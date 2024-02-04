@@ -1,0 +1,57 @@
+spring:
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  datasource:
+    username: cwliot1.8
+    url: jdbc:mysql://192.168.49.129:3306/cwliot1.8?useUnicode=true&characterEncoding=UTF-8&useSSL=false
+    driver-class-name: com.mysql.jdbc.Driver
+    password: "DMKRjBbHCiPAyAdn"
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # 下面为连接池的补充设置，应用到上面所有数据源中
+      # 初始化大小，最小，最大
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      # 配置获取连接等待超时的时间
+      max-wait: 60000
+      # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒
+      time-between-eviction-runs-millis: 60000
+      # 配置一个连接在池中最小生存的时间，单位是毫秒
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1 FROM DUAL
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      # 打开PSCache，并且指定每个连接上PSCache的大小
+      pool-prepared-statements: true
+      max-pool-prepared-statement-per-connection-size: 20
+        # 配置监控统计拦截的 Filter，去掉后监控界面 SQL 无法统计，wall 用于防火墙   日志 log4j
+      # filters: stat,wall,log4j   #导入了log4j
+      use-global-data-source-stat: true
+      # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
+      connect-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
+      stat-view-servlet:
+        enabled: true
+        url-pattern: /druid/*
+        reset-enable: false
+        login-username: admin
+        login-password: 123456
+  redis:
+    host: 192.168.49.129
+    password: 1234
+    port: 6379
+    timeout: 1000
+grpc:
+  server:
+    port: 9090
+mqtt:
+  Host: tcp://192.168.49.129:1883
+  username: cwl
+  password: 19260817
+wx:
+  debug: true
+  micro:
+    appid: 123
+    appsecret : 123

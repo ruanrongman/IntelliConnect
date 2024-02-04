@@ -1,0 +1,34 @@
+# Release drafter configuration https://github.com/release-drafter/release-drafter#configuration
+# Emojis were chosen to match the https://gitmoji.carloscuesta.me/
+
+name-template: "v$NEXT_PATCH_VERSION"
+tag-template: "v$NEXT_PATCH_VERSION"
+
+categories:
+  - title: ":rocket: Features"
+    labels: [enhancement, feature]
+  - title: ":wrench: Fixes & Refactoring"
+    labels: [bug, refactoring, bugfix, fix]
+  - title: ":package: Build System & CI/CD"
+    labels: [build, ci, testing]
+  - title: ":boom: Breaking Changes"
+    labels: [breaking]
+  - title: ":pencil: Documentation"
+    labels: [documentation]
+  - title: ":arrow_up: Dependencies updates"
+    labels: [dependencies]
+
+template: |
+  👋 Hello and welcome to the release notes for IntelliConnect v$NEXT_PATCH_VERSION! We're excited to share some new updates that we believe will enhance your experience with IntelliConnect.
+  
+  For detailed information, please visit our official documentation: [IntelliConnect Documentation](https://undertone0809.github.io/IntelliConnect/#/)
+
+  To see the code, report issues, or contribute, check out our GitHub repository: [IntelliConnect on GitHub](https://github.com/ruanrongman/IntelliConnect)
+  
+  ## What’s Changed
+
+  $CHANGES
+
+  ## :busts_in_silhouette: List of contributors
+
+  $CONTRIBUTORS
