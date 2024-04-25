@@ -1,0 +1,156 @@
+/**
+ * Copyright © 2023-2030 The ruanrongman Authors
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package top.rslly.iot.services;
+
+import org.springframework.beans.BeanUtils;
+import org.springframework.security.core.parameters.P;
+import org.springframework.stereotype.Service;
+import top.rslly.iot.dao.ProductDataRepository;
+import top.rslly.iot.dao.ProductDeviceRepository;
+import top.rslly.iot.dao.ProductModelRepository;
+import top.rslly.iot.models.ProductDeviceEntity;
+import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.models.ProductModelEntity;
+import top.rslly.iot.param.prompt.ProductDeviceDescription;
+import top.rslly.iot.param.request.ProductDevice;
+import top.rslly.iot.utility.result.JsonResult;
+import top.rslly.iot.utility.result.ResultCode;
+import top.rslly.iot.utility.result.ResultTool;
+
+import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
+@Service
+public class ProductDeviceServiceImpl implements ProductDeviceService {
+
+  @Resource
+  private ProductDeviceRepository productDeviceRepository;
+  @Resource
+  private ProductModelRepository productModelRepository;
+  @Resource
+  private ProductDataRepository productDataRepository;
+  @Resource
+  private DataServiceImpl dataService;
+
+  @Override
+  public List<ProductDeviceEntity> findAllBySubscribeTopic(String subscribeTopic) {
+    return productDeviceRepository.findAllBySubscribeTopic(subscribeTopic);
+  }
+
+  @Override
+  public List<ProductDeviceEntity> findAllByClientId(String clientId) {
+    return productDeviceRepository.findAllByClientId(clientId);
+  }
+
+  @Override
+  public List<ProductDeviceEntity> findAllByModelId(int modelId) {
+    return productDeviceRepository.findAllByModelId(modelId);
+  }
+
+  @Override
+  public List<ProductDeviceEntity> deleteById(int id) {
+    return productDeviceRepository.deleteById(id);
+  }
+
+  @Override
+  public List<ProductDeviceDescription> getDescription(int modelId) {
+    var devices = productDeviceRepository.findAllByModelId(modelId);
+    var productDataEntities = productDataRepository.findAllByModelId(modelId);
+    List<ProductDeviceDescription> productDeviceDescriptionList = new LinkedList<>();
+    if (devices.isEmpty() || productDataEntities.isEmpty())
+      return productDeviceDescriptionList;
+    List<String> properties = new ArrayList<>();
+    List<String> valueList = new ArrayList<>();
+    for (var s : productDataEntities) {
+      properties.add(s.getJsonKey());
+    }
+    for (var s : devices) {
+      ProductDeviceDescription productDeviceDescription = new ProductDeviceDescription();
+      productDeviceDescription.setDevice_name(s.getName());
+      productDeviceDescription.setOnline(s.getOnline());
+      for (var jsonKey : properties) {
+        var dataServiceAllBySort = dataService.findAllBySort(s.getId(), jsonKey);
+        if (dataServiceAllBySort == null)
+          valueList.add("null");// cast error
+        else {
+          if (!dataServiceAllBySort.isEmpty()) {
+            valueList.add(dataServiceAllBySort.get(0).getValue());
+          } else {
+            valueList.add("null");
+          }
+        }
+      }
+      productDeviceDescription.setProperties(properties);
+      productDeviceDescription.setValues(valueList);
+      productDeviceDescriptionList.add(productDeviceDescription);
+    }
+
+    return productDeviceDescriptionList;
+  }
+
+  @Override
+  public int updateOnlineByClientId(String online, String clientId) {
+    return productDeviceRepository.updateOnlineByClientId(online, clientId);
+  }
+
+  @Override
+  public JsonResult<?> getProductDevice() {
+    var result = productDeviceRepository.findAll();
+    if (result.isEmpty()) {
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    } else
+      return ResultTool.success(result);
+  }
+
+  @Override
+  public JsonResult<?> postProductDevice(ProductDevice productDevice) {
+    ProductDeviceEntity productDeviceEntity = new ProductDeviceEntity();
+    productDeviceEntity.setOnline("disconnected");
+    BeanUtils.copyProperties(productDevice, productDeviceEntity);
+    List<ProductModelEntity> result =
+        productModelRepository.findAllById(productDeviceEntity.getModelId());
+    List<ProductDeviceEntity> p1 =
+        productDeviceRepository.findAllByClientId(productDeviceEntity.getClientId());
+    List<ProductDeviceEntity> p2 =
+        productDeviceRepository.findAllByName(productDeviceEntity.getName());
+    if (result.isEmpty() || !p1.isEmpty() || !p2.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    else if (productDeviceEntity.getName().matches(".*[\\u4E00-\\u9FA5]+.*"))
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    else {
+      productDeviceEntity.setSubscribeTopic(
+          "/oc/devices/" + productDeviceEntity.getName() + "/sys/" + "properties/report");
+      ProductDeviceEntity productDeviceEntity1 = productDeviceRepository.save(productDeviceEntity);
+      return ResultTool.success(productDeviceEntity1);
+    }
+  }
+
+  @Override
+  public JsonResult<?> deleteProductDevice(int id) {
+    List<ProductDeviceEntity> result = productDeviceRepository.deleteById(id);
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    else {
+      return ResultTool.success(result);
+    }
+  }
+}
