@@ -19,8 +19,10 @@
  */
 package top.rslly.iot.utility.ai;
 
+import com.alibaba.fastjson.JSON;
 import com.zhipu.oapi.utils.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.text.SimpleDateFormat;
@@ -32,6 +34,10 @@ import java.util.Map;
 public class Prompt {
   @Autowired
   private DescriptionUtil descriptionUtil;
+  @Value("${ai.robot-name}")
+  private String robotName;
+  @Value("${ai.team-name}")
+  private String teamName;
   private static final String controlPrompt =
       """
           As a smart speaker, your name is {agent_name}, developed by the {team_name} team.  You are good at helping people operate various appliances，
@@ -39,21 +45,25 @@ public class Prompt {
           The electrical properties and value that can be controlled by each electrical:{properties_value}
           The device of current electrical type and the latest status:{equipment_status}
           value ["null"] means devices information is not exist
-          If devices is disconnected you cannot control it
+          If devices are disconnected you cannot control it
           ## Output Format
           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
           The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
           ```json
           {
           "thought": "The thought of what to do and why.(use Chinese)",
-          "action": # the action to take, must be one of provided tools
+          "action": # the action to take
               {
-              "name": "electronic name,If it doesn't match, please output null",
-              "code": "if success output 200,else output 400",
-              "taskType": "If it is a control task, output control; otherwise, output 'query'."
-              "answer": "Answer humanity,Be polite and gentle as much as possible",
-              "properties": "electronic input parameters, json list data,If there is no such properties, please output []",
-              "value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output []",
+              "answer": "Please describe your control strategy in detail and Answer humanity,Be polite and gentle",
+              "controlParameters":[
+               {
+                "name": "electronic name,If it doesn't match, please output null",
+                "code": "if success output 200,else output 400",
+                "taskType": "If it is a control task, output control; otherwise, output 'query'."
+                "properties": "electronic input parameters, json list data,If there is no such properties, please output []",
+                "value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output []",
+               }
+              ]
               }
           }
           ```
@@ -61,19 +71,24 @@ public class Prompt {
            ```json
           {
           "thought": "The thought of what to do and why.",
-          "action": # the action to take, must be one of provided tools
+          "action":
               {
-              "name": "null",
-              "code": "400",
-              "taskType": "control",
-              "answer": "Answer humanity,Be polite and gentle as much as possible",
-              "properties": [],
-              "value": [],
+              "answer": "Please describe your control strategy in detail and Answer humanity,Be polite and gentle",
+              "controlParameters":[
+              {
+                  "name": "electronic name",
+                  "code": "400",
+                  "taskType": "control",
+                  "properties": [],
+                  "value": [],
+               }
+              ]
               }
           }
           ```
           ## Attention
           - Your output is JSON only and no explanation.
+          - If there is some electrical power that cannot be controlled, such as disconnected, please inform the user
           """;
   private static final String musicPrompt =
       """
@@ -84,7 +99,7 @@ public class Prompt {
           ```json
           {
           "thought": "The thought of what to do and why.(use Chinese)",
-          "action": # the action to take, must be one of provided tools
+          "action": # the action to take
               {
               "code": "If this is related to playing music output 200,else output 400",
               "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
@@ -99,52 +114,56 @@ public class Prompt {
   private static final String classifierPrompt =
       """
            As a smart speaker, your name is {agent_name}, developed by the {team_name} team. You are good at helping people doing the following task
-           1.Query weather
-           2.Get the current time
-           3.Control electrical and query electrical status(Excluding playing music.)
-           4.Request a song or play music.(including Recommend music.)
-           5.Composite tasks(like according to weather control electrical or Turn on the air conditioning first, then turn on the lights)
-           6.All other tasks except for the one above (including chatting,coding,write paper,translate and etc.)
-           reference information: The current time is{time}
-           You now need to classify based on user input，choose task 5 as much as possible
+           {task_map}
+           reference information: The current time is {time}
+           You now need to classify based on user input
            ## Output Format
            To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
            The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
            ```json
            {
            "thought": "The thought of what to do and why.(use Chinese)",
-           "action": # the action to take, must be one of provided task
+           "action": # the action to take, must be one of provided tools
                {
                "code": "if success output 200,If it doesn't match any task,output 400",
                "answer": "Task 1,3,4,5,6 just need to answer "yes",no explanation.other Answer vivid,lively,kind and amiable",
                "value": "one of task No., json list data like [1],If it doesn't match, please output []",
-               "args": "task input parameters(Summarize the context,not null)"
+               "args": "task input parameters(Combined with Current Conversation,Summarize the context,not null)"
                }
            }
            ```
-           if not task 2,please return it in the following format
-            ```json
+           ## few shot
+           if user input: What's the weather like today ?
            {
-           "thought": "The thought of what to do and why.(use Chinese)",
-           "action": # the action to take, must be one of provided task
-               {
-               "code": "200",
-               "answer": "yes",
-               "value": "one of task No., json list data like [1],If it doesn't match, please output []",
-               "args": "task input parameters(Summarize the context,not null)"
-               }
-           }
-           ```
-           ## example
-           if user input: What's the weather like today
-            {
-           "thought": "The thought of what to do and why.(use Chinese)",
-           "action": # the action to take, must be one of provided task
+           "thought": "用户想要查询天气",
+           "action":
                {
                "code": "200",
                "answer": "yes",
                "value": "[1]",
                "args": "What's the weather like today"
+               }
+           }
+           if user input: what time is it ?
+           {
+           "thought": "用户希望查询时间",
+           "action":
+               {
+               "code": "200",
+               "answer": "现在时间是 XXX",
+               "value": "[2]",
+               "args": "ok"
+               }
+           }
+           if user input: Bundle the lamp product,key is XXX
+           {
+           "thought": "用户想要绑定产品",
+           "action":
+               {
+               "code": "200",
+               "answer": "yes",
+               "value": "[7]",
+               "args": "Bundle the lamp product,key is XXX"
                }
            }
            ## Attention
@@ -154,10 +173,11 @@ public class Prompt {
           """;
   private static final String chatPrompt = """
       You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
-      你回答的每句话都尽量口语化、简短,总是喜欢使用表情符号
+      你可以回答新闻内容和用户的各种合法请求，你回答的每句话都尽量口语化、简短,总是喜欢使用表情符号
       ## Output Format
       Please do not output \\n and try to limit the word count to 100 words or less
-      The user problem is as follows:
+      ## Current Conversation
+         Below is the current conversation consisting of interleaving human and assistant history.
       """;
   private static final String weatherPrompt =
       """
@@ -168,7 +188,7 @@ public class Prompt {
            ```json
            {
            "thought": "The thought of what to do and why.(use Chinese)",
-           "action": # the action to take, must be one of provided tools
+           "action": # the action to take
                {
                "code": "If this is related to weather output 200,else output 400",
                "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
@@ -181,7 +201,7 @@ public class Prompt {
            - First of all, the address must be a string of characters, containing the names of buildings such as country, province, city, district, town, village, street, house number, housing estate, building, etc.
              Characters grouped together from the name of the large region to the name of the small region. A valid address should be unique.
              Note: The country information can be selectively ignored during the geocoding conversion for the mainland, Hong Kong, and Macao, but the address composition at the provincial, municipal,
-             and urban levels cannot be ignored. Returning to Taiwan Province is not supported for the time being.
+             and urban levels cannot be ignored.
            ## Current Conversation
            Below is the current conversation consisting of interleaving human and assistant history.
           """;
@@ -191,6 +211,71 @@ public class Prompt {
       当前天气信息{lives}
       未来几天的天气信息{forecast}
       """;
+  private static final String wxProductBoundPrompt =
+      """
+          Identify the product name and key to be bound based on the user's request
+          ## Output Format
+               To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
+               The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
+               ```json
+               {
+               "thought": "The thought of what to do and why.(use Chinese)",
+               "action": # the action to take
+                   {
+                   "code": "If this is related to bind product output 200,else output 400",
+                   "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
+                   "productName": "The user needs to bind the product name",
+                   "productKey": "The product key"
+                   }
+               }
+               ```
+               ## few shot
+               if user input: help me bound the air product,the key is 12345
+               {
+               "thought": "The thought of what to do and why.(use Chinese)",
+               "action":
+                   {
+                   "code": "200",
+                   "answer": "Ok, I've understood, your device name is air and the key is 12345",
+                   "productName": "air",
+                   "productKey": "12345"
+                   }
+               }
+               ## Attention
+               - Your output is JSON only and no explanation.
+          """;
+  private static final String wxProductActivePrompt =
+      """
+          Identify the products name that the user wants to control
+           ## Output Format
+               To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
+               The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
+               ```json
+               {
+               "thought": "The thought of what to do and why.(use Chinese)",
+               "action": # the action to take
+                   {
+                   "code": "If this is related to bind product output 200,else output 400",
+                   "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
+                   "productName": "The name of the product that the user wants to control",
+                   }
+               }
+               ```
+               ## few shot
+               if user input: 设置控制lamp产品
+               {
+               "thought": "The thought of what to do and why.(use Chinese)",
+               "action":
+                   {
+                   "code": "200",
+                   "answer": "Ok, I've understood, your want to control product name is lamp",
+                   "productName": "lamp",
+                   }
+               }
+               ## Attention
+               - Your output is JSON only and no explanation.
+               - The product name should be based solely on the user's input and should not be translated into other languages
+          """;
   private static final String ReactSystem =
       """
           As a diligent Task Agent, you goal is to effectively accomplish the provided task or question as best as you can.
@@ -256,11 +341,88 @@ public class Prompt {
           ## Current Conversation
           Below is the current conversation consisting of interleaving human and assistant history.
           """;
+  private static final String voicePrompt =
+      """
+            ## Output Format
+              To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
+              The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
+              ```json
+                {
+                  "language":"The language entered by the user",
+                  "content":"The content of the audio(use chinese)"
+                }
+              ```
+            ## Attention
+                - Your output is JSON only and no explanation.
+          """;
+  private static final String schedulePrompt =
+      """
+          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Simplify user input to city names.
+          Identify the time when the user wants to be reminded and convert it to a cron expression.
+          reference information: The current time is {time}
+          ## Output Format
+           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
+           The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
+           ```json
+           {
+           "thought": "The thought of what to do and why.(use Chinese)",
+           "action": # the action to take
+               {
+               "code": "If this is related to Time reminder task output 200,else output 400",
+               "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
+               "repeat": "If it is a periodic time task output true,else output false"
+               "time" : "execution time,Here is the response formatted:yyyy-MM-dd HH:mm:ss"
+               "cron": "Linux Crontab expression"
+               }
+           }
+           ```
+           ## few shot
+           if user input: Remind me in 5 seconds
+           The current time is 2024-06-06 10:40:05
+             {
+             "thought": "The thought of what to do and why.(use Chinese)",
+             "action":
+                 {
+                 "code": "200",
+                 "answer": "Okay, I'll remind you in 5 seconds",
+                 "repeat": "false",
+                 "time": "2024-06-06 10:40:10",
+                 "cron": null
+                 }
+             }
+           if user input: Remind me at 12:00 noon every day.
+           The current time is 2024-06-06 10:40:05
+           {
+             "thought": "The thought of what to do and why.(use Chinese)",
+             "action":
+                 {
+                 "code": "200",
+                 "answer": "Okay, I'll remind you at 12:00 noon every day",
+                 "repeat": "true",
+                 "time": null,
+                 "cron": "0 0 12 * * ?"
+                 }
+             }
+           ## Attention
+           - Your output is JSON only and no explanation.
+           - Linux Crontab expression example
+             "0 0 8 * * *" Indicates that tasks are executed at 8 am every day.
+
+             "0 0/30 9-17 * * *" The task is executed every 30 minutes between 9am and 17pm every day.
+
+             "0 0 12 ? * WED" The task is executed every Wednesday at 12:00 noon.
+
+             "0 0 10 L * ?" The task is executed at 10am on the last day of each month.
+
+             "0 0 3-5 * * *" Execute tasks every hour between 3am and 5am every day.
+
+             "0 15 10 L * ?" The task is executed at 10:15 am on the last day of each month.
+          """;
 
   public String getControlTool(int productId) {
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", "小优");
-    params.put("team_name", "创万联");
+    params.put("agent_name", robotName);
+    params.put("team_name", teamName);
     params.put("electrical_name", descriptionUtil.getElectricalName(productId));
     params.put("properties_value", descriptionUtil.getPropertiesAndValue(productId));
     params.put("equipment_status", descriptionUtil.getCurrentValue(productId));
@@ -269,33 +431,56 @@ public class Prompt {
 
   public String getMusicTool() {
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", "小优");
-    params.put("team_name", "创万联");
+    params.put("agent_name", robotName);
+    params.put("team_name", teamName);
     return StringUtils.formatString(musicPrompt, params);
   }
 
+  // 1.Query weather
+  // 2.Get the current time
+  // 3.Control electrical and query electrical status(Excluding playing music.)
+  // 4.Request a song or play music.(including Recommend music.)
+  // 5.Composite tasks(like according to weather control electrical or Turn on the air conditioning
+  // first, then turn on the lights)
+  // 6.All other tasks except for the one above (including chatting,coding,write paper,translate and
+  // etc.)
   public String getClassifierTool() {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
+    Map<String, String> classifierMap = new HashMap<>();
+    classifierMap.put("1", "Query weather");
+    classifierMap.put("2", "Get the current time");
+    classifierMap.put("3",
+        "Control electrical and query electrical status(Excluding playing music.)");
+    classifierMap.put("4", "Request a song or play music.(including Recommend music.)");
+    classifierMap.put("5",
+        "Composite tasks(like according to weather control electrical)");
+    classifierMap.put("6",
+        "Other tasks (including chatting,coding,write paper,Get news or unknown events,translate and etc.)");
+    classifierMap.put("7", "bundle the product");
+    classifierMap.put("8", "Set up controlled products");
+    classifierMap.put("9", "Scheduled tasks or reminder tasks");
+    String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", "小优");
-    params.put("team_name", "创万联");
+    params.put("agent_name", robotName);
+    params.put("team_name", teamName);
+    params.put("task_map", classifierJson);
     params.put("time", formattedDate);
     return StringUtils.formatString(classifierPrompt, params);
   }
 
   public String getChatTool() {
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", "小优");
-    params.put("team_name", "创万联");
+    params.put("agent_name", robotName);
+    params.put("team_name", teamName);
     return StringUtils.formatString(chatPrompt, params);
   }
 
   public String getWeatherTool() {
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", "小优");
-    params.put("team_name", "创万联");
+    params.put("agent_name", robotName);
+    params.put("team_name", teamName);
     return StringUtils.formatString(weatherPrompt, params);
   }
 
@@ -306,10 +491,33 @@ public class Prompt {
     return StringUtils.formatString(weatherArrangePrompt, params);
   }
 
+  public String getWxProductBoundTool() {
+    return wxProductBoundPrompt;
+  }
+
+  public String getWxProductActiveTool() {
+    return wxProductActivePrompt;
+  }
+
   public String getReact(String toolDescriptions, String question) {
     Map<String, String> params = new HashMap<>();
     params.put("tool_descriptions", toolDescriptions);
     params.put("question", question);
     return StringUtils.formatString(ReactSystem, params);
+  }
+
+  public String getVoice() {
+    return voicePrompt;
+  }
+
+  public String getScheduleTool() {
+    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    Date date = new Date();
+    String formattedDate = formatter.format(date);
+    Map<String, String> params = new HashMap<>();
+    params.put("agent_name", robotName);
+    params.put("team_name", teamName);
+    params.put("time", formattedDate);
+    return StringUtils.formatString(schedulePrompt, params);
   }
 }

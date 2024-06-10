@@ -38,6 +38,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
 
   List<ProductEntity> findAllByProductName(String productName);
 
+  List<ProductEntity> findAllByProductNameAndKeyvalue(String productName, String keyvalue);
+
   @Transactional
   List<ProductEntity> deleteById(int id);
 

@@ -20,8 +20,11 @@
 package top.rslly.iot.services;
 
 
+import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.param.request.Product;
 import top.rslly.iot.utility.result.JsonResult;
+
+import java.util.List;
 
 public interface ProductService {
 
@@ -30,4 +33,8 @@ public interface ProductService {
   JsonResult<?> postProduct(Product product);
 
   JsonResult<?> deleteProduct(int id);
+
+  List<ProductEntity> findAllByProductName(String productName);
+
+  List<ProductEntity> findAllById(int productId);
 }

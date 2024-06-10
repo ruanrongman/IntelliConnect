@@ -38,7 +38,7 @@ public interface ProductModelService {
 
   List<ProductModelEntity> findAllByProductId(int productId);
 
-  List<ProductModelEntity> findAllByName(String name);
+  List<ProductModelEntity> findAllByProductIdAndName(int productId, String name);
 
   JsonResult<?> deleteProductModel(int id);
 

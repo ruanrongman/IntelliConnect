@@ -28,8 +28,11 @@ import top.rslly.iot.models.DataEntity;
 import top.rslly.iot.services.DataServiceImpl;
 import top.rslly.iot.services.ProductDataServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
+import top.rslly.iot.utility.EmqTransfer;
 import top.rslly.iot.utility.exhook.*;
 
+import javax.annotation.PostConstruct;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -41,7 +44,30 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
   private ProductDeviceServiceImpl productDeviceService;
   @Autowired
   private DealThingsModel dealThingsModel;
+  @Autowired
+  private EmqTransfer emqTransfer;
 
+  @PostConstruct
+  public void init() {
+    try {
+      var connectMap = emqTransfer.ConnectMap();
+      var deviceEntityList =
+          productDeviceService.findAll();
+      for (var s : deviceEntityList) {
+        String status = "disconnected";
+        if (connectMap.containsKey(s.getClientId())) {
+          if (connectMap.get(s.getClientId()).equals("true"))
+            status = "connected";
+        }
+        // log.info("Device: " + s.getClientId() + " status: " + status);
+        productDeviceService.updateOnlineByClientId(status,
+            s.getClientId());
+      }
+      log.info("Emq connected information init success");
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
 
   @Override
   public void onProviderLoaded(ProviderLoadedRequest request,

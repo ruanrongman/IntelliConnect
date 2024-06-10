@@ -21,15 +21,17 @@ package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
-import top.rslly.iot.utility.ai.Glm;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.Prompt;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 
 import java.io.IOException;
 import java.util.*;
@@ -41,24 +43,26 @@ public class MusicTool implements BaseTool<Map<String, String>> {
   private Prompt prompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  @Value("${ai.musicTool-llm}")
+  private String llmName;
   private String name = "musicTool";
   private String description = """
       A tool for playing music.
-      Args: Music or Singer Name, or both.(str)
+      Args: Requests from users related to music(str)
       """;
 
   @Override
   public Map<String, String> run(String question) {
-    Glm glm = new Glm();
-    List<ChatMessage> messages = new ArrayList<>();
+    LLM llm = LLMFactory.getLLM(llmName);
+    List<ModelMessage> messages = new ArrayList<>();
     Map<String, String> responseMap = new HashMap<>();
 
-    ChatMessage systemMessage =
-        new ChatMessage(ChatMessageRole.SYSTEM.value(), prompt.getMusicTool());
-    ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), question);
+    ModelMessage systemMessage =
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getMusicTool());
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
-    var obj = glm.jsonChat(question, messages, true).getJSONObject("action");
+    var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     var answer = (String) obj.get("answer");
     responseMap.put("answer", answer);
     responseMap.put("url", "");

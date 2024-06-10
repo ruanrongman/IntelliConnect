@@ -20,6 +20,7 @@
 package top.rslly.iot.utility;
 
 
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +29,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 @Component
+@Slf4j
 public class HttpRequestUtils {
 
   private final OkHttpClient okHttpClient;
@@ -130,7 +132,7 @@ public class HttpRequestUtils {
       @Override
       public void onResponse(Call call, Response response) throws IOException {
         String result = response.body().string();// 5.获得网络数据
-        System.out.println(result);
+        log.info(result);
       }
     });
 

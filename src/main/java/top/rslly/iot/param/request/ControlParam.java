@@ -30,7 +30,7 @@ import java.util.List;
 @Setter
 public class ControlParam {
   String name;
+  int qos;
   List<String> key;
   List<String> value;
-
 }

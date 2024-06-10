@@ -40,8 +40,8 @@ public class JsUtils {
     imp1.hardWareService = this.hardWareService;
   }
 
-  public static boolean control(String name, List<String> key, List<String> value) {
-    ControlParam controlParam = new ControlParam(name, key, value);
+  public static boolean control(String name, int qos, List<String> key, List<String> value) {
+    ControlParam controlParam = new ControlParam(name, qos, key, value);
     try {
       var res = imp1.hardWareService.control(controlParam).getErrorCode();
       return res == 200;

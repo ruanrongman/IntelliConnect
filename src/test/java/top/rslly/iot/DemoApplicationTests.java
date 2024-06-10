@@ -26,18 +26,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
+import org.quartz.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.junit4.SpringRunner;
+import top.rslly.iot.dao.ProductDeviceRepository;
 import top.rslly.iot.dao.TimeDataRepository;
 import top.rslly.iot.models.DataEntity;
 import top.rslly.iot.models.influxdb.DataTimeEntity;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.utility.DataCleanAuto;
 import top.rslly.iot.utility.DataSave;
+import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 import top.rslly.iot.utility.influxdb.executor.ExecutorImpl;
@@ -45,12 +49,10 @@ import top.rslly.iot.utility.script.ControlScriptFactory;
 import top.rslly.iot.utility.script.js.JsScriptInfo;
 import top.rslly.iot.utility.script.js.NashornJsInvokeService;
 
+import javax.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -75,12 +77,17 @@ class DemoApplicationTests {
   @Autowired
   private ApplicationContext applicationContext;
   @Autowired
-  private WeatherTool weatherTool;
-  @Autowired
   private NashornJsInvokeService nashornJsInvokeService;
   @Autowired
   private Manage manage;
-
+  @Autowired
+  private WxBoundProductTool wxBoundProductTool;
+  @Autowired
+  private WxProductActiveTool wxProductActiveTool;
+  @Resource
+  private ProductDeviceRepository productDeviceRepository;
+  @Autowired
+  ChatTool chatTool;
 
   @Test
   void testDataSave() {
@@ -96,7 +103,7 @@ class DemoApplicationTests {
     List<String> value = new ArrayList<>();
     key.add("brightness");
     value.add("100");
-    ControlParam controlParam = new ControlParam(name, key, value);
+    ControlParam controlParam = new ControlParam(name, 1, key, value);
     Assertions.assertEquals("100", controlParam.getValue().get(0));
   }
 
@@ -177,16 +184,19 @@ class DemoApplicationTests {
   @Test
   public void Ai() {
     SpringBeanUtils.setApplicationContext(applicationContext);
-    var answer = agent.run("根据新会的天气控制空调", 1);
-    // var answer= prompt.GetControlTool();
-    System.out.println(answer);
+    // var answer = agent.run("根据新会的天气播放音乐", 1);
+    var answer = Glm.testImageToWord(
+        "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
+    // var answer= chatTool.run("你好", new ArrayList<>());
+    log.info(answer);
   }
 
   @Test
-  public void AiTool() {
+  public void AiTool() throws InterruptedException {
     SpringBeanUtils.setApplicationContext(applicationContext);
-    var answer = manage.runTool("controlTool", "打开空调", 1);
-    System.out.println(answer);
+    var answer = manage.runTool("controlTool", "打开摩托车，打开灯，打开空调", 1);
+    log.info(answer);
+    Thread.sleep(100000);
   }
 
   @Test
@@ -195,7 +205,7 @@ class DemoApplicationTests {
     // System.out.println(body);
     var jsCode = ControlScriptFactory.generateControlNodeScript("controlFunc",
         """
-            var res=control("light1",["switch"],["on"]);
+            var res=control("light1",1,["switch"],["on"]);
             return res;
             """);
     JsScriptInfo jsScriptInfo = new JsScriptInfo("controlFunc");
@@ -227,6 +237,36 @@ class DemoApplicationTests {
     sandbox.eval(script);
     String result = (String) sandbox.getSandboxedInvocable().invokeFunction("control");
     System.out.println(result);
+  }
+
+  @Test
+  public void testWxProductBind() {
+    var res = wxBoundProductTool.run("绑定lamp设备，密钥是12345");
+    System.out.println(res.get("answer"));
+    System.out.println(res.get("productName"));
+    System.out.println(res.get("productKey"));
+  }
+
+  @Test
+  public void testWxProductActive() {
+    var res = wxProductActiveTool.run("设置控制lamp产品");
+    System.out.println(res.get("answer"));
+    System.out.println(res.get("productName"));
+  }
+
+  @Test
+  public void productDeviceCount() {
+    var ans = productDeviceRepository.connectStatusCount("connected");
+    var ans2 = productDeviceRepository.connectStatusCount("disconnected");
+    System.out.println(ans);
+    System.out.println(ans2);
+  }
+
+  @Test
+  public void simpleTest() throws SchedulerException, InterruptedException {
+    QuartzManager.addJob("test", "test", "test", "test", RemindJob.class, "0/5 * * * * ?", "test");
+    // QuartzManager.startJobs();
+    Thread.sleep(100000);
   }
 
 

@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.controllers;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -36,6 +37,15 @@ import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultTool;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.File;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping(value = "/api/v2")
@@ -80,5 +90,31 @@ public class Tool {
     var answer =
         router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId());
     return ResultTool.success(answer);
+  }
+
+  // ota功能，尚未完成
+  @RequestMapping(value = "/micro/{name}", method = RequestMethod.GET)
+  public void micro(@PathVariable("name") String name, HttpServletResponse response)
+      throws IOException {
+
+    ServletOutputStream out = response.getOutputStream();
+    try {
+      String filePath = "D://temp-rainy//"; // 上传后的路径
+      File file = new File(filePath + name);
+      response.setCharacterEncoding("UTF-8");
+      response.setHeader("Content-Disposition", "attachment; filename=" +
+          URLEncoder.encode(name.substring(0, name.lastIndexOf(".")) + ".bin",
+              StandardCharsets.UTF_8));
+      response.addHeader("Content-Length", "" + file.length());
+      out.write(Files.readAllBytes(Paths.get(filePath + name)));
+      out.flush();
+      out.close();
+
+
+    } catch (Exception e) {
+      e.printStackTrace();
+      response.setStatus(404);
+      out.close();
+    }
   }
 }

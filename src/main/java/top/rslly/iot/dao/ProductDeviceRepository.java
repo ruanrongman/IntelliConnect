@@ -22,6 +22,7 @@ package top.rslly.iot.dao;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 
@@ -42,6 +43,9 @@ public interface ProductDeviceRepository extends JpaRepository<ProductDeviceEnti
 
   @Transactional
   List<ProductDeviceEntity> deleteById(int id);
+
+  @Query(" select count(t) from ProductDeviceEntity t where t.online = :status")
+  Integer connectStatusCount(@Param("status") String status);
 
   @Transactional
   @Modifying

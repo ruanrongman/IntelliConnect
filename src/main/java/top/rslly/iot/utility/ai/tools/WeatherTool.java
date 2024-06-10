@@ -21,16 +21,17 @@ package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
-import top.rslly.iot.utility.ai.Glm;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.Prompt;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 
 import java.io.IOException;
 import java.util.*;
@@ -44,6 +45,8 @@ public class WeatherTool implements BaseTool<String> {
   private String AmapKey;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  @Value("${ai.weatherTool-llm}")
+  private String llmName;
   private String name = "weatherTool";
   private String description = """
       Get live weather facts and forecasts
@@ -52,24 +55,24 @@ public class WeatherTool implements BaseTool<String> {
 
   @Override
   public String run(String question) {
-    Glm glm = new Glm();
-    List<ChatMessage> messages = new ArrayList<>();
+    LLM llm = LLMFactory.getLLM(llmName);
+    List<ModelMessage> messages = new ArrayList<>();
 
-    ChatMessage systemMessage =
-        new ChatMessage(ChatMessageRole.SYSTEM.value(), prompt.getWeatherTool());
-    ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), question);
+    ModelMessage systemMessage =
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getWeatherTool());
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
-    var obj = glm.jsonChat(question, messages, false).getJSONObject("action");
+    var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
     try {
       Map<String, String> answer = process_llm_result(obj);
-      ChatMessage responseSystemMessage =
-          new ChatMessage(ChatMessageRole.SYSTEM.value(),
+      ModelMessage responseSystemMessage =
+          new ModelMessage(ModelMessageRole.SYSTEM.value(),
               prompt.getWeatherResponse(answer.get("lives"), answer.get("forecasts")));
       messages.clear();
       messages.add(responseSystemMessage);
       messages.add(userMessage);
-      return glm.commonChat(question, messages, false);
+      return llm.commonChat(question, messages, false);
     } catch (Exception e) {
       // e.printStackTrace();
     }

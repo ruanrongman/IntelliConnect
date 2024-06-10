@@ -73,4 +73,14 @@ public class ProductServiceImpl implements ProductService {
       return ResultTool.success(result);
     }
   }
+
+  @Override
+  public List<ProductEntity> findAllByProductName(String productName) {
+    return productRepository.findAllByProductName(productName);
+  }
+
+  @Override
+  public List<ProductEntity> findAllById(int productId) {
+    return productRepository.findAllById(productId);
+  }
 }

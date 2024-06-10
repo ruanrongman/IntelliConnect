@@ -20,15 +20,17 @@
 package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSONObject;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
-import top.rslly.iot.utility.ai.Glm;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.Prompt;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,25 +44,29 @@ public class ClassifierTool {
   private Prompt prompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
-  private String name = "ClassifierTool";
+  @Value("${ai.classifierTool-llm}")
+  private String llmName;
+  private String name = "classifierTool";
   private String description = """
       This tool is used to classify users' intentions
       Args: user question(str)
       """;
 
-  public Map<String, Object> run(String question, List<ChatMessage> memory) {
-    Glm glm = new Glm();
-    List<ChatMessage> messages = new ArrayList<>();
+  public Map<String, Object> run(String question, List<ModelMessage> memory) {
+    LLM llm = LLMFactory.getLLM(llmName);
+    List<ModelMessage> messages = new ArrayList<>();
     Map<String, Object> resultMap = new HashMap<>();
 
-    ChatMessage systemMessage =
-        new ChatMessage(ChatMessageRole.SYSTEM.value(), prompt.getClassifierTool());
-    ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), question);
+    ModelMessage systemMessage =
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getClassifierTool());
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
+    if (!memory.isEmpty()) {
+      // messages.addAll(memory);
+      systemMessage.setContent(prompt.getClassifierTool() + memory);
+    }
     messages.add(systemMessage);
-    if (!memory.isEmpty())
-      messages.addAll(memory);
     messages.add(userMessage);
-    var obj = glm.jsonChat(question, messages, true).getJSONObject("action");
+    var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     var answer = (String) obj.get("answer");
     try {
       var value = process_llm_value(obj);

@@ -66,7 +66,8 @@ public class ProductModelServiceImpl implements ProductModelService {
     ProductModelEntity productModelEntity = new ProductModelEntity();
     BeanUtils.copyProperties(productModel, productModelEntity);
     List<ProductEntity> result = productRepository.findAllById(productModel.getProductId());
-    List<ProductModelEntity> p1 = productModelRepository.findAllByName(productModel.getName());
+    List<ProductModelEntity> p1 = productModelRepository
+        .findAllByProductIdAndName(productModel.getProductId(), productModel.getName());
     if (result.isEmpty() || !p1.isEmpty())
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     else {
@@ -96,9 +97,10 @@ public class ProductModelServiceImpl implements ProductModelService {
   }
 
   @Override
-  public List<ProductModelEntity> findAllByName(String name) {
-    return productModelRepository.findAllByName(name);
+  public List<ProductModelEntity> findAllByProductIdAndName(int productId, String name) {
+    return productModelRepository.findAllByProductIdAndName(productId, name);
   }
+
 
   @Override
   public JsonResult<?> deleteProductModel(int id) {

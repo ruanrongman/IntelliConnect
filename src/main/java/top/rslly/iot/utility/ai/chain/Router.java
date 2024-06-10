@@ -19,12 +19,20 @@
  */
 package top.rslly.iot.utility.ai.chain;
 
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhipu.oapi.service.v4.model.ChatMessage;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.WxProductActiveEntity;
+import top.rslly.iot.services.*;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 
@@ -46,18 +54,37 @@ public class Router {
   @Autowired
   private WeatherTool weatherTool;
   @Autowired
+  private WxBoundProductTool wxBoundProductTool;
+  @Autowired
   private RedisUtil redisUtil;
   @Autowired
   private Agent agent;
+  @Autowired
+  private WxUserServiceImpl wxUserService;
+  @Autowired
+  private WxProductBindServiceImpl wxProductBindService;
+  @Autowired
+  private WxProductActiveTool wxProductActiveTool;
+  @Autowired
+  private WxProductActiveServiceImpl wxProductActiveService;
+  @Autowired
+  private ProductServiceImpl productService;
+  @Autowired
+  private ScheduleTool scheduleTool;
 
-  public String response(String content, String chatId, int productId) {
-    List<ChatMessage> memory;
+  // chatId in wechat module need to use openid
+  public String response(String content, String chatId, int productId, String... microappid) {
+    List<ModelMessage> memory;
     String answer;
-    Map<String, String> musicMap = null;
-    boolean isMusicTool = false;
+    String toolResult = "";
     var memory_cache = redisUtil.get("memory" + chatId);
     if (memory_cache != null)
-      memory = Cast.castList(memory_cache, ChatMessage.class);
+      try {
+        memory = Cast.castList(memory_cache, ModelMessage.class);
+      } catch (Exception e) {
+        e.printStackTrace();
+        memory = new ArrayList<>();
+      }
     else
       memory = new ArrayList<>();
     var resultMap = classifierTool.run(content, memory);
@@ -72,30 +99,105 @@ public class Router {
       List<String> value = Cast.castList(resultMap.get("value"), String.class);
       if (!value.isEmpty()) {
         switch (value.get(0)) {
-          case "4" -> {
-            musicMap = musicTool.run(args);
-            isMusicTool = true;
-            answer = "以下是网易云音乐插件结果：" + musicMap.get("answer") + musicMap.get("url");
+          case "1" -> {
+            toolResult = weatherTool.run(args);
+            answer = "以下是高德天气插件结果：" + toolResult;
           }
-          case "1" -> answer = "以下是高德天气插件结果：" + weatherTool.run(args);
-          case "3" -> answer = "以下是智能控制插件结果：" + controlTool.run(args, productId);
+          case "3" -> {
+            toolResult = controlTool.run(args, productId);
+            answer = "以下是智能控制插件结果：" + toolResult;
+          }
+          case "4" -> {
+            var musicMap = musicTool.run(args);
+            toolResult = musicMap.get("answer");
+            answer = "以下是网易云音乐插件结果：" + toolResult + musicMap.get("url");
+          }
+          case "5" -> {
+            toolResult = agent.run(content, productId);
+            answer = "以下是智能体处理结果：" + toolResult;
+          }
           case "6" -> answer = chatTool.run(content, memory);
-          case "5" -> answer = "以下是智能体处理结果：" + agent.run(content, productId);
+          case "7" -> {
+            if (wxUserService.findAllByOpenid(chatId).isEmpty())
+              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
+            else {
+              var wxBoundProductToolMap = wxBoundProductTool.run(args);
+              String productName = wxBoundProductToolMap.get("productName");
+              String productKey = wxBoundProductToolMap.get("productKey");
+              var productList = productService.findAllByProductName(productName);
+              if (productList.isEmpty())
+                toolResult = "对不起小主人，没有找到" + productName + "产品";
+              else {
+                if (!wxProductBindService
+                    .findByOpenidAndProductId(chatId, productList.get(0).getId()).isEmpty())
+                  toolResult = "对不起小主人，你已经绑定过该产品了，无需重复绑定";
+                else {
+                  boolean result =
+                      wxProductBindService.wxBindProduct(chatId, productName, productKey);
+                  if (result)
+                    toolResult = wxBoundProductToolMap.get("answer");
+                  else
+                    toolResult = "对不起小主人，我绑定失败了，请再试一次吧,参考输入格式为绑定XXX产品，密钥为XXX";
+                }
+              }
+
+            }
+            answer = "以下是微信绑定产品插件结果：" + toolResult;
+          }
+          case "8" -> {
+            if (wxUserService.findAllByOpenid(chatId).isEmpty())
+              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
+            else {
+
+              var wxProductActiveToolMap = wxProductActiveTool.run(args);
+              String productName = wxProductActiveToolMap.get("productName");
+              WxProductActiveEntity wxProductActiveEntity = new WxProductActiveEntity();
+              wxProductActiveEntity.setOpenid(chatId);
+              var productList = productService.findAllByProductName(productName);
+              if (productList.isEmpty())
+                toolResult = "对不起小主人，没有找到" + productName + "产品";
+              else {
+                if (wxProductBindService
+                    .findByOpenidAndProductId(chatId, productList.get(0).getId()).isEmpty())
+                  toolResult = "对不起小主人，你还没绑定该产品，请先绑定该产品再来设置吧";
+                else {
+                  wxProductActiveEntity.setProductId(productList.get(0).getId());
+                  if (wxProductActiveService
+                      .findAllByProductIdAndOpenid(wxProductActiveEntity.getProductId(),
+                          wxProductActiveEntity.getOpenid())
+                      .isEmpty()) {
+                    wxProductActiveService.setUp(wxProductActiveEntity);
+                    toolResult = wxProductActiveToolMap.get("answer");
+                  } else {
+                    toolResult = "对不起小主人，你当前已经能控制该产品了，无需进行切换";
+                  }
+                }
+              }
+            }
+            answer = "以下是微信切换产品插件结果：" + toolResult;
+          }
+          case "9" -> {
+            if (wxUserService.findAllByOpenid(chatId).isEmpty())
+              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
+            else {
+              toolResult = scheduleTool.run(args, chatId, microappid[0]);
+            }
+            answer = "以下是定时任务插件的结果：" + toolResult;
+          }
           default -> answer = resultMap.get("answer").toString();
         }
       } else
         answer = chatTool.run(content, memory);
     } else
       answer = chatTool.run(content, memory);
-    ChatMessage chatMessage;
-    if (isMusicTool)
-      chatMessage = new ChatMessage(ChatMessageRole.ASSISTANT.value(), musicMap.get("answer"));
-    else
-      chatMessage = new ChatMessage(ChatMessageRole.ASSISTANT.value(), answer);
-    ChatMessage userContent = new ChatMessage(ChatMessageRole.USER.value(), content);
+    if (toolResult.equals(""))
+      toolResult = answer;
+    ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), content);
+    ModelMessage chatMessage = new ModelMessage(ChatMessageRole.ASSISTANT.value(), toolResult);
     memory.add(userContent);
     memory.add(chatMessage);
-    System.out.println(memory.size());
+    // System.out.println(memory.size());
+    // slide memory window
     if (memory.size() > 6) {
       memory.subList(0, memory.size() - 6).clear();
     }

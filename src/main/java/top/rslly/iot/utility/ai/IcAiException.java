@@ -23,9 +23,9 @@ import lombok.Getter;
 
 public class IcAiException extends Exception {
   @Getter
-  private final String body;
+  private final String message;
 
-  public IcAiException(String body) {
-    this.body = body;
+  public IcAiException(String message) {
+    this.message = message;
   }
 }

@@ -21,6 +21,7 @@ package top.rslly.iot.transfer;
 
 import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ import top.rslly.iot.models.DataEntity;
 import top.rslly.iot.services.DataServiceImpl;
 import top.rslly.iot.services.ProductDataServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
+import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
 import top.rslly.iot.utility.DataSave;
 import top.rslly.iot.utility.RedisUtil;
 
@@ -38,6 +40,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Component
+@Slf4j
 public class DealThingsModel {
   @Autowired
   private ProductDeviceServiceImpl productDeviceService;
@@ -60,6 +63,8 @@ public class DealThingsModel {
     int modelId = deviceEntityList.get(0).getModelId();
     var productDataEntities = productDataService.findAllByModelId(modelId);
     var mes = JSON.parseObject(message);
+    String reply_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
+        + "/sys/" + "properties/report_reply";
     for (var s : productDataEntities) {
       var result = mes.get(s.getJsonKey());
       if (result == null || s.getStorageType().equals(DataSave.never.getStorageType()))
@@ -85,6 +90,11 @@ public class DealThingsModel {
       } finally {
         lock.unlock();
       }
+    }
+    try {
+      MqttConnectionUtils.publish(reply_topic, "{\"code\":\"" + 200 + "\",\"status\":\"ok\"}", 1);
+    } catch (MqttException e) {
+      log.error("DealThingsModel error:{}", e.getMessage());
     }
   }
 }

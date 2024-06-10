@@ -30,6 +30,8 @@ import java.util.List;
 public interface ProductDeviceService {
   List<ProductDeviceEntity> findAllBySubscribeTopic(String subscribeTopic);
 
+  List<ProductDeviceEntity> findAll();
+
   List<ProductDeviceEntity> findAllByClientId(String clientId);
 
   List<ProductDeviceEntity> findAllByModelId(int modelId);

@@ -37,7 +37,7 @@
 
 
 <p align="center">
-  <img src="images/logo.png">
+  <img src="images/logo2.png" width="300px" height="250px"/>
 </p>
 
 

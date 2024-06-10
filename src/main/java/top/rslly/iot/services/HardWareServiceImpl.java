@@ -50,6 +50,8 @@ public class HardWareServiceImpl implements HardWareService {
     if (deviceEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+    if (controlParam.getQos() < 0 || controlParam.getQos() > 2)
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     int modelId = deviceEntityList.get(0).getModelId();
     var productDataEntities = productDataRepository.findAllByModelId(modelId);
     if (productDataEntities.isEmpty()) {
@@ -77,7 +79,8 @@ public class HardWareServiceImpl implements HardWareService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     MqttConnectionUtils.publish(
-        "/oc/devices/" + controlParam.getName() + "/sys/" + "properties/update", res.toString(), 0);
+        "/oc/devices/" + controlParam.getName() + "/sys/" + "properties/update", res.toString(),
+        controlParam.getQos());
     return ResultTool.success();
   }
 }

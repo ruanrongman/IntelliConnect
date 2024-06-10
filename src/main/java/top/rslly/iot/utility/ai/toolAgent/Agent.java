@@ -21,14 +21,16 @@ package top.rslly.iot.utility.ai.toolAgent;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.DescriptionUtil;
-import top.rslly.iot.utility.ai.Glm;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.Prompt;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.tools.Manage;
 
 import java.util.ArrayList;
@@ -41,31 +43,36 @@ import java.util.Map;
 public class Agent {
   @Autowired
   private Manage manage;
+  @Value("${ai.agent-llm}")
+  private String llmName;
   @Autowired
   private Prompt prompt;
   @Autowired
   private DescriptionUtil descriptionUtil;
+  @Value("${ai.agent-epoch-limit}")
+  private int epochLimit = 8;
   private final StringBuffer conversationPrompt = new StringBuffer();
 
   public String run(String question, int productId) {
-    Glm glm = new Glm();
+    LLM llm = LLMFactory.getLLM(llmName);
     String system = prompt.getReact(descriptionUtil.getTools(), question);
-    List<ChatMessage> messages = new ArrayList<>();
+    List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);
+    // System.out.println("agent epoch limit" + epochLimit);
+    log.info("agent epoch limit{}", epochLimit);
     int iteration = 0;
-    while (iteration < 8) {
+    while (iteration < epochLimit) {
       messages.clear();
-      ChatMessage systemMessage =
-          new ChatMessage(ChatMessageRole.SYSTEM.value(), conversationPrompt);
-      ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), question);
+      ModelMessage systemMessage =
+          new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt);
+      ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
       messages.add(systemMessage);
       messages.add(userMessage);
-      var obj = glm.jsonChat(question, messages, false);
+      var obj = llm.jsonChat(question, messages, false);
       var answer = (String) obj.getJSONObject("action").get("answer");
       try {
         Map<String, String> res = process_llm_result(obj);
-        // System.out.println(res);
         if (res.get("action_name").equals("finish")) {
           String args = res.get("action_parameters");
           return JSON.parseObject(args).getString("content");

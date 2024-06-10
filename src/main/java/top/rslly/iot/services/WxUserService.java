@@ -24,6 +24,7 @@ import top.rslly.iot.param.request.WxUser;
 import top.rslly.iot.utility.result.JsonResult;
 
 import java.io.IOException;
+import java.util.List;
 
 public interface WxUserService {
   JsonResult<?> wxLogin(WxUser wxUser) throws IOException;
@@ -31,4 +32,8 @@ public interface WxUserService {
   JsonResult<?> wxRegister(WxUser wxUser) throws IOException;
 
   WxUserEntity wxRegister(String openid);
+
+  List<WxUserEntity> findAllByOpenid(String openid);
+
+  JsonResult<?> wxGetAllUser();
 }

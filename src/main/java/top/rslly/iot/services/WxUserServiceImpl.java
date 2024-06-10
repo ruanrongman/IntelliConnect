@@ -50,7 +50,7 @@ public class WxUserServiceImpl implements WxUserService {
 
   @Override
   public JsonResult<?> wxLogin(WxUser wxUser) throws IOException {
-    String s = dealWx.GetOpenid(wxUser.getCode(), microAppid, microAppSecret);
+    String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     String openid = (String) JSON.parseObject(s).get("openid");
     // System.out.println(openid);
     List<WxUserEntity> user = wxUserRepository.findAllByOpenid(openid);
@@ -62,7 +62,7 @@ public class WxUserServiceImpl implements WxUserService {
 
   @Override
   public JsonResult<?> wxRegister(WxUser wxUser) throws IOException {
-    String s = dealWx.GetOpenid(wxUser.getCode(), microAppid, microAppSecret);
+    String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     String openid = (String) JSON.parseObject(s).get("openid");
     List<WxUserEntity> user = wxUserRepository.findAllByOpenid(openid);
     if (!user.isEmpty())
@@ -88,5 +88,15 @@ public class WxUserServiceImpl implements WxUserService {
       return wxUserEntity;
     }
     return null;
+  }
+
+  @Override
+  public List<WxUserEntity> findAllByOpenid(String openid) {
+    return wxUserRepository.findAllByOpenid(openid);
+  }
+
+  @Override
+  public JsonResult<?> wxGetAllUser() {
+    return ResultTool.success(wxUserRepository.findAll());
   }
 }

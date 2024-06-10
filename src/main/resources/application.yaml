@@ -83,4 +83,25 @@ js:
     maxInvokeRequestsTimeout: 5
     js_thread_pool_size: 50
 weather:
-    key: XXXXX
+  key: XXXX
+ai:
+  glm-key: XXX
+  deepSeek-key: XXX
+  dashscope-key: XXX
+  robot-name: 小创
+  team-name: 创万联
+  agent-epoch-limit: 5
+  chatTool-llm: deepSeek
+  classifierTool-llm: deepSeek
+  controlTool-llm: deepSeek
+  musicTool-llm: deepSeek
+  weatherTool-llm: deepSeek
+  wxBoundProductTool-llm: deepSeek
+  wxProductActiveTool-llm: deepSeek
+  scheduleTool-llm: deepSeek
+  agent-llm: deepSeek
+emq:
+  api:
+    url: http://192.168.49.129:18083/api/v5/clients
+    key: XXX
+    secret: XXX

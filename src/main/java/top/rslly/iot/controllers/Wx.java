@@ -23,29 +23,22 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
-import org.checkerframework.checker.units.qual.A;
 import org.dom4j.Document;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Controller;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
-import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.WxUser;
-import top.rslly.iot.services.WxUserService;
 import top.rslly.iot.services.WxUserServiceImpl;
-import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.SHA1;
-import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.result.JsonResult;
-import top.rslly.iot.utility.result.ResultCode;
-import top.rslly.iot.utility.result.ResultTool;
 import top.rslly.iot.utility.wx.DealWx;
+import top.rslly.iot.utility.wx.SmartRobot;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -54,7 +47,6 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.List;
 
 @RestController
 @Slf4j
@@ -66,6 +58,8 @@ public class Wx {
   private SHA1 sha1;
   @Autowired
   private DealWx dealWx;
+  @Autowired
+  private SmartRobot smartRobot;
   @Value("${wx.msg.token}")
   private String TOKEN;
   @Value("${wx.appid}")
@@ -99,8 +93,8 @@ public class Wx {
         String nonce = request.getParameter("nonce");
         // 随机字符串
         String echostr = request.getParameter("echostr");
-        log.info("signature = " + signature + " , timestamp = " + timestamp + " , nonce = " + nonce
-            + " , echostr = " + echostr);
+        log.info("signature={}, timestamp={}, nonce={}, echostr={}",
+            signature, timestamp, nonce, echostr);
         String[] strArray = new String[] {TOKEN, timestamp, nonce};
         Arrays.sort(strArray);
         StringBuilder sb = new StringBuilder();
@@ -134,18 +128,29 @@ public class Wx {
             String openid = (String) JSON.parseObject(bodyInfo).get("FromUserName");
             String userid = DigestUtils.md5DigestAsHex(openid.getBytes(StandardCharsets.UTF_8));
             // String ans = router.response(msg);
-            if (microId.equals("gh_a51fecbbd805"))
-              dealWx.smartSendContent(openid, msg, microappid);
-            else if (microId.equals("gh_3ce59b00beee"))
-              dealWx.smartSendContent(openid, msg, microappid2);
+            if (microId.equals("gh_a51fecbbd805")) {
+              if (msg.equals("注册账户")) {
+                var res = wxUserService.wxRegister(openid);
+                if (res != null)
+                  dealWx.sendContent(openid, "注册成功", microappid);
+              } else
+                smartRobot.smartSendContent(openid, msg, microappid);
+            } else if (microId.equals("gh_3ce59b00beee")) {
+              if (msg.equals("注册账户")) {
+                var res = wxUserService.wxRegister(openid);
+                if (res != null)
+                  dealWx.sendContent(openid, "注册成功", microappid2);
+              } else
+                smartRobot.smartSendContent(openid, msg, microappid2);
+            }
           } else if (msgType.equals("event")) {
             String event = JSON.parseObject(bodyInfo).getString("Event");
             String openid = (String) JSON.parseObject(bodyInfo).get("FromUserName");
             if (event.equals("user_enter_tempsession")) {
               if (microId.equals("gh_a51fecbbd805"))
-                dealWx.SendContent(openid, "创万联AI小助手正在为你服务", microappid);
+                dealWx.sendContent(openid, "创万联AI小助手正在为你服务", microappid);
               else if (microId.equals("gh_3ce59b00beee"))
-                dealWx.SendContent(openid, "创万联AI小助手正在为你服务", microappid2);
+                dealWx.sendContent(openid, "创万联AI小助手正在为你服务", microappid2);
             }
           }
         } catch (JSONException e) {
@@ -171,28 +176,29 @@ public class Wx {
               String content = root.element("Content").getText();
               String userid = DigestUtils.md5DigestAsHex(openid.getBytes(StandardCharsets.UTF_8));
               if (content.equals("消息推送密钥")) {
-                dealWx.SendContent(openid, userid, appid);
+                dealWx.sendContent(openid, userid, appid);
               } else if (content.equals("注册账户")) {
                 var res = wxUserService.wxRegister(openid);
                 if (res != null)
-                  dealWx.SendContent(openid, "注册成功", appid);
+                  dealWx.sendContent(openid, "注册成功", appid);
               } else {
                 // String ans = router.response(content);
-                dealWx.smartSendContent(openid, content, appid);
+                smartRobot.smartSendContent(openid, content, appid);
               }
             } else if (type.getText().equals("voice")) {
               String voiceContent = root.element("Recognition").getText();
-              String mediaId = root.element("MediaId").getText();
-              dealWx.GetMedia(mediaId, appid);
-              if (voiceContent != null && !voiceContent.equals(""))
-                dealWx.smartSendContent(openid, voiceContent, appid);
+              String mediaId = root.element("MediaId16K").getText();
+              String url = dealWx.getMedia(mediaId, appid);
+              if (url != null && !url.equals("")) {
+                smartRobot.dealVoice(openid, url, appid);
+              }
             } else if (type.getText().equals("image")) {
               String imageUrl = root.element("PicUrl").getText();
-              dealWx.smartImageSendContent(openid, imageUrl, appid);
+              smartRobot.smartImageSendContent(openid, imageUrl, appid);
             }
             // e.printStackTrace();
           } catch (Exception e2) {
-            e2.printStackTrace();
+            log.error("微信处理POST请求异常{}", e2.getMessage());
           }
         }
 
@@ -202,8 +208,7 @@ public class Wx {
         out.close();
       }
     } catch (Exception ex) {
-      // logger.error("微信帐号接口配置失败！", ex);
-      ex.printStackTrace();
+      log.error("微信帐号接口配置失败！{}", ex.getMessage());
     }
 
 

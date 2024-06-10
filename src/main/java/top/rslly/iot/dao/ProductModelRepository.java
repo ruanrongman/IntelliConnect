@@ -30,6 +30,8 @@ public interface ProductModelRepository extends JpaRepository<ProductModelEntity
 
   List<ProductModelEntity> findAllByName(String name);
 
+  List<ProductModelEntity> findAllByProductIdAndName(int productId, String name);
+
   List<ProductModelEntity> findAllById(int id);
 
   @Transactional

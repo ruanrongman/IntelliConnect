@@ -22,11 +22,17 @@ package top.rslly.iot.utility.ai.tools;
 import com.zhipu.oapi.service.v4.model.ChatMessage;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
-import top.rslly.iot.utility.ai.Glm;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.Prompt;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,23 +44,28 @@ public class ChatTool {
   private Prompt prompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  @Value("${ai.chatTool-llm}")
+  private String llmName;
   private String name = "chatTool";
   private String description = """
       This tool is used to chat with people
       Args: user question(str)
       """;
 
-  public String run(String question, List<ChatMessage> memory) {
-    Glm glm = new Glm();
-    List<ChatMessage> messages = new ArrayList<>();
+  public String run(String question, List<ModelMessage> memory) {
+    LLM llm = LLMFactory.getLLM(llmName);
+    List<ModelMessage> messages = new ArrayList<>();
 
-    ChatMessage systemMessage =
-        new ChatMessage(ChatMessageRole.SYSTEM.value(), prompt.getChatTool());
-    ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), question);
+    ModelMessage systemMessage =
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getChatTool());
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
+    if (!memory.isEmpty()) {
+      // messages.addAll(memory);
+      systemMessage.setContent(prompt.getChatTool() + memory);
+    }
     messages.add(systemMessage);
-    if (!memory.isEmpty())
-      messages.addAll(memory);
     messages.add(userMessage);
-    return glm.commonChat(question, messages, true);
+    // log.info("chatTool: " + messages);
+    return llm.commonChat(question, messages, true);
   }
 }

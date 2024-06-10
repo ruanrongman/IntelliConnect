@@ -57,6 +57,11 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  public List<ProductDeviceEntity> findAll() {
+    return productDeviceRepository.findAll();
+  }
+
+  @Override
   public List<ProductDeviceEntity> findAllByClientId(String clientId) {
     return productDeviceRepository.findAllByClientId(clientId);
   }

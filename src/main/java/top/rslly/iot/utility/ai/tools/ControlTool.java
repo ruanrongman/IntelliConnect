@@ -19,27 +19,31 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.Data;
-import org.eclipse.paho.client.mqttv3.MqttException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.services.HardWareServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
 import top.rslly.iot.services.ProductModelServiceImpl;
-import top.rslly.iot.utility.ai.Glm;
+import top.rslly.iot.services.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.Prompt;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Data
 @Component
+@Slf4j
 public class ControlTool implements BaseTool<String> {
   @Autowired
   private Prompt prompt;
@@ -48,8 +52,12 @@ public class ControlTool implements BaseTool<String> {
   @Autowired
   private ProductModelServiceImpl productModelService;
   @Autowired
+  private ProductServiceImpl productService;
+  @Autowired
   private HardWareServiceImpl hardWareService;
 
+  @Value("${ai.controlTool-llm}")
+  private String llmName;
   private String name = "controlTool";
   private String description = """
       A tool for controlling and querying electrical status
@@ -63,50 +71,59 @@ public class ControlTool implements BaseTool<String> {
 
   @Override
   public String run(String question, int productId) {
-    Glm glm = new Glm();
-    List<ChatMessage> messages = new ArrayList<>();
 
-    ChatMessage systemMessage =
-        new ChatMessage(ChatMessageRole.SYSTEM.value(), prompt.getControlTool(productId));
-    ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), question);
+    if (productService.findAllById(productId).isEmpty())
+      return "产品设置错误，请检查相关设置！";
+    if (productModelService.findAllByProductId(productId).isEmpty())
+      return "产品下面没有任何设备，请先绑定设备";
+    LLM llm = LLMFactory.getLLM(llmName);
+    List<ModelMessage> messages = new ArrayList<>();
+
+    ModelMessage systemMessage =
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getControlTool(productId));
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
-    var obj = glm.jsonChat(question, messages, false).getJSONObject("action");
-    var answer = obj.getString("answer");
-    try {
-      this.process_llm_result(obj);
-    } catch (Exception e) {
-      return answer;
+    var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
+    String answer = obj.getString("answer");
+    JSONArray controlParameters = obj.getJSONArray("controlParameters");
+    for (Object controlParameter : controlParameters) {
+      process_llm_result(productId, (JSONObject) controlParameter);
     }
     return answer;
   }
 
-  private void process_llm_result(JSONObject jsonObject) throws MqttException, IcAiException {
-    if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
-      var propertyJson = jsonObject.getJSONArray("properties");
-      var valueJson = jsonObject.getJSONArray("value");
-      String taskType = jsonObject.get("taskType").toString();
-      if (taskType == null)
-        throw new NullPointerException("taskType is null");
-      List<String> properties = JSONObject.parseArray(propertyJson.toJSONString(), String.class);
-      List<String> value = JSONObject.parseArray(valueJson.toJSONString(), String.class);
-      var productModels = productModelService.findAllByName(jsonObject.get("name").toString());
-      if (productModels.isEmpty())
-        throw new IcAiException("platform not support");
-      for (var s : productModels) {
-        var deviceNames = productDeviceService.findAllByModelId(s.getId());
-        if (deviceNames.isEmpty())
+  private void process_llm_result(int productId, JSONObject jsonObject) {
+    try {
+      if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
+        JSONArray propertyJson = jsonObject.getJSONArray("properties");
+        JSONArray valueJson = jsonObject.getJSONArray("value");
+        String taskType = jsonObject.get("taskType").toString();
+        if (taskType == null)
+          throw new NullPointerException("taskType is null");
+        List<String> properties = JSONObject.parseArray(propertyJson.toJSONString(), String.class);
+        List<String> value = JSONObject.parseArray(valueJson.toJSONString(), String.class);
+        var productModels = productModelService.findAllByProductIdAndName(productId,
+            jsonObject.get("name").toString());
+        if (productModels.isEmpty())
           throw new IcAiException("platform not support");
-        for (var device : deviceNames) {
-          if (!properties.isEmpty() && !value.isEmpty() && taskType.equals("control")) {
-            ControlParam controlParam = new ControlParam(device.getName(), properties, value);
-            var res = hardWareService.control(controlParam);
-            if (res.getErrorCode() != 200)
-              throw new IcAiException("platform not support");
+        for (var s : productModels) {
+          var deviceNames = productDeviceService.findAllByModelId(s.getId());
+          if (deviceNames.isEmpty())
+            throw new IcAiException("platform not support");
+          for (var device : deviceNames) {
+            if (!properties.isEmpty() && !value.isEmpty() && taskType.equals("control")) {
+              ControlParam controlParam = new ControlParam(device.getName(), 1, properties, value);
+              var res = hardWareService.control(controlParam);
+              if (res.getErrorCode() != 200)
+                throw new IcAiException("platform not support");
+            }
           }
         }
-      }
-    } else
-      throw new IcAiException("llm response error");
+      } else
+        throw new IcAiException("llm response error");
+    } catch (Exception e) {
+      log.error("control tools error:{}", e.getMessage());
+    }
   }
 }
