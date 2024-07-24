@@ -36,10 +36,7 @@ import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.*;
 
 @Component
 public class Router {
@@ -77,6 +74,9 @@ public class Router {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
+    Map<String, Object> globalMessage = new HashMap<>();
+    globalMessage.put("productId", productId);
+    globalMessage.put("chatId", chatId);
     var memory_cache = redisUtil.get("memory" + chatId);
     if (memory_cache != null)
       try {
@@ -104,7 +104,7 @@ public class Router {
             answer = "以下是高德天气插件结果：" + toolResult;
           }
           case "3" -> {
-            toolResult = controlTool.run(args, productId);
+            toolResult = controlTool.run(args, globalMessage);
             answer = "以下是智能控制插件结果：" + toolResult;
           }
           case "4" -> {
@@ -113,67 +113,17 @@ public class Router {
             answer = "以下是网易云音乐插件结果：" + toolResult + musicMap.get("url");
           }
           case "5" -> {
-            toolResult = agent.run(content, productId);
+
+            toolResult = agent.run(content, globalMessage);
             answer = "以下是智能体处理结果：" + toolResult;
           }
           case "6" -> answer = chatTool.run(content, memory);
           case "7" -> {
-            if (wxUserService.findAllByOpenid(chatId).isEmpty())
-              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
-            else {
-              var wxBoundProductToolMap = wxBoundProductTool.run(args);
-              String productName = wxBoundProductToolMap.get("productName");
-              String productKey = wxBoundProductToolMap.get("productKey");
-              var productList = productService.findAllByProductName(productName);
-              if (productList.isEmpty())
-                toolResult = "对不起小主人，没有找到" + productName + "产品";
-              else {
-                if (!wxProductBindService
-                    .findByOpenidAndProductId(chatId, productList.get(0).getId()).isEmpty())
-                  toolResult = "对不起小主人，你已经绑定过该产品了，无需重复绑定";
-                else {
-                  boolean result =
-                      wxProductBindService.wxBindProduct(chatId, productName, productKey);
-                  if (result)
-                    toolResult = wxBoundProductToolMap.get("answer");
-                  else
-                    toolResult = "对不起小主人，我绑定失败了，请再试一次吧,参考输入格式为绑定XXX产品，密钥为XXX";
-                }
-              }
-
-            }
+            toolResult = wxBoundProductTool.run(args, globalMessage);
             answer = "以下是微信绑定产品插件结果：" + toolResult;
           }
           case "8" -> {
-            if (wxUserService.findAllByOpenid(chatId).isEmpty())
-              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
-            else {
-
-              var wxProductActiveToolMap = wxProductActiveTool.run(args);
-              String productName = wxProductActiveToolMap.get("productName");
-              WxProductActiveEntity wxProductActiveEntity = new WxProductActiveEntity();
-              wxProductActiveEntity.setOpenid(chatId);
-              var productList = productService.findAllByProductName(productName);
-              if (productList.isEmpty())
-                toolResult = "对不起小主人，没有找到" + productName + "产品";
-              else {
-                if (wxProductBindService
-                    .findByOpenidAndProductId(chatId, productList.get(0).getId()).isEmpty())
-                  toolResult = "对不起小主人，你还没绑定该产品，请先绑定该产品再来设置吧";
-                else {
-                  wxProductActiveEntity.setProductId(productList.get(0).getId());
-                  if (wxProductActiveService
-                      .findAllByProductIdAndOpenid(wxProductActiveEntity.getProductId(),
-                          wxProductActiveEntity.getOpenid())
-                      .isEmpty()) {
-                    wxProductActiveService.setUp(wxProductActiveEntity);
-                    toolResult = wxProductActiveToolMap.get("answer");
-                  } else {
-                    toolResult = "对不起小主人，你当前已经能控制该产品了，无需进行切换";
-                  }
-                }
-              }
-            }
+            toolResult = wxProductActiveTool.run(args, globalMessage);
             answer = "以下是微信切换产品插件结果：" + toolResult;
           }
           case "9" -> {

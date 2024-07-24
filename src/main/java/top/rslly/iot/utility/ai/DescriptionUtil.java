@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.services.ProductDataServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
 import top.rslly.iot.services.ProductModelServiceImpl;
+import top.rslly.iot.services.TimeScheduleServiceImpl;
 import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.ai.tools.MusicTool;
 import top.rslly.iot.utility.ai.tools.WeatherTool;
@@ -39,7 +40,8 @@ public class DescriptionUtil {
   private ProductDataServiceImpl productDataService;
   @Autowired
   private ProductDeviceServiceImpl productDeviceService;
-
+  @Autowired
+  private TimeScheduleServiceImpl timeScheduleService;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
@@ -63,6 +65,15 @@ public class DescriptionUtil {
       var dataList = productDeviceService.getDescription(s.getId());
       if (!dataList.isEmpty())
         jsonObject.put(s.getName(), dataList);
+    }
+    return jsonObject.toJSONString();
+  }
+
+  public String getSchedule(String openid) {
+    JSONObject jsonObject = new JSONObject();
+    var result = timeScheduleService.findAllByOpenid(openid);
+    for (var s : result) {
+      jsonObject.put(s.getTaskName(), s.getCron());
     }
     return jsonObject.toJSONString();
   }

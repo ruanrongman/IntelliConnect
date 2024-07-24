@@ -19,8 +19,10 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
+import java.util.Map;
+
 public interface BaseTool<T> {
   T run(String question);
 
-  T run(String question, int productId);
+  T run(String question, Map<String, Object> globalMessage);
 }

@@ -21,6 +21,7 @@ package top.rslly.iot.utility;
 
 import org.quartz.*;
 import org.quartz.impl.StdSchedulerFactory;
+import top.rslly.iot.utility.ai.tools.MyJobListener;
 
 public class QuartzManager {
   /**
@@ -34,12 +35,17 @@ public class QuartzManager {
    * @param cron 时间设置 表达式，参考quartz说明文档
    * @param objects 可变参数需要进行传参的值
    */
-  private static final SchedulerFactory schedulerFactory = new StdSchedulerFactory();
+  private static SchedulerFactory schedulerFactory = null;
+
+  public static void init() {
+    schedulerFactory = new StdSchedulerFactory();
+  }
 
   public static void addJob(String jobName, String jobGroupName, String triggerName,
       String triggerGroupName, Class jobClass, String cron, Object... objects) {
     try {
       Scheduler scheduler = schedulerFactory.getScheduler();
+      scheduler.getListenerManager().addJobListener(new MyJobListener());
       // 任务名，任务组，任务执行类
       JobDetail jobDetail = JobBuilder.newJob(jobClass).withIdentity(jobName, jobGroupName).build();
       // 触发器
@@ -138,6 +144,15 @@ public class QuartzManager {
     try {
       Scheduler scheduler = schedulerFactory.getScheduler();
       scheduler.start();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static boolean checkExist(String jobName, String jobGroupName) {
+    try {
+      Scheduler scheduler = schedulerFactory.getScheduler();
+      return scheduler.checkExists(JobKey.jobKey(jobName, jobGroupName));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

@@ -82,8 +82,9 @@ js:
     max_black_list_duration_sec: 60
     maxInvokeRequestsTimeout: 5
     js_thread_pool_size: 50
-weather:
-  key: XXXX
+ota:
+   bin:
+     path: D://temp-rainy//
 ai:
   glm-key: XXX
   deepSeek-key: XXX

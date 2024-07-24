@@ -20,6 +20,8 @@
 package top.rslly.iot.transfer;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,18 +53,28 @@ public class DealThingsModel {
   @Autowired
   private RedisUtil redisUtil;
 
-  private final Lock lock = new ReentrantLock();
+  // private final Lock lock = new ReentrantLock();
 
-  // 同步问题
-  @Async("taskExecutor")
-  public void deal(String clientId, String topic, String message) {
+
+  public boolean deal(String clientId, String topic, String message) {
+    // this clientId is delivered id ,not the sender
+    log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
     String characteristic = UUID.randomUUID().toString();
+    // var deviceEntityList = productDeviceService.findAllBySubscribeTopic(topic);
+    // if (deviceEntityList.isEmpty()||!clientId.equals(MqttConnectionUtils.clientId))
+    // return;
     var deviceEntityList = productDeviceService.findAllByClientId(clientId);
     if (deviceEntityList.isEmpty() || !deviceEntityList.get(0).getSubscribeTopic().equals(topic))
-      return;
+      return false;
     int modelId = deviceEntityList.get(0).getModelId();
     var productDataEntities = productDataService.findAllByModelId(modelId);
-    var mes = JSON.parseObject(message);
+    JSONObject mes;
+    try {
+      mes = JSON.parseObject(message);
+    } catch (JSONException e) {
+      log.error("json error{}", e.getMessage());
+      return false;
+    }
     String reply_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
         + "/sys/" + "properties/report_reply";
     for (var s : productDataEntities) {
@@ -74,7 +86,6 @@ public class DealThingsModel {
       dataEntity.setJsonKey(s.getJsonKey());
       dataEntity.setValue(result.toString());
       dataEntity.setDeviceId(deviceEntityList.get(0).getId());
-      lock.lock();
       try {
         long time = System.currentTimeMillis();
         dataEntity.setTime(time);
@@ -86,15 +97,17 @@ public class DealThingsModel {
           // log.info("热点过期时间{}",
           // redisUtil.getExpire(deviceEntityList.get(0).getId()+s.getJsonKey()));
         }
+        log.info("{}", dataEntity);
         dataService.insert(dataEntity);
-      } finally {
-        lock.unlock();
+      } catch (Exception e) {
+        log.error("DealThingsModel save error:{}", e.getMessage());
       }
     }
     try {
-      MqttConnectionUtils.publish(reply_topic, "{\"code\":\"" + 200 + "\",\"status\":\"ok\"}", 1);
+      MqttConnectionUtils.publish(reply_topic, "{\"code\":\"" + 200 + "\",\"status\":\"ok\"}", 0);
     } catch (MqttException e) {
       log.error("DealThingsModel error:{}", e.getMessage());
     }
+    return true;
   }
 }

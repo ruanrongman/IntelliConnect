@@ -95,15 +95,11 @@ public class Glm implements LLM {
               .requestId(requestId).build();
       ModelApiResponse invokeModelApiResp = client.invokeModelApi(chatCompletionRequest);
       var response =
-          mapper.writeValueAsString(invokeModelApiResp.getData().getChoices().get(0).getMessage());
+          invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent().toString();
       log.info("model output:{} ", response);
       var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "")
           .replace("json", "");
-      JSONObject obj = JSON.parseObject(temp);
-      var contentObj = obj.getJSONObject("content");
-      if (contentObj == null)
-        throw new NullPointerException("content jsonObject is null");
-      return contentObj;
+      return JSON.parseObject(temp);
     } catch (Exception e) {
       JSONObject action = new JSONObject();
       JSONObject answer = new JSONObject();
@@ -135,8 +131,8 @@ public class Glm implements LLM {
           .requestId(requestId).build();
       ModelApiResponse invokeModelApiResp = client.invokeModelApi(chatCompletionRequest);
 
-      var response = mapper.writeValueAsString(
-          invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent());
+      var response =
+          invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent().toString();
       log.info("model output:{} ", response);
       return response;
     } catch (Exception e) {

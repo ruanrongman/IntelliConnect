@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.services.HardWareServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
@@ -40,6 +41,8 @@ import top.rslly.iot.utility.ai.llm.LLMFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Data
 @Component
@@ -70,7 +73,8 @@ public class ControlTool implements BaseTool<String> {
   }
 
   @Override
-  public String run(String question, int productId) {
+  public String run(String question, Map<String, Object> globalMessage) {
+    int productId = (int) globalMessage.get("productId");
 
     if (productService.findAllById(productId).isEmpty())
       return "产品设置错误，请检查相关设置！";
@@ -81,6 +85,7 @@ public class ControlTool implements BaseTool<String> {
 
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getControlTool(productId));
+    // log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
@@ -103,23 +108,23 @@ public class ControlTool implements BaseTool<String> {
           throw new NullPointerException("taskType is null");
         List<String> properties = JSONObject.parseArray(propertyJson.toJSONString(), String.class);
         List<String> value = JSONObject.parseArray(valueJson.toJSONString(), String.class);
-        var productModels = productModelService.findAllByProductIdAndName(productId,
-            jsonObject.get("name").toString());
-        if (productModels.isEmpty())
-          throw new IcAiException("platform not support");
-        for (var s : productModels) {
-          var deviceNames = productDeviceService.findAllByModelId(s.getId());
-          if (deviceNames.isEmpty())
-            throw new IcAiException("platform not support");
-          for (var device : deviceNames) {
-            if (!properties.isEmpty() && !value.isEmpty() && taskType.equals("control")) {
-              ControlParam controlParam = new ControlParam(device.getName(), 1, properties, value);
-              var res = hardWareService.control(controlParam);
-              if (res.getErrorCode() != 200)
-                throw new IcAiException("platform not support");
-            }
-          }
+        String deviceName = jsonObject.get("name").toString();
+        List<Integer> modelList = new ArrayList<>();
+        var productModelEntityList = productModelService.findAllByProductId(productId);
+        for (var s : productModelEntityList) {
+          modelList.add(s.getId());
         }
+        if (modelList
+            .contains(productDeviceService.findAllByName(deviceName).get(0).getModelId())) {
+          if (!properties.isEmpty() && !value.isEmpty() && taskType.equals("control")) {
+            ControlParam controlParam = new ControlParam(deviceName, 1, properties, value);
+            var res = hardWareService.control(controlParam);
+            if (res.getErrorCode() != 200)
+              throw new IcAiException("platform not support");
+          }
+        } else
+          throw new IcAiException("the deviceName is not in this product");
+
       } else
         throw new IcAiException("llm response error");
     } catch (Exception e) {

@@ -45,7 +45,8 @@ public class Prompt {
           The electrical properties and value that can be controlled by each electrical:{properties_value}
           The device of current electrical type and the latest status:{equipment_status}
           value ["null"] means devices information is not exist
-          If devices are disconnected you cannot control it
+          If you find the user wants to control is not in the above range or the device is disconnected,
+          you can not control it,and you should warn the user in the answer param
           ## Output Format
           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
           The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
@@ -54,33 +55,14 @@ public class Prompt {
           "thought": "The thought of what to do and why.(use Chinese)",
           "action": # the action to take
               {
-              "answer": "Please describe your control strategy in detail and Answer humanity,Be polite and gentle",
+              "answer": "Answer vivid,lively,kind to user requests immediately based on data(use Chinese)",
               "controlParameters":[
                {
-                "name": "electronic name,If it doesn't match, please output null",
-                "code": "if success output 200,else output 400",
+                "name": "device name,If it doesn't match, please output null",
+                "code": "if device connect output 200,else output 400",
                 "taskType": "If it is a control task, output control; otherwise, output 'query'."
                 "properties": "electronic input parameters, json list data,If there is no such properties, please output []",
-                "value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output []",
-               }
-              ]
-              }
-          }
-          ```
-          If you find the user wants to control is not in the above range or the device is disconnected,you should return
-           ```json
-          {
-          "thought": "The thought of what to do and why.",
-          "action":
-              {
-              "answer": "Please describe your control strategy in detail and Answer humanity,Be polite and gentle",
-              "controlParameters":[
-              {
-                  "name": "electronic name",
-                  "code": "400",
-                  "taskType": "control",
-                  "properties": [],
-                  "value": [],
+                "value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output []"
                }
               ]
               }
@@ -88,7 +70,8 @@ public class Prompt {
           ```
           ## Attention
           - Your output is JSON only and no explanation.
-          - If there is some electrical power that cannot be controlled, such as disconnected, please inform the user
+          - Please respond to the user's request immediately, rather than using terms like "later" or "then"
+          - If device cannot be controlled, such as disconnected, please inform the user
           """;
   private static final String musicPrompt =
       """
@@ -104,7 +87,7 @@ public class Prompt {
               "code": "If this is related to playing music output 200,else output 400",
               "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
               "singer": "singer name,if you not found,output null",
-              "music":  "music name,if you not found,output null",
+              "music":  "music name,if you not found,output null"
               }
           }
           ```
@@ -134,6 +117,7 @@ public class Prompt {
            ```
            ## few shot
            if user input: What's the weather like today ?
+           ```json
            {
            "thought": "用户想要查询天气",
            "action":
@@ -144,7 +128,9 @@ public class Prompt {
                "args": "What's the weather like today"
                }
            }
+           ```
            if user input: what time is it ?
+           ```json
            {
            "thought": "用户希望查询时间",
            "action":
@@ -155,7 +141,9 @@ public class Prompt {
                "args": "ok"
                }
            }
+           ```
            if user input: Bundle the lamp product,key is XXX
+           ```json
            {
            "thought": "用户想要绑定产品",
            "action":
@@ -166,6 +154,7 @@ public class Prompt {
                "args": "Bundle the lamp product,key is XXX"
                }
            }
+           ```
            ## Attention
            - Your output is JSON only and no explanation.
            ## Current Conversation
@@ -192,7 +181,7 @@ public class Prompt {
                {
                "code": "If this is related to weather output 200,else output 400",
                "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
-               "address": "Structured addresses",
+               "address": "Structured addresses"
                }
            }
            ```
@@ -213,7 +202,7 @@ public class Prompt {
       """;
   private static final String wxProductBoundPrompt =
       """
-          Identify the product name and key to be bound based on the user's request
+          Identify the product name and key to be bind or unbind based on the user's request
           ## Output Format
                To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
                The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
@@ -224,6 +213,7 @@ public class Prompt {
                    {
                    "code": "If this is related to bind product output 200,else output 400",
                    "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
+                   "bind" : "if user want to bound output true,else output false",
                    "productName": "The user needs to bind the product name",
                    "productKey": "The product key"
                    }
@@ -231,16 +221,19 @@ public class Prompt {
                ```
                ## few shot
                if user input: help me bound the air product,the key is 12345
+               ```json
                {
-               "thought": "The thought of what to do and why.(use Chinese)",
+               "thought": "用户想要绑定空调产品",
                "action":
                    {
                    "code": "200",
-                   "answer": "Ok, I've understood, your device name is air and the key is 12345",
+                   "answer": "Ok, I've understood, your product name is air and the key is 12345",
+                   "bind" : "true",
                    "productName": "air",
                    "productKey": "12345"
                    }
                }
+               ```
                ## Attention
                - Your output is JSON only and no explanation.
           """;
@@ -257,21 +250,23 @@ public class Prompt {
                    {
                    "code": "If this is related to bind product output 200,else output 400",
                    "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
-                   "productName": "The name of the product that the user wants to control",
+                   "productName": "The name of the product that the user wants to control"
                    }
                }
                ```
                ## few shot
                if user input: 设置控制lamp产品
+               ```json
                {
-               "thought": "The thought of what to do and why.(use Chinese)",
+               "thought": "用户想要设置控制产品",
                "action":
                    {
                    "code": "200",
                    "answer": "Ok, I've understood, your want to control product name is lamp",
-                   "productName": "lamp",
+                   "productName": "lamp"
                    }
                }
+               ```
                ## Attention
                - Your output is JSON only and no explanation.
                - The product name should be based solely on the user's input and should not be translated into other languages
@@ -357,9 +352,10 @@ public class Prompt {
           """;
   private static final String schedulePrompt =
       """
-          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Simplify user input to city names.
+          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
           Identify the time when the user wants to be reminded and convert it to a cron expression.
           reference information: The current time is {time}
+          Arranged reminder tasks:{schedule_map}
           ## Output Format
            To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
            The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
@@ -369,40 +365,52 @@ public class Prompt {
            "action": # the action to take
                {
                "code": "If this is related to Time reminder task output 200,else output 400",
-               "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
-               "repeat": "If it is a periodic time task output true,else output false"
-               "time" : "execution time,Here is the response formatted:yyyy-MM-dd HH:mm:ss"
-               "cron": "Linux Crontab expression"
+               "answer": "Answer vivid,lively,kind and amiable(use Chinese),you must tell people the Arranged reminder tasks",
+               "repeat": "If it is a periodic time task output true,else output false",
+               "task_name": "The name of the scheduled task",
+               "time" : "execution time,Here is the response formatted:yyyy-MM-dd HH:mm:ss",
+               "cron": "Linux Crontab expression",
+               "cancel":"If it is to cancel the task output ture else false"
                }
            }
            ```
            ## few shot
            if user input: Remind me in 5 seconds
+           if Arranged reminder tasks is {}
            The current time is 2024-06-06 10:40:05
+           ```json
              {
-             "thought": "The thought of what to do and why.(use Chinese)",
+             "thought": "用户想要在5分钟后提醒",
              "action":
                  {
                  "code": "200",
-                 "answer": "Okay, I'll remind you in 5 seconds",
+                 "answer": "好的我将会在5秒种后提醒你，你当前没有设定任何提醒任务",
+                 "task_name": "5 seconds task",
                  "repeat": "false",
                  "time": "2024-06-06 10:40:10",
-                 "cron": null
+                 "cron": null,
+                 "cancel":"false"
                  }
              }
+            ```
            if user input: Remind me at 12:00 noon every day.
+           if Arranged reminder tasks is {"1300秒后提醒任务":"36 59 11 19 06 ? 2024"}
            The current time is 2024-06-06 10:40:05
+           ```json
            {
-             "thought": "The thought of what to do and why.(use Chinese)",
+             "thought": "用户想要每天中午12点提醒",
              "action":
                  {
                  "code": "200",
-                 "answer": "Okay, I'll remind you at 12:00 noon every day",
+                 "answer": "好的我将会在每天中午12点提醒你，你已经设定了以下提醒任务 '1300秒后提醒任务'",
+                 "task_name": "12:00 noon every day task",
                  "repeat": "true",
                  "time": null,
-                 "cron": "0 0 12 * * ?"
+                 "cron": "0 0 12 * * ?",
+                 "cancel":"false"
                  }
              }
+           ```
            ## Attention
            - Your output is JSON only and no explanation.
            - Linux Crontab expression example
@@ -458,7 +466,7 @@ public class Prompt {
         "Composite tasks(like according to weather control electrical)");
     classifierMap.put("6",
         "Other tasks (including chatting,coding,write paper,Get news or unknown events,translate and etc.)");
-    classifierMap.put("7", "bundle the product");
+    classifierMap.put("7", "bind or Unbinding the product");
     classifierMap.put("8", "Set up controlled products");
     classifierMap.put("9", "Scheduled tasks or reminder tasks");
     String classifierJson = JSON.toJSONString(classifierMap);
@@ -510,13 +518,14 @@ public class Prompt {
     return voicePrompt;
   }
 
-  public String getScheduleTool() {
+  public String getScheduleTool(String openid) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
     Map<String, String> params = new HashMap<>();
     params.put("agent_name", robotName);
     params.put("team_name", teamName);
+    params.put("schedule_map", descriptionUtil.getSchedule(openid));
     params.put("time", formattedDate);
     return StringUtils.formatString(schedulePrompt, params);
   }

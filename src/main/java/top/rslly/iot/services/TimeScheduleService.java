@@ -19,35 +19,18 @@
  */
 package top.rslly.iot.services;
 
-import top.rslly.iot.models.ProductDeviceEntity;
-import top.rslly.iot.param.prompt.ProductDataDescription;
-import top.rslly.iot.param.prompt.ProductDeviceDescription;
-import top.rslly.iot.param.request.ProductDevice;
-import top.rslly.iot.utility.result.JsonResult;
+import top.rslly.iot.models.TimeScheduleEntity;
 
 import java.util.List;
 
-public interface ProductDeviceService {
-  List<ProductDeviceEntity> findAllBySubscribeTopic(String subscribeTopic);
+public interface TimeScheduleService {
+  List<TimeScheduleEntity> findAllByOpenid(String openid);
 
-  List<ProductDeviceEntity> findAll();
+  List<TimeScheduleEntity> findAllByOpenidAndTaskName(String openid, String taskName);
 
-  List<ProductDeviceEntity> findAllByClientId(String clientId);
+  List<TimeScheduleEntity> findAll();
 
-  List<ProductDeviceEntity> findAllByName(String name);
+  void insert(TimeScheduleEntity timeScheduleEntity);
 
-  List<ProductDeviceEntity> findAllByModelId(int modelId);
-
-  List<ProductDeviceEntity> deleteById(int id);
-
-  List<ProductDeviceDescription> getDescription(int modelId);
-
-  int updateOnlineByClientId(String online, String clientId);
-
-  JsonResult<?> getProductDevice();
-
-  JsonResult<?> postProductDevice(ProductDevice productDevice);
-
-  JsonResult<?> deleteProductDevice(int id);
-
+  void deleteByOpenidAndTaskName(String openid, String taskName);
 }

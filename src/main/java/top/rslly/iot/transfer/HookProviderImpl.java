@@ -20,6 +20,7 @@
 package top.rslly.iot.transfer;
 
 import com.alibaba.fastjson.JSON;
+import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -77,8 +78,7 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
 
         HookSpec.newBuilder().setName("client.connected").build(),
         HookSpec.newBuilder().setName("client.disconnected").build(),
-        HookSpec.newBuilder().setName("message.delivered").build(),
-        // HookSpec.newBuilder().setName("message.publish").build(),
+        HookSpec.newBuilder().setName("message.publish").build(),
 
     };
     LoadedResponse reply = LoadedResponse.newBuilder().addAllHooks(Arrays.asList(specs)).build();
@@ -119,15 +119,32 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
   }
 
   @Override
-  public void onMessageDelivered(MessageDeliveredRequest request,
-      StreamObserver<EmptySuccess> responseObserver) {
-    dealThingsModel.deal(request.getClientinfo().getClientid(), request.getMessage().getTopic(),
-        request.getMessage().getPayload().toStringUtf8());
-    EmptySuccess reply = EmptySuccess.newBuilder().build();
+  public void onMessagePublish(MessagePublishRequest request,
+      StreamObserver<ValuedResponse> responseObserver) {
+    boolean isDeal =
+        dealThingsModel.deal(request.getMessage().getFrom(), request.getMessage().getTopic(),
+            request.getMessage().getPayload().toStringUtf8());
+    Message nmsg;
+    if (isDeal) {
+      ByteString bstr = ByteString.copyFromUtf8("You don't have permissions");
+
+      nmsg = Message.newBuilder()
+          .setId(request.getMessage().getId())
+          .setNode(request.getMessage().getNode())
+          .setFrom(request.getMessage().getFrom())
+          .setTopic(request.getMessage().getTopic())
+          .setQos(request.getMessage().getQos())
+          .setTimestamp(request.getMessage().getTimestamp())
+          .setPayload(bstr).build();
+    } else
+      nmsg = request.getMessage();
+
+    ValuedResponse reply = ValuedResponse.newBuilder()
+        .setType(ValuedResponse.ResponsedType.STOP_AND_RETURN)
+        .setMessage(nmsg).build();
     responseObserver.onNext(reply);
     responseObserver.onCompleted();
   }
-
 
 }
 

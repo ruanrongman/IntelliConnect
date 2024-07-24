@@ -80,7 +80,7 @@ public class WeatherTool implements BaseTool<String> {
   }
 
   @Override
-  public String run(String question, int productId) {
+  public String run(String question, Map<String, Object> globalMessage) {
     return this.run(question);
   }
 

@@ -17,29 +17,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility;
+package top.rslly.iot.services;
 
-import java.io.File;
-import java.io.FileOutputStream;
+import org.springframework.web.multipart.MultipartFile;
+import top.rslly.iot.utility.result.JsonResult;
+
+import javax.servlet.http.HttpServletResponse;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
-public class FileUtil {
+public interface OtaService {
+  JsonResult<?> uploadBin(String name, MultipartFile multipartFile);
 
-  public static void uploadFile(byte[] file, String filePath, String fileName) throws Exception {
-    File targetFile = new File(filePath);
-    if (!targetFile.exists()) {
-      if (!targetFile.mkdirs()) {
-        throw new IOException("Failed to create target directory.");
-      }
-    }
-    // 确保文件路径以系统相关的路径分隔符结尾
-    String systemPath = System.getProperty("file.separator");
-    String safeFilePath = filePath.endsWith(systemPath) ? filePath : filePath + systemPath;
-    FileOutputStream out = new FileOutputStream(safeFilePath + fileName);
-    out.write(file);
-    out.flush();
-    out.close();
-  }
+  void otaDevice(String name, HttpServletResponse response) throws IOException;
 
+  JsonResult<?> otaEnable(String name, String deviceName);
 
+  JsonResult<?> deleteBin(String name);
 }

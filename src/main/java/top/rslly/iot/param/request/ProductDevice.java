@@ -29,5 +29,6 @@ public class ProductDevice {
   private String clientId;
   private int allow;
   private String name;
+  private String description;
 
 }

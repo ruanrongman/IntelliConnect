@@ -19,14 +19,11 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.wx.DealWx;
 
@@ -36,16 +33,19 @@ import java.time.format.DateTimeFormatter;
 @Slf4j
 public class RemindJob implements Job {
 
-  @SneakyThrows
   @Override
-  public void execute(JobExecutionContext jobExecutionContext) throws JobExecutionException {
+  public void execute(JobExecutionContext jobExecutionContext) {
     JobDataMap jobDataMap = jobExecutionContext.getJobDetail().getJobDataMap();
     DealWx dealWx = (DealWx) SpringBeanUtils.getBean("dealWx");
     String openid = jobDataMap.get("data1").toString();
     String microappid = jobDataMap.get("data2").toString();
     log.info("openid:{}", openid);
     log.info("microappid:{}", microappid);
-    dealWx.sendContent(openid, "提醒时间到了！！！", microappid);
+    try {
+      dealWx.sendContent(openid, "提醒时间到了！！！", microappid);
+    } catch (Exception e) {
+      log.error("发送失败", e);
+    }
     // 创建一个事件，下面仅创建一个输出语句作演示
     log.info(Thread.currentThread().getName() + "--"
         + DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now()));

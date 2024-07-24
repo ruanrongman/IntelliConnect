@@ -21,6 +21,7 @@ package top.rslly.iot.services;
 
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.ProductRepository;
+import top.rslly.iot.dao.WxProductActiveRepository;
 import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.dao.WxUserRepository;
 import top.rslly.iot.models.WxProductBindEntity;
@@ -35,6 +36,8 @@ import java.util.List;
 public class WxProductBindServiceImpl implements WxProductBindService {
   @Resource
   private WxProductBindRepository wxProductBindRepository;
+  @Resource
+  private WxProductActiveRepository wxProductActiveRepository;
   @Resource
   private WxUserRepository wxUserRepository;
   @Resource
@@ -66,9 +69,20 @@ public class WxProductBindServiceImpl implements WxProductBindService {
   }
 
   @Override
-  public JsonResult<?> wxUnBindProduct(Long id) {
-    wxUserRepository.deleteById(id);
-    return ResultTool.success();
+  public boolean wxUnBindProduct(String openid, String productName, String productKey) {
+    if (productName == null || productKey == null)
+      return false;
+    var productList = productRepository.findAllByProductNameAndKeyvalue(productName, productKey);
+    if (wxUserRepository.findAllByOpenid(openid).isEmpty() || productList.isEmpty() ||
+        productRepository.findAllById(productList.get(0).getId()).isEmpty())
+      return false;
+    wxProductBindRepository.deleteByOpenidAndProductId(openid, productList.get(0).getId());
+    // 设置成这样是为了将其归位，让用户重新选择
+    var wxProductActiveList = wxProductActiveRepository.findAllByOpenid(openid);
+    if (wxProductActiveList.get(0).getProductId() == productList.get(0).getId()) {
+      wxProductActiveRepository.updateProperty(openid, 0);
+    }
+    return true;
   }
 
   @Override

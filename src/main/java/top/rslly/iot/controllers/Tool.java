@@ -25,12 +25,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.param.request.MetaData;
 import top.rslly.iot.param.request.ReadData;
 import top.rslly.iot.services.DataServiceImpl;
 import top.rslly.iot.services.HardWareServiceImpl;
+import top.rslly.iot.services.OtaServiceImpl;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.RuntimeMessage;
 import top.rslly.iot.utility.ai.chain.Router;
@@ -51,11 +53,11 @@ import java.nio.file.Paths;
 @RequestMapping(value = "/api/v2")
 public class Tool {
   @Autowired
-  private RedisUtil redisUtil;
-  @Autowired
   private DataServiceImpl dataService;
   @Autowired
   private HardWareServiceImpl hardWareService;
+  @Autowired
+  private OtaServiceImpl otaService;
   @Autowired
   private Router router;
 
@@ -65,13 +67,14 @@ public class Tool {
     return ResultTool.success(RuntimeMessage.getMessage());
   }
 
+  @Operation(summary = "设备属性控制api接口", description = "注意传入参数为ControlParam")
   @RequestMapping(value = "/control", method = RequestMethod.POST)
   public JsonResult<?> control(@RequestBody ControlParam controlParam) throws MqttException {
 
     return hardWareService.control(controlParam);
   }
 
-  @Operation(summary = "用于获取物联网一段时间的设备数据", description = "使用两个毫秒时间戳")
+  @Operation(summary = "用于获取物联网一段时间的设备数据", description = "时间参数请使用两个毫秒时间戳")
   @RequestMapping(value = "/readData", method = RequestMethod.POST)
   public JsonResult<?> readData(@RequestBody ReadData readData) {
     return dataService.findAllByTimeBetweenAndDeviceName(readData.getTime1(), readData.getTime2(),
@@ -88,33 +91,30 @@ public class Tool {
   @RequestMapping(value = "/aiControl", method = RequestMethod.POST)
   public JsonResult<?> aiControl(@RequestBody AiControl aiControl) {
     var answer =
-        router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId());
+        router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId(),
+            "1234");
     return ResultTool.success(answer);
   }
 
-  // ota功能，尚未完成
+  // ota list and delete
   @RequestMapping(value = "/micro/{name}", method = RequestMethod.GET)
   public void micro(@PathVariable("name") String name, HttpServletResponse response)
       throws IOException {
-
-    ServletOutputStream out = response.getOutputStream();
-    try {
-      String filePath = "D://temp-rainy//"; // 上传后的路径
-      File file = new File(filePath + name);
-      response.setCharacterEncoding("UTF-8");
-      response.setHeader("Content-Disposition", "attachment; filename=" +
-          URLEncoder.encode(name.substring(0, name.lastIndexOf(".")) + ".bin",
-              StandardCharsets.UTF_8));
-      response.addHeader("Content-Length", "" + file.length());
-      out.write(Files.readAllBytes(Paths.get(filePath + name)));
-      out.flush();
-      out.close();
-
-
-    } catch (Exception e) {
-      e.printStackTrace();
-      response.setStatus(404);
-      out.close();
-    }
+    otaService.otaDevice(name, response);
   }
+
+  @RequestMapping(value = "/ota/dealBean", method = RequestMethod.POST)
+  public JsonResult<?> ota(@RequestParam("name") String name,
+      @RequestPart("file") MultipartFile multipartFile) {
+    return otaService.uploadBin(name, multipartFile);
+  }
+
+  @RequestMapping(value = "/ota/enable", method = RequestMethod.POST)
+  public JsonResult<?> otaEnable(@RequestParam("name") String name,
+      @RequestParam("deviceName") String deviceName) {
+    return otaService.otaEnable(name, deviceName);
+  }
+
+
+
 }

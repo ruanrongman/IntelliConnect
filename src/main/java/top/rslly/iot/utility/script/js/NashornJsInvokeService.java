@@ -45,7 +45,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class NashornJsInvokeService extends AbstractJsInvokeService implements ScriptInvokeService {
-  protected final Map<UUID, JsScriptInfo> scriptInfoMap = new ConcurrentHashMap<>();
+  // protected final Map<UUID, JsScriptInfo> scriptInfoMap = new ConcurrentHashMap<>();
   private NashornSandbox sandbox;
   private ScriptEngine engine;
   private ExecutorService monitorExecutorService;
@@ -140,7 +140,7 @@ public class NashornJsInvokeService extends AbstractJsInvokeService implements S
         } finally {
           evalLock.unlock();
         }
-        scriptInfoMap.put(scriptId, scriptInfo);
+        // scriptInfoMap.put(scriptId, scriptInfo);
         return scriptId;
       } catch (Exception e) {
         e.printStackTrace();
@@ -180,13 +180,4 @@ public class NashornJsInvokeService extends AbstractJsInvokeService implements S
     }
   }
 
-  public void runJssync(String functionName, Object... args)
-      throws ScriptException, NoSuchMethodException {
-
-    this.sandbox.getSandboxedInvocable().invokeFunction(functionName, args);
-  }
-
-  public void compileJs(String JsCode) throws ScriptException {
-    this.sandbox.eval(JsCode);
-  }
 }

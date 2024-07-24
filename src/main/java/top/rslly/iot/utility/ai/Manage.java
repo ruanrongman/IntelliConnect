@@ -17,10 +17,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.tools;
+package top.rslly.iot.utility.ai;
 
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.SpringBeanUtils;
+import top.rslly.iot.utility.ai.tools.BaseTool;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -28,8 +29,8 @@ import java.util.Map;
 
 @Component
 public class Manage {
-  public String runTool(String toolName, String question, int productId) {
-
+  public String runTool(String toolName, String question, Map<String, Object> globalMessage) {
+    toolName = toolName.substring(0, 1).toLowerCase() + toolName.substring(1);
     var obj = SpringBeanUtils.getBean(toolName);
     if (!isInterfaceImplemented(obj.getClass(), BaseTool.class))
       throw new IllegalArgumentException("the tool not implement the interface");
@@ -38,8 +39,8 @@ public class Manage {
       Method method = obj.getClass().getDeclaredMethod("run", String.class);
       var res = method.invoke(obj, question);
       if (res == null) {
-        method = obj.getClass().getDeclaredMethod("run", String.class, int.class);
-        res = method.invoke(obj, question, productId);
+        method = obj.getClass().getDeclaredMethod("run", String.class, Map.class);
+        res = method.invoke(obj, question, globalMessage);
       }
       if (res instanceof String)
         return (String) res;

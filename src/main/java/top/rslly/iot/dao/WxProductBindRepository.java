@@ -30,6 +30,11 @@ public interface WxProductBindRepository extends JpaRepository<WxProductBindEnti
 
   List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
 
+  List<WxProductBindEntity> findAllByProductId(int productId);
+
   @Transactional
   List<WxProductBindEntity> deleteById(int id);
+
+  @Transactional
+  List<WxProductBindEntity> deleteByOpenidAndProductId(String openid, int productId);
 }

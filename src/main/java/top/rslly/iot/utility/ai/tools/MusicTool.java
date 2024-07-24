@@ -77,7 +77,7 @@ public class MusicTool implements BaseTool<Map<String, String>> {
   }
 
   @Override
-  public Map<String, String> run(String question, int productId) {
+  public Map<String, String> run(String question, Map<String, Object> globalMessage) {
     return this.run(question);
   }
 

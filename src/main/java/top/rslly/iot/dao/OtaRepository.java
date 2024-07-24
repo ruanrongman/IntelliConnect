@@ -20,24 +20,10 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.models.WxProductActiveEntity;
+import top.rslly.iot.models.OtaEntity;
 
 import java.util.List;
 
-public interface WxProductActiveRepository extends JpaRepository<WxProductActiveEntity, Long> {
-  List<WxProductActiveEntity> findAllByProductIdAndOpenid(int productId, String openid);
-
-  List<WxProductActiveEntity> findAllByOpenid(String openid);
-
-  @Modifying
-  @Transactional
-  @Query("UPDATE WxProductActiveEntity e SET e.productId = :productId WHERE e.openid = :openid")
-  void updateProperty(@Param("openid") String openid, @Param("productId") int productId);
-
-  @Transactional
-  List<WxProductActiveEntity> deleteByOpenidAndProductId(String openid, int productId);
+public interface OtaRepository extends JpaRepository<OtaEntity, Long> {
+  List<OtaEntity> findAllByName(String name);
 }

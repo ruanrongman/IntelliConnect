@@ -24,6 +24,11 @@ import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.WxProductActiveEntity;
+import top.rslly.iot.services.ProductServiceImpl;
+import top.rslly.iot.services.WxProductActiveServiceImpl;
+import top.rslly.iot.services.WxProductBindServiceImpl;
+import top.rslly.iot.services.WxUserServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -38,9 +43,17 @@ import java.util.Map;
 
 @Data
 @Component
-public class WxProductActiveTool {
+public class WxProductActiveTool implements BaseTool<String> {
   @Autowired
   private Prompt prompt;
+  @Autowired
+  private ProductServiceImpl productService;
+  @Autowired
+  private WxProductBindServiceImpl wxProductBindService;
+  @Autowired
+  private WxProductActiveServiceImpl wxProductActiveService;
+  @Autowired
+  private WxUserServiceImpl wxUserService;
   @Value("${ai.wxProductActiveTool-llm}")
   private String llmName;
   private String name = "wxProductActiveTool";
@@ -49,35 +62,60 @@ public class WxProductActiveTool {
       Args: product name .(str)
       """;
 
-  public Map<String, String> run(String question) {
+  public String run(String question) {
+    return null;
+  }
+
+  @Override
+  public String run(String question, Map<String, Object> globalMessage) {
+    String chatId = (String) globalMessage.get("chatId");
+    if (wxUserService.findAllByOpenid(chatId).isEmpty())
+      return "检测到当前不在微信客服对话环境，该功能无法使用";
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
-    Map<String, String> responseMap = new HashMap<>();
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getWxProductActiveTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
-    var answer = (String) obj.get("answer");
-    responseMap.put("answer", answer);
-    responseMap.put("productName", "");
+    // var answer = (String) obj.get("answer");
     try {
-      var productMetaData = process_llm_result(obj);
-      responseMap.put("productName", productMetaData.get("productName"));
-      return responseMap;
+      return process_llm_result(obj, chatId);
     } catch (Exception e) {
       // e.printStackTrace();
-      return responseMap;
+      return "对不起小主人,切换产品操作发生了异常，请重新尝试";
     }
   }
 
-  private Map<String, String> process_llm_result(JSONObject jsonObject) throws IcAiException {
-    Map<String, String> result = new HashMap<>();
+  private String process_llm_result(JSONObject jsonObject, String chatId) throws IcAiException {
     if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
       var productName = jsonObject.getString("productName");
-      result.put("productName", productName);
-      return result;
+      var answer = jsonObject.getString("answer");
+      var productList = productService.findAllByProductName(productName);
+      String toolResult;
+      if (productList.isEmpty())
+        toolResult = "对不起小主人，没有找到" + productName + "产品";
+      else {
+        if (wxProductBindService
+            .findByOpenidAndProductId(chatId, productList.get(0).getId()).isEmpty())
+          toolResult = "对不起小主人，你还没绑定该产品，请先绑定该产品再来设置吧";
+        else {
+          WxProductActiveEntity wxProductActiveEntity = new WxProductActiveEntity();
+          wxProductActiveEntity.setOpenid(chatId);
+          wxProductActiveEntity.setProductId(productList.get(0).getId());
+          if (wxProductActiveService
+              .findAllByProductIdAndOpenid(wxProductActiveEntity.getProductId(),
+                  wxProductActiveEntity.getOpenid())
+              .isEmpty()) {
+            wxProductActiveService.setUp(wxProductActiveEntity);
+            toolResult = answer;
+          } else {
+            toolResult = "对不起小主人，你当前已经能控制该产品了，无需进行切换";
+          }
+        }
+      }
+      return toolResult;
     } else {
       throw new IcAiException(jsonObject.getString("platform not support"));
     }

@@ -25,6 +25,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.TimeScheduleEntity;
+import top.rslly.iot.services.TimeScheduleServiceImpl;
 import top.rslly.iot.utility.QuartzCronDateUtils;
 import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.ai.IcAiException;
@@ -53,13 +55,16 @@ public class ScheduleTool {
       Identify the time when the user wants to be reminded and convert it to a cron expression.
       Args: The time and specific needs that the user wants to be reminded of.(str)
       """;
+  @Autowired
+  private TimeScheduleServiceImpl timeScheduleService;
 
   public String run(String question, String openid, String appid) {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getScheduleTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getScheduleTool(openid));
+    // log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
@@ -70,6 +75,7 @@ public class ScheduleTool {
       return answer;
     } catch (Exception e) {
       // e.printStackTrace();
+      log.info("LLM error: " + e.getMessage());
       return answer;
     }
   }
@@ -79,16 +85,35 @@ public class ScheduleTool {
 
     if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
       SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-      String timeStr = jsonObject.getString("time");
+
       String repeat = jsonObject.getString("repeat");
-      String cron;
-      if (repeat.equals("true")) {
-        cron = jsonObject.getString("cron");
-      } else
-        cron = QuartzCronDateUtils.getCron(formatter.parse(timeStr));
-      String uuid = UUID.randomUUID().toString();
-      QuartzManager.addJob(uuid, "group-1",
-          uuid, "trigger-1", RemindJob.class, cron, openid, appid);
+      String taskName = jsonObject.getString("task_name");
+      String cancel = jsonObject.getString("cancel");
+      String cron = "";
+      if (cancel.equals("false")) {
+        String timeStr = jsonObject.getString("time");
+        if (repeat.equals("true")) {
+          cron = jsonObject.getString("cron");
+        } else {
+          cron = QuartzCronDateUtils.getCron(formatter.parse(timeStr));
+        }
+        // String uuid = UUID.randomUUID().toString();
+
+        if (timeScheduleService.findAllByOpenidAndTaskName(openid, taskName).isEmpty()) {
+          TimeScheduleEntity timeScheduleEntity = new TimeScheduleEntity();
+          timeScheduleEntity.setOpenid(openid);
+          timeScheduleEntity.setTaskName(taskName);
+          timeScheduleEntity.setCron(cron);
+          timeScheduleEntity.setAppid(appid);
+          timeScheduleService.insert(timeScheduleEntity);
+          QuartzManager.addJob(taskName, openid, taskName, openid, RemindJob.class, cron, openid,
+              appid);
+        } else
+          throw new IcAiException("task name is duplicate");
+      } else {
+        timeScheduleService.deleteByOpenidAndTaskName(openid, taskName);
+        QuartzManager.removeJob(taskName, openid, taskName, openid);
+      }
       log.info("obj:{}", jsonObject);
       log.info("time cron{}", cron);
     } else

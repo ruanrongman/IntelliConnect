@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.services;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 @Service
+@Slf4j
 public class ProductDeviceServiceImpl implements ProductDeviceService {
 
   @Resource
@@ -67,6 +69,11 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  public List<ProductDeviceEntity> findAllByName(String name) {
+    return productDeviceRepository.findAllByName(name);
+  }
+
+  @Override
   public List<ProductDeviceEntity> findAllByModelId(int modelId) {
     return productDeviceRepository.findAllByModelId(modelId);
   }
@@ -84,11 +91,11 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
     if (devices.isEmpty() || productDataEntities.isEmpty())
       return productDeviceDescriptionList;
     List<String> properties = new ArrayList<>();
-    List<String> valueList = new ArrayList<>();
     for (var s : productDataEntities) {
       properties.add(s.getJsonKey());
     }
     for (var s : devices) {
+      List<String> valueList = new ArrayList<>();
       ProductDeviceDescription productDeviceDescription = new ProductDeviceDescription();
       productDeviceDescription.setDevice_name(s.getName());
       productDeviceDescription.setOnline(s.getOnline());
@@ -106,6 +113,7 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
       }
       productDeviceDescription.setProperties(properties);
       productDeviceDescription.setValues(valueList);
+      productDeviceDescription.setDescription(s.getDescription());
       productDeviceDescriptionList.add(productDeviceDescription);
     }
 

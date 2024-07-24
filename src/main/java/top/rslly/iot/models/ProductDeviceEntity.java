@@ -32,6 +32,7 @@ public class ProductDeviceEntity {
   private String online;
   private int allow;
   private String name;
+  private String description;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -94,7 +95,6 @@ public class ProductDeviceEntity {
     this.allow = allow;
   }
 
-
   @Basic
   @Column(name = "name")
   public String getName() {
@@ -104,6 +104,17 @@ public class ProductDeviceEntity {
   public void setName(String name) {
     this.name = name;
   }
+
+  @Basic
+  @Column(name = "description")
+  public String getDescription() {
+    return description;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
+  }
+
 
   @Override
   public boolean equals(Object o) {
@@ -115,11 +126,12 @@ public class ProductDeviceEntity {
     return id == that.id && modelId == that.modelId && allow == that.allow
         && Objects.equals(clientId, that.clientId)
         && Objects.equals(subscribeTopic, that.subscribeTopic)
-        && Objects.equals(online, that.online) && Objects.equals(name, that.name);
+        && Objects.equals(online, that.online) && Objects.equals(name, that.name)
+        && Objects.equals(description, that.description);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, name, modelId, clientId, subscribeTopic, online, allow);
+    return Objects.hash(id, name, description, modelId, clientId, subscribeTopic, online, allow);
   }
 }

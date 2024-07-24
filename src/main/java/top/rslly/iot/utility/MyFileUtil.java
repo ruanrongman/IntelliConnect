@@ -17,17 +17,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot.utility;
 
-import lombok.Data;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
-import java.util.List;
+public class MyFileUtil {
 
-@Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
-  private String description;
-  private List<String> properties;
-  private List<String> values;
+  public static void uploadFile(byte[] file, String filePath, String fileName) throws Exception {
+    File targetFile = new File(filePath);
+    if (!targetFile.exists()) {
+      if (!targetFile.mkdirs()) {
+        throw new IOException("Failed to create target directory.");
+      }
+    }
+    // 确保文件路径以系统相关的路径分隔符结尾
+    String systemPath = System.getProperty("file.separator");
+    String safeFilePath = filePath.endsWith(systemPath) ? filePath : filePath + systemPath;
+    FileOutputStream out = new FileOutputStream(safeFilePath + fileName);
+    out.write(file);
+    out.flush();
+    out.close();
+  }
+
+
 }

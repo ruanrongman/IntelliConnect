@@ -187,7 +187,7 @@ public class Wx {
               }
             } else if (type.getText().equals("voice")) {
               String voiceContent = root.element("Recognition").getText();
-              String mediaId = root.element("MediaId16K").getText();
+              String mediaId = root.element("MediaId").getText();
               String url = dealWx.getMedia(mediaId, appid);
               if (url != null && !url.equals("")) {
                 smartRobot.dealVoice(openid, url, appid);

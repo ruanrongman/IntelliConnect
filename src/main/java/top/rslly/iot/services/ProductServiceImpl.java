@@ -22,9 +22,13 @@ package top.rslly.iot.services;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.MqttUserRepository;
+import top.rslly.iot.dao.ProductModelRepository;
 import top.rslly.iot.dao.ProductRepository;
+import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.models.MqttUserEntity;
 import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.models.ProductModelEntity;
+import top.rslly.iot.models.WxProductBindEntity;
 import top.rslly.iot.param.request.Product;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -38,6 +42,10 @@ import java.util.List;
 public class ProductServiceImpl implements ProductService {
   @Resource
   private ProductRepository productRepository;
+  @Resource
+  private ProductModelRepository productModelRepository;
+  @Resource
+  private WxProductBindRepository wxProductBindRepository;
   @Resource
   private MqttUserRepository mqttUserRepository;
 
@@ -66,12 +74,20 @@ public class ProductServiceImpl implements ProductService {
 
   @Override
   public JsonResult<?> deleteProduct(int id) {
-    List<ProductEntity> result = productRepository.deleteById(id);
-    if (result.isEmpty())
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    else {
-      return ResultTool.success(result);
+    List<ProductModelEntity> productModelEntityList = productModelRepository.findAllByProductId(id);
+    List<WxProductBindEntity> wxProductBindEntityList =
+        wxProductBindRepository.findAllByProductId(id);
+    if (productModelEntityList.isEmpty() && wxProductBindEntityList.isEmpty()) {
+      List<ProductEntity> result = productRepository.deleteById(id);
+      if (result.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      else {
+        return ResultTool.success(result);
+      }
+    } else {
+      return ResultTool.fail(ResultCode.HAS_DEPENDENCIES);
     }
+
   }
 
   @Override

@@ -21,8 +21,10 @@ package top.rslly.iot.services;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import top.rslly.iot.dao.ProductDeviceRepository;
 import top.rslly.iot.dao.ProductModelRepository;
 import top.rslly.iot.dao.ProductRepository;
+import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductModelDescription;
@@ -40,6 +42,8 @@ public class ProductModelServiceImpl implements ProductModelService {
 
   @Resource
   private ProductModelRepository productModelRepository;
+  @Resource
+  private ProductDeviceRepository productDeviceRepository;
   @Resource
   private ProductRepository productRepository;
 
@@ -104,11 +108,18 @@ public class ProductModelServiceImpl implements ProductModelService {
 
   @Override
   public JsonResult<?> deleteProductModel(int id) {
-    List<ProductModelEntity> result = productModelRepository.deleteById(id);
-    if (result.isEmpty())
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    else {
-      return ResultTool.success(result);
+    List<ProductDeviceEntity> productDeviceEntityList =
+        productDeviceRepository.findAllByModelId(id);
+    if (productDeviceEntityList.isEmpty()) {
+      List<ProductModelEntity> result = productModelRepository.deleteById(id);
+      if (result.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      else {
+        return ResultTool.success(result);
+      }
+    } else {
+      return ResultTool.fail(ResultCode.HAS_DEPENDENCIES);
     }
+
   }
 }

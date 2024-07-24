@@ -29,7 +29,7 @@ public interface WxProductBindService {
 
   boolean wxBindProduct(String openid, String productName, String productKey);
 
-  JsonResult<?> wxUnBindProduct(Long id);
+  boolean wxUnBindProduct(String openid, String productName, String productKey);
 
   List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
 

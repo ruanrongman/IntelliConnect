@@ -80,16 +80,11 @@ public class DeepSeek implements LLM {
       // chatCompletionResponse.getChoices().forEach(e -> {
       // System.out.println(e.getMessage().getContent());
       // });
-      var response =
-          mapper.writeValueAsString(chatCompletionResponse.getChoices().get(0).getMessage());
+      var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
       log.info("model output:{} ", response);
       var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "")
           .replace("json", "");
-      JSONObject obj = JSON.parseObject(temp);
-      var contentObj = obj.getJSONObject("content");
-      if (contentObj == null)
-        throw new NullPointerException("content jsonObject is null");
-      return contentObj;
+      return JSON.parseObject(temp);
     } catch (Exception e) {
       // e.printStackTrace();
       JSONObject action = new JSONObject();
@@ -113,8 +108,7 @@ public class DeepSeek implements LLM {
       // chatCompletionResponse.getChoices().forEach(e -> {
       // System.out.println(e.getMessage().getContent());
       // });
-      var response = mapper
-          .writeValueAsString(chatCompletionResponse.getChoices().get(0).getMessage().getContent());
+      var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
       log.info("model output:{} ", response);
       return response;
     } catch (Exception e) {

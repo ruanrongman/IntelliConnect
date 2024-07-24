@@ -40,10 +40,13 @@ import top.rslly.iot.utility.DataCleanAuto;
 import top.rslly.iot.utility.DataSave;
 import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.SpringBeanUtils;
+import top.rslly.iot.utility.ai.Manage;
+import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
+import top.rslly.iot.utility.ai.voice.DashScopeVoice;
 import top.rslly.iot.utility.influxdb.executor.ExecutorImpl;
 import top.rslly.iot.utility.script.ControlScriptFactory;
 import top.rslly.iot.utility.script.js.JsScriptInfo;
@@ -52,9 +55,7 @@ import top.rslly.iot.utility.script.js.NashornJsInvokeService;
 import javax.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 
@@ -88,6 +89,10 @@ class DemoApplicationTests {
   private ProductDeviceRepository productDeviceRepository;
   @Autowired
   ChatTool chatTool;
+  @Autowired
+  private ScheduleTool scheduleTool;
+  @Autowired
+  private Prompt prompt;
 
   @Test
   void testDataSave() {
@@ -185,18 +190,24 @@ class DemoApplicationTests {
   public void Ai() {
     SpringBeanUtils.setApplicationContext(applicationContext);
     // var answer = agent.run("根据新会的天气播放音乐", 1);
-    var answer = Glm.testImageToWord(
-        "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
+    // var answer = Glm.testImageToWord(
+    // "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
     // var answer= chatTool.run("你好", new ArrayList<>());
+    String answer = DashScopeVoice.simpleMultiModalConversationCall(
+        "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
     log.info(answer);
   }
 
   @Test
   public void AiTool() throws InterruptedException {
     SpringBeanUtils.setApplicationContext(applicationContext);
-    var answer = manage.runTool("controlTool", "打开摩托车，打开灯，打开空调", 1);
+    Map<String, Object> globalMessage = new HashMap<>();
+    globalMessage.put("productId", 1);
+    var answer = manage.runTool("controlTool", "打开摩托，客厅灯，空调和卧室灯", globalMessage);
+    // var answer = agent.run("根据新会的天气控制空调温度", globalMessage);
     log.info(answer);
-    Thread.sleep(100000);
+    // prompt.getControlTool(1);
+    // Thread.sleep(100000);
   }
 
   @Test
@@ -242,16 +253,11 @@ class DemoApplicationTests {
   @Test
   public void testWxProductBind() {
     var res = wxBoundProductTool.run("绑定lamp设备，密钥是12345");
-    System.out.println(res.get("answer"));
-    System.out.println(res.get("productName"));
-    System.out.println(res.get("productKey"));
   }
 
   @Test
   public void testWxProductActive() {
     var res = wxProductActiveTool.run("设置控制lamp产品");
-    System.out.println(res.get("answer"));
-    System.out.println(res.get("productName"));
   }
 
   @Test
@@ -266,6 +272,13 @@ class DemoApplicationTests {
   public void simpleTest() throws SchedulerException, InterruptedException {
     QuartzManager.addJob("test", "test", "test", "test", RemindJob.class, "0/5 * * * * ?", "test");
     // QuartzManager.startJobs();
+    Thread.sleep(100000);
+  }
+
+  @Test
+  public void ScheduleToolTest() throws InterruptedException {
+    SpringBeanUtils.setApplicationContext(applicationContext);
+    scheduleTool.run("1300秒后提醒我", "test", "test");
     Thread.sleep(100000);
   }
 

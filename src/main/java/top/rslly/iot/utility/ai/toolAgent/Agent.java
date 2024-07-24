@@ -31,7 +31,7 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
-import top.rslly.iot.utility.ai.tools.Manage;
+import top.rslly.iot.utility.ai.Manage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,7 +53,7 @@ public class Agent {
   private int epochLimit = 8;
   private final StringBuffer conversationPrompt = new StringBuffer();
 
-  public String run(String question, int productId) {
+  public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     String system = prompt.getReact(descriptionUtil.getTools(), question);
     List<ModelMessage> messages = new ArrayList<>();
@@ -78,7 +78,7 @@ public class Agent {
           return JSON.parseObject(args).getString("content");
         }
         toolResult =
-            manage.runTool(res.get("action_name"), res.get("action_parameters"), productId);
+            manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
         conversationPrompt.append(obj);
         conversationPrompt.append(String.format("Observation: %s\n", toolResult));
         log.info("Thought{}", res.get("thought"));

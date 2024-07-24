@@ -20,6 +20,7 @@
 package top.rslly.iot.transfer.mqtt;
 
 
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -33,13 +34,14 @@ import java.util.Date;
 import java.util.UUID;
 
 @Slf4j
+@Data
 public class MqttConnectionUtils {
 
   private static MqttClient client;
 
   private static MqttConnectOptions connectOptions;
 
-  private static String clientId;
+  public static String clientId;
 
   // private static String Host;
 
@@ -81,6 +83,7 @@ public class MqttConnectionUtils {
     // MqttTopic topic = client.getTopic(TOPIC);
     // setWill方法，如果项目中需要知道客户端是否掉线可以调用该方法。设置最终端口的通知消息
     // connectOptions.setWill(topic, "close".getBytes(), 2, true);
+    // client.subscribe("/#");
     client.setCallback(new PushCallback());
     log.info("WIFI版启动成功=================");
   }

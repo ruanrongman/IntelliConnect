@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.utility;
 
+import org.quartz.CronExpression;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -42,4 +44,17 @@ public class QuartzCronDateUtils {
     return formatDateByPattern(date, dateFormat);
   }
 
+  public static boolean isCronExpired(String cronExpression) {
+    if (cronExpression == null || cronExpression.trim().isEmpty()) {
+      return true;
+    }
+    try {
+      Date now = new Date();
+      CronExpression expression = new CronExpression(cronExpression);
+      Date nextFireTime = expression.getNextValidTimeAfter(now);
+      return nextFireTime.before(now);
+    } catch (Exception e) {
+      return true;
+    }
+  }
 }
