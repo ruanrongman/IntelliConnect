@@ -17,18 +17,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot.services;
 
-import lombok.Data;
+import top.rslly.iot.models.DataEntity;
+import top.rslly.iot.models.EventStorageEntity;
+import top.rslly.iot.models.influxdb.EventStorageTimeEntity;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
-@Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
-  private String description;
-  private List<String> properties;
-  private List<String> values;
-  private String allow;
+public interface EventStorageService {
+  void insert(EventStorageEntity eventStorageTimeEntity);
+
+  JsonResult<?> findAllByTimeBetweenAndDeviceNameAndJsonKey(long time, long time2, String name,
+      String jsonKey);
+
+  List<EventStorageEntity> findAllByTimeBetweenAndDeviceIdAndJsonKey(long time, long time2,
+      int deviceId, String jsonKey);
+
+
+  void deleteAllByTimeBeforeAndDeviceIdAndJsonKey(long time, int deviceId, String jsonKey);
 }

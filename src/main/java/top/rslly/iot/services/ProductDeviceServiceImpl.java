@@ -21,13 +21,12 @@ package top.rslly.iot.services;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.ProductDataRepository;
 import top.rslly.iot.dao.ProductDeviceRepository;
 import top.rslly.iot.dao.ProductModelRepository;
 import top.rslly.iot.models.ProductDeviceEntity;
-import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductDeviceDescription;
 import top.rslly.iot.param.request.ProductDevice;
@@ -84,6 +83,7 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public List<ProductDeviceDescription> getDescription(int modelId) {
     var devices = productDeviceRepository.findAllByModelId(modelId);
     var productDataEntities = productDataRepository.findAllByModelId(modelId);
@@ -99,6 +99,10 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
       ProductDeviceDescription productDeviceDescription = new ProductDeviceDescription();
       productDeviceDescription.setDevice_name(s.getName());
       productDeviceDescription.setOnline(s.getOnline());
+      if (s.getAllow() == 0)
+        productDeviceDescription.setAllow("false");
+      else
+        productDeviceDescription.setAllow("true");
       for (var jsonKey : properties) {
         var dataServiceAllBySort = dataService.findAllBySort(s.getId(), jsonKey);
         if (dataServiceAllBySort == null)
@@ -135,6 +139,7 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductDevice(ProductDevice productDevice) {
     ProductDeviceEntity productDeviceEntity = new ProductDeviceEntity();
     productDeviceEntity.setOnline("disconnected");

@@ -59,15 +59,11 @@ public class Router {
   @Autowired
   private WxUserServiceImpl wxUserService;
   @Autowired
-  private WxProductBindServiceImpl wxProductBindService;
-  @Autowired
   private WxProductActiveTool wxProductActiveTool;
   @Autowired
-  private WxProductActiveServiceImpl wxProductActiveService;
-  @Autowired
-  private ProductServiceImpl productService;
-  @Autowired
   private ScheduleTool scheduleTool;
+  @Autowired
+  private SearchTool searchTool;
 
   // chatId in wechat module need to use openid
   public String response(String content, String chatId, int productId, String... microappid) {
@@ -133,6 +129,10 @@ public class Router {
               toolResult = scheduleTool.run(args, chatId, microappid[0]);
             }
             answer = "以下是定时任务插件的结果：" + toolResult;
+          }
+          case "10" -> {
+            toolResult = searchTool.run(args);
+            answer = "以下是百度搜索插件的结果：" + toolResult;
           }
           default -> answer = resultMap.get("answer").toString();
         }

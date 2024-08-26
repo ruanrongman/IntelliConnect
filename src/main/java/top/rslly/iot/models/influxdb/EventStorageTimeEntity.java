@@ -17,18 +17,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot.models.influxdb;
 
 import lombok.Data;
-
-import java.util.List;
+import org.influxdb.annotation.Measurement;
+import top.rslly.iot.utility.influxdb.ano.Tag;
+import top.rslly.iot.utility.influxdb.ano.TimeColumn;
 
 @Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
-  private String description;
-  private List<String> properties;
-  private List<String> values;
-  private String allow;
+@Measurement(name = "event_storage")
+public class EventStorageTimeEntity {
+  @TimeColumn
+  private Long time;
+  @Tag
+  private int deviceId;
+  private String jsonKey;
+  private String value;
+  private String characteristic;
 }

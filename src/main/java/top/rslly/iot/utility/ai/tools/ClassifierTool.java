@@ -28,9 +28,9 @@ import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.ClassifierToolPrompt;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -41,7 +41,7 @@ import java.util.Map;
 @Component
 public class ClassifierTool {
   @Autowired
-  private Prompt prompt;
+  private ClassifierToolPrompt classifierToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
   @Value("${ai.classifierTool-llm}")
@@ -58,11 +58,11 @@ public class ClassifierTool {
     Map<String, Object> resultMap = new HashMap<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getClassifierTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), classifierToolPrompt.getClassifierTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
-      systemMessage.setContent(prompt.getClassifierTool() + memory);
+      systemMessage.setContent(classifierToolPrompt.getClassifierTool() + memory);
     }
     messages.add(systemMessage);
     messages.add(userMessage);

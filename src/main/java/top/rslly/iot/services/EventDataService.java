@@ -17,18 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot.services;
 
-import lombok.Data;
+import jdk.jfr.Event;
+import top.rslly.iot.models.EventDataEntity;
+import top.rslly.iot.param.request.EventData;
+import top.rslly.iot.param.request.ProductData;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
-@Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
-  private String description;
-  private List<String> properties;
-  private List<String> values;
-  private String allow;
+public interface EventDataService {
+  List<EventDataEntity> findAllByModelId(int modelId);
+
+  JsonResult<?> getEventData();
+
+  JsonResult<?> postEventData(EventData eventData);
+
+  JsonResult<?> deleteEventData(int id);
 }

@@ -70,7 +70,11 @@ public class SmartRobot {
       }
     }
     String content = router.response(msg, openid, productId, microappid);
-    dealWx.sendContent(openid, content, microappid);
+    if (content.length() > 800) {
+      dealWx.sendContent(openid, content.substring(0, 800), microappid);
+      dealWx.sendContent(openid, content.substring(800), microappid);
+    } else
+      dealWx.sendContent(openid, content, microappid);
   }
 
   @Async("taskExecutor")

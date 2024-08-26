@@ -32,7 +32,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.junit4.SpringRunner;
 import top.rslly.iot.dao.ProductDeviceRepository;
-import top.rslly.iot.dao.TimeDataRepository;
+import top.rslly.iot.dao.DataTimeRepository;
 import top.rslly.iot.models.DataEntity;
 import top.rslly.iot.models.influxdb.DataTimeEntity;
 import top.rslly.iot.param.request.ControlParam;
@@ -43,7 +43,6 @@ import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.chain.Router;
-import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 import top.rslly.iot.utility.ai.voice.DashScopeVoice;
@@ -66,9 +65,9 @@ class DemoApplicationTests {
   @Autowired
   private DataCleanAuto dataCleanAuto;
   @Autowired
-  private ExecutorImpl dataTimeRepository;
+  private ExecutorImpl executor;
   @Autowired(required = false)
-  private TimeDataRepository timeDataRepository;
+  private DataTimeRepository dataTimeRepository;
   @Autowired
   private ControlTool controlTool;
   @Autowired
@@ -91,8 +90,7 @@ class DemoApplicationTests {
   ChatTool chatTool;
   @Autowired
   private ScheduleTool scheduleTool;
-  @Autowired
-  private Prompt prompt;
+
 
   @Test
   void testDataSave() {
@@ -120,7 +118,7 @@ class DemoApplicationTests {
 
   @Test
   public void ping() {
-    if (dataTimeRepository.ping()) {
+    if (executor.ping()) {
       log.info("连接成功");
     } else {
       log.info("连接失败");
@@ -137,13 +135,13 @@ class DemoApplicationTests {
     dataTimeEntity.setJsonKey("temp");
     dataTimeEntity.setValue("30");
     dataTimeEntity.setCharacteristic(UUID.randomUUID().toString());
-    dataTimeRepository.insert(dataTimeEntity);
+    executor.insert(dataTimeEntity);
   }
 
   @Test
   public void list() {
     String sql = "SELECT * FROM \"data\" tz('Asia/Shanghai')";
-    List<DataTimeEntity> locations = dataTimeRepository.query(DataTimeEntity.class, sql);
+    List<DataTimeEntity> locations = executor.query(DataTimeEntity.class, sql);
     if (locations == null || locations.isEmpty()) {
       log.info("暂无数据");
     }
@@ -158,7 +156,7 @@ class DemoApplicationTests {
     // 默认使用配置文件中数据库
     // influxDao.deleteDataBase();
     // 使用指定数据库
-    dataTimeRepository.deleteDataBase("data");
+    executor.deleteDataBase("data");
   }
 
   @Test
@@ -171,18 +169,18 @@ class DemoApplicationTests {
     dataTimeEntity.setJsonKey("temp");
     dataTimeEntity.setValue("90");
     dataTimeEntity.setCharacteristic(UUID.randomUUID().toString());
-    timeDataRepository.insert(dataTimeEntity);
+    executor.insert(dataTimeEntity);
   }
 
   @Test
   public void time() {
-    var res = timeDataRepository.findAllByTimeBetweenAndDeviceId(0L, System.currentTimeMillis(), 1);
+    var res = dataTimeRepository.findAllByTimeBetweenAndDeviceId(0L, System.currentTimeMillis(), 1);
     System.out.println(res.get(0));
   }
 
   @Test
   public void influxdbMetaData() {
-    var res = timeDataRepository.findAllBySort(1, "color");
+    var res = dataTimeRepository.findAllBySort(1, "color");
     System.out.println(res.toString());
   }
 

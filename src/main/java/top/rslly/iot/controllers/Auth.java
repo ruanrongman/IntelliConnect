@@ -24,10 +24,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import top.rslly.iot.param.request.Product;
-import top.rslly.iot.param.request.ProductData;
-import top.rslly.iot.param.request.ProductDevice;
-import top.rslly.iot.param.request.ProductModel;
+import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultTool;
@@ -44,6 +41,10 @@ public class Auth {
   ProductDeviceServiceImpl productDeviceService;
   @Autowired
   ProductDataServiceImpl productDataService;
+  @Autowired
+  EventDataServiceImpl eventDataService;
+  @Autowired
+  ProductEventServiceImpl productEventService;
   @Autowired
   MqttUserServiceImpl mqttUserService;
 
@@ -100,6 +101,24 @@ public class Auth {
     return productModelService.deleteProductModel(id);
   }
 
+  @Operation(summary = "获取事件", description = "获取物模型的事件")
+  @RequestMapping(value = "/ProductEvent", method = RequestMethod.GET)
+  public JsonResult<?> ProductEvent() {
+    return productEventService.getProductEvent();
+  }
+
+  @Operation(summary = "提交事件", description = "提交物模型的事件")
+  @RequestMapping(value = "/ProductEvent", method = RequestMethod.POST)
+  public JsonResult<?> ProductEvent(@RequestBody ProductEvent productEvent) {
+    return productEventService.postProductEvent(productEvent);
+  }
+
+  @Operation(summary = "删除事件", description = "删除物模型的事件")
+  @RequestMapping(value = "/ProductEvent", method = RequestMethod.DELETE)
+  public JsonResult<?> ProductEvent(@RequestParam("id") int id) {
+    return productEventService.deleteProductEvent(id);
+  }
+
   @Operation(summary = "获取设备", description = "获取物模型的设备")
   @RequestMapping(value = "/ProductDevice", method = RequestMethod.GET)
   public JsonResult<?> ProductDevice() {
@@ -134,6 +153,24 @@ public class Auth {
   @RequestMapping(value = "/ProductData", method = RequestMethod.DELETE)
   public JsonResult<?> ProductData(@RequestParam("id") int id) {
     return productDataService.deleteProductData(id);
+  }
+
+  @Operation(summary = "获取事件入参", description = "获取事件入参")
+  @RequestMapping(value = "/EventData", method = RequestMethod.GET)
+  public JsonResult<?> EventData() {
+    return eventDataService.getEventData();
+  }
+
+  @Operation(summary = "提交事件入参", description = "提交事件入参")
+  @RequestMapping(value = "/EventData", method = RequestMethod.POST)
+  public JsonResult<?> EventData(@RequestBody EventData eventData) {
+    return eventDataService.postEventData(eventData);
+  }
+
+  @Operation(summary = "删除事件入参", description = "删除事件入参")
+  @RequestMapping(value = "/EventData", method = RequestMethod.DELETE)
+  public JsonResult<?> EventData(@RequestParam("id") int id) {
+    return eventDataService.deleteEventData(id);
   }
 
 

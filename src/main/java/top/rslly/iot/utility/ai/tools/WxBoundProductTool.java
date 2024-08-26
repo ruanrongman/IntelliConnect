@@ -24,16 +24,17 @@ import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.*;
+import top.rslly.iot.services.ProductServiceImpl;
+import top.rslly.iot.services.WxProductBindServiceImpl;
+import top.rslly.iot.services.WxUserServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.WxBoundProductToolPrompt;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +42,7 @@ import java.util.Map;
 @Component
 public class WxBoundProductTool implements BaseTool<String> {
   @Autowired
-  private Prompt prompt;
+  private WxBoundProductToolPrompt wxBoundProductToolPrompt;
   @Autowired
   private WxUserServiceImpl wxUserService;
   @Autowired
@@ -68,7 +69,8 @@ public class WxBoundProductTool implements BaseTool<String> {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getWxProductBoundTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(),
+            wxBoundProductToolPrompt.getWxProductBoundTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);

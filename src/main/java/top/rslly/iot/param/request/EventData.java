@@ -17,18 +17,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot.param.request;
 
-import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 
-import java.util.List;
-
-@Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
+@AllArgsConstructor
+@Getter
+@Setter
+public class EventData {
+  private String jsonKey;
+  private int modelId;
   private String description;
-  private List<String> properties;
-  private List<String> values;
-  private String allow;
+  private String type;
 }

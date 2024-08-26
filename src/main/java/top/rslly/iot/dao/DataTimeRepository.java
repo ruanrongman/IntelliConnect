@@ -27,7 +27,7 @@ import top.rslly.iot.utility.influxdb.ano.Select;
 
 import java.util.List;
 
-public interface TimeDataRepository extends InfluxDBBaseMapper<DataEntity> {
+public interface DataTimeRepository extends InfluxDBBaseMapper<DataEntity> {
   @Select(value = "SELECT * FROM \"data\" where time >=#{time1}ms and time <=#{time2}ms",
       resultType = DataEntity.class)
   List<DataEntity> findAllByTimeBetween(@Param("time1") Long time1, @Param("time2") Long time2);

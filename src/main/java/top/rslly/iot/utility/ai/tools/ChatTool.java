@@ -19,20 +19,16 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
-import com.zhipu.oapi.service.v4.model.ChatMessage;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.llm.Glm;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.ChatToolPrompt;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +37,7 @@ import java.util.List;
 @Component
 public class ChatTool {
   @Autowired
-  private Prompt prompt;
+  private ChatToolPrompt chatToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
   @Value("${ai.chatTool-llm}")
@@ -57,11 +53,11 @@ public class ChatTool {
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getChatTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), chatToolPrompt.getChatTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
-      systemMessage.setContent(prompt.getChatTool() + memory);
+      systemMessage.setContent(chatToolPrompt.getChatTool() + memory);
     }
     messages.add(systemMessage);
     messages.add(userMessage);

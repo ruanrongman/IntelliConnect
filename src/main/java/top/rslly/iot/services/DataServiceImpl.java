@@ -23,7 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.DataRepository;
 import top.rslly.iot.dao.ProductDeviceRepository;
-import top.rslly.iot.dao.TimeDataRepository;
+import top.rslly.iot.dao.DataTimeRepository;
 import top.rslly.iot.models.DataEntity;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
@@ -45,20 +45,21 @@ public class DataServiceImpl implements DataService {
   @Resource
   private ProductDeviceRepository deviceRepository;
   @Resource
-  private TimeDataRepository timeDataRepository;
+  private DataTimeRepository dataTimeRepository;
   @Resource
   private RedisUtil redisUtil;
 
   @Override
   public void insert(DataEntity dataEntity) {
     if (database.equals("influxdb")) {
-      timeDataRepository.insert(dataEntity);
+      dataTimeRepository.insert(dataEntity);
     } else
       dataRepository.save(dataEntity);
   }
 
   @Override
-  public JsonResult<?> findAllByTimeBetweenAndDeviceName(long time, long time2, String name) {
+  public JsonResult<?> findAllByTimeBetweenAndDeviceNameAndJsonKey(long time, long time2,
+      String name, String jsonKey) {
     var productDeviceEntities = deviceRepository.findAllByName(name);
     if (productDeviceEntities.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -66,9 +67,11 @@ public class DataServiceImpl implements DataService {
     int deviceId = productDeviceEntities.get(0).getId();
     List<DataEntity> res;
     if (database.equals("influxdb")) {
-      res = timeDataRepository.findAllByTimeBetweenAndDeviceId(time, time2, deviceId);
+      res = dataTimeRepository.findAllByTimeBetweenAndDeviceIdAndJsonKey(time, time2, deviceId,
+          jsonKey);
     } else {
-      res = dataRepository.findAllByTimeBetweenAndDeviceId(time, time2, deviceId);
+      res =
+          dataRepository.findAllByTimeBetweenAndDeviceIdAndJsonKey(time, time2, deviceId, jsonKey);
     }
     if (res.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -79,7 +82,7 @@ public class DataServiceImpl implements DataService {
   public List<DataEntity> findAllByTimeBetweenAndDeviceIdAndJsonKey(long time, long time2,
       int deviceId, String jsonKey) {
     if (database.equals("influxdb")) {
-      return timeDataRepository.findAllByTimeBetweenAndDeviceIdAndJsonKey(time, time2, deviceId,
+      return dataTimeRepository.findAllByTimeBetweenAndDeviceIdAndJsonKey(time, time2, deviceId,
           jsonKey);
     } else
       return dataRepository.findAllByTimeBetweenAndDeviceIdAndJsonKey(time, time2, deviceId,
@@ -92,7 +95,7 @@ public class DataServiceImpl implements DataService {
     var memory = redisUtil.get(deviceId + jsonKey);
     if (memory == null) {
       if (database.equals("influxdb")) {
-        res = timeDataRepository.findAllBySort(deviceId, jsonKey);
+        res = dataTimeRepository.findAllBySort(deviceId, jsonKey);
       } else {
         res = dataRepository.findAllBySort(deviceId, jsonKey);
       }
@@ -107,7 +110,7 @@ public class DataServiceImpl implements DataService {
   @Override
   public void deleteAllByTimeBeforeAndDeviceIdAndJsonKey(long time, int deviceId, String jsonKey) {
     if (database.equals("influxdb")) {
-      timeDataRepository.deleteAllByTimeBeforeAndDeviceIdAndJsonKey(time, deviceId, jsonKey);
+      dataTimeRepository.deleteAllByTimeBeforeAndDeviceIdAndJsonKey(time, deviceId, jsonKey);
     } else
       dataRepository.deleteAllByTimeBeforeAndDeviceIdAndJsonKey(time, deviceId, jsonKey);
   }
@@ -118,7 +121,7 @@ public class DataServiceImpl implements DataService {
     var memory = redisUtil.get(deviceId + jsonKey);
     if (memory == null) {
       if (database.equals("influxdb")) {
-        res = timeDataRepository.findAllBySort(deviceId, jsonKey);
+        res = dataTimeRepository.findAllBySort(deviceId, jsonKey);
       } else {
         res = dataRepository.findAllBySort(deviceId, jsonKey);
       }

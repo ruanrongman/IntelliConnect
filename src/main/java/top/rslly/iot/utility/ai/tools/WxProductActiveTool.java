@@ -32,12 +32,11 @@ import top.rslly.iot.services.WxUserServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.WxProductActiveToolPrompt;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +44,7 @@ import java.util.Map;
 @Component
 public class WxProductActiveTool implements BaseTool<String> {
   @Autowired
-  private Prompt prompt;
+  private WxProductActiveToolPrompt wxProductActiveToolPrompt;
   @Autowired
   private ProductServiceImpl productService;
   @Autowired
@@ -74,7 +73,8 @@ public class WxProductActiveTool implements BaseTool<String> {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getWxProductActiveTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(),
+            wxProductActiveToolPrompt.getWxProductActiveTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);

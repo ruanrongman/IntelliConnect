@@ -32,22 +32,21 @@ import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.ScheduleToolPrompt;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Component
 @Data
 @Slf4j
 public class ScheduleTool {
   @Autowired
-  private Prompt prompt;
+  private ScheduleToolPrompt scheduleToolPrompt;
   @Value("${ai.scheduleTool-llm}")
   private String llmName;
   private String name = "scheduleTool";
@@ -63,7 +62,8 @@ public class ScheduleTool {
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getScheduleTool(openid));
+        new ModelMessage(ModelMessageRole.SYSTEM.value(),
+            scheduleToolPrompt.getScheduleTool(openid));
     // log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);

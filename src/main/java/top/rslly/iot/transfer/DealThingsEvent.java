@@ -25,36 +25,28 @@ import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.models.DataEntity;
-import top.rslly.iot.services.DataServiceImpl;
-import top.rslly.iot.services.ProductDataServiceImpl;
+import top.rslly.iot.models.EventStorageEntity;
+import top.rslly.iot.services.EventDataServiceImpl;
+import top.rslly.iot.services.EventStorageServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
+import top.rslly.iot.services.ProductEventServiceImpl;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
-import top.rslly.iot.utility.DataSave;
-import top.rslly.iot.utility.RedisUtil;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 @Component
 @Slf4j
-public class DealThingsModel {
+public class DealThingsEvent {
   @Autowired
   private ProductDeviceServiceImpl productDeviceService;
   @Autowired
-  private ProductDataServiceImpl productDataService;
+  private ProductEventServiceImpl productEventService;
   @Autowired
-  private DataServiceImpl dataService;
+  private EventDataServiceImpl eventDataService;
   @Autowired
-  private RedisUtil redisUtil;
+  private EventStorageServiceImpl eventStorageService;
 
-  // private final Lock lock = new ReentrantLock();
   public boolean deal(String clientId, String topic, String message) {
     // this clientId is delivered id ,not the sender
     log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
@@ -63,47 +55,48 @@ public class DealThingsModel {
     // if (deviceEntityList.isEmpty()||!clientId.equals(MqttConnectionUtils.clientId))
     // return;
     var deviceEntityList = productDeviceService.findAllByClientId(clientId);
-    if (deviceEntityList.isEmpty() || !deviceEntityList.get(0).getSubscribeTopic().equals(topic))
+    if (deviceEntityList.isEmpty())
+      return false;
+    String event_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
+        + "/sys/" + "properties/event";
+    if (!event_topic.equals(topic))
       return false;
     int allow = deviceEntityList.get(0).getAllow();
     if (allow == 0) {
       return false;
     }
     int modelId = deviceEntityList.get(0).getModelId();
-    var productDataEntities = productDataService.findAllByModelId(modelId);
+    var eventDataEntities = eventDataService.findAllByModelId(modelId);
     JSONObject mes;
+    int event_id;
     try {
       mes = JSON.parseObject(message);
-    } catch (JSONException e) {
+      var eventEntities =
+          productEventService.findAllByModelIdAndName(modelId, mes.get("event").toString());
+      event_id = eventEntities.get(0).getId();// event_id is the id of event
+    } catch (Exception e) {
       log.error("json error{}", e.getMessage());
       return false;
     }
     String reply_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
-        + "/sys/" + "properties/report_reply";
-    for (var s : productDataEntities) {
+        + "/sys/" + "properties/event_reply";
+    for (var s : eventDataEntities) {
       var result = mes.get(s.getJsonKey());
-      if (result == null || s.getStorageType().equals(DataSave.never.getStorageType()))
+      if (result == null)
         continue;// Automatically ignore values
-      DataEntity dataEntity = new DataEntity();
-      dataEntity.setCharacteristic(characteristic);
-      dataEntity.setJsonKey(s.getJsonKey());
-      dataEntity.setValue(result.toString());
-      dataEntity.setDeviceId(deviceEntityList.get(0).getId());
+      EventStorageEntity eventStorageEntity = new EventStorageEntity();
+      eventStorageEntity.setCharacteristic(characteristic);
+      eventStorageEntity.setEventId(event_id);
+      eventStorageEntity.setJsonKey(s.getJsonKey());
+      eventStorageEntity.setValue(result.toString());
+      eventStorageEntity.setDeviceId(deviceEntityList.get(0).getId());
       try {
         long time = System.currentTimeMillis();
-        dataEntity.setTime(time);
-        var memory = redisUtil.get(deviceEntityList.get(0).getId() + s.getJsonKey());
-        if (memory != null) {
-          List<DataEntity> dataEntityList = new ArrayList<>();
-          dataEntityList.add(dataEntity);
-          redisUtil.set(deviceEntityList.get(0).getId() + s.getJsonKey(), dataEntityList, 120);
-          // log.info("热点过期时间{}",
-          // redisUtil.getExpire(deviceEntityList.get(0).getId()+s.getJsonKey()));
-        }
-        log.info("{}", dataEntity);
-        dataService.insert(dataEntity);
+        eventStorageEntity.setTime(time);
+        log.info("{}", eventStorageEntity);
+        eventStorageService.insert(eventStorageEntity);
       } catch (Exception e) {
-        log.error("DealThingsModel save error:{}", e.getMessage());
+        log.error("DealThingsEvent save error:{}", e.getMessage());
       }
     }
     try {
@@ -113,4 +106,5 @@ public class DealThingsModel {
     }
     return true;
   }
+
 }

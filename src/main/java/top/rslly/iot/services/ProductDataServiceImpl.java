@@ -22,6 +22,7 @@ package top.rslly.iot.services;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.ProductDataRepository;
 import top.rslly.iot.dao.ProductModelRepository;
 import top.rslly.iot.models.ProductDataEntity;
@@ -84,6 +85,7 @@ public class ProductDataServiceImpl implements ProductDataService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductData(ProductData productData) {
     ProductDataEntity productDataEntity = new ProductDataEntity();
     BeanUtils.copyProperties(productData, productDataEntity);

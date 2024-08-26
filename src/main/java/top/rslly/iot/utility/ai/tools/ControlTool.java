@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.services.HardWareServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
@@ -35,21 +34,20 @@ import top.rslly.iot.services.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.ControlToolPrompt;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Data
 @Component
 @Slf4j
 public class ControlTool implements BaseTool<String> {
   @Autowired
-  private Prompt prompt;
+  private ControlToolPrompt controlToolPrompt;
   @Autowired
   private ProductDeviceServiceImpl productDeviceService;
   @Autowired
@@ -84,7 +82,8 @@ public class ControlTool implements BaseTool<String> {
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getControlTool(productId));
+        new ModelMessage(ModelMessageRole.SYSTEM.value(),
+            controlToolPrompt.getControlTool(productId));
     // log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);

@@ -17,18 +17,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot.dao;
 
-import lombok.Data;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.EventDataEntity;
 
+import javax.transaction.Transactional;
 import java.util.List;
 
-@Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
-  private String description;
-  private List<String> properties;
-  private List<String> values;
-  private String allow;
+public interface EventDataRepository extends JpaRepository<EventDataEntity, Long> {
+  List<EventDataEntity> findAllByModelId(int modelId);
+
+  List<EventDataEntity> findAllByModelIdAndJsonKey(int modelId, String jsonKey);
+
+  @Transactional
+  List<EventDataEntity> deleteById(int id);
 }

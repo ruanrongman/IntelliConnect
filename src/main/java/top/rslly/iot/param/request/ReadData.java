@@ -28,4 +28,5 @@ public class ReadData {
   Long time1;
   Long time2;
   String name;
+  String jsonKey;
 }

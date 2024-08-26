@@ -29,9 +29,9 @@ import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.MusicToolPrompt;
 
 import java.io.IOException;
 import java.util.*;
@@ -40,7 +40,7 @@ import java.util.*;
 @Component
 public class MusicTool implements BaseTool<Map<String, String>> {
   @Autowired
-  private Prompt prompt;
+  private MusicToolPrompt musicToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
   @Value("${ai.musicTool-llm}")
@@ -58,7 +58,7 @@ public class MusicTool implements BaseTool<Map<String, String>> {
     Map<String, String> responseMap = new HashMap<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getMusicTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), musicToolPrompt.getMusicTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);

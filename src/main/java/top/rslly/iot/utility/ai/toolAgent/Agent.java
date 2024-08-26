@@ -32,6 +32,7 @@ import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.Manage;
+import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -46,7 +47,7 @@ public class Agent {
   @Value("${ai.agent-llm}")
   private String llmName;
   @Autowired
-  private Prompt prompt;
+  private ReactPrompt reactPrompt;
   @Autowired
   private DescriptionUtil descriptionUtil;
   @Value("${ai.agent-epoch-limit}")
@@ -55,7 +56,7 @@ public class Agent {
 
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
-    String system = prompt.getReact(descriptionUtil.getTools(), question);
+    String system = reactPrompt.getReact(descriptionUtil.getTools(), question);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);

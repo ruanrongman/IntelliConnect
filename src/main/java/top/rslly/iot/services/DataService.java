@@ -27,7 +27,8 @@ import java.util.List;
 public interface DataService {
   void insert(DataEntity dataEntity);
 
-  JsonResult<?> findAllByTimeBetweenAndDeviceName(long time, long time2, String name);
+  JsonResult<?> findAllByTimeBetweenAndDeviceNameAndJsonKey(long time, long time2, String name,
+      String jsonKey);
 
   List<DataEntity> findAllByTimeBetweenAndDeviceIdAndJsonKey(long time, long time2, int deviceId,
       String jsonKey);

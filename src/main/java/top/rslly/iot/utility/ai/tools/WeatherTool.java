@@ -29,9 +29,9 @@ import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.prompts.WeatherToolPrompt;
 
 import java.io.IOException;
 import java.util.*;
@@ -40,7 +40,7 @@ import java.util.*;
 @Component
 public class WeatherTool implements BaseTool<String> {
   @Autowired
-  private Prompt prompt;
+  private WeatherToolPrompt weatherToolPrompt;
   @Value("${weather.key}")
   private String AmapKey;
   @Autowired
@@ -59,7 +59,7 @@ public class WeatherTool implements BaseTool<String> {
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt.getWeatherTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(), weatherToolPrompt.getWeatherTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
@@ -68,7 +68,7 @@ public class WeatherTool implements BaseTool<String> {
       Map<String, String> answer = process_llm_result(obj);
       ModelMessage responseSystemMessage =
           new ModelMessage(ModelMessageRole.SYSTEM.value(),
-              prompt.getWeatherResponse(answer.get("lives"), answer.get("forecasts")));
+              weatherToolPrompt.getWeatherResponse(answer.get("lives"), answer.get("forecasts")));
       messages.clear();
       messages.add(responseSystemMessage);
       messages.add(userMessage);

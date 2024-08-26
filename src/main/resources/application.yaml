@@ -85,7 +85,11 @@ js:
 ota:
    bin:
      path: D://temp-rainy//
+weather:
+  key: XXX
 ai:
+  chromeDrive-path: XXX
+  chrome-path: XXX
   glm-key: XXX
   deepSeek-key: XXX
   dashscope-key: XXX
@@ -100,6 +104,7 @@ ai:
   wxBoundProductTool-llm: deepSeek
   wxProductActiveTool-llm: deepSeek
   scheduleTool-llm: deepSeek
+  searchTool-llm: deepSeek
   agent-llm: deepSeek
 emq:
   api:

@@ -21,6 +21,7 @@ package top.rslly.iot.services;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.MqttUserRepository;
 import top.rslly.iot.dao.ProductModelRepository;
 import top.rslly.iot.dao.ProductRepository;
@@ -59,6 +60,7 @@ public class ProductServiceImpl implements ProductService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProduct(Product product) {
     ProductEntity productEntity = new ProductEntity();
     BeanUtils.copyProperties(product, productEntity);
@@ -73,6 +75,7 @@ public class ProductServiceImpl implements ProductService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProduct(int id) {
     List<ProductModelEntity> productModelEntityList = productModelRepository.findAllByProductId(id);
     List<WxProductBindEntity> wxProductBindEntityList =

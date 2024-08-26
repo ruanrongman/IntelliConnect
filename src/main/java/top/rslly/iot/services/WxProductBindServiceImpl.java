@@ -20,6 +20,7 @@
 package top.rslly.iot.services;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.ProductRepository;
 import top.rslly.iot.dao.WxProductActiveRepository;
 import top.rslly.iot.dao.WxProductBindRepository;
@@ -44,6 +45,7 @@ public class WxProductBindServiceImpl implements WxProductBindService {
   private ProductRepository productRepository;
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> wxBindProduct(WxProductBindEntity wxProductBindEntity) {
     if (wxUserRepository.findAllByOpenid(wxProductBindEntity.getOpenid()).isEmpty() ||
         productRepository.findAllById(wxProductBindEntity.getProductId()).isEmpty())
@@ -54,6 +56,7 @@ public class WxProductBindServiceImpl implements WxProductBindService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public boolean wxBindProduct(String openid, String productName, String productKey) {
     if (productName == null || productKey == null)
       return false;
@@ -69,6 +72,7 @@ public class WxProductBindServiceImpl implements WxProductBindService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public boolean wxUnBindProduct(String openid, String productName, String productKey) {
     if (productName == null || productKey == null)
       return false;

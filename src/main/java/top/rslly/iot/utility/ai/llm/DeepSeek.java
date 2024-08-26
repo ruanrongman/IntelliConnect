@@ -31,12 +31,14 @@ import com.unfbx.chatgpt.entity.chat.ChatCompletionResponse;
 import com.unfbx.chatgpt.entity.chat.Message;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.ModelMessage;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -49,9 +51,15 @@ public class DeepSeek implements LLM {
 
   @Value("${ai.deepSeek-key}")
   public void setApiKey(String apiKey) {
+    OkHttpClient okHttpClient = new OkHttpClient.Builder()
+        .connectTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+        .writeTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+        .readTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+        .build();
     // 填写自己的api key
     openAiClient = OpenAiClient.builder()
         .apiKey(List.of(apiKey))
+        .okHttpClient(okHttpClient)
         .apiHost(URL)
         .build();
   }

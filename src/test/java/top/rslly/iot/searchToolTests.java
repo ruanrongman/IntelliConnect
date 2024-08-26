@@ -17,18 +17,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.prompt;
+package top.rslly.iot;
 
-import lombok.Data;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import top.rslly.iot.utility.ai.tools.SearchTool;
 
-import java.util.List;
+@SpringBootTest
+public class searchToolTests {
+  @Autowired
+  private SearchTool searchTool;
 
-@Data
-public class ProductDeviceDescription {
-  private String device_name;
-  private String online;
-  private String description;
-  private List<String> properties;
-  private List<String> values;
-  private String allow;
+  @Test
+  public void searchTool() {
+    searchTool.run("中国队奥运会拿了多少奖牌,详细介绍每块金牌的故事");
+  }
 }

@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Component
+@Deprecated
 public class Prompt {
   @Autowired
   private DescriptionUtil descriptionUtil;
@@ -45,7 +46,7 @@ public class Prompt {
           The electrical properties and value that can be controlled by each electrical:{properties_value}
           The device of current electrical type and the latest status:{equipment_status}
           value ["null"] means devices information is not exist
-          If you find the user wants to control is not in the above range or the device is disconnected,
+          If you find the user wants to control is not in the above range ,the device is disconnected or allow is false,
           you can not control it,and you should warn the user in the answer param
           ## Output Format
           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
@@ -71,7 +72,7 @@ public class Prompt {
           ## Attention
           - Your output is JSON only and no explanation.
           - Please respond to the user's request immediately, rather than using terms like "later" or "then"
-          - If device cannot be controlled, such as disconnected, please inform the user
+          - If device cannot be controlled, such as not allow or disconnected, please inform the user
           """;
   private static final String musicPrompt =
       """
@@ -98,7 +99,6 @@ public class Prompt {
       """
            As a smart speaker, your name is {agent_name}, developed by the {team_name} team. You are good at helping people doing the following task
            {task_map}
-           reference information: The current time is {time}
            You now need to classify based on user input
            ## Output Format
            To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
@@ -155,6 +155,7 @@ public class Prompt {
                }
            }
            ```
+           reference information: The current time is {time}
            ## Attention
            - Your output is JSON only and no explanation.
            ## Current Conversation
@@ -460,14 +461,14 @@ public class Prompt {
     classifierMap.put("1", "Query weather");
     classifierMap.put("2", "Get the current time");
     classifierMap.put("3",
-        "Control electrical and query electrical status(Excluding playing music.)");
+        "Operate electrical and query electrical status(Excluding playing music.)");
     classifierMap.put("4", "Request a song or play music.(including Recommend music.)");
     classifierMap.put("5",
         "Composite tasks(like according to weather control electrical)");
     classifierMap.put("6",
         "Other tasks (including chatting,coding,write paper,Get news or unknown events,translate and etc.)");
-    classifierMap.put("7", "bind or Unbinding the product");
-    classifierMap.put("8", "Set up controlled products");
+    classifierMap.put("7", "Bind or Unbinding the product");
+    classifierMap.put("8", "handoff controlled products");
     classifierMap.put("9", "Scheduled tasks or reminder tasks");
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();

@@ -50,8 +50,8 @@ public class DataCleanAuto {
     // 当前时间日历
     Calendar calendar = Calendar.getInstance();
     calendar.add(Calendar.DATE, -7);
-    // long lastTime = calendar.getTime().getTime();
-    long lastTime = System.currentTimeMillis();
+    long lastTime = calendar.getTime().getTime();
+    // long lastTime = System.currentTimeMillis();
     // System.out.println(lastTime);
     List<ProductDataEntity> productDataEntityList =
         productDataService.findAllByStorageType(DataSave.week.getStorageType());

@@ -31,6 +31,7 @@ import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.param.request.MetaData;
 import top.rslly.iot.param.request.ReadData;
 import top.rslly.iot.services.DataServiceImpl;
+import top.rslly.iot.services.EventStorageServiceImpl;
 import top.rslly.iot.services.HardWareServiceImpl;
 import top.rslly.iot.services.OtaServiceImpl;
 import top.rslly.iot.utility.RedisUtil;
@@ -55,6 +56,8 @@ public class Tool {
   @Autowired
   private DataServiceImpl dataService;
   @Autowired
+  private EventStorageServiceImpl eventStorageService;
+  @Autowired
   private HardWareServiceImpl hardWareService;
   @Autowired
   private OtaServiceImpl otaService;
@@ -77,8 +80,17 @@ public class Tool {
   @Operation(summary = "用于获取物联网一段时间的设备数据", description = "时间参数请使用两个毫秒时间戳")
   @RequestMapping(value = "/readData", method = RequestMethod.POST)
   public JsonResult<?> readData(@RequestBody ReadData readData) {
-    return dataService.findAllByTimeBetweenAndDeviceName(readData.getTime1(), readData.getTime2(),
-        readData.getName());
+    return dataService.findAllByTimeBetweenAndDeviceNameAndJsonKey(readData.getTime1(),
+        readData.getTime2(),
+        readData.getName(), readData.getJsonKey());
+  }
+
+  @Operation(summary = "用于获取物联网一段时间的设备事件数据", description = "时间参数请使用两个毫秒时间戳")
+  @RequestMapping(value = "/readEvent", method = RequestMethod.POST)
+  public JsonResult<?> readEvent(@RequestBody ReadData readData) {
+    return eventStorageService.findAllByTimeBetweenAndDeviceNameAndJsonKey(readData.getTime1(),
+        readData.getTime2(),
+        readData.getName(), readData.getJsonKey());
   }
 
   @Operation(summary = "获取属性实时数据", description = "高性能接口(带redis缓存)")
@@ -91,8 +103,7 @@ public class Tool {
   @RequestMapping(value = "/aiControl", method = RequestMethod.POST)
   public JsonResult<?> aiControl(@RequestBody AiControl aiControl) {
     var answer =
-        router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId(),
-            "1234");
+        router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId());
     return ResultTool.success(answer);
   }
 

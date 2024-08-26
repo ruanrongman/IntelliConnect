@@ -21,6 +21,7 @@ package top.rslly.iot.services;
 
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.ProductDataRepository;
 import top.rslly.iot.dao.ProductDeviceRepository;
 import top.rslly.iot.param.request.ControlParam;
@@ -45,6 +46,7 @@ public class HardWareServiceImpl implements HardWareService {
   private ProductDeviceRepository productDeviceRepository;
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> control(ControlParam controlParam) throws MqttException {
     var deviceEntityList = productDeviceRepository.findAllByName(controlParam.getName());
     if (deviceEntityList.isEmpty()) {
@@ -52,6 +54,10 @@ public class HardWareServiceImpl implements HardWareService {
     }
     if (controlParam.getQos() < 0 || controlParam.getQos() > 2)
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    int allow = deviceEntityList.get(0).getAllow();
+    if (allow == 0) {
+      return ResultTool.fail(ResultCode.DEVICE_ABANDON);
+    }
     int modelId = deviceEntityList.get(0).getModelId();
     var productDataEntities = productDataRepository.findAllByModelId(modelId);
     if (productDataEntities.isEmpty()) {
