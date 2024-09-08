@@ -43,7 +43,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="https://www.rslly.top/data/User/wonder/home/pictures/cwl2.png" width="250px"/>
+    <img src="https://www.rslly.top/data/User/wonder/home/pictures/cwl3.png" width="250px"/>
 </div>
 
 
