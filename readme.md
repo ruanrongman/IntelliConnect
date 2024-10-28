@@ -29,6 +29,7 @@
 
 ## 安装运行
 * 安装mysql和redis数据库，高性能运行推荐安装时序数据库influxdb
+* 安装EMQX集群,并配置好exhook，本项目使用exhook作为mqtt消息的处理器
 * 安装java17环境
 * 修改配置文件application.yaml
 * java -jar IntelliConnect-1.8-SNAPSHOT.jar
@@ -43,7 +44,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="https://www.rslly.top/data/User/wonder/home/pictures/cwl3.png" width="250px"/>
+    <img src="https://www.rslly.top/data/User/wonder/home/pictures/cwl4.jpg" width="250px"/>
 </div>
 
 

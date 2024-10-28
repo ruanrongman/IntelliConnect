@@ -12,12 +12,21 @@
 > 创建完物模型之后需要添加其属性，事件，功能，目前支持属性和事件的添加，后续将会支持添加功能。
 
 以下是物模型属性接口的参数列表：  
-private String jsonKey; // 属性名称  
-private int modelId; // 物模型id  
-private String description; // 属性描述（请注意，该描述应该具体描述该属性的范围和可取值，这个描述影响agent智能体的理解。例如：温度属性，描述应该为：温度范围0-100，单位为摄氏度）   
-private String storageType; // 属性存储类型   
-private int rRw;// 属性读写类型，0表示只读，1表示可读写  
-private String type;// 属性类型，目前支持：int、float、string（后续将支持更多的属性类型） 
+* private String jsonKey; // 属性名称  
+* private int modelId; // 物模型id  
+* private String description; // 属性描述（请注意，该描述应该具体描述该属性的范围和可取值，这个描述影响agent智能体的理解。例如：温度属性，描述应该为：温度范围0-100，单位为摄氏度）   
+* private String storageType; // 属性存储类型   
+* private int rRw;// 属性读写类型，0表示只读，1表示可读写  
+* private String type;// 属性类型，目前支持：int、float、string（后续将支持更多的属性类型）   
+* private String max;// 属性最大值  (默认为null)     
+* private String min;// 属性最小值  (默认为null)   
+* private String step;// 属性步长  (默认为null)   
+* private String unit;// 属性单位  (默认为null)
+
 ## 设备接入
-有了物模型并添加好属性，事件，功能后之后，就可以将设备接入物联网平台了。本平台默认使用mqtt协议接入，并且支持ssl加密。
+有了物模型并添加好属性，事件，功能后之后，就可以将设备接入物联网平台了。本平台默认使用`MQTT`协议接入，并且支持`SSL`加密。
 设备接入物联网平台需要先创建设备，创建设备之后，就可以通过mqtt协议进行设备接入。
+
+## 使用Agent控制设备
+使用Agent控制设备，需要先按照上述流程进行设备接入，成功后请查看控制台的设备列表，确保设备已经接入。并配置application.yaml中
+的key。请仔细考虑具体项目所需的大模型，不同的大模型会影响平台的运行效果。

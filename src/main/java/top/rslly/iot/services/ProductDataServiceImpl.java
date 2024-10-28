@@ -67,6 +67,10 @@ public class ProductDataServiceImpl implements ProductDataService {
           ProductDataDescription productDataDescription = new ProductDataDescription();
           productDataDescription.setValueName(s.getJsonKey());
           productDataDescription.setDescription(s.getDescription());
+          productDataDescription.setUnit(s.getUnit());
+          productDataDescription.setMax(s.getMax());
+          productDataDescription.setMin(s.getMin());
+          productDataDescription.setStep(s.getStep());
           productDataDescription.setType(s.getType());
           productDataDescriptionList.add(productDataDescription);
         }
@@ -108,6 +112,16 @@ public class ProductDataServiceImpl implements ProductDataService {
     if (result.isEmpty() || !p1.isEmpty() || p2 == null || p3 == null || !isPermit)
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     else {
+      try {
+        String max = productData.getMax();
+        String min = productData.getMin();
+        if (max != null && min != null
+            && Double.parseDouble(max) - Double.parseDouble(min) < 1e-8) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+        }
+      } catch (Exception e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
       ProductDataEntity productDataEntity1 = productDataRepository.save(productDataEntity);
       return ResultTool.success(productDataEntity1);
     }

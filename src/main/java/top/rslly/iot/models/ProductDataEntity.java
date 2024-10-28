@@ -33,9 +33,12 @@ public class ProductDataEntity {
   private String storageType;
   private int rRw;
   private String type;
+  private String max;
+  private String min;
+  private String step;
+  private String unit;
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id")
   public int getId() {
     return id;
@@ -105,6 +108,46 @@ public class ProductDataEntity {
     this.type = type;
   }
 
+  @Basic
+  @Column(name = "max")
+  public String getMax() {
+    return max;
+  }
+
+  public void setMax(String max) {
+    this.max = max;
+  }
+
+  @Basic
+  @Column(name = "min")
+  public String getMin() {
+    return min;
+  }
+
+  public void setMin(String min) {
+    this.min = min;
+  }
+
+  @Basic
+  @Column(name = "step")
+  public String getStep() {
+    return step;
+  }
+
+  public void setStep(String step) {
+    this.step = step;
+  }
+
+  @Basic
+  @Column(name = "unit")
+  public String getUnit() {
+    return unit;
+  }
+
+  public void setUnit(String unit) {
+    this.unit = unit;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o)
@@ -114,11 +157,14 @@ public class ProductDataEntity {
     ProductDataEntity that = (ProductDataEntity) o;
     return id == that.id && modelId == that.modelId && rRw == that.rRw
         && Objects.equals(jsonKey, that.jsonKey) && Objects.equals(description, that.description)
-        && Objects.equals(storageType, that.storageType) && Objects.equals(type, that.type);
+        && Objects.equals(storageType, that.storageType) && Objects.equals(type, that.type)
+        && Objects.equals(max, that.max) && Objects.equals(min, that.min)
+        && Objects.equals(step, that.step) && Objects.equals(unit, that.unit);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, jsonKey, modelId, description, storageType, rRw, type);
+    return Objects.hash(id, jsonKey, modelId, description, storageType, rRw, type, max, min, step,
+        unit);
   }
 }

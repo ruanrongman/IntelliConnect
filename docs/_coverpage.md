@@ -20,7 +20,7 @@
 
 <div class="title">InteliConnect</div>
 
-> A Powerful iot platform.
+> A Powerful iot platform core.
 
 
 <p align="center">

@@ -70,7 +70,7 @@ public class Tool {
     return ResultTool.success(RuntimeMessage.getMessage());
   }
 
-  @Operation(summary = "设备属性控制api接口", description = "注意传入参数为ControlParam")
+  @Operation(summary = "设备属性控制api接口", description = "注意传入参数为ControlParam,属性设置重复时候取第一个")
   @RequestMapping(value = "/control", method = RequestMethod.POST)
   public JsonResult<?> control(@RequestBody ControlParam controlParam) throws MqttException {
 

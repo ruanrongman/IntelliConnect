@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.services;
 
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class HardWareServiceImpl implements HardWareService {
   @Resource
   private ProductDataRepository productDataRepository;
@@ -65,28 +67,47 @@ public class HardWareServiceImpl implements HardWareService {
     }
     List<String> productDataKey = new ArrayList<>();
     Map<String, String> productTypeMap = new HashMap<>();
+    Map<String, String> dataMaxMap = new HashMap<>();
+    Map<String, String> dataMinMap = new HashMap<>();
     List<String> productType = new ArrayList<>();
+    List<String> controlKey = new ArrayList<>();
+    List<String> controlValue = new ArrayList<>();
+    List<String> dataMax = new ArrayList<>();
+    List<String> dataMin = new ArrayList<>();
     for (var s : productDataEntities) {
       if (s.getrRw() == 1) {
         productDataKey.add(s.getJsonKey());
         productTypeMap.put(s.getJsonKey(), s.getType());
+        if (s.getMax() != null || s.getMin() != null) {
+          dataMaxMap.put(s.getJsonKey(), s.getMax());
+          dataMinMap.put(s.getJsonKey(), s.getMin());
+        }
       }
     }
-    if (!productDataKey.containsAll(controlParam.getKey())) {
+    if (!productDataKey.containsAll(controlParam.getKey())
+        || controlParam.getValue().size() != controlParam.getKey().size()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    for (var s : controlParam.getKey()) {
-      productType.add(productTypeMap.get(s));
+    for (int i = 0; i < controlParam.getKey().size(); i++) {
+      if (!controlKey.contains(controlParam.getKey().get(i))) {
+        controlKey.add(controlParam.getKey().get(i));
+        controlValue.add(controlParam.getValue().get(i));
+        productType.add(productTypeMap.get(controlParam.getKey().get(i)));
+        dataMax.add(dataMaxMap.get(controlParam.getKey().get(i)));
+        dataMin.add(dataMinMap.get(controlParam.getKey().get(i)));
+      }
     }
     StringBuffer res = null;
     try {
-      res = JsonCreate.create(controlParam.getKey(), controlParam.getValue(), productType);
-    } catch (IOException e) {
+      res = JsonCreate.create(controlKey, controlValue, productType, dataMax,
+          dataMin);
+    } catch (IOException | IllegalArgumentException e) {
+      log.error(e.getMessage());
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     MqttConnectionUtils.publish(
         "/oc/devices/" + controlParam.getName() + "/sys/" + "properties/update", res.toString(),
         controlParam.getQos());
-    return ResultTool.success();
+    return ResultTool.success(res.toString());
   }
 }

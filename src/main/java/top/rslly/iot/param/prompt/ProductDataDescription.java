@@ -25,5 +25,9 @@ import lombok.Data;
 public class ProductDataDescription {
   private String valueName;
   private String description;
+  private String max;
+  private String min;
+  private String step;
+  private String unit;
   private String type;
 }

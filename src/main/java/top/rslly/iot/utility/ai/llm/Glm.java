@@ -87,7 +87,7 @@ public class Glm implements LLM {
       String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
       ChatCompletionRequest chatCompletionRequest =
           ChatCompletionRequest.builder()
-              .model(Constants.ModelChatGLM4)
+              .model("glm-4-plus")
               .temperature(0.3F)
               .stream(Boolean.FALSE).tools(chatToolList)
               .invokeMethod(Constants.invokeMethod)

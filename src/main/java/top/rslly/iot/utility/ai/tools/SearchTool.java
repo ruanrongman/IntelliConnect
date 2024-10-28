@@ -94,8 +94,9 @@ public class SearchTool implements BaseTool<String> {
       text = driver.findElement(By.tagName("body")).getText();
     } catch (Exception e) {
       text = "搜索失败";
+    } finally {
+      driver.quit();
     }
-    driver.quit();
     return text;
   }
 
@@ -103,7 +104,7 @@ public class SearchTool implements BaseTool<String> {
       String chromePath) {
     List<Map<String, String>> results = new ArrayList<>();
     WebDriver driver = getDriver(chromeDrivePath, chromePath);
-    driver.manage().timeouts().implicitlyWait(2, TimeUnit.SECONDS); // 隐式等待5秒
+    driver.manage().timeouts().implicitlyWait(3, TimeUnit.SECONDS); // 隐式等待5秒
     // 最大化窗口
     driver.manage().window().maximize(); // 最大化窗口
     // 设置隐性等待时间

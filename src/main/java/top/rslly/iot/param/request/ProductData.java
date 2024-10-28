@@ -31,4 +31,8 @@ public class ProductData {
   private String storageType;
   private int rRw;
   private String type;
+  private String max;
+  private String min;
+  private String step;
+  private String unit;
 }
