@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="https://www.rslly.top/data/User/wonder/home/pictures/logo2.png" width="300px" height="250px"/>
+  <img src="./docs/images/logo2.png" width="300px" height="250px"/>
 </p>
 
 ## 概述
@@ -39,12 +39,20 @@
 * 完善的物模型抽象，使得iot开发者可以专注于业务本身
 * AI能力丰富，支持Agent智能体技术，快速开发AI智能应用
 
+## 项目文档
+* 项目文档地址https://ruanrongman.github.io/IntelliConnect/
+* 技术博客地址https://wordpress.rslly.top
+* 社区地址https://github.com/cwliot
+* 创万联社区公众号：微信直接搜索创万联
+## 相关项目和社区
+* Promptulate https://github.com/Undertone0809/promptulate [A LLM application and Agent development framework.]
+* Rymcu https://github.com/rymcu [为数百万人服务的开源嵌入式知识学习交流平台]
 ## 交流群
 
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="https://www.rslly.top/data/User/wonder/home/pictures/cwl4.jpg" width="250px"/>
+    <img src="./docs/images/dd875b2d11d4bac0fe668a00eb93749.jpg" width="250px"/>
 </div>
 
 
