@@ -20,20 +20,16 @@
 package top.rslly.iot.services;
 
 import org.springframework.web.multipart.MultipartFile;
+import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.utility.result.JsonResult;
 
 import javax.servlet.http.HttpServletResponse;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
-public interface OtaService {
-  JsonResult<?> uploadBin(String name, MultipartFile multipartFile);
+public interface AiService {
+  JsonResult<?> getAiResponse(AiControl aiControl);
 
-  JsonResult<?> otaList();
+  JsonResult<?> getAiResponse(String chatId, int productId, MultipartFile multipartFile);
 
-  void otaDevice(String name, HttpServletResponse response) throws IOException;
-
-  JsonResult<?> otaEnable(String name, String deviceName);
-
-  JsonResult<?> deleteBin(String name);
+  public void audioTmpGet(String name, HttpServletResponse response) throws IOException;
 }

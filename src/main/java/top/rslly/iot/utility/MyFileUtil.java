@@ -22,6 +22,9 @@ package top.rslly.iot.utility;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class MyFileUtil {
 
@@ -32,13 +35,30 @@ public class MyFileUtil {
         throw new IOException("Failed to create target directory.");
       }
     }
-    // 确保文件路径以系统相关的路径分隔符结尾
-    String systemPath = System.getProperty("file.separator");
-    String safeFilePath = filePath.endsWith(systemPath) ? filePath : filePath + systemPath;
+    String safeFilePath = safePath(filePath);
+
     FileOutputStream out = new FileOutputStream(safeFilePath + fileName);
     out.write(file);
     out.flush();
     out.close();
+  }
+
+  public static void deleteFile(String filePath) throws IOException {
+    String safeFilePath = safePath(filePath);
+    Path path = Paths.get(safeFilePath);
+    boolean result = Files.deleteIfExists(path);
+    if (!result)
+      throw new IOException("Failed to delete file.");
+  }
+
+  private static String safePath(String filePath) {
+    // 确保文件路径以系统相关的路径形式匹配
+    String systemPath = System.getProperty("file.separator");
+    String safeFilePath = filePath.replace("/", systemPath).replace("\\", systemPath);
+    if (!safeFilePath.endsWith(systemPath)) {
+      safeFilePath += systemPath;
+    }
+    return safeFilePath;
   }
 
 

@@ -30,10 +30,7 @@ import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.param.request.MetaData;
 import top.rslly.iot.param.request.ReadData;
-import top.rslly.iot.services.DataServiceImpl;
-import top.rslly.iot.services.EventStorageServiceImpl;
-import top.rslly.iot.services.HardWareServiceImpl;
-import top.rslly.iot.services.OtaServiceImpl;
+import top.rslly.iot.services.*;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.RuntimeMessage;
 import top.rslly.iot.utility.ai.chain.Router;
@@ -62,7 +59,7 @@ public class Tool {
   @Autowired
   private OtaServiceImpl otaService;
   @Autowired
-  private Router router;
+  private AiServiceImpl aiService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -102,10 +99,24 @@ public class Tool {
   @Operation(summary = "使用大模型控制设备", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl", method = RequestMethod.POST)
   public JsonResult<?> aiControl(@RequestBody AiControl aiControl) {
-    var answer =
-        router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId());
-    return ResultTool.success(answer);
+    return aiService.getAiResponse(aiControl);
   }
+
+  @Operation(summary = "使用大模型控制设备(语音)", description = "响应速度取决于大模型速度")
+  @RequestMapping(value = "/aiControl/video", method = RequestMethod.POST)
+  public JsonResult<?> aiControl(@RequestParam("chatId") String chatId,
+      @RequestParam("productId") int productId,
+      @RequestPart("file") MultipartFile multipartFile) {
+    return aiService.getAiResponse(chatId, productId, multipartFile);
+  }
+
+  @Operation(summary = "获取缓存音频文件(禁止调用)", description = "禁止调用")
+  @RequestMapping(value = "/ai/tmp_voice/{name}", method = RequestMethod.GET)
+  public void audioTmpGet(@PathVariable("name") String name, HttpServletResponse response)
+      throws IOException {
+    aiService.audioTmpGet(name, response);
+  }
+
 
   // ota list and delete
   @RequestMapping(value = "/micro/{name}", method = RequestMethod.GET)
@@ -114,13 +125,23 @@ public class Tool {
     otaService.otaDevice(name, response);
   }
 
-  @RequestMapping(value = "/ota/dealBean", method = RequestMethod.POST)
+  @RequestMapping(value = "/otaUpload", method = RequestMethod.POST)
   public JsonResult<?> ota(@RequestParam("name") String name,
       @RequestPart("file") MultipartFile multipartFile) {
     return otaService.uploadBin(name, multipartFile);
   }
 
-  @RequestMapping(value = "/ota/enable", method = RequestMethod.POST)
+  @RequestMapping(value = "/otaList", method = RequestMethod.GET)
+  public JsonResult<?> otaList() {
+    return otaService.otaList();
+  }
+
+  @RequestMapping(value = "/otaDelete", method = RequestMethod.DELETE)
+  public JsonResult<?> otaDelete(@RequestParam("name") String name) {
+    return otaService.deleteBin(name);
+  }
+
+  @RequestMapping(value = "/otaEnable", method = RequestMethod.POST)
   public JsonResult<?> otaEnable(@RequestParam("name") String name,
       @RequestParam("deviceName") String deviceName) {
     return otaService.otaEnable(name, deviceName);

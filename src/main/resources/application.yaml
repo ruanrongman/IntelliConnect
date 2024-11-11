@@ -68,7 +68,9 @@ wx:
   micro:
     appid: XXXXXX
     appsecret: XXXXXX
+    ToUserName: XXXXXX
     appid2: XXXXXX
+    ToUserName2: XXXXXX
     appsecret2: XXXXXX
   msg:
     token: XXXXXX
@@ -88,24 +90,26 @@ ota:
 weather:
   key: XXX
 ai:
-  chromeDrive-path: XXX
-  chrome-path: XXX
-  glm-key: XXX
-  deepSeek-key: XXX
-  dashscope-key: XXX
-  robot-name: 小创
-  team-name: 创万联
-  agent-epoch-limit: 5
-  chatTool-llm: deepSeek
-  classifierTool-llm: deepSeek
-  controlTool-llm: deepSeek
-  musicTool-llm: deepSeek
-  weatherTool-llm: deepSeek
-  wxBoundProductTool-llm: deepSeek
-  wxProductActiveTool-llm: deepSeek
-  scheduleTool-llm: deepSeek
-  searchTool-llm: deepSeek
-  agent-llm: deepSeek
+    chromeDrive-path: XXX
+    chrome-path: XXX
+    audio-tmp-path: D://temp-music//
+    audio-temp-url: https://XXX.com
+    glm-key: XXX
+    deepSeek-key: XXX
+    dashscope-key: XXX
+    robot-name: 小创
+    team-name: 创万联
+    agent-epoch-limit: 5
+    chatTool-llm: deepSeek
+    classifierTool-llm: deepSeek
+    controlTool-llm: deepSeek
+    musicTool-llm: deepSeek
+    weatherTool-llm: deepSeek
+    wxBoundProductTool-llm: deepSeek
+    wxProductActiveTool-llm: deepSeek
+    scheduleTool-llm: deepSeek
+    searchTool-llm: deepSeek
+    agent-llm: deepSeek
 emq:
   api:
     url: http://192.168.49.129:18083/api/v5/clients

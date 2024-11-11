@@ -30,6 +30,7 @@ import top.rslly.iot.services.ProductModelServiceImpl;
 import top.rslly.iot.services.TimeScheduleServiceImpl;
 import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.ai.tools.MusicTool;
+import top.rslly.iot.utility.ai.tools.SearchTool;
 import top.rslly.iot.utility.ai.tools.WeatherTool;
 
 @Component
@@ -82,10 +83,12 @@ public class DescriptionUtil {
     ControlTool controlTool = new ControlTool();
     WeatherTool weatherTool = new WeatherTool();
     MusicTool musicTool = new MusicTool();
+    SearchTool searchTool = new SearchTool();
     JSONObject jsonObject = new JSONObject();
     jsonObject.put(controlTool.getName(), controlTool.getDescription());
     jsonObject.put(weatherTool.getName(), weatherTool.getDescription());
     jsonObject.put(musicTool.getName(), musicTool.getDescription());
+    jsonObject.put(searchTool.getName(), searchTool.getDescription());
     return jsonObject.toJSONString();
   }
 }

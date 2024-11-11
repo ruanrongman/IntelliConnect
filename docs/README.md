@@ -9,6 +9,7 @@
 * 配备物模型和完善的监控模块
 * 支持多种大模型和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
+* 支持OTA空中升级技术
 * 支持微信小程序和微信服务号
 * 使用常见的mysql和redis数据库，上手简单
 * 支持时序数据库influxdb
@@ -36,7 +37,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/dd875b2d11d4bac0fe668a00eb93749.jpg" width="250px"/>
+    <img src="./images/7f2362f62d759803f9d3f8f6daf695c.jpg" width="250px"/>
 </div>
 
 

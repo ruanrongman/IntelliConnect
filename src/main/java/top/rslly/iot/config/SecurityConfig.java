@@ -67,6 +67,7 @@ public class SecurityConfig {
     return (web) -> web.ignoring().antMatchers("/swagger-ui.html", "/swagger-ui/*",
         "/swagger-resources/**", "/v2/api-docs", "/v3/api-docs", "/webjars/**", "/ruan/**",
         "/api/v2/micro/**",
+        "/api/v2/ai/tmp_voice/**",
         // "/api/v2/startProcess/**",
         // "/api/v2/stop/**",
         // "/api/v2/reset/**",

@@ -90,6 +90,11 @@ public class OtaServiceImpl implements OtaService {
   }
 
   @Override
+  public JsonResult<?> otaList() {
+    return ResultTool.success(otaRepository.findAll());
+  }
+
+  @Override
   public void otaDevice(String name, HttpServletResponse response) throws IOException {
     ServletOutputStream out = response.getOutputStream();
     try {
@@ -106,7 +111,7 @@ public class OtaServiceImpl implements OtaService {
 
 
     } catch (Exception e) {
-      e.printStackTrace();
+      log.error(e.getMessage());
       response.setStatus(404);
       out.close();
     }
@@ -141,6 +146,18 @@ public class OtaServiceImpl implements OtaService {
 
   @Override
   public JsonResult<?> deleteBin(String name) {
-    return null;
+    if (name == null)
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    var otaList = otaRepository.findAllByName(name);
+    if (otaList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    try {
+      MyFileUtil.deleteFile(binPath + otaList.get(0).getPath());
+    } catch (IOException e) {
+      log.error(e.getMessage());
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+    otaRepository.delete(otaList.get(0));
+    return ResultTool.success();
   }
 }

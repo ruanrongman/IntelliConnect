@@ -66,6 +66,10 @@ public class Wx {
   private String appid;
   @Value("${wx.micro.appid}")
   private String microappid;
+  @Value("${wx.micro.ToUserName}")
+  private String ToUserName;
+  @Value("${wx.micro.ToUserName2}")
+  private String ToUserName2;
   @Value("${wx.micro.appid2}")
   private String microappid2;
 
@@ -128,14 +132,14 @@ public class Wx {
             String openid = (String) JSON.parseObject(bodyInfo).get("FromUserName");
             String userid = DigestUtils.md5DigestAsHex(openid.getBytes(StandardCharsets.UTF_8));
             // String ans = router.response(msg);
-            if (microId.equals("gh_a51fecbbd805")) {
+            if (microId.equals(ToUserName)) {
               if (msg.equals("注册账户")) {
                 var res = wxUserService.wxRegister(openid);
                 if (res != null)
                   dealWx.sendContent(openid, "注册成功", microappid);
               } else
                 smartRobot.smartSendContent(openid, msg, microappid);
-            } else if (microId.equals("gh_3ce59b00beee")) {
+            } else if (microId.equals(ToUserName2)) {
               if (msg.equals("注册账户")) {
                 var res = wxUserService.wxRegister(openid);
                 if (res != null)
@@ -147,9 +151,9 @@ public class Wx {
             String event = JSON.parseObject(bodyInfo).getString("Event");
             String openid = (String) JSON.parseObject(bodyInfo).get("FromUserName");
             if (event.equals("user_enter_tempsession")) {
-              if (microId.equals("gh_a51fecbbd805"))
+              if (microId.equals(ToUserName))
                 dealWx.sendContent(openid, "创万联AI小助手正在为你服务", microappid);
-              else if (microId.equals("gh_3ce59b00beee"))
+              else if (microId.equals(ToUserName2))
                 dealWx.sendContent(openid, "创万联AI小助手正在为你服务", microappid2);
             }
           }
