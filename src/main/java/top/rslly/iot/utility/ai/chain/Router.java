@@ -151,7 +151,7 @@ public class Router {
     if (memory.size() > 6) {
       memory.subList(0, memory.size() - 6).clear();
     }
-    redisUtil.set("memory" + chatId, memory);
+    redisUtil.set("memory" + chatId, memory, 24 * 3600);
     return answer;
   }
 

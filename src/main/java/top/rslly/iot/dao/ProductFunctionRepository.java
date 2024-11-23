@@ -17,22 +17,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.dao;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.ProductFunctionEntity;
 
+import javax.transaction.Transactional;
 import java.util.List;
 
-@AllArgsConstructor
-@Getter
-@Setter
-public class ControlParam {
-  String name;
-  String mode;
-  String status;
-  int qos;
-  List<String> key;
-  List<String> value;
+public interface ProductFunctionRepository extends JpaRepository<ProductFunctionEntity, Long> {
+
+  List<ProductFunctionEntity> findAllByModelId(int modelId);
+
+  List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);
+
+  List<ProductFunctionEntity> findAllByModelIdAndJsonKeyAndDataType(int modelId, String jsonKey,
+      String dataType);
+
+  @Transactional
+  List<ProductFunctionEntity> deleteById(int id);
 }

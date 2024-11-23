@@ -82,7 +82,7 @@ public class Agent {
             manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
         conversationPrompt.append(obj);
         conversationPrompt.append(String.format("Observation: %s\n", toolResult));
-        log.info("Thought{}", res.get("thought"));
+        log.info("Thought:{}", res.get("thought"));
         log.info("Observation:{}", toolResult);
       } catch (Exception e) {
         return answer;

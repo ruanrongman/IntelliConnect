@@ -92,16 +92,16 @@ public class DataServiceImpl implements DataService {
   @Override
   public List<DataEntity> findAllBySort(int deviceId, String jsonKey) {
     List<DataEntity> res;
-    var memory = redisUtil.get(deviceId + jsonKey);
+    var memory = redisUtil.get("property" + deviceId + jsonKey);
     if (memory == null) {
       if (database.equals("influxdb")) {
         res = dataTimeRepository.findAllBySort(deviceId, jsonKey);
       } else {
         res = dataRepository.findAllBySort(deviceId, jsonKey);
       }
-      redisUtil.set(deviceId + jsonKey, res, 60);
+      redisUtil.set("property" + deviceId + jsonKey, res, 60);
     } else {
-      redisUtil.expire(deviceId + jsonKey, 120);
+      redisUtil.expire("property" + deviceId + jsonKey, 120);
       return Cast.castList(memory, DataEntity.class);
     }
     return res;
@@ -118,16 +118,16 @@ public class DataServiceImpl implements DataService {
   @Override
   public JsonResult<?> metaData(int deviceId, String jsonKey) {
     List<DataEntity> res;
-    var memory = redisUtil.get(deviceId + jsonKey);
+    var memory = redisUtil.get("property" + deviceId + jsonKey);
     if (memory == null) {
       if (database.equals("influxdb")) {
         res = dataTimeRepository.findAllBySort(deviceId, jsonKey);
       } else {
         res = dataRepository.findAllBySort(deviceId, jsonKey);
       }
-      redisUtil.set(deviceId + jsonKey, res, 60);
+      redisUtil.set("property" + deviceId + jsonKey, res, 60);
     } else {
-      redisUtil.expire(deviceId + jsonKey, 120);
+      redisUtil.expire("property" + deviceId + jsonKey, 120);
       return ResultTool.success(memory);
     }
     if (res.isEmpty())

@@ -48,6 +48,8 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
   @Autowired
   private DealThingsEvent dealThingsEvent;
   @Autowired
+  private DealThingsFunction dealThingsFunction;
+  @Autowired
   private EmqTransfer emqTransfer;
 
   @PostConstruct
@@ -129,8 +131,11 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
     boolean isDealEvent =
         dealThingsEvent.deal(request.getMessage().getFrom(), request.getMessage().getTopic(),
             request.getMessage().getPayload().toStringUtf8());
+    boolean isDealFunction =
+        dealThingsFunction.deal(request.getMessage().getFrom(), request.getMessage().getTopic(),
+            request.getMessage().getPayload().toStringUtf8());
     Message nmsg;
-    if (isDealModel || isDealEvent) {
+    if (isDealModel || isDealEvent || isDealFunction) {
       ByteString bstr = ByteString.copyFromUtf8("You don't have permissions");
 
       nmsg = Message.newBuilder()

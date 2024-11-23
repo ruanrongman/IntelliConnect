@@ -20,7 +20,7 @@
 
 ## 概述
 * 本项目基于springboot2.7开发，使用spring security作为安全框架
-* 配备物模型和完善的监控模块
+* 配备物模型(属性，功能和事件模块)和完善的监控模块
 * 支持多种大模型和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术
@@ -46,6 +46,7 @@
 * 社区地址https://github.com/cwliot
 * 创万联社区公众号：微信直接搜索创万联
 ## 相关项目和社区
+* 创万联(cwl): 专注于物联网和人工智能技术的开源社区。
 * Promptulate https://github.com/Undertone0809/promptulate [A LLM application and Agent development framework.]
 * Rymcu https://github.com/rymcu [为数百万人服务的开源嵌入式知识学习交流平台]
 ## 交流群
@@ -53,7 +54,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/7f2362f62d759803f9d3f8f6daf695c.jpg" width="250px"/>
+    <img src="./docs/images/cbdbb770815a22e9a4cb8551dcda188.jpg" width="250px"/>
 </div>
 
 

@@ -103,7 +103,7 @@ public class SmartRobot {
     if (memory.size() > 6) {
       memory.subList(0, memory.size() - 6).clear();
     }
-    redisUtil.set("memory" + openid, memory);
+    redisUtil.set("memory" + openid, memory, 24 * 3600);
     dealWx.sendContent(openid, content, microappid);
   }
 

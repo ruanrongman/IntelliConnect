@@ -115,7 +115,7 @@ public class ClassifierToolPrompt {
         "Operate electrical and query electrical status(Excluding playing music.)");
     classifierMap.put("4", "Request a song or play music.(including Recommend music.)");
     classifierMap.put("5",
-        "Composite tasks(like according to weather control electrical)");
+        "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
     classifierMap.put("6",
         "Other tasks (including chatting,coding,write paper,Get news or unknown events,translate and etc.)");
     classifierMap.put("7", "Bind or Unbinding the product");

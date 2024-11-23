@@ -106,7 +106,7 @@ class DemoApplicationTests {
     List<String> value = new ArrayList<>();
     key.add("brightness");
     value.add("100");
-    ControlParam controlParam = new ControlParam(name, 1, key, value);
+    ControlParam controlParam = new ControlParam(name, "attribute", null, 1, key, value);
     Assertions.assertEquals("100", controlParam.getValue().get(0));
   }
 
@@ -214,7 +214,7 @@ class DemoApplicationTests {
     // System.out.println(body);
     var jsCode = ControlScriptFactory.generateControlNodeScript("controlFunc",
         """
-            var res=control("light1",1,["switch"],["on"]);
+            var res=control("light1","attribute",null,1,["switch"],["on"]);
             return res;
             """);
     JsScriptInfo jsScriptInfo = new JsScriptInfo("controlFunc");

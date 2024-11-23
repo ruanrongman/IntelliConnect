@@ -46,6 +46,8 @@ public class Auth {
   @Autowired
   ProductEventServiceImpl productEventService;
   @Autowired
+  ProductFunctionServiceImpl productFunctionService;
+  @Autowired
   MqttUserServiceImpl mqttUserService;
 
 
@@ -154,6 +156,27 @@ public class Auth {
   public JsonResult<?> ProductData(@RequestParam("id") int id) {
     return productDataService.deleteProductData(id);
   }
+
+
+
+  @Operation(summary = "获取功能", description = "获取物模型的功能")
+  @RequestMapping(value = "/ProductFunction", method = RequestMethod.GET)
+  public JsonResult<?> ProductFunction() {
+    return productFunctionService.getProductFunction();
+  }
+
+  @Operation(summary = "提交功能", description = "创建物模型的功能")
+  @RequestMapping(value = "/ProductFunction", method = RequestMethod.POST)
+  public JsonResult<?> ProductFunction(@RequestBody ProductFunction productFunction) {
+    return productFunctionService.postProductFunction(productFunction);
+  }
+
+  @Operation(summary = "删除功能", description = "删除物模型的功能")
+  @RequestMapping(value = "/ProductFunction", method = RequestMethod.DELETE)
+  public JsonResult<?> ProductFunction(@RequestParam("id") int id) {
+    return productFunctionService.deleteProductFunction(id);
+  }
+
 
   @Operation(summary = "获取事件入参", description = "获取事件入参")
   @RequestMapping(value = "/EventData", method = RequestMethod.GET)

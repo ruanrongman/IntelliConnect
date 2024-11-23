@@ -56,7 +56,7 @@ public class DashScopeVoice {
             Collections.singletonMap("text", "这段音频在说什么?")))
         .build();
     MultiModalConversationParam param = MultiModalConversationParam.builder()
-        .model("qwen-audio-chat")
+        .model("qwen2-audio-instruct")
         .message(userMessage)
         .build();
     try {

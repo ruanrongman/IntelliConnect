@@ -86,6 +86,7 @@ public class ReactPrompt {
           - Choose only ONE tool and you can't do without using any tools in one step.
           - Your final answer output language should be consistent with the language used by the user. Middle step output is English.
           - Whether the action input is JSON or str depends on the definition of the tool.
+          - After three failed attempts on a hardware control task, do not try again, as too many attempts may cause the device to malfunction.
 
           ## User question
           {question}

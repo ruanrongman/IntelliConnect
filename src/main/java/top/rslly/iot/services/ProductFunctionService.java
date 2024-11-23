@@ -17,22 +17,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.services;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import top.rslly.iot.models.ProductEventEntity;
+import top.rslly.iot.models.ProductFunctionEntity;
+import top.rslly.iot.param.prompt.ProductFunctionDescription;
+import top.rslly.iot.param.prompt.ProductModelDescription;
+import top.rslly.iot.param.request.ProductData;
+import top.rslly.iot.param.request.ProductFunction;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
-@AllArgsConstructor
-@Getter
-@Setter
-public class ControlParam {
-  String name;
-  String mode;
-  String status;
-  int qos;
-  List<String> key;
-  List<String> value;
+public interface ProductFunctionService {
+
+  List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);
+
+  List<ProductFunctionDescription> getDescription(int productId);
+
+  JsonResult<?> getProductFunction();
+
+  JsonResult<?> postProductFunction(ProductFunction productFunction);
+
+  JsonResult<?> deleteProductFunction(int id);
 }

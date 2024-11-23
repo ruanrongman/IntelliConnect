@@ -67,7 +67,7 @@ public class Tool {
     return ResultTool.success(RuntimeMessage.getMessage());
   }
 
-  @Operation(summary = "设备属性控制api接口", description = "注意传入参数为ControlParam,属性设置重复时候取第一个")
+  @Operation(summary = "设备属性或服务控制api接口", description = "注意传入参数为ControlParam,属性或服务设置重复时候取第一个")
   @RequestMapping(value = "/control", method = RequestMethod.POST)
   public JsonResult<?> control(@RequestBody ControlParam controlParam) throws MqttException {
 
@@ -103,7 +103,7 @@ public class Tool {
   }
 
   @Operation(summary = "使用大模型控制设备(语音)", description = "响应速度取决于大模型速度")
-  @RequestMapping(value = "/aiControl/video", method = RequestMethod.POST)
+  @RequestMapping(value = "/aiControl/audio", method = RequestMethod.POST)
   public JsonResult<?> aiControl(@RequestParam("chatId") String chatId,
       @RequestParam("productId") int productId,
       @RequestPart("file") MultipartFile multipartFile) {

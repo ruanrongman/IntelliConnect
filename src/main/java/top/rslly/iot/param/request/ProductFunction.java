@@ -19,20 +19,17 @@
  */
 package top.rslly.iot.param.request;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
-import java.util.List;
-
-@AllArgsConstructor
-@Getter
-@Setter
-public class ControlParam {
-  String name;
-  String mode;
-  String status;
-  int qos;
-  List<String> key;
-  List<String> value;
+@Data
+public class ProductFunction {
+  private String jsonKey;
+  private String dataType;
+  private int modelId;
+  private String description;
+  private String type;
+  private String max;
+  private String min;
+  private String step;
+  private String unit;
 }

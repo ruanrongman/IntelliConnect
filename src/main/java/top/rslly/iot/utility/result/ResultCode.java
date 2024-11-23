@@ -41,7 +41,8 @@ public enum ResultCode {
                   "账号已存在"), USER_ACCOUNT_USE_BY_OTHERS(2009, "账号下线"),
 
   /* 业务错误 */
-  NO_PERMISSION(3001, "没有权限"), HAS_DEPENDENCIES(3002, "存在依赖关系，无法删除"), DEVICE_ABANDON(3003, "设备被禁用");
+  NO_PERMISSION(3001, "没有权限"), HAS_DEPENDENCIES(3002, "存在依赖关系，无法删除"), DEVICE_ABANDON(3003,
+      "设备被禁用"), DEVICE_TIMEOUT(3004, "设备响应超时");
 
   private Integer code;
   private String message;

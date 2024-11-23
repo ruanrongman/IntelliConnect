@@ -25,32 +25,20 @@ import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.models.DataEntity;
-import top.rslly.iot.services.DataServiceImpl;
-import top.rslly.iot.services.ProductDataServiceImpl;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
+import top.rslly.iot.services.ProductFunctionServiceImpl;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
-import top.rslly.iot.utility.DataSave;
 import top.rslly.iot.utility.RedisUtil;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 @Component
 @Slf4j
-public class DealThingsModel {
+public class DealThingsFunction {
+
   @Autowired
   private ProductDeviceServiceImpl productDeviceService;
   @Autowired
-  private ProductDataServiceImpl productDataService;
-  @Autowired
-  private DataServiceImpl dataService;
+  private ProductFunctionServiceImpl productFunctionService;
   @Autowired
   private RedisUtil redisUtil;
 
@@ -58,19 +46,17 @@ public class DealThingsModel {
   public boolean deal(String clientId, String topic, String message) {
     // this clientId is delivered id ,not the sender
     log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
-    String characteristic = UUID.randomUUID().toString();
-    // var deviceEntityList = productDeviceService.findAllBySubscribeTopic(topic);
-    // if (deviceEntityList.isEmpty()||!clientId.equals(MqttConnectionUtils.clientId))
-    // return;
     var deviceEntityList = productDeviceService.findAllByClientId(clientId);
-    if (deviceEntityList.isEmpty() || !deviceEntityList.get(0).getSubscribeTopic().equals(topic))
+    if (deviceEntityList.isEmpty())
       return false;
-    int allow = deviceEntityList.get(0).getAllow();
-    if (allow == 0) {
+    String deviceName = deviceEntityList.get(0).getName();
+    String function_topic = "/oc/devices/" + deviceName
+        + "/sys/" + "service/report";
+    if (!function_topic.equals(topic))
       return false;
-    }
     int modelId = deviceEntityList.get(0).getModelId();
-    var productDataEntities = productDataService.findAllByModelId(modelId);
+    var functionReplyEntities =
+        productFunctionService.findAllByModelIdAndDataType(modelId, "output");
     JSONObject mes;
     try {
       mes = JSON.parseObject(message);
@@ -78,37 +64,29 @@ public class DealThingsModel {
       log.error("json error{}", e.getMessage());
       return false;
     }
-    String reply_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
-        + "/sys/" + "properties/report_reply";
-    for (var s : productDataEntities) {
+    String reply_topic = "/oc/devices/" + deviceName
+        + "/sys/" + "service/report_reply";
+    String async_outputData_topic = "/oc/devices/" + deviceName
+        + "/sys/" + "service/async_outputData";
+    JSONObject outputDataObject = new JSONObject();
+    for (var s : functionReplyEntities) {
       var result = mes.get(s.getJsonKey());
-      if (result == null || s.getStorageType().equals(DataSave.never.getStorageType()))
+      if (result == null)
         continue;// Automatically ignore values
-      DataEntity dataEntity = new DataEntity();
-      dataEntity.setCharacteristic(characteristic);
-      dataEntity.setJsonKey(s.getJsonKey());
-      dataEntity.setValue(result.toString());
-      dataEntity.setDeviceId(deviceEntityList.get(0).getId());
       try {
-        long time = System.currentTimeMillis();
-        dataEntity.setTime(time);
-        var memory = redisUtil.get("property" + deviceEntityList.get(0).getId() + s.getJsonKey());
-        if (memory != null) {
-          List<DataEntity> dataEntityList = new ArrayList<>();
-          dataEntityList.add(dataEntity);
-          redisUtil.set("property" + deviceEntityList.get(0).getId() + s.getJsonKey(),
-              dataEntityList, 120);
-          // log.info("热点过期时间{}",
-          // redisUtil.getExpire(deviceEntityList.get(0).getId()+s.getJsonKey()));
-        }
-        log.info("{}", dataEntity);
-        dataService.insert(dataEntity);
+        outputDataObject.put(s.getJsonKey(), result);
+        // redisUtil.set("service"+deviceEntityList.get(0).getId() + s.getJsonKey(), result, 120);
+        // log.info("热点过期时间{}",
+        // redisUtil.getExpire(deviceEntityList.get(0).getId()+s.getJsonKey()));
+        log.info("key:{},value:{}", s.getJsonKey(), result);
       } catch (Exception e) {
         log.error("DealThingsModel save error:{}", e.getMessage());
       }
     }
+    redisUtil.set("service" + deviceName, outputDataObject.toJSONString(), 120);
     try {
       MqttConnectionUtils.publish(reply_topic, "{\"code\":\"" + 200 + "\",\"status\":\"ok\"}", 0);
+      MqttConnectionUtils.publish(async_outputData_topic, outputDataObject.toJSONString(), 0);
     } catch (MqttException e) {
       log.error("DealThingsModel error:{}", e.getMessage());
     }

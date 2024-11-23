@@ -24,10 +24,7 @@ import com.alibaba.fastjson.JSONObject;
 import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.ProductDataServiceImpl;
-import top.rslly.iot.services.ProductDeviceServiceImpl;
-import top.rslly.iot.services.ProductModelServiceImpl;
-import top.rslly.iot.services.TimeScheduleServiceImpl;
+import top.rslly.iot.services.*;
 import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.ai.tools.MusicTool;
 import top.rslly.iot.utility.ai.tools.SearchTool;
@@ -42,6 +39,8 @@ public class DescriptionUtil {
   @Autowired
   private ProductDeviceServiceImpl productDeviceService;
   @Autowired
+  private ProductFunctionServiceImpl productFunctionService;
+  @Autowired
   private TimeScheduleServiceImpl timeScheduleService;
 
   public String getElectricalName(int productId) {
@@ -54,6 +53,16 @@ public class DescriptionUtil {
     var result = productModelService.findAllByProductId(productId);
     for (var s : result) {
       var dataList = productDataService.getDescription(s.getId());
+      jsonObject.put(s.getName(), dataList);
+    }
+    return jsonObject.toJSONString();
+  }
+
+  public String getThingsFunction(int productId) {
+    JSONObject jsonObject = new JSONObject();
+    var result = productModelService.findAllByProductId(productId);
+    for (var s : result) {
+      var dataList = productFunctionService.getDescription(s.getId());
       jsonObject.put(s.getName(), dataList);
     }
     return jsonObject.toJSONString();

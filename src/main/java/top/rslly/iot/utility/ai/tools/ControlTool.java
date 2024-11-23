@@ -37,6 +37,7 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ControlToolPrompt;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -90,24 +91,32 @@ public class ControlTool implements BaseTool<String> {
     messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
     String answer = obj.getString("answer");
+    StringBuilder ragAnswer = new StringBuilder();
     JSONArray controlParameters = obj.getJSONArray("controlParameters");
     for (Object controlParameter : controlParameters) {
-      process_llm_result(productId, (JSONObject) controlParameter);
+      ragAnswer.append(process_llm_result(productId, (JSONObject) controlParameter));
+      if (controlParameters.size() > 1)
+        ragAnswer.append("\n");
     }
-    return answer;
+    return answer + "平台真实响应:" + ragAnswer;
   }
 
-  private void process_llm_result(int productId, JSONObject jsonObject) {
+  private String process_llm_result(int productId, JSONObject jsonObject) {
     try {
+      String deviceName = jsonObject.get("name").toString();
       if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
         JSONArray propertyJson = jsonObject.getJSONArray("properties");
-        JSONArray valueJson = jsonObject.getJSONArray("value");
+        JSONArray functionJson = jsonObject.getJSONArray("function");
+        JSONArray functionValue = jsonObject.getJSONArray("function_value");
+        JSONArray valueJson = jsonObject.getJSONArray("properties_value");
         String taskType = jsonObject.get("taskType").toString();
         if (taskType == null)
           throw new NullPointerException("taskType is null");
         List<String> properties = JSONObject.parseArray(propertyJson.toJSONString(), String.class);
+        List<String> functions = JSONObject.parseArray(functionJson.toJSONString(), String.class);
+        List<String> functionValues =
+            JSONObject.parseArray(functionValue.toJSONString(), String.class);
         List<String> value = JSONObject.parseArray(valueJson.toJSONString(), String.class);
-        String deviceName = jsonObject.get("name").toString();
         List<Integer> modelList = new ArrayList<>();
         var productModelEntityList = productModelService.findAllByProductId(productId);
         for (var s : productModelEntityList) {
@@ -115,19 +124,48 @@ public class ControlTool implements BaseTool<String> {
         }
         if (modelList
             .contains(productDeviceService.findAllByName(deviceName).get(0).getModelId())) {
-          if (!properties.isEmpty() && !value.isEmpty() && taskType.equals("control")) {
-            ControlParam controlParam = new ControlParam(deviceName, 1, properties, value);
-            var res = hardWareService.control(controlParam);
-            if (res.getErrorCode() != 200)
-              throw new IcAiException("platform not support");
+          if (taskType.equals("control")) {
+            List<String> errorMessages = new ArrayList<>();
+            if (!properties.isEmpty() && !value.isEmpty()) {
+              ControlParam controlParam =
+                  new ControlParam(deviceName, "attribute", "null", 1, properties, value);
+              var res = hardWareService.control(controlParam);
+              if (res.getErrorCode() != 200) {
+                errorMessages
+                    .add(deviceName + (res.getErrorMsg() != null ? res.getErrorMsg() : ""));
+              }
+            }
+            if (!functions.isEmpty() && !functionValues.isEmpty()) {
+              ControlParam controlParam1 =
+                  new ControlParam(deviceName, "service", "async", 1, functions, functionValues);
+              var res = hardWareService.control(controlParam1);
+              if (res.getErrorCode() != 200) {
+                errorMessages
+                    .add(deviceName + (res.getErrorMsg() != null ? res.getErrorMsg() : ""));
+              }
+            }
+            // Throw exception if any errors are collected
+            if (!errorMessages.isEmpty()) {
+              throw new IcAiException(String.join("\n", errorMessages));
+            }
+          } else {
+            throw new IcAiException(deviceName + "未设置控制参数");
           }
         } else
-          throw new IcAiException("the deviceName is not in this product");
+          throw new IcAiException(deviceName + "未在平台产品中注册");
 
-      } else
-        throw new IcAiException("llm response error");
+      } else {
+        if (deviceName == null || deviceName.equals("null"))
+          throw new IcAiException("某设备不存在");
+        else
+          throw new IcAiException(deviceName + "设备离线");
+      }
+      return deviceName + "操作成功";
+    } catch (IcAiException e) {
+      return e.getMessage();
     } catch (Exception e) {
       log.error("control tools error:{}", e.getMessage());
+      return "某步骤出现严重错误，请重试！！！";
     }
   }
 }

@@ -17,22 +17,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.param.prompt;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
-import java.util.List;
-
-@AllArgsConstructor
-@Getter
-@Setter
-public class ControlParam {
-  String name;
-  String mode;
-  String status;
-  int qos;
-  List<String> key;
-  List<String> value;
+@Data
+public class ProductFunctionDescription {
+  private String serviceName;
+  private String description;
+  private String max;
+  private String min;
+  private String step;
+  private String unit;
+  private String type;
 }
