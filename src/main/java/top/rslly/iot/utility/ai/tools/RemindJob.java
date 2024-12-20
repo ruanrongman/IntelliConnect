@@ -36,13 +36,16 @@ public class RemindJob implements Job {
   @Override
   public void execute(JobExecutionContext jobExecutionContext) {
     JobDataMap jobDataMap = jobExecutionContext.getJobDetail().getJobDataMap();
+    String jobName = jobExecutionContext.getJobDetail().getKey().getName();
+    log.info("task name: {}", jobName);
+
     DealWx dealWx = (DealWx) SpringBeanUtils.getBean("dealWx");
     String openid = jobDataMap.get("data1").toString();
     String microappid = jobDataMap.get("data2").toString();
     log.info("openid:{}", openid);
     log.info("microappid:{}", microappid);
     try {
-      dealWx.sendContent(openid, "提醒时间到了！！！", microappid);
+      dealWx.sendContent(openid, jobName + "提醒时间到了！！！", microappid);
     } catch (Exception e) {
       log.error("发送失败", e);
     }

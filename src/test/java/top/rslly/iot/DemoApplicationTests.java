@@ -43,6 +43,7 @@ import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 import top.rslly.iot.utility.ai.voice.DashScopeVoice;
@@ -188,12 +189,13 @@ class DemoApplicationTests {
   public void Ai() {
     SpringBeanUtils.setApplicationContext(applicationContext);
     // var answer = agent.run("根据新会的天气播放音乐", 1);
-    // var answer = Glm.testImageToWord(
-    // "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
+    var answer = Glm.testImageToWord(
+        "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
     // var answer= chatTool.run("你好", new ArrayList<>());
-    String answer = DashScopeVoice.simpleMultiModalConversationCall(
+    String answer2 = DashScopeVoice.simpleMultiModalConversationCall(
         "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
     log.info(answer);
+    log.info(answer2);
   }
 
   @Test
@@ -276,7 +278,7 @@ class DemoApplicationTests {
   @Test
   public void ScheduleToolTest() throws InterruptedException {
     SpringBeanUtils.setApplicationContext(applicationContext);
-    scheduleTool.run("1300秒后提醒我", "test", "test");
+    scheduleTool.run("20秒后提醒我", "test", "test");
     Thread.sleep(100000);
   }
 

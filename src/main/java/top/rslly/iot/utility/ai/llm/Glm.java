@@ -179,7 +179,7 @@ public class Glm implements LLM {
 
     ChatCompletionRequest chatCompletionRequest =
         ChatCompletionRequest.builder()
-            .model(Constants.ModelChatGLM4V)
+            .model("GLM-4V-Flash")
             .stream(Boolean.FALSE)
             .invokeMethod(Constants.invokeMethod)
             .messages(messages)

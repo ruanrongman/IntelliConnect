@@ -21,7 +21,7 @@
 ## 概述
 * 本项目基于springboot2.7开发，使用spring security作为安全框架
 * 配备物模型(属性，功能和事件模块)和完善的监控模块
-* 支持多种大模型和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用
+* 支持多种大模型和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用(首个基于Agent智能体设计的物联网平台)
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术
 * 支持微信小程序和微信服务号
@@ -54,7 +54,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/cbdbb770815a22e9a4cb8551dcda188.jpg" width="250px"/>
+    <img src="./docs/images/f21e4e38d401f0d1aef3f3551591408.jpg" width="250px"/>
 </div>
 
 

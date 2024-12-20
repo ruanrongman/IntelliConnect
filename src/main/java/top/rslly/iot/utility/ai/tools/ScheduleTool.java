@@ -76,7 +76,7 @@ public class ScheduleTool {
     } catch (Exception e) {
       // e.printStackTrace();
       log.info("LLM error: " + e.getMessage());
-      return answer;
+      return "不好意思，提醒任务设置失败了，请检查是否输入时间小于20秒或者没有表达清楚请求。";
     }
   }
 
@@ -95,7 +95,12 @@ public class ScheduleTool {
         if (repeat.equals("true")) {
           cron = jsonObject.getString("cron");
         } else {
-          cron = QuartzCronDateUtils.getCron(formatter.parse(timeStr));
+          var time = formatter.parse(timeStr);
+          if (time.before(new java.util.Date()))
+            throw new IcAiException("time is before now");
+          if (time.getTime() - new java.util.Date().getTime() < 20 * 1000)
+            throw new IcAiException("time is too near");
+          cron = QuartzCronDateUtils.getCron(time);
         }
         // String uuid = UUID.randomUUID().toString();
 
