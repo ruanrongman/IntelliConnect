@@ -44,6 +44,7 @@ public class ScheduleToolPrompt {
       """
           You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
           Identify the time when the user wants to be reminded and convert it to a cron expression.
+          If the user does not provide a specific time, you can plan a time for them.
           reference information: The current time is {time}
           Arranged reminder tasks:{schedule_map}
           ## Output Format
@@ -52,15 +53,19 @@ public class ScheduleToolPrompt {
            ```json
            {
            "thought": "The thought of what to do and why.(use Chinese)",
-           "action": # the action to take
+           "action":
                {
-               "code": "If this is related to Time reminder task output 200,else output 400",
                "answer": "Answer vivid,lively,kind and amiable(use Chinese),you must tell people the Arranged reminder tasks",
-               "repeat": "If it is a periodic time task output true,else output false",
-               "task_name": "The name of the scheduled task",
-               "time" : "execution time,Here is the response formatted:yyyy-MM-dd HH:mm:ss",
-               "cron": "Linux Crontab expression",
-               "cancel":"If it is to cancel the task output ture else false"
+               "taskParameters":[
+               {
+                 "code": "If this is related to Time reminder or query task output 200,else output 400",
+                 "repeat": "If it is a periodic time task output true,else output false",
+                 "task_name": "The name of the scheduled task",
+                 "time" : "execution time,Here is the response formatted:yyyy-MM-dd HH:mm:ss",
+                 "cron": "Linux Crontab expression",
+                 "taskType":"set or cancel; otherwise, output 'query'."
+               }
+               ]
                }
            }
            ```
@@ -69,36 +74,57 @@ public class ScheduleToolPrompt {
            if Arranged reminder tasks is {}
            The current time is 2024-06-06 10:40:05
            ```json
-             {
+            {
              "thought": "用户想要在5分钟后提醒",
-             "action":
+             "action":{
+             "answer": "🔍\s你的日程
+              1.【5分钟后提醒】
+                - 日期：2024-06-06
+                - 时间：10:40:10
+                - 提醒：日程开始时
+                - 备注：5分钟后提醒",
+             "taskParameters":[
                  {
                  "code": "200",
-                 "answer": "好的我将会在5秒种后提醒你，你当前没有设定任何提醒任务",
                  "task_name": "5 seconds task",
                  "repeat": "false",
                  "time": "2024-06-06 10:40:10",
                  "cron": null,
-                 "cancel":"false"
+                 "taskType":"set"
                  }
+             ]
              }
+           }
             ```
            if user input: Remind me at 12:00 noon every day.
-           if Arranged reminder tasks is {"1300秒后提醒任务":"36 59 11 19 06 ? 2024"}
+           if Arranged reminder tasks is {"资料提交提醒任务":"36 59 11 19 06 ? 2024"}
            The current time is 2024-06-06 10:40:05
            ```json
            {
              "thought": "用户想要每天中午12点提醒",
-             "action":
+             "action":{
+             "answer": "🔍\s你的日程
+              1.【资料提交提醒任务】
+               - 日期：2024-06-19
+               - 时间：10:40:10
+               - 提醒：日程开始时
+               - 备注：手机充电提醒
+              2.【每天中午12点提醒】
+               - 日期：每天
+               - 时间：12:0:0
+               - 提醒：日程开始时
+               - 备注：每天中午12点提醒",
+             "taskParameters":[
                  {
                  "code": "200",
-                 "answer": "好的我将会在每天中午12点提醒你，你已经设定了以下提醒任务 '1300秒后提醒任务'",
                  "task_name": "12:00 noon every day task",
                  "repeat": "true",
                  "time": null,
                  "cron": "0 0 12 * * ?",
-                 "cancel":"false"
+                 "taskType":"set"
                  }
+              ]
+              }
              }
            ```
            ## Attention

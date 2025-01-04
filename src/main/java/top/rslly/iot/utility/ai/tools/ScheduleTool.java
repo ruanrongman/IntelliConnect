@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -40,27 +41,35 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @Data
 @Slf4j
-public class ScheduleTool {
+public class ScheduleTool implements BaseTool<String> {
   @Autowired
   private ScheduleToolPrompt scheduleToolPrompt;
   @Value("${ai.scheduleTool-llm}")
   private String llmName;
   private String name = "scheduleTool";
   private String description = """
-      Identify the time when the user wants to be reminded and convert it to a cron expression.
-      Args: The time and specific needs that the user wants to be reminded of.(str)
+      Used for schedule management and reminder tasks, you can query, cancel, and set schedules.
+      Args: User's schedule management needs.(str)
       """;
   @Autowired
   private TimeScheduleServiceImpl timeScheduleService;
 
-  public String run(String question, String openid, String appid) {
+  @Override
+  public String run(String question) {
+    return null;
+  }
+
+  @Override
+  public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
-
+    String openid = (String) globalMessage.get("chatId");
+    String appid = (String) globalMessage.get("microappid");
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             scheduleToolPrompt.getScheduleTool(openid));
@@ -70,8 +79,11 @@ public class ScheduleTool {
     messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     String answer = (String) obj.get("answer");
+    JSONArray taskParameters = obj.getJSONArray("taskParameters");
     try {
-      process_llm_result(obj, openid, appid);
+      for (Object taskParameter : taskParameters) {
+        process_llm_result((JSONObject) taskParameter, openid, appid);
+      }
       return answer;
     } catch (Exception e) {
       // e.printStackTrace();
@@ -85,12 +97,11 @@ public class ScheduleTool {
 
     if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
       SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
       String repeat = jsonObject.getString("repeat");
       String taskName = jsonObject.getString("task_name");
-      String cancel = jsonObject.getString("cancel");
+      String taskType = jsonObject.getString("taskType");
       String cron = "";
-      if (cancel.equals("false")) {
+      if (taskType.equals("set")) {
         String timeStr = jsonObject.getString("time");
         if (repeat.equals("true")) {
           cron = jsonObject.getString("cron");
@@ -115,7 +126,7 @@ public class ScheduleTool {
               appid);
         } else
           throw new IcAiException("task name is duplicate");
-      } else {
+      } else if (taskType.equals("cancel")) {
         timeScheduleService.deleteByOpenidAndTaskName(openid, taskName);
         QuartzManager.removeJob(taskName, openid, taskName, openid);
       }

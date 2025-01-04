@@ -41,12 +41,11 @@ import top.rslly.iot.utility.DataSave;
 import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.ai.Manage;
-import top.rslly.iot.utility.ai.Prompt;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
-import top.rslly.iot.utility.ai.voice.DashScopeVoice;
+import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.influxdb.executor.ExecutorImpl;
 import top.rslly.iot.utility.script.ControlScriptFactory;
 import top.rslly.iot.utility.script.js.JsScriptInfo;
@@ -192,10 +191,11 @@ class DemoApplicationTests {
     var answer = Glm.testImageToWord(
         "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
     // var answer= chatTool.run("你好", new ArrayList<>());
-    String answer2 = DashScopeVoice.simpleMultiModalConversationCall(
-        "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
+    // String answer2 = DashScopeVoice.simpleMultiModalConversationCall(
+    // "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
+    Text2audio.synthesizeAndSaveAudio("你好");
     log.info(answer);
-    log.info(answer2);
+    // log.info(answer2);
   }
 
   @Test
@@ -278,7 +278,10 @@ class DemoApplicationTests {
   @Test
   public void ScheduleToolTest() throws InterruptedException {
     SpringBeanUtils.setApplicationContext(applicationContext);
-    scheduleTool.run("20秒后提醒我", "test", "test");
+    Map<String, Object> globalMessage = new HashMap<>();
+    globalMessage.put("openid", "test");
+    globalMessage.put("microappid", "test");
+    scheduleTool.run("我现在有哪些日程", globalMessage);
     Thread.sleep(100000);
   }
 

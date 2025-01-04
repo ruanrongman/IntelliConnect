@@ -32,12 +32,18 @@
 <source src="../video/demo.mp4" type="video/mp4">
 </video>
 
+## Agent语音交互效果
+
+<video  controls="controls" width="500" height="200">
+<source src="../video/demo2.mp4" type="video/mp4">
+</video>
+
 ## 交流群
 
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/f21e4e38d401f0d1aef3f3551591408.jpg" width="250px"/>
+    <img src="./images/2006b2aa47e1b17eb918c97e0c924cf.jpg" width="250px"/>
 </div>
 
 

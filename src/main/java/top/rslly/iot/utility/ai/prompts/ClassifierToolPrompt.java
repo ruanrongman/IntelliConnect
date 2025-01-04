@@ -120,7 +120,7 @@ public class ClassifierToolPrompt {
         "Other tasks (including chatting,coding,write paper,Get news or unknown events,translate and etc.)");
     classifierMap.put("7", "Bind or Unbinding the product");
     classifierMap.put("8", "handoff controlled products");
-    classifierMap.put("9", "Set or cancel scheduled tasks or reminder tasks");
+    classifierMap.put("9", "Schedule management and reminder tasks");
     classifierMap.put("10",
         "Search for online(Please simplify user input to meet the needs of search engines)");
     String classifierJson = JSON.toJSONString(classifierMap);

@@ -106,8 +106,9 @@ public class Tool {
   @RequestMapping(value = "/aiControl/audio", method = RequestMethod.POST)
   public JsonResult<?> aiControl(@RequestParam("chatId") String chatId,
       @RequestParam("productId") int productId,
+      @RequestParam("tts") boolean tts,
       @RequestPart("file") MultipartFile multipartFile) {
-    return aiService.getAiResponse(chatId, productId, multipartFile);
+    return aiService.getAiResponse(chatId, tts, productId, multipartFile);
   }
 
   @Operation(summary = "获取缓存音频文件(禁止调用)", description = "禁止调用")

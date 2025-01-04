@@ -73,6 +73,8 @@ public class Router {
     Map<String, Object> globalMessage = new HashMap<>();
     globalMessage.put("productId", productId);
     globalMessage.put("chatId", chatId);
+    if (microappid.length > 0)
+      globalMessage.put("microappid", microappid[0]);
     var memory_cache = redisUtil.get("memory" + chatId);
     if (memory_cache != null)
       try {
@@ -126,7 +128,7 @@ public class Router {
             if (wxUserService.findAllByOpenid(chatId).isEmpty())
               toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
             else {
-              toolResult = scheduleTool.run(args, chatId, microappid[0]);
+              toolResult = scheduleTool.run(args, globalMessage);
             }
             answer = "以下是定时任务插件的结果：" + toolResult;
           }

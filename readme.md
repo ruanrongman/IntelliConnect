@@ -22,6 +22,7 @@
 * 本项目基于springboot2.7开发，使用spring security作为安全框架
 * 配备物模型(属性，功能和事件模块)和完善的监控模块
 * 支持多种大模型和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用(首个基于Agent智能体设计的物联网平台)
+* 支持快速构建智能语音应用，支持语音识别和语音合成
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术
 * 支持微信小程序和微信服务号
@@ -40,8 +41,8 @@
 * 完善的物模型抽象，使得iot开发者可以专注于业务本身
 * AI能力丰富，支持Agent智能体技术，快速开发AI智能应用
 
-## 项目文档
-* 项目文档地址https://ruanrongman.github.io/IntelliConnect/
+## 项目文档和视频演示
+* 项目文档和视频演示地址https://ruanrongman.github.io/IntelliConnect/
 * 技术博客地址https://wordpress.rslly.top
 * 社区地址https://github.com/cwliot
 * 创万联社区公众号：微信直接搜索创万联
@@ -54,7 +55,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/f21e4e38d401f0d1aef3f3551591408.jpg" width="250px"/>
+    <img src="./docs/images/2006b2aa47e1b17eb918c97e0c924cf.jpg" width="250px"/>
 </div>
 
 

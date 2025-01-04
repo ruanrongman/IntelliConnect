@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.services;
 
+import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.voice.DashScopeVoice;
+import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -40,6 +42,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Base64;
 import java.util.UUID;
 
 @Service
@@ -61,7 +64,8 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
-  public JsonResult<?> getAiResponse(String chatId, int productId, MultipartFile multipartFile) {
+  public JsonResult<?> getAiResponse(String chatId, boolean tts, int productId,
+      MultipartFile multipartFile) {
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
 
@@ -75,14 +79,19 @@ public class AiServiceImpl implements AiService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     String filePath = audioPath; // 上传后的路径
     fileName = UUID.randomUUID() + suffixName; // 新文件名
-    String aiResponse;
+    JSONObject aiResponse = new JSONObject();
     try {
       MyFileUtil.uploadFile(multipartFile.getBytes(), filePath, fileName);
       String result = DashScopeVoice
           .simpleMultiModalConversationCall(audioTempUrl + prefix_url + "/" + fileName);
       log.info(audioTempUrl + prefix_url + "/" + fileName);
       log.info(result);
-      aiResponse = router.response(result, chatId, productId);
+      String answer = router.response(result, chatId, productId);
+      aiResponse.put("text", answer);
+      if (tts) {
+        var audio = Text2audio.synthesizeAndSaveAudio(answer).array();
+        aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
+      }
     } catch (Exception e) {
       log.error(e.getMessage());
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);

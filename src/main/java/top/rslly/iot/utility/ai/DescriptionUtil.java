@@ -25,10 +25,7 @@ import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.*;
-import top.rslly.iot.utility.ai.tools.ControlTool;
-import top.rslly.iot.utility.ai.tools.MusicTool;
-import top.rslly.iot.utility.ai.tools.SearchTool;
-import top.rslly.iot.utility.ai.tools.WeatherTool;
+import top.rslly.iot.utility.ai.tools.*;
 
 @Component
 public class DescriptionUtil {
@@ -93,11 +90,13 @@ public class DescriptionUtil {
     WeatherTool weatherTool = new WeatherTool();
     MusicTool musicTool = new MusicTool();
     SearchTool searchTool = new SearchTool();
+    ScheduleTool scheduleTool = new ScheduleTool();
     JSONObject jsonObject = new JSONObject();
     jsonObject.put(controlTool.getName(), controlTool.getDescription());
     jsonObject.put(weatherTool.getName(), weatherTool.getDescription());
     jsonObject.put(musicTool.getName(), musicTool.getDescription());
     jsonObject.put(searchTool.getName(), searchTool.getDescription());
+    jsonObject.put(scheduleTool.getName(), scheduleTool.getDescription());
     return jsonObject.toJSONString();
   }
 }

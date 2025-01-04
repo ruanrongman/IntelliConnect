@@ -28,3 +28,9 @@ Agent智能体可以自我学习。智能体是一种通用问题解决器。从
 <video  controls="controls" width="500" height="200">
 <source src="../video/demo.mp4" type="video/mp4">
 </video>
+
+## Agent语音交互效果
+
+<video  controls="controls" width="500" height="200">
+<source src="../video/demo2.mp4" type="video/mp4">
+</video>
