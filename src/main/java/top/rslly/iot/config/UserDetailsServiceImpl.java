@@ -41,7 +41,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
   @Autowired
   private UserService userService;
 
-  private Logger LOG = Logger.getLogger(String.valueOf(UserDetailsServiceImpl.class));
+  // private Logger LOG = Logger.getLogger(String.valueOf(UserDetailsServiceImpl.class));
 
   @Override
   public UserDetails loadUserByUsername(String s) throws UsernameNotFoundException {

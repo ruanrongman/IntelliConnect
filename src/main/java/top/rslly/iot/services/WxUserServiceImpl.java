@@ -96,6 +96,11 @@ public class WxUserServiceImpl implements WxUserService {
   }
 
   @Override
+  public List<WxUserEntity> findAllByName(String name) {
+    return wxUserRepository.findAllByName(name);
+  }
+
+  @Override
   public JsonResult<?> wxGetAllUser() {
     return ResultTool.success(wxUserRepository.findAll());
   }

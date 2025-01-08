@@ -20,19 +20,27 @@
 package top.rslly.iot.utility.ai.voice;
 
 import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversation;
+import com.alibaba.dashscope.audio.tts.SpeechSynthesisResult;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
+import com.alibaba.dashscope.common.ResultCallback;
 import com.alibaba.dashscope.utils.Constants;
+import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.utility.SseEmitterUtil;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.concurrent.CountDownLatch;
 
 @Component
 @Slf4j
@@ -40,6 +48,46 @@ public class Text2audio {
   private static String model = "cosyvoice-v1";
   private static String voice = "longtong";
   private static SpeechSynthesisParam param;
+
+  static class ReactCallback extends ResultCallback<SpeechSynthesisResult> {
+    public CountDownLatch latch = new CountDownLatch(1);
+    private final String chatId;
+
+    ReactCallback(String chatId) {
+      this.chatId = chatId;
+    }
+
+    @Override
+    public void onEvent(SpeechSynthesisResult message) {
+      // Write Audio to player
+      if (message.getAudioFrame() != null) {
+        // audioPlayer.write(message.getAudioFrame());
+        JSONObject aiResponse = new JSONObject();
+        var audio = message.getAudioFrame().array();
+        aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
+        SseEmitterUtil.sendMessage(chatId, aiResponse.toJSONString());
+        log.info(Arrays.toString(message.getAudioFrame().array()));
+      }
+    }
+
+    @Override
+    public void onComplete() {
+      System.out.println("synthesis onComplete!");
+      SseEmitterUtil.removeUser(chatId);
+      latch.countDown();
+    }
+
+    @Override
+    public void onError(Exception e) {
+      System.out.println("synthesis onError!");
+      SseEmitterUtil.removeUser(chatId);
+      e.printStackTrace();
+    }
+
+    public void waitForComplete() throws InterruptedException {
+      latch.await();
+    }
+  }
 
   @Value("${ai.dashscope-key}")
   public void setApiKey(String apiKey) {
@@ -60,6 +108,13 @@ public class Text2audio {
     log.info("requestId{}", synthesizer.getLastRequestId());
     // log.info(Arrays.toString(audio.array()));
     return audio;
+  }
+
+  @Async("taskExecutor")
+  public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
+    ReactCallback callback = new ReactCallback(chatId);
+    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
+    synthesizer.call(text);
   }
 
 }

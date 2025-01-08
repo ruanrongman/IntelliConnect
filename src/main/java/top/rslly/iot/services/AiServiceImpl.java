@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.DashScopeVoice;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.result.JsonResult;
@@ -54,6 +55,10 @@ public class AiServiceImpl implements AiService {
   private String audioTempUrl;
   @Autowired
   private Router router;
+  @Autowired
+  private Text2audio text2audio;
+  @Autowired
+  private Audio2Text audio2Text;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
 
   @Override
@@ -64,7 +69,7 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
-  public JsonResult<?> getAiResponse(String chatId, boolean tts, int productId,
+  public JsonResult<?> getAiResponse(String chatId, boolean tts, boolean stream, int productId,
       MultipartFile multipartFile) {
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
@@ -82,15 +87,19 @@ public class AiServiceImpl implements AiService {
     JSONObject aiResponse = new JSONObject();
     try {
       MyFileUtil.uploadFile(multipartFile.getBytes(), filePath, fileName);
-      String result = DashScopeVoice
-          .simpleMultiModalConversationCall(audioTempUrl + prefix_url + "/" + fileName);
+      // String result = DashScopeVoice
+      // .simpleMultiModalConversationCall(audioTempUrl + prefix_url + "/" + fileName);
+      String result = audio2Text.getText(audioTempUrl + prefix_url + "/" + fileName);
       log.info(audioTempUrl + prefix_url + "/" + fileName);
       log.info(result);
       String answer = router.response(result, chatId, productId);
       aiResponse.put("text", answer);
       if (tts) {
         var audio = Text2audio.synthesizeAndSaveAudio(answer).array();
-        aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
+        if (!stream)
+          aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
+        else
+          text2audio.asyncSynthesizeAndSaveAudio(answer, chatId);
       }
     } catch (Exception e) {
       log.error(e.getMessage());

@@ -122,6 +122,7 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
     responseObserver.onCompleted();
   }
 
+  // 安全屏障，后续更新
   @Override
   public void onMessagePublish(MessagePublishRequest request,
       StreamObserver<ValuedResponse> responseObserver) {

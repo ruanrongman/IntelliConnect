@@ -1,4 +1,7 @@
 spring:
+  banner:
+    charset: UTF-8
+    location: classpath:banner.txt
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher

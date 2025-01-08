@@ -26,6 +26,7 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.param.request.MetaData;
@@ -33,6 +34,7 @@ import top.rslly.iot.param.request.ReadData;
 import top.rslly.iot.services.*;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.RuntimeMessage;
+import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.result.JsonResult;
@@ -69,9 +71,10 @@ public class Tool {
 
   @Operation(summary = "设备属性或服务控制api接口", description = "注意传入参数为ControlParam,属性或服务设置重复时候取第一个")
   @RequestMapping(value = "/control", method = RequestMethod.POST)
-  public JsonResult<?> control(@RequestBody ControlParam controlParam) throws MqttException {
+  public JsonResult<?> control(@RequestBody ControlParam controlParam,
+      @RequestHeader("Authorization") String header) throws MqttException {
 
-    return hardWareService.control(controlParam);
+    return hardWareService.control(controlParam, header);
   }
 
   @Operation(summary = "用于获取物联网一段时间的设备数据", description = "时间参数请使用两个毫秒时间戳")
@@ -108,7 +111,17 @@ public class Tool {
       @RequestParam("productId") int productId,
       @RequestParam("tts") boolean tts,
       @RequestPart("file") MultipartFile multipartFile) {
-    return aiService.getAiResponse(chatId, tts, productId, multipartFile);
+    return aiService.getAiResponse(chatId, tts, false, productId, multipartFile);
+  }
+
+  // 流式 使用大模型控制设备(语音）
+  @Operation(summary = "使用大模型控制设备(语音）", description = "响应速度取决于大模型速度")
+  @RequestMapping(value = "/aiControl/audio/stream", method = RequestMethod.POST)
+  public SseEmitter aiControlStream(@RequestParam("chatId") String chatId,
+      @RequestParam("productId") int productId,
+      @RequestPart("file") MultipartFile multipartFile) {
+    aiService.getAiResponse(chatId, true, true, productId, multipartFile);
+    return SseEmitterUtil.connect(chatId);
   }
 
   @Operation(summary = "获取缓存音频文件(禁止调用)", description = "禁止调用")

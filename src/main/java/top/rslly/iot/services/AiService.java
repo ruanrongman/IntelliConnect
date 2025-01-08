@@ -29,8 +29,8 @@ import java.io.IOException;
 public interface AiService {
   JsonResult<?> getAiResponse(AiControl aiControl);
 
-  JsonResult<?> getAiResponse(String chatId, boolean tts, int productId,
+  JsonResult<?> getAiResponse(String chatId, boolean tts, boolean stream, int productId,
       MultipartFile multipartFile);
 
-  public void audioTmpGet(String name, HttpServletResponse response) throws IOException;
+  void audioTmpGet(String name, HttpServletResponse response) throws IOException;
 }

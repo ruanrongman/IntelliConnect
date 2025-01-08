@@ -45,6 +45,7 @@ import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
+import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.influxdb.executor.ExecutorImpl;
 import top.rslly.iot.utility.script.ControlScriptFactory;
@@ -90,6 +91,8 @@ class DemoApplicationTests {
   ChatTool chatTool;
   @Autowired
   private ScheduleTool scheduleTool;
+  @Autowired
+  private Audio2Text audio2Text;
 
 
   @Test
@@ -191,11 +194,11 @@ class DemoApplicationTests {
     var answer = Glm.testImageToWord(
         "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
     // var answer= chatTool.run("你好", new ArrayList<>());
-    // String answer2 = DashScopeVoice.simpleMultiModalConversationCall(
-    // "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
-    Text2audio.synthesizeAndSaveAudio("你好");
-    log.info(answer);
-    // log.info(answer2);
+    String answer2 = audio2Text.getText(
+        "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
+    // Text2audio.synthesizeAndSaveAudio("你好");
+    // log.info(answer);
+    log.info(answer2);
   }
 
   @Test

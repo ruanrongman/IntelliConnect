@@ -17,15 +17,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.param.request;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.WxUserEntity;
+import lombok.Data;
 
-import java.util.List;
-
-public interface WxUserRepository extends JpaRepository<WxUserEntity, Long> {
-  List<WxUserEntity> findAllByOpenid(String openid);
-
-  List<WxUserEntity> findAllByName(String name);
+@Data
+public class WxBindProduct {
+  String openid;
+  String productName;
+  String productKey;
 }

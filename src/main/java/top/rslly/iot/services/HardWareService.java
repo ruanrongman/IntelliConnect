@@ -24,5 +24,5 @@ import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.utility.result.JsonResult;
 
 public interface HardWareService {
-  JsonResult<?> control(ControlParam controlParam) throws MqttException;
+  JsonResult<?> control(ControlParam controlParam, String... header) throws MqttException;
 }

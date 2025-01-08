@@ -32,6 +32,7 @@ import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.Glm;
+import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.DashScopeVoice;
 
 import java.io.IOException;
@@ -52,6 +53,8 @@ public class SmartRobot {
   private WxProductBindServiceImpl wxProductBindService;
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private Audio2Text audio2Text;
 
   @Async("taskExecutor")
   public void smartSendContent(String openid, String msg, String microappid) throws IOException {
@@ -109,7 +112,7 @@ public class SmartRobot {
 
   @Async("taskExecutor")
   public void dealVoice(String openid, String url, String microappid) throws IOException {
-    String result = DashScopeVoice.simpleMultiModalConversationCall(url);
+    String result = audio2Text.getText(url);
     smartSendContent(openid, result, microappid);
   }
 }

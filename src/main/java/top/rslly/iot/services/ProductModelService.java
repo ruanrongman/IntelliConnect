@@ -36,6 +36,8 @@ public interface ProductModelService {
 
   List<ProductModelDescription> getDescription(int productId);
 
+  List<ProductModelEntity> findAllById(int id);
+
   List<ProductModelEntity> findAllByProductId(int productId);
 
   List<ProductModelEntity> findAllByProductIdAndName(int productId, String name);

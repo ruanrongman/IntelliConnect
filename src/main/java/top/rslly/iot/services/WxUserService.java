@@ -35,5 +35,7 @@ public interface WxUserService {
 
   List<WxUserEntity> findAllByOpenid(String openid);
 
+  List<WxUserEntity> findAllByName(String name);
+
   JsonResult<?> wxGetAllUser();
 }

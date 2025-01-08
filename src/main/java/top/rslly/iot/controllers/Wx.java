@@ -33,10 +33,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import top.rslly.iot.param.request.WxBindProduct;
 import top.rslly.iot.param.request.WxUser;
+import top.rslly.iot.services.WxProductBindServiceImpl;
 import top.rslly.iot.services.WxUserServiceImpl;
 import top.rslly.iot.utility.SHA1;
 import top.rslly.iot.utility.result.JsonResult;
+import top.rslly.iot.utility.result.ResultCode;
+import top.rslly.iot.utility.result.ResultTool;
 import top.rslly.iot.utility.wx.DealWx;
 import top.rslly.iot.utility.wx.SmartRobot;
 
@@ -58,6 +62,8 @@ public class Wx {
   private SHA1 sha1;
   @Autowired
   private DealWx dealWx;
+  @Autowired
+  private WxProductBindServiceImpl wxProductBindService;
   @Autowired
   private SmartRobot smartRobot;
   @Value("${wx.msg.token}")
@@ -82,6 +88,31 @@ public class Wx {
   @RequestMapping(value = "/wxRegister", method = RequestMethod.POST)
   public JsonResult<?> wxRegister(@RequestBody WxUser wxUser) throws IOException {
     return wxUserService.wxRegister(wxUser);
+  }
+
+  @RequestMapping(value = "/wxBindProduct", method = RequestMethod.GET)
+  public JsonResult<?> wxBindProduct(String openid) {
+    return ResultTool.success(wxProductBindService.findAllByOpenid(openid));
+  }
+
+  @RequestMapping(value = "/wxBindProduct", method = RequestMethod.POST)
+  public JsonResult<?> wxBindProduct(@RequestBody WxBindProduct wxBindProduct) {
+    var res = wxProductBindService.wxBindProduct(wxBindProduct.getOpenid(),
+        wxBindProduct.getProductName(), wxBindProduct.getProductKey());
+    if (res)
+      return ResultTool.success();
+    else
+      return ResultTool.fail(ResultCode.USER_CREDENTIALS_ERROR);
+  }
+
+  @RequestMapping(value = "/wxBindProduct", method = RequestMethod.DELETE)
+  public JsonResult<?> wxUnBindProduct(@RequestBody WxBindProduct wxBindProduct) {
+    var res = wxProductBindService.wxUnBindProduct(wxBindProduct.getOpenid(),
+        wxBindProduct.getProductName(), wxBindProduct.getProductKey());
+    if (res)
+      return ResultTool.success();
+    else
+      return ResultTool.fail(ResultCode.USER_CREDENTIALS_ERROR);
   }
 
   @RequestMapping(value = "/wxmsg", method = {RequestMethod.GET, RequestMethod.POST})

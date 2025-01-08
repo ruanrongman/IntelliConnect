@@ -57,11 +57,13 @@ public class HardWareServiceImpl implements HardWareService {
   @Resource
   private ProductFunctionRepository productFunctionRepository;
   @Autowired
+  private SafetyServiceImpl safetyService;
+  @Autowired
   private RedisUtil redisUtil;
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> control(ControlParam controlParam) throws MqttException {
+  public JsonResult<?> control(ControlParam controlParam, String... header) throws MqttException {
     var deviceEntityList = productDeviceRepository.findAllByName(controlParam.getName());
     if (deviceEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -75,6 +77,11 @@ public class HardWareServiceImpl implements HardWareService {
       return ResultTool.fail(ResultCode.DEVICE_ABANDON);
     }
     int modelId = deviceEntityList.get(0).getModelId();
+    if (header.length != 0) {
+      if (!safetyService.controlAuthorize(header[0], modelId)) {
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      }
+    }
     List<ProductDataEntity> productDataEntities = productDataRepository.findAllByModelId(modelId);
     List<ProductFunctionEntity> productFunctionEntities =
         productFunctionRepository.findAllByModelIdAndDataType(modelId, "input");
