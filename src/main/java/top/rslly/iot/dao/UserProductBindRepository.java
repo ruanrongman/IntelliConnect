@@ -17,30 +17,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.dao;
 
-import top.rslly.iot.models.WxProductBindEntity;
-import top.rslly.iot.param.request.WxBindProduct;
-import top.rslly.iot.utility.result.JsonResult;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.UserProductBindEntity;
 
+import javax.transaction.Transactional;
 import java.util.List;
 
-public interface WxProductBindService {
-  JsonResult<?> wxBindProduct(WxProductBindEntity wxProductBindEntity);
+public interface UserProductBindRepository extends JpaRepository<UserProductBindEntity, Long> {
+  List<UserProductBindEntity> findAllByUserId(int userId);
 
-  JsonResult<?> wxGetBindProduct(String token);
+  List<UserProductBindEntity> findAllByUserIdAndProductId(int userId, int productId);
 
-  JsonResult<?> wxBindProduct(WxBindProduct wxBindProduct, String token);
+  List<UserProductBindEntity> findAllByProductId(int productId);
 
-  JsonResult<?> wxUnBindProduct(WxBindProduct wxBindProduct, String token);
-
-  boolean wxBindProduct(String openid, String productName, String productKey);
-
-  boolean wxUnBindProduct(String openid, String productName, String productKey);
-
-  List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
-
-  List<WxProductBindEntity> findAllByOpenid(String openid);
-
-  JsonResult<?> getWxProductBind();
+  @Transactional
+  List<UserProductBindEntity> deleteById(int id);
 }

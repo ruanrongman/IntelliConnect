@@ -20,7 +20,9 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import top.rslly.iot.models.WxProductBindEntity;
+import top.rslly.iot.param.response.WxBindProductResponse;
 
 import javax.transaction.Transactional;
 import java.util.List;
@@ -31,6 +33,10 @@ public interface WxProductBindRepository extends JpaRepository<WxProductBindEnti
   List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
 
   List<WxProductBindEntity> findAllByProductId(int productId);
+
+  @Query("SELECT new top.rslly.iot.param.response.WxBindProductResponse(e.id, e.productId) FROM WxProductBindEntity e WHERE e.openid = ?1")
+  List<WxBindProductResponse> findProductIdByOpenid(String openid);
+
 
   @Transactional
   List<WxProductBindEntity> deleteById(int id);

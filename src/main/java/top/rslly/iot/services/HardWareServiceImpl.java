@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.services;
 
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttException;
@@ -32,7 +31,6 @@ import top.rslly.iot.dao.ProductFunctionRepository;
 import top.rslly.iot.models.ProductDataEntity;
 import top.rslly.iot.models.ProductFunctionEntity;
 import top.rslly.iot.param.request.ControlParam;
-import top.rslly.iot.param.request.ProductFunction;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
 import top.rslly.iot.utility.JsonCreate;
 import top.rslly.iot.utility.RedisUtil;
@@ -78,7 +76,7 @@ public class HardWareServiceImpl implements HardWareService {
     }
     int modelId = deviceEntityList.get(0).getModelId();
     if (header.length != 0) {
-      if (!safetyService.controlAuthorize(header[0], modelId)) {
+      if (!safetyService.controlAuthorizeModel(header[0], modelId)) {
         return ResultTool.fail(ResultCode.NO_PERMISSION);
       }
     }

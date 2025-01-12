@@ -97,6 +97,7 @@ public class Text2audio {
             // 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
             .apiKey(apiKey)
             .model(model)
+            .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
             .voice(voice)
             .build();
   }

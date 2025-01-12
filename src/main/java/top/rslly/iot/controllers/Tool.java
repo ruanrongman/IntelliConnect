@@ -101,8 +101,9 @@ public class Tool {
 
   @Operation(summary = "使用大模型控制设备", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl", method = RequestMethod.POST)
-  public JsonResult<?> aiControl(@RequestBody AiControl aiControl) {
-    return aiService.getAiResponse(aiControl);
+  public JsonResult<?> aiControl(@RequestBody AiControl aiControl,
+      @RequestHeader("Authorization") String header) {
+    return aiService.getAiResponse(aiControl, header);
   }
 
   @Operation(summary = "使用大模型控制设备(语音)", description = "响应速度取决于大模型速度")
@@ -110,8 +111,9 @@ public class Tool {
   public JsonResult<?> aiControl(@RequestParam("chatId") String chatId,
       @RequestParam("productId") int productId,
       @RequestParam("tts") boolean tts,
-      @RequestPart("file") MultipartFile multipartFile) {
-    return aiService.getAiResponse(chatId, tts, false, productId, multipartFile);
+      @RequestPart("file") MultipartFile multipartFile,
+      @RequestHeader("Authorization") String header) {
+    return aiService.getAiResponse(chatId, tts, false, productId, multipartFile, header);
   }
 
   // 流式 使用大模型控制设备(语音）
@@ -119,8 +121,9 @@ public class Tool {
   @RequestMapping(value = "/aiControl/audio/stream", method = RequestMethod.POST)
   public SseEmitter aiControlStream(@RequestParam("chatId") String chatId,
       @RequestParam("productId") int productId,
-      @RequestPart("file") MultipartFile multipartFile) {
-    aiService.getAiResponse(chatId, true, true, productId, multipartFile);
+      @RequestPart("file") MultipartFile multipartFile,
+      @RequestHeader("Authorization") String header) {
+    aiService.getAiResponse(chatId, true, true, productId, multipartFile, header);
     return SseEmitterUtil.connect(chatId);
   }
 

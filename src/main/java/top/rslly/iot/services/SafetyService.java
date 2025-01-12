@@ -20,5 +20,7 @@
 package top.rslly.iot.services;
 
 public interface SafetyService {
-  public boolean controlAuthorize(String token, int modelId);
+  boolean controlAuthorizeProduct(String token, int productId);
+
+  boolean controlAuthorizeModel(String token, int modelId);
 }

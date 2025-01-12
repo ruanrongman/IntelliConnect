@@ -24,6 +24,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.UserRepository;
 import top.rslly.iot.models.UserEntity;
+import top.rslly.iot.param.request.User;
+import top.rslly.iot.utility.result.JsonResult;
+import top.rslly.iot.utility.result.ResultCode;
+import top.rslly.iot.utility.result.ResultTool;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -46,9 +50,24 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  public UserEntity insert(UserEntity l1) {
-    l1.setPassword("{bcrypt}" + passwordEncoder.encode(l1.getPassword()));// adapt new version
-                                                                          // spring security
-    return userRepository.save(l1);
+  public UserEntity insert(UserEntity userEntity) {
+    userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(userEntity.getPassword()));// adapt
+                                                                                          // new
+                                                                                          // version
+    // spring security
+    return userRepository.save(userEntity);
+  }
+
+  @Override
+  public JsonResult<?> newUser(User user) {
+    if (!userRepository.findAllByUsername(user.getUsername()).isEmpty()) {
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
+    }
+    UserEntity userEntity = new UserEntity();
+    userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(user.getPassword()));
+    userEntity.setUsername(user.getUsername());
+    userEntity.setRole(user.getRole());
+    userRepository.save(userEntity);
+    return ResultTool.success();
   }
 }

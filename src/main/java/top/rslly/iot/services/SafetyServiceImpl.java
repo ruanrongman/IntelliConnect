@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.param.request.ProductModel;
+import top.rslly.iot.param.request.User;
 import top.rslly.iot.utility.JwtTokenUtil;
 
 @Service
@@ -33,23 +34,37 @@ public class SafetyServiceImpl implements SafetyService {
   @Autowired
   private ProductModelServiceImpl productModelService;
   @Autowired
+  private UserProductBindServiceImpl userProductBindService;
+  @Autowired
+  private UserServiceImpl userService;
+  @Autowired
   private WxUserServiceImpl wxUserService;
 
   @Override
-  public boolean controlAuthorize(String token, int modelId) {
+  public boolean controlAuthorizeModel(String token, int modelId) {
+    return this.controlAuthorizeProduct(token,
+        productModelService.findAllById(modelId).get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeProduct(String token, int productId) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
-    String wx_username = JwtTokenUtil.getUsername(token_deal);
-    // log.info("role {}",role);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    log.info("role {}", role);
     if (role.equals("ROLE_" + "wx_user")) {
-      String openid;
-      if (wxUserService.findAllByName(wx_username).isEmpty()) {
+      if (wxUserService.findAllByName(username).isEmpty()) {
         return false;
-      } else
-        openid = wxUserService.findAllByName(wx_username).get(0).getOpenid();
-      int productId = productModelService.findAllById(modelId).get(0).getProductId();
+      }
+      String openid = wxUserService.findAllByName(username).get(0).getOpenid();
       // log.info("productId{}",productId);
       return !wxProductBindService.findByOpenidAndProductId(openid, productId).isEmpty();
+    } else if (!role.equals("[ROLE_admin]")) {
+      var userList = userService.findAllByUsername(username);
+      if (userList.isEmpty())
+        return false;
+      int userId = userList.get(0).getId();
+      return !userProductBindService.findAllByUserIdAndProductId(userId, productId).isEmpty();
     }
     return true;
   }

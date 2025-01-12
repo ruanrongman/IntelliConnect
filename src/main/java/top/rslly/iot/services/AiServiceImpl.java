@@ -59,10 +59,15 @@ public class AiServiceImpl implements AiService {
   private Text2audio text2audio;
   @Autowired
   private Audio2Text audio2Text;
+  @Autowired
+  private SafetyServiceImpl safetyService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
 
   @Override
-  public JsonResult<?> getAiResponse(AiControl aiControl) {
+  public JsonResult<?> getAiResponse(AiControl aiControl, String token) {
+    if (!safetyService.controlAuthorizeProduct(token, aiControl.getProductId())) {
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    }
     var answer =
         router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId());
     return ResultTool.success(answer);
@@ -70,7 +75,10 @@ public class AiServiceImpl implements AiService {
 
   @Override
   public JsonResult<?> getAiResponse(String chatId, boolean tts, boolean stream, int productId,
-      MultipartFile multipartFile) {
+      MultipartFile multipartFile, String token) {
+    if (!safetyService.controlAuthorizeProduct(token, productId)) {
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    }
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
 

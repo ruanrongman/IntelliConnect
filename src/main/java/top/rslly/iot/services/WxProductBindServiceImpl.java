@@ -26,6 +26,9 @@ import top.rslly.iot.dao.WxProductActiveRepository;
 import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.dao.WxUserRepository;
 import top.rslly.iot.models.WxProductBindEntity;
+import top.rslly.iot.param.request.WxBindProduct;
+import top.rslly.iot.param.response.WxBindProductResponse;
+import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -54,6 +57,56 @@ public class WxProductBindServiceImpl implements WxProductBindService {
     return ResultTool.success(result);
 
   }
+
+  @Override
+  public JsonResult<?> wxGetBindProduct(String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String wx_username = JwtTokenUtil.getUsername(token_deal);
+    var wxUsers = wxUserRepository.findAllByName(wx_username);
+    if (!role.equals("ROLE_" + "wx_user") || wxUsers.isEmpty())
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
+    List<WxBindProductResponse> wxBindProductResponses =
+        wxProductBindRepository.findProductIdByOpenid(wxUsers.get(0).getOpenid());
+    if (wxBindProductResponses.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    else {
+      return ResultTool.success(wxBindProductResponses);
+    }
+  }
+
+  @Override
+  public JsonResult<?> wxBindProduct(WxBindProduct wxBindProduct, String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String wx_username = JwtTokenUtil.getUsername(token_deal);
+    var wxUsers = wxUserRepository.findAllByName(wx_username);
+    if (!role.equals("ROLE_" + "wx_user") || wxUsers.isEmpty())
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
+    var res = this.wxBindProduct(wxUsers.get(0).getOpenid(),
+        wxBindProduct.getProductName(), wxBindProduct.getProductKey());
+    if (res)
+      return ResultTool.success();
+    else
+      return ResultTool.fail(ResultCode.USER_CREDENTIALS_ERROR);
+  }
+
+  @Override
+  public JsonResult<?> wxUnBindProduct(WxBindProduct wxBindProduct, String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String wx_username = JwtTokenUtil.getUsername(token_deal);
+    var wxUsers = wxUserRepository.findAllByName(wx_username);
+    if (!role.equals("ROLE_" + "wx_user") || wxUsers.isEmpty())
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
+    var res = this.wxUnBindProduct(wxUsers.get(0).getOpenid(),
+        wxBindProduct.getProductName(), wxBindProduct.getProductKey());
+    if (res)
+      return ResultTool.success();
+    else
+      return ResultTool.fail(ResultCode.USER_CREDENTIALS_ERROR);
+  }
+
 
   @Override
   @Transactional(rollbackFor = Exception.class)

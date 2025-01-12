@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.utility.result.JsonResult;
+import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 @RestController
@@ -34,35 +35,68 @@ import top.rslly.iot.utility.result.ResultTool;
 public class Auth {
 
   @Autowired
-  ProductServiceImpl productService;
+  private UserServiceImpl userService;
   @Autowired
-  ProductModelServiceImpl productModelService;
+  private ProductServiceImpl productService;
   @Autowired
-  ProductDeviceServiceImpl productDeviceService;
+  private ProductModelServiceImpl productModelService;
   @Autowired
-  ProductDataServiceImpl productDataService;
+  private ProductDeviceServiceImpl productDeviceService;
   @Autowired
-  EventDataServiceImpl eventDataService;
+  private ProductDataServiceImpl productDataService;
   @Autowired
-  ProductEventServiceImpl productEventService;
+  private EventDataServiceImpl eventDataService;
   @Autowired
-  ProductFunctionServiceImpl productFunctionService;
+  private ProductEventServiceImpl productEventService;
   @Autowired
-  MqttUserServiceImpl mqttUserService;
+  private ProductFunctionServiceImpl productFunctionService;
+  @Autowired
+  private UserProductBindServiceImpl userProductBindService;
+  @Autowired
+  private MqttUserServiceImpl mqttUserService;
+  @Autowired
+  private SafetyServiceImpl safetyService;
 
+
+  @PreAuthorize("hasRole('ROLE_admin')")
+  @Operation(summary = "创建新用户", description = "目前仅管理员用户支持")
+  @RequestMapping(value = "/newUser", method = RequestMethod.POST)
+  public JsonResult<?> createUser(@RequestBody User user) {
+    return userService.newUser(user);
+  }
+
+  @Operation(summary = "获取用户产品绑定列表", description = "获取用户产品绑定列表")
+  @RequestMapping(value = "/userProductBindList", method = RequestMethod.GET)
+  public JsonResult<?> userProductBindList(@RequestHeader("Authorization") String token) {
+    return userProductBindService.userProductBindList(token);
+  }
+
+  @Operation(summary = "用户产品绑定", description = "用户产品绑定")
+  @RequestMapping(value = "/userProductBind", method = RequestMethod.POST)
+  public JsonResult<?> userProductBind(@RequestBody UserBindProduct userBindProduct,
+      @RequestHeader("Authorization") String token) {
+    return userProductBindService.userProductBind(userBindProduct, token);
+  }
+
+  @Operation(summary = "用户产品解绑", description = "用户产品解绑")
+  @RequestMapping(value = "/userProductUnbind", method = RequestMethod.POST)
+  public JsonResult<?> userProductUnbind(@RequestBody UserBindProduct userBindProduct,
+      @RequestHeader("Authorization") String token) {
+    return userProductBindService.userProductUnbind(userBindProduct, token);
+  }
 
   // 获取所有mqtt用户信息
   @PreAuthorize("hasRole('ROLE_admin')")
+  @Operation(summary = "获取MQTT用户信息", description = "获取所有MQTT用户信息(管理员专属)")
   @RequestMapping(value = "/mqttUser", method = RequestMethod.GET)
   public JsonResult<?> MqttUser() {
     return mqttUserService.getMqttUser();
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "获取产品信息", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.GET)
-  public JsonResult<?> Product() {
-    return productService.getProduct();
+  public JsonResult<?> Product(@RequestHeader("Authorization") String header) {
+    return productService.getProduct(header);
   }
 
   // 添加产品信息，如产品密钥这些，后续版本将会添加更多细节。
@@ -72,10 +106,12 @@ public class Auth {
     return productService.postProduct(product);
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "删除产品信息（慎用）", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.DELETE)
-  public JsonResult<?> Product(@RequestParam("id") int id) {
+  public JsonResult<?> Product(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeProduct(header, id))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
     return productService.deleteProduct(id);
   }
 
@@ -100,7 +136,10 @@ public class Auth {
 
   @Operation(summary = "删除物模型", description = "删除产品的物模型")
   @RequestMapping(value = "/ProductModel", method = RequestMethod.DELETE)
-  public JsonResult<?> ProductModel(@RequestParam("id") int id) {
+  public JsonResult<?> ProductModel(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeModel(header, id))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
     return productModelService.deleteProductModel(id);
   }
 

@@ -23,7 +23,6 @@ import lombok.Data;
 
 @Data
 public class WxBindProduct {
-  String openid;
   String productName;
   String productKey;
 }

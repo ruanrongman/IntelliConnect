@@ -55,7 +55,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/1667cceabb1f849a1150f8dd3a2323b.jpg" width="250px"/>
+    <img src="./docs/images/04741700b0b36feaa4bb4f2ed9d0d5e.jpg" width="250px"/>
 </div>
 
 

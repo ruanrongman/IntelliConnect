@@ -17,30 +17,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.param.request;
 
-import top.rslly.iot.models.WxProductBindEntity;
-import top.rslly.iot.param.request.WxBindProduct;
-import top.rslly.iot.utility.result.JsonResult;
+import lombok.Data;
 
-import java.util.List;
-
-public interface WxProductBindService {
-  JsonResult<?> wxBindProduct(WxProductBindEntity wxProductBindEntity);
-
-  JsonResult<?> wxGetBindProduct(String token);
-
-  JsonResult<?> wxBindProduct(WxBindProduct wxBindProduct, String token);
-
-  JsonResult<?> wxUnBindProduct(WxBindProduct wxBindProduct, String token);
-
-  boolean wxBindProduct(String openid, String productName, String productKey);
-
-  boolean wxUnBindProduct(String openid, String productName, String productKey);
-
-  List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
-
-  List<WxProductBindEntity> findAllByOpenid(String openid);
-
-  JsonResult<?> getWxProductBind();
+@Data
+public class UserBindProduct {
+  String productName;
+  String productKey;
 }

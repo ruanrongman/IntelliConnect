@@ -29,10 +29,7 @@ import org.dom4j.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.DigestUtils;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.WxBindProduct;
 import top.rslly.iot.param.request.WxUser;
 import top.rslly.iot.services.WxProductBindServiceImpl;
@@ -91,28 +88,20 @@ public class Wx {
   }
 
   @RequestMapping(value = "/wxBindProduct", method = RequestMethod.GET)
-  public JsonResult<?> wxBindProduct(String openid) {
-    return ResultTool.success(wxProductBindService.findAllByOpenid(openid));
+  public JsonResult<?> wxBindProduct(@RequestHeader("Authorization") String header) {
+    return wxProductBindService.wxGetBindProduct(header);
   }
 
   @RequestMapping(value = "/wxBindProduct", method = RequestMethod.POST)
-  public JsonResult<?> wxBindProduct(@RequestBody WxBindProduct wxBindProduct) {
-    var res = wxProductBindService.wxBindProduct(wxBindProduct.getOpenid(),
-        wxBindProduct.getProductName(), wxBindProduct.getProductKey());
-    if (res)
-      return ResultTool.success();
-    else
-      return ResultTool.fail(ResultCode.USER_CREDENTIALS_ERROR);
+  public JsonResult<?> wxBindProduct(@RequestBody WxBindProduct wxBindProduct,
+      @RequestHeader("Authorization") String header) {
+    return wxProductBindService.wxBindProduct(wxBindProduct, header);
   }
 
   @RequestMapping(value = "/wxBindProduct", method = RequestMethod.DELETE)
-  public JsonResult<?> wxUnBindProduct(@RequestBody WxBindProduct wxBindProduct) {
-    var res = wxProductBindService.wxUnBindProduct(wxBindProduct.getOpenid(),
-        wxBindProduct.getProductName(), wxBindProduct.getProductKey());
-    if (res)
-      return ResultTool.success();
-    else
-      return ResultTool.fail(ResultCode.USER_CREDENTIALS_ERROR);
+  public JsonResult<?> wxUnBindProduct(@RequestBody WxBindProduct wxBindProduct,
+      @RequestHeader("Authorization") String header) {
+    return wxProductBindService.wxUnBindProduct(wxBindProduct, header);
   }
 
   @RequestMapping(value = "/wxmsg", method = {RequestMethod.GET, RequestMethod.POST})

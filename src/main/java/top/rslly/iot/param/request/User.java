@@ -17,22 +17,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.param.request;
 
+import lombok.Data;
 
-
-import top.rslly.iot.models.UserEntity;
-import top.rslly.iot.param.request.User;
-import top.rslly.iot.utility.result.JsonResult;
-
-import java.util.List;
-
-public interface UserService {
-  List<UserEntity> findAllByUsername(String username);
-
-  List<UserEntity> findAll();
-
-  UserEntity insert(UserEntity userEntity);
-
-  JsonResult<?> newUser(User user);
+@Data
+public class User {
+  private String username;
+  private String password;
+  private String role;
 }

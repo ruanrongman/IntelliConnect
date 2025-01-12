@@ -17,22 +17,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.param.response;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
-
-import top.rslly.iot.models.UserEntity;
-import top.rslly.iot.param.request.User;
-import top.rslly.iot.utility.result.JsonResult;
-
-import java.util.List;
-
-public interface UserService {
-  List<UserEntity> findAllByUsername(String username);
-
-  List<UserEntity> findAll();
-
-  UserEntity insert(UserEntity userEntity);
-
-  JsonResult<?> newUser(User user);
+@Data
+@AllArgsConstructor
+public class WxBindProductResponse {
+  private int id;
+  private int productId;
 }

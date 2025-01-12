@@ -19,28 +19,21 @@
  */
 package top.rslly.iot.services;
 
-import top.rslly.iot.models.WxProductBindEntity;
-import top.rslly.iot.param.request.WxBindProduct;
+import top.rslly.iot.models.UserProductBindEntity;
+import top.rslly.iot.param.request.UserBindProduct;
 import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
-public interface WxProductBindService {
-  JsonResult<?> wxBindProduct(WxProductBindEntity wxProductBindEntity);
+public interface UserProductBindService {
 
-  JsonResult<?> wxGetBindProduct(String token);
+  List<UserProductBindEntity> findAllByUserId(int userId);
 
-  JsonResult<?> wxBindProduct(WxBindProduct wxBindProduct, String token);
+  List<UserProductBindEntity> findAllByUserIdAndProductId(int userId, int productId);
 
-  JsonResult<?> wxUnBindProduct(WxBindProduct wxBindProduct, String token);
+  JsonResult<?> userProductBindList(String token);
 
-  boolean wxBindProduct(String openid, String productName, String productKey);
+  JsonResult<?> userProductBind(UserBindProduct userBindProduct, String token);
 
-  boolean wxUnBindProduct(String openid, String productName, String productKey);
-
-  List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
-
-  List<WxProductBindEntity> findAllByOpenid(String openid);
-
-  JsonResult<?> getWxProductBind();
+  JsonResult<?> userProductUnbind(UserBindProduct userBindProduct, String token);
 }
