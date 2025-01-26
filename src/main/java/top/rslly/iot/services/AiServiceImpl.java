@@ -104,6 +104,7 @@ public class AiServiceImpl implements AiService {
       aiResponse.put("text", answer);
       if (tts) {
         var audio = Text2audio.synthesizeAndSaveAudio(answer).array();
+        audio = Text2audio.VoiceBitChange(audio);
         if (!stream)
           aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
         else

@@ -102,8 +102,9 @@ public class Auth {
   // 添加产品信息，如产品密钥这些，后续版本将会添加更多细节。
   @Operation(summary = "提交产品信息", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.POST)
-  public JsonResult<?> Product(@RequestBody Product product) {
-    return productService.postProduct(product);
+  public JsonResult<?> Product(@RequestBody Product product,
+      @RequestHeader("Authorization") String header) {
+    return productService.postProduct(product, header);
   }
 
   @Operation(summary = "删除产品信息（慎用）", description = "比如产品密钥和注册状态")
@@ -115,11 +116,10 @@ public class Auth {
     return productService.deleteProduct(id);
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "获取物模型", description = "获取所有产品的物模型")
   @RequestMapping(value = "/ProductModel", method = RequestMethod.GET)
-  public JsonResult<?> ProductModel() {
-    return productModelService.getProductModel();
+  public JsonResult<?> ProductModel(@RequestHeader("Authorization") String header) {
+    return productModelService.getProductModel(header);
   }
 
   @Operation(summary = "获取物模型", description = "获取对应产品的物模型")
@@ -143,11 +143,11 @@ public class Auth {
     return productModelService.deleteProductModel(id);
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
+
   @Operation(summary = "获取事件", description = "获取所有物模型的事件")
   @RequestMapping(value = "/ProductEvent", method = RequestMethod.GET)
-  public JsonResult<?> ProductEvent() {
-    return productEventService.getProductEvent();
+  public JsonResult<?> ProductEvent(@RequestHeader("Authorization") String header) {
+    return productEventService.getProductEvent(header);
   }
 
   @Operation(summary = "提交事件", description = "提交物模型的事件")
@@ -162,11 +162,11 @@ public class Auth {
     return productEventService.deleteProductEvent(id);
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
+
   @Operation(summary = "获取设备", description = "获取所有物模型的设备")
   @RequestMapping(value = "/ProductDevice", method = RequestMethod.GET)
-  public JsonResult<?> ProductDevice() {
-    return productDeviceService.getProductDevice();
+  public JsonResult<?> ProductDevice(@RequestHeader("Authorization") String header) {
+    return productDeviceService.getProductDevice(header);
   }
 
   @Operation(summary = "创建设备", description = "创建物模型的设备")
@@ -181,11 +181,10 @@ public class Auth {
     return productDeviceService.deleteProductDevice(id);
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "获取属性", description = "获取所有物模型的属性")
   @RequestMapping(value = "/ProductData", method = RequestMethod.GET)
-  public JsonResult<?> ProductData() {
-    return productDataService.getProductData();
+  public JsonResult<?> ProductData(@RequestHeader("Authorization") String header) {
+    return productDataService.getProductData(header);
   }
 
   @Operation(summary = "创建属性", description = "创建物模型的属性")
@@ -201,11 +200,10 @@ public class Auth {
   }
 
 
-  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "获取功能", description = "获取所有物模型的功能")
   @RequestMapping(value = "/ProductFunction", method = RequestMethod.GET)
-  public JsonResult<?> ProductFunction() {
-    return productFunctionService.getProductFunction();
+  public JsonResult<?> ProductFunction(@RequestHeader("Authorization") String header) {
+    return productFunctionService.getProductFunction(header);
   }
 
   @Operation(summary = "提交功能", description = "创建物模型的功能")
@@ -220,11 +218,10 @@ public class Auth {
     return productFunctionService.deleteProductFunction(id);
   }
 
-  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "获取事件入参", description = "获取所有事件入参")
   @RequestMapping(value = "/EventData", method = RequestMethod.GET)
-  public JsonResult<?> EventData() {
-    return eventDataService.getEventData();
+  public JsonResult<?> EventData(@RequestHeader("Authorization") String header) {
+    return eventDataService.getEventData(header);
   }
 
   @Operation(summary = "提交事件入参", description = "提交事件入参")

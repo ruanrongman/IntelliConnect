@@ -28,7 +28,7 @@ import top.rslly.iot.utility.result.JsonResult;
 import java.util.List;
 
 public interface ProductModelService {
-  JsonResult<?> getProductModel();
+  JsonResult<?> getProductModel(String token);
 
   JsonResult<?> getProductModel(int productId);
 

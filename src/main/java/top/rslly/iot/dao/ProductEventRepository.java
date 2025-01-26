@@ -30,6 +30,8 @@ public interface ProductEventRepository extends JpaRepository<ProductEventEntity
 
   List<ProductEventEntity> findAllByModelIdAndName(int modelId, String name);
 
+  List<ProductEventEntity> findAllByModelId(int modelId);
+
   List<ProductEventEntity> findAllByName(String name);
 
 

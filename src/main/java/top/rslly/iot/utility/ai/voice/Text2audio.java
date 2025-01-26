@@ -32,12 +32,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.SseEmitterUtil;
+import ws.schild.jave.Encoder;
+import ws.schild.jave.MultimediaObject;
+import ws.schild.jave.encode.AudioAttributes;
+import ws.schild.jave.encode.EncodingAttributes;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
@@ -45,8 +47,8 @@ import java.util.concurrent.CountDownLatch;
 @Component
 @Slf4j
 public class Text2audio {
-  private static String model = "cosyvoice-v1";
-  private static String voice = "longtong";
+  private static final String model = "cosyvoice-v1";
+  private static final String voice = "longtong";
   private static SpeechSynthesisParam param;
 
   static class ReactCallback extends ResultCallback<SpeechSynthesisResult> {
@@ -64,6 +66,7 @@ public class Text2audio {
         // audioPlayer.write(message.getAudioFrame());
         JSONObject aiResponse = new JSONObject();
         var audio = message.getAudioFrame().array();
+        // audio = VoiceBitChange(audio);
         aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
         SseEmitterUtil.sendMessage(chatId, aiResponse.toJSONString());
         log.info(Arrays.toString(message.getAudioFrame().array()));
@@ -97,7 +100,7 @@ public class Text2audio {
             // 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
             .apiKey(apiKey)
             .model(model)
-            .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
+            // .format(SpeechSynthesisAudioFormat.MP3_24000HZ_MONO_256KBPS)
             .voice(voice)
             .build();
   }
@@ -109,6 +112,55 @@ public class Text2audio {
     log.info("requestId{}", synthesizer.getLastRequestId());
     // log.info(Arrays.toString(audio.array()));
     return audio;
+  }
+
+  public static byte[] VoiceBitChange(byte[] bytes) {
+    if (bytes == null || bytes.length == 0) {
+      throw new IllegalArgumentException("Input byte array cannot be null or empty");
+    }
+
+    File tempInputFile = null;
+    File tempOutputFile = null;
+    try {
+      // 创建临时文件
+      tempInputFile = File.createTempFile("tempInput", ".tmp");
+      tempOutputFile = File.createTempFile("tempOutput", ".mp3");
+
+      // 将二进制数组写入临时文件
+      try (FileOutputStream fos = new FileOutputStream(tempInputFile)) {
+        fos.write(bytes);
+      }
+
+      // Audio Attributes
+      AudioAttributes audio = new AudioAttributes();
+      audio.setCodec("mp3");
+      audio.setBitRate(16000);
+      audio.setChannels(1);
+      audio.setSamplingRate(16000);
+
+      // Encoding attributes
+      EncodingAttributes attrs = new EncodingAttributes();
+      attrs.setOutputFormat("mp3");
+      attrs.setAudioAttributes(audio);
+
+      // Encode
+      Encoder encoder = new Encoder();
+      encoder.encode(new MultimediaObject(tempInputFile), tempOutputFile, attrs);
+
+      // 将生成的MP3文件读回为二进制数组
+      return Files.readAllBytes(tempOutputFile.toPath());
+
+    } catch (Exception e) {
+      throw new RuntimeException("Error during encoding: " + e.getMessage(), e);
+    } finally {
+      // 安全删除临时文件
+      if (tempInputFile != null && tempInputFile.exists()) {
+        tempInputFile.delete();
+      }
+      if (tempOutputFile != null && tempOutputFile.exists()) {
+        tempOutputFile.delete();
+      }
+    }
   }
 
   @Async("taskExecutor")

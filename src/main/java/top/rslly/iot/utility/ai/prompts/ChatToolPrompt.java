@@ -24,6 +24,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,6 +38,7 @@ public class ChatToolPrompt {
   private static final String chatPrompt = """
       You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
       你可以回答新闻内容和用户的各种合法请求，你回答的每句话都尽量口语化、简短,总是喜欢使用表情符号
+      reference information: The current time is {time}
       ## Output Format
       Please do not output \\n and try to limit the word count to 100 words or less
       ## Current Conversation
@@ -43,9 +46,13 @@ public class ChatToolPrompt {
       """;
 
   public String getChatTool() {
+    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    Date date = new Date();
+    String formattedDate = formatter.format(date);
     Map<String, String> params = new HashMap<>();
     params.put("agent_name", robotName);
     params.put("team_name", teamName);
+    params.put("time", formattedDate);
     return StringUtils.formatString(chatPrompt, params);
   }
 }

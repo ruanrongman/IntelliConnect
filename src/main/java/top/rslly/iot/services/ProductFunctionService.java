@@ -35,7 +35,7 @@ public interface ProductFunctionService {
 
   List<ProductFunctionDescription> getDescription(int productId);
 
-  JsonResult<?> getProductFunction();
+  JsonResult<?> getProductFunction(String token);
 
   JsonResult<?> postProductFunction(ProductFunction productFunction);
 

@@ -52,8 +52,7 @@ public class ProductServiceImpl implements ProductService {
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
-  @Autowired
-  private SafetyService safetyService;
+
 
   @Override
   public JsonResult<?> getProduct(String token) {
@@ -101,7 +100,10 @@ public class ProductServiceImpl implements ProductService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> postProduct(Product product) {
+  public JsonResult<?> postProduct(Product product, String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
     ProductEntity productEntity = new ProductEntity();
     BeanUtils.copyProperties(product, productEntity);
     List<MqttUserEntity> result = mqttUserRepository.findALLById(productEntity.getMqttUser());
@@ -110,6 +112,25 @@ public class ProductServiceImpl implements ProductService {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     else {
       ProductEntity productEntity1 = productRepository.save(productEntity);
+      if (role.equals("ROLE_" + "wx_user")) {
+        WxProductBindEntity wxProductBindEntity = new WxProductBindEntity();
+        var userList = wxUserRepository.findAllByName(username);
+        if (userList.isEmpty()) {
+          return ResultTool.fail(ResultCode.COMMON_FAIL);
+        }
+        wxProductBindEntity.setOpenid(userList.get(0).getOpenid());
+        wxProductBindEntity.setProductId(productEntity1.getId());
+        wxProductBindRepository.save(wxProductBindEntity);
+      } else if (!role.equals("[ROLE_admin]")) {
+        UserProductBindEntity userProductBindEntity = new UserProductBindEntity();
+        var userList = userRepository.findAllByUsername(username);
+        if (userList.isEmpty()) {
+          return ResultTool.fail(ResultCode.COMMON_FAIL);
+        }
+        userProductBindEntity.setUserId(userList.get(0).getId());
+        userProductBindEntity.setProductId(productEntity1.getId());
+        userProductBindRepository.save(userProductBindEntity);
+      }
       return ResultTool.success(productEntity1);
     }
   }
@@ -122,12 +143,14 @@ public class ProductServiceImpl implements ProductService {
         wxProductBindRepository.findAllByProductId(id);
     List<UserProductBindEntity> userProductBindEntityList =
         userProductBindRepository.findAllByProductId(id);
-    if (productModelEntityList.isEmpty() && wxProductBindEntityList.isEmpty()
-        && userProductBindEntityList.isEmpty()) {
+    if (productModelEntityList.isEmpty() && wxProductBindEntityList.isEmpty()) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       else {
+        if (userProductBindEntityList.isEmpty()) {
+          userProductBindRepository.deleteByProductId(id);
+        }
         return ResultTool.success(result);
       }
     } else {

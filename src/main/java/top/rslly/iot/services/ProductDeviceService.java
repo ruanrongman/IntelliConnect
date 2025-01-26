@@ -44,7 +44,7 @@ public interface ProductDeviceService {
 
   int updateOnlineByClientId(String online, String clientId);
 
-  JsonResult<?> getProductDevice();
+  JsonResult<?> getProductDevice(String token);
 
   JsonResult<?> postProductDevice(ProductDevice productDevice);
 

@@ -30,7 +30,7 @@ public interface ProductService {
 
   JsonResult<?> getProduct(String token);
 
-  JsonResult<?> postProduct(Product product);
+  JsonResult<?> postProduct(Product product, String token);
 
   JsonResult<?> deleteProduct(int id);
 

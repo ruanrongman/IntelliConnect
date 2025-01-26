@@ -30,7 +30,7 @@ import java.util.List;
 public interface EventDataService {
   List<EventDataEntity> findAllByModelId(int modelId);
 
-  JsonResult<?> getEventData();
+  JsonResult<?> getEventData(String token);
 
   JsonResult<?> postEventData(EventData eventData);
 

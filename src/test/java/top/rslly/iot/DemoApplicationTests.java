@@ -46,6 +46,7 @@ import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
+import top.rslly.iot.utility.ai.voice.TTsMarker;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.influxdb.executor.ExecutorImpl;
 import top.rslly.iot.utility.script.ControlScriptFactory;
@@ -54,6 +55,7 @@ import top.rslly.iot.utility.script.js.NashornJsInvokeService;
 
 import javax.annotation.Resource;
 import javax.script.ScriptException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -93,6 +95,8 @@ class DemoApplicationTests {
   private ScheduleTool scheduleTool;
   @Autowired
   private Audio2Text audio2Text;
+  @Autowired
+  private TTsMarker tTsMarker;
 
 
   @Test
@@ -191,14 +195,30 @@ class DemoApplicationTests {
   public void Ai() {
     SpringBeanUtils.setApplicationContext(applicationContext);
     // var answer = agent.run("根据新会的天气播放音乐", 1);
-    var answer = Glm.testImageToWord(
-        "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
+    // var answer = Glm.testImageToWord(
+    // "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
     // var answer= chatTool.run("你好", new ArrayList<>());
-    String answer2 = audio2Text.getText(
-        "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
-    // Text2audio.synthesizeAndSaveAudio("你好");
+    // String answer2 = audio2Text.getText(
+    // "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
+    byte[] audio = new byte[0];
+    try {
+      audio = Text2audio.synthesizeAndSaveAudio("豫章故郡").array();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    audio = Text2audio.VoiceBitChange(audio);
+    // 将音频数据写入文件
+    try (FileOutputStream fos = new FileOutputStream("output_audio.mp3")) {
+      fos.write(audio);
+      log.info("音频文件已成功写入到 output_audio.mp3");
+    } catch (IOException e) {
+      log.error("写入音频文件时发生错误: " + e.getMessage());
+    }
+
+    log.info(Arrays.toString(audio));
+    TTsMarker.saveHexToFile(audio);
     // log.info(answer);
-    log.info(answer2);
+    // log.info(answer2);
   }
 
   @Test

@@ -22,19 +22,19 @@ package top.rslly.iot.services;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.dao.ProductDeviceRepository;
-import top.rslly.iot.dao.ProductModelRepository;
-import top.rslly.iot.dao.ProductRepository;
+import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductModelDescription;
 import top.rslly.iot.param.request.ProductModel;
+import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -47,10 +47,55 @@ public class ProductModelServiceImpl implements ProductModelService {
   private ProductDeviceRepository productDeviceRepository;
   @Resource
   private ProductRepository productRepository;
+  @Resource
+  private WxProductBindRepository wxProductBindRepository;
+  @Resource
+  private UserProductBindRepository userProductBindRepository;
+  @Resource
+  private WxUserRepository wxUserRepository;
+  @Resource
+  private UserRepository userRepository;
 
   @Override
-  public JsonResult<?> getProductModel() {
-    var result = productModelRepository.findAll();
+  public JsonResult<?> getProductModel(String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    List<ProductModelEntity> result;
+    if (role.equals("ROLE_" + "wx_user")) {
+      if (wxUserRepository.findAllByName(username).isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      result = new ArrayList<>();
+      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      if (wxBindProductResponseList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      for (var s : wxBindProductResponseList) {
+        List<ProductModelEntity> productModelEntities =
+            productModelRepository.findAllByProductId(s.getProductId());
+        result.addAll(productModelEntities);
+      }
+    } else if (!role.equals("[ROLE_admin]")) {
+      var userList = userRepository.findAllByUsername(username);
+      if (userList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      int userId = userList.get(0).getId();
+      result = new ArrayList<>();
+      var userProductBindEntityList = userProductBindRepository.findAllByUserId(userId);
+      if (userProductBindEntityList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      for (var s : userProductBindEntityList) {
+        List<ProductModelEntity> productModelEntities =
+            productModelRepository.findAllByProductId(s.getProductId());
+        result.addAll(productModelEntities);
+      }
+    } else {
+      result = productModelRepository.findAll();
+    }
     if (result.isEmpty()) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     } else

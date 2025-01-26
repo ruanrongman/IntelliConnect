@@ -45,8 +45,6 @@ public class ScheduleToolPrompt {
           You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
           Identify the time when the user wants to be reminded and convert it to a cron expression.
           If the user does not provide a specific time, you can plan a time for them.
-          reference information: The current time is {time}
-          Arranged reminder tasks:{schedule_map}
           ## Output Format
            To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
            The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
@@ -141,6 +139,9 @@ public class ScheduleToolPrompt {
              "0 0 3-5 * * *" Execute tasks every hour between 3am and 5am every day.
 
              "0 15 10 L * ?" The task is executed at 10:15 am on the last day of each month.
+           ## work information
+           reference information: The current time is {time}
+           Arranged reminder tasks:{schedule_map}
           """;
 
   public String getScheduleTool(String openid) {

@@ -33,7 +33,7 @@ public interface ProductDataService {
 
   List<ProductDataDescription> getDescription(int modelId);
 
-  JsonResult<?> getProductData();
+  JsonResult<?> getProductData(String token);
 
   JsonResult<?> postProductData(ProductData productData);
 
