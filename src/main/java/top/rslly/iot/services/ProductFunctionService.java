@@ -31,6 +31,8 @@ import java.util.List;
 
 public interface ProductFunctionService {
 
+  List<ProductFunctionEntity> findAllById(int id);
+
   List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);
 
   List<ProductFunctionDescription> getDescription(int productId);

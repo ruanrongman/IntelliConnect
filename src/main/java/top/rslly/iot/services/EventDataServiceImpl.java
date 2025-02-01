@@ -53,6 +53,11 @@ public class EventDataServiceImpl implements EventDataService {
   private UserRepository userRepository;
 
   @Override
+  public List<EventDataEntity> findAllById(int id) {
+    return eventDataRepository.findAllById(id);
+  }
+
+  @Override
   public List<EventDataEntity> findAllByModelId(int modelId) {
     return eventDataRepository.findAllByModelId(modelId);
   }

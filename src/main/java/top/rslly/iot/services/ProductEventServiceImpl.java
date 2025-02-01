@@ -51,6 +51,11 @@ public class ProductEventServiceImpl implements ProductEventService {
   private UserRepository userRepository;
 
   @Override
+  public List<ProductEventEntity> findAllById(int id) {
+    return productEventRepository.findAllById(id);
+  }
+
+  @Override
   public List<ProductEventEntity> findAllByModelIdAndName(int modelId, String name) {
     return productEventRepository.findAllByModelIdAndName(modelId, name);
   }

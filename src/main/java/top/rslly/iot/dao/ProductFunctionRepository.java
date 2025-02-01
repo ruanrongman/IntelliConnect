@@ -27,6 +27,8 @@ import java.util.List;
 
 public interface ProductFunctionRepository extends JpaRepository<ProductFunctionEntity, Long> {
 
+  List<ProductFunctionEntity> findAllById(int id);
+
   List<ProductFunctionEntity> findAllByModelId(int modelId);
 
   List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);

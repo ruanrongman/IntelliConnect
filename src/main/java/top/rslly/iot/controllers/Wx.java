@@ -144,12 +144,12 @@ public class Wx {
         try {
 
           // System.out.println(bodyInfo);
-          String microId = (String) JSON.parseObject(bodyInfo).get("ToUserName");
+          String microId = JSON.parseObject(bodyInfo).getString("ToUserName");
 
-          String msgType = (String) JSON.parseObject(bodyInfo).get("MsgType");
+          String msgType = JSON.parseObject(bodyInfo).getString("MsgType");
           if (msgType.equals("text")) {
-            String msg = (String) JSON.parseObject(bodyInfo).get("Content");
-            String openid = (String) JSON.parseObject(bodyInfo).get("FromUserName");
+            String msg = JSON.parseObject(bodyInfo).getString("Content");
+            String openid = JSON.parseObject(bodyInfo).getString("FromUserName");
             String userid = DigestUtils.md5DigestAsHex(openid.getBytes(StandardCharsets.UTF_8));
             // String ans = router.response(msg);
             if (microId.equals(ToUserName)) {
@@ -167,6 +167,13 @@ public class Wx {
               } else
                 smartRobot.smartSendContent(openid, msg, microappid2);
             }
+          } else if (msgType.equals("image")) {
+            String openid = JSON.parseObject(bodyInfo).getString("FromUserName");
+            String imageUrl = JSON.parseObject(bodyInfo).getString("PicUrl");
+            if (microId.equals(ToUserName))
+              smartRobot.smartImageSendContent(openid, imageUrl, microappid);
+            else if (microId.equals(ToUserName2))
+              smartRobot.smartImageSendContent(openid, imageUrl, microappid2);
           } else if (msgType.equals("event")) {
             String event = JSON.parseObject(bodyInfo).getString("Event");
             String openid = (String) JSON.parseObject(bodyInfo).get("FromUserName");

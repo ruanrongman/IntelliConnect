@@ -138,8 +138,12 @@ public class Auth {
   @RequestMapping(value = "/ProductModel", method = RequestMethod.DELETE)
   public JsonResult<?> ProductModel(@RequestParam("id") int id,
       @RequestHeader("Authorization") String header) {
-    if (!safetyService.controlAuthorizeModel(header, id))
-      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    try {
+      if (!safetyService.controlAuthorizeModel(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productModelService.deleteProductModel(id);
   }
 
@@ -158,7 +162,14 @@ public class Auth {
 
   @Operation(summary = "删除事件", description = "删除物模型的事件")
   @RequestMapping(value = "/ProductEvent", method = RequestMethod.DELETE)
-  public JsonResult<?> ProductEvent(@RequestParam("id") int id) {
+  public JsonResult<?> ProductEvent(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeEvent(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productEventService.deleteProductEvent(id);
   }
 
@@ -177,7 +188,14 @@ public class Auth {
 
   @Operation(summary = "删除设备", description = "删除物模型的设备")
   @RequestMapping(value = "/ProductDevice", method = RequestMethod.DELETE)
-  public JsonResult<?> ProductDevice(@RequestParam("id") int id) {
+  public JsonResult<?> ProductDevice(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productDeviceService.deleteProductDevice(id);
   }
 
@@ -214,7 +232,14 @@ public class Auth {
 
   @Operation(summary = "删除功能", description = "删除物模型的功能")
   @RequestMapping(value = "/ProductFunction", method = RequestMethod.DELETE)
-  public JsonResult<?> ProductFunction(@RequestParam("id") int id) {
+  public JsonResult<?> ProductFunction(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeFunction(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productFunctionService.deleteProductFunction(id);
   }
 
@@ -232,7 +257,14 @@ public class Auth {
 
   @Operation(summary = "删除事件入参", description = "删除事件入参")
   @RequestMapping(value = "/EventData", method = RequestMethod.DELETE)
-  public JsonResult<?> EventData(@RequestParam("id") int id) {
+  public JsonResult<?> EventData(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeEventData(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return eventDataService.deleteEventData(id);
   }
 

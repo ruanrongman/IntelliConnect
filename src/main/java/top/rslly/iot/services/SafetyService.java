@@ -23,4 +23,12 @@ public interface SafetyService {
   boolean controlAuthorizeProduct(String token, int productId);
 
   boolean controlAuthorizeModel(String token, int modelId);
+
+  boolean controlAuthorizeDevice(String token, int deviceId);
+
+  boolean controlAuthorizeFunction(String token, int functionId);
+
+  boolean controlAuthorizeEvent(String token, int eventId);
+
+  boolean controlAuthorizeEventData(String token, int eventDataId);
 }

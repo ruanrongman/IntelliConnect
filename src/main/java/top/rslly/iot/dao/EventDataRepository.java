@@ -26,6 +26,9 @@ import javax.transaction.Transactional;
 import java.util.List;
 
 public interface EventDataRepository extends JpaRepository<EventDataEntity, Long> {
+
+  List<EventDataEntity> findAllById(int id);
+
   List<EventDataEntity> findAllByModelId(int modelId);
 
   List<EventDataEntity> findAllByModelIdAndJsonKey(int modelId, String jsonKey);

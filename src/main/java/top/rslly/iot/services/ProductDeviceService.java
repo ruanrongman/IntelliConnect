@@ -32,6 +32,8 @@ public interface ProductDeviceService {
 
   List<ProductDeviceEntity> findAll();
 
+  List<ProductDeviceEntity> findAllById(int id);
+
   List<ProductDeviceEntity> findAllByClientId(String clientId);
 
   List<ProductDeviceEntity> findAllByName(String name);

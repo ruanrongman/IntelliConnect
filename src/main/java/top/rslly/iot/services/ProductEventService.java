@@ -28,6 +28,8 @@ import java.util.List;
 
 public interface ProductEventService {
 
+  List<ProductEventEntity> findAllById(int id);
+
   List<ProductEventEntity> findAllByModelIdAndName(int modelId, String name);
 
   JsonResult<?> getProductEvent(String token);

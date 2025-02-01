@@ -58,6 +58,11 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
 
 
   @Override
+  public List<ProductFunctionEntity> findAllById(int id) {
+    return productFunctionRepository.findAllById(id);
+  }
+
+  @Override
   public List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType) {
     return productFunctionRepository.findAllByModelIdAndDataType(modelId, dataType);
   }

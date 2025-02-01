@@ -22,9 +22,12 @@ package top.rslly.iot.services;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.ProductModel;
 import top.rslly.iot.param.request.User;
 import top.rslly.iot.utility.JwtTokenUtil;
+
+import java.util.List;
 
 @Service
 @Slf4j
@@ -34,7 +37,15 @@ public class SafetyServiceImpl implements SafetyService {
   @Autowired
   private ProductModelServiceImpl productModelService;
   @Autowired
+  private ProductDeviceServiceImpl productDeviceService;
+  @Autowired
+  private ProductEventServiceImpl productEventService;
+  @Autowired
   private UserProductBindServiceImpl userProductBindService;
+  @Autowired
+  private ProductFunctionServiceImpl productFunctionService;
+  @Autowired
+  private EventDataServiceImpl eventDataService;
   @Autowired
   private UserServiceImpl userService;
   @Autowired
@@ -42,8 +53,48 @@ public class SafetyServiceImpl implements SafetyService {
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
+    List<ProductModelEntity> productModelEntityList = productModelService.findAllById(modelId);
+    if (productModelEntityList.isEmpty())
+      throw new NullPointerException("modelId not found!");
     return this.controlAuthorizeProduct(token,
-        productModelService.findAllById(modelId).get(0).getProductId());
+        productModelEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeDevice(String token, int deviceId) {
+    List<ProductDeviceEntity> productDeviceEntityList = productDeviceService.findAllById(deviceId);
+    if (productDeviceEntityList.isEmpty())
+      throw new NullPointerException("deviceId not found!");
+    return this.controlAuthorizeModel(token,
+        productDeviceEntityList.get(0).getModelId());
+  }
+
+  @Override
+  public boolean controlAuthorizeFunction(String token, int functionId) {
+    List<ProductFunctionEntity> productFunctionEntityList =
+        productFunctionService.findAllById(functionId);
+    if (productFunctionEntityList.isEmpty())
+      throw new NullPointerException("functionId not found!");
+    return this.controlAuthorizeModel(token,
+        productFunctionEntityList.get(0).getModelId());
+  }
+
+  @Override
+  public boolean controlAuthorizeEvent(String token, int eventId) {
+    List<ProductEventEntity> productEventEntityList = productEventService.findAllById(eventId);
+    if (productEventEntityList.isEmpty())
+      throw new NullPointerException("eventId not found!");
+    return this.controlAuthorizeModel(token,
+        productEventEntityList.get(0).getModelId());
+  }
+
+  @Override
+  public boolean controlAuthorizeEventData(String token, int eventDataId) {
+    List<EventDataEntity> eventDataEntityList = eventDataService.findAllById(eventDataId);
+    if (eventDataEntityList.isEmpty())
+      throw new NullPointerException("eventDataId not found!");
+    return this.controlAuthorizeModel(token,
+        eventDataEntityList.get(0).getModelId());
   }
 
   @Override
