@@ -17,20 +17,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.param.response;
 
-public interface SafetyService {
-  boolean controlAuthorizeProduct(String token, int productId);
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-  boolean controlAuthorizeModel(String token, int modelId);
-
-  boolean controlAuthorizeDevice(String token, int deviceId);
-
-  boolean controlAuthorizeFunction(String token, int functionId);
-
-  boolean controlAuthorizeEvent(String token, int eventId);
-
-  boolean controlAuthorizeEventData(String token, int eventDataId);
-
-  boolean controlAuthorizeProductData(String token, int productDataId);
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class DeviceConnectedNumResponse {
+  private int num;
+  private int connectedNum;
+  private int disconnectedNum;
 }

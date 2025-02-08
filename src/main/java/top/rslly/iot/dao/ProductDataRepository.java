@@ -29,6 +29,9 @@ import java.util.List;
 
 @Repository
 public interface ProductDataRepository extends JpaRepository<ProductDataEntity, Long> {
+
+  List<ProductDataEntity> findAllById(int id);
+
   List<ProductDataEntity> findAllByModelId(int modelId);
 
   List<ProductDataEntity> findAllByModelIdAndJsonKey(int modelId, String jsonKey);

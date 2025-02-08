@@ -36,6 +36,10 @@ public interface EventStorageRepository extends JpaRepository<EventStorageEntity
 
   List<EventStorageEntity> findAllByTimeBetweenAndDeviceId(long time, long time2, int deviceId);
 
+  List<EventStorageEntity> findAllByDeviceId(int deviceId);
+
+  List<EventStorageEntity> findAllByDeviceIdAndJsonKey(int deviceId, String jsonKey);
+
   @Query(
       value = "SELECT * FROM event_storage WHERE device_id =?1 And json_key=?2 ORDER BY time DESC LIMIT 1",
       nativeQuery = true)
@@ -44,4 +48,10 @@ public interface EventStorageRepository extends JpaRepository<EventStorageEntity
   @Transactional
   List<EventStorageEntity> deleteAllByTimeBeforeAndDeviceIdAndJsonKey(long time, int deviceId,
       String jsonKey);
+
+  @Transactional
+  List<EventStorageEntity> deleteByDeviceId(int deviceId);
+
+  @Transactional
+  List<EventStorageEntity> deleteAllByDeviceIdAndJsonKey(int deviceId, String jsonKey);
 }

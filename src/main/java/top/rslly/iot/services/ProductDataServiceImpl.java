@@ -20,6 +20,7 @@
 package top.rslly.iot.services;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,8 @@ public class ProductDataServiceImpl implements ProductDataService {
   @Resource
   private ProductModelRepository productModelRepository;
   @Resource
+  private ProductDeviceRepository productDeviceRepository;
+  @Resource
   private WxProductBindRepository wxProductBindRepository;
   @Resource
   private UserProductBindRepository userProductBindRepository;
@@ -56,6 +59,13 @@ public class ProductDataServiceImpl implements ProductDataService {
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
+  @Autowired
+  private DataServiceImpl dataService;
+
+  @Override
+  public List<ProductDataEntity> findAllById(int id) {
+    return productDataRepository.findAllById(id);
+  }
 
   @Override
   public List<ProductDataEntity> findAllByModelId(int modelId) {
@@ -188,6 +198,11 @@ public class ProductDataServiceImpl implements ProductDataService {
     if (result.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
+      List<ProductDeviceEntity> productDeviceList =
+          productDeviceRepository.findAllByModelId(result.get(0).getModelId());
+      for (var s : productDeviceList) {
+        dataService.deleteAllByDeviceIdAndJsonKey(s.getId(), result.get(0).getJsonKey());
+      }
       return ResultTool.success(result);
     }
   }

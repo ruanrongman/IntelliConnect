@@ -28,6 +28,7 @@ import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductDeviceDescription;
 import top.rslly.iot.param.request.ProductDevice;
+import top.rslly.iot.param.response.DeviceConnectedNumResponse;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -58,6 +59,8 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   private UserRepository userRepository;
   @Resource
   private DataServiceImpl dataService;
+  @Resource
+  private EventStorageServiceImpl eventStorageService;
 
   @Override
   public List<ProductDeviceEntity> findAllBySubscribeTopic(String subscribeTopic) {
@@ -196,6 +199,73 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  public JsonResult<?> getProductDeviceConnectedNum(String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    DeviceConnectedNumResponse deviceConnectedNumResponse = new DeviceConnectedNumResponse();
+    int num = 0;
+    int connectedNum = 0;
+    if (role.equals("ROLE_" + "wx_user")) {
+      if (wxUserRepository.findAllByName(username).isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      if (wxBindProductResponseList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      for (var s : wxBindProductResponseList) {
+        List<ProductModelEntity> productModelEntities =
+            productModelRepository.findAllByProductId(s.getProductId());
+        for (var s1 : productModelEntities) {
+          List<ProductDeviceEntity> productDeviceEntityList =
+              productDeviceRepository.findAllByModelId(s1.getId());
+          for (var s2 : productDeviceEntityList) {
+            ++num;
+            if (s2.getOnline().equals("connected"))
+              ++connectedNum;
+          }
+        }
+      }
+    } else if (!role.equals("[ROLE_admin]")) {
+      var userList = userRepository.findAllByUsername(username);
+      if (userList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      int userId = userList.get(0).getId();
+      var userProductBindEntityList = userProductBindRepository.findAllByUserId(userId);
+      if (userProductBindEntityList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      for (var s : userProductBindEntityList) {
+        List<ProductModelEntity> productModelEntities =
+            productModelRepository.findAllByProductId(s.getProductId());
+        for (var s1 : productModelEntities) {
+          List<ProductDeviceEntity> productDeviceEntityList =
+              productDeviceRepository.findAllByModelId(s1.getId());
+          for (var s2 : productDeviceEntityList) {
+            ++num;
+            if (s2.getOnline().equals("connected"))
+              ++connectedNum;
+          }
+        }
+      }
+    } else {
+      List<ProductDeviceEntity> productDeviceEntityList = productDeviceRepository.findAll();
+      for (var s : productDeviceEntityList) {
+        ++num;
+        if (s.getOnline().equals("connected"))
+          ++connectedNum;
+      }
+    }
+    deviceConnectedNumResponse.setNum(num);
+    deviceConnectedNumResponse.setConnectedNum(connectedNum);
+    deviceConnectedNumResponse.setDisconnectedNum(num - connectedNum);
+    return ResultTool.success(deviceConnectedNumResponse);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductDevice(ProductDevice productDevice) {
     ProductDeviceEntity productDeviceEntity = new ProductDeviceEntity();
@@ -222,9 +292,11 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   @Override
   public JsonResult<?> deleteProductDevice(int id) {
     List<ProductDeviceEntity> result = productDeviceRepository.deleteById(id);
-    if (result.isEmpty())
+    if (result.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    else {
+    } else {
+      dataService.deleteAllByDeviceId(id);
+      eventStorageService.deleteAllByDeviceId(id);
       return ResultTool.success(result);
     }
   }

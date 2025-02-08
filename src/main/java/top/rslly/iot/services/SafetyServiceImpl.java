@@ -47,6 +47,8 @@ public class SafetyServiceImpl implements SafetyService {
   @Autowired
   private EventDataServiceImpl eventDataService;
   @Autowired
+  private ProductDataServiceImpl productDataService;
+  @Autowired
   private UserServiceImpl userService;
   @Autowired
   private WxUserServiceImpl wxUserService;
@@ -95,6 +97,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("eventDataId not found!");
     return this.controlAuthorizeModel(token,
         eventDataEntityList.get(0).getModelId());
+  }
+
+  @Override
+  public boolean controlAuthorizeProductData(String token, int productDataId) {
+    List<ProductDataEntity> productDataEntityList = productDataService.findAllById(productDataId);
+    if (productDataEntityList.isEmpty())
+      throw new NullPointerException("productDataId not found!");
+    return this.controlAuthorizeModel(token,
+        productDataEntityList.get(0).getModelId());
   }
 
   @Override

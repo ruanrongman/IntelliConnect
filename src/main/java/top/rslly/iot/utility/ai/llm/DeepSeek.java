@@ -41,22 +41,29 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Component
 public class DeepSeek implements LLM {
-  private static final String URL = "https://api.deepseek.com";
-  private static final String model = "deepseek-chat";
+  private static String URL = "https://api.deepseek.com";
+  private static String model = "deepseek-chat";
   // private static final String glmUrl = "https://open.bigmodel.cn/api/paas/v4/";
   private static OpenAiClient openAiClient;
   private static final ObjectMapper mapper = defaultObjectMapper();
+  private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
+      .connectTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+      .writeTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+      .readTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+      .build();
 
-  @Value("${ai.deepSeek-key}")
-  public void setApiKey(String apiKey) {
-    OkHttpClient okHttpClient = new OkHttpClient.Builder()
-        .connectTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
-        .writeTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
-        .readTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
+  public DeepSeek(String apiKey) {
+    openAiClient = OpenAiClient.builder()
+        .apiKey(List.of(apiKey))
+        .okHttpClient(okHttpClient)
+        .apiHost(URL)
         .build();
-    // 填写自己的api key
+  }
+
+  public DeepSeek(String url, String model, String apiKey) {
+    DeepSeek.URL = url;
+    DeepSeek.model = model;
     openAiClient = OpenAiClient.builder()
         .apiKey(List.of(apiKey))
         .okHttpClient(okHttpClient)
@@ -94,7 +101,7 @@ public class DeepSeek implements LLM {
           .replace("json", "");
       return JSON.parseObject(temp);
     } catch (Exception e) {
-      // e.printStackTrace();
+      e.printStackTrace();
       JSONObject action = new JSONObject();
       JSONObject answer = new JSONObject();
       answer.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");

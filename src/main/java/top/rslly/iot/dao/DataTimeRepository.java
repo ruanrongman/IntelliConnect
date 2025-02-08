@@ -50,8 +50,26 @@ public interface DataTimeRepository extends InfluxDBBaseMapper<DataEntity> {
       resultType = DataEntity.class)
   List<DataEntity> findAllBySort(int deviceId, String jsonKey);
 
+  @Select(
+      value = "SELECT * FROM \"data\" WHERE deviceId='#{deviceId}'",
+      resultType = DataEntity.class)
+  List<DataEntity> findAllByDeviceId(@Param("deviceId") int deviceId);
+
+  @Select(
+      value = "SELECT * FROM \"data\" WHERE deviceId='#{deviceId}' and jsonKey=#{jsonKey}",
+      resultType = DataEntity.class)
+  List<DataEntity> findAllByDeviceIdAndJsonKey(@Param("deviceId") int deviceId,
+      @Param("jsonKey") String jsonKey);
+
   @Delete(
       value = "DELETE FROM \"data\" where time <=#{time}ms and deviceId='#{deviceId}' and jsonKey=#{jsonKey}")
   void deleteAllByTimeBeforeAndDeviceIdAndJsonKey(@Param("time") long time,
       @Param("deviceId") int deviceId, @Param("jsonKey") String jsonKey);
+
+  @Delete(value = "DELETE FROM \"data\" where deviceId='#{deviceId}' and jsonKey=#{jsonKey}")
+  void deleteAllByDeviceIdAndJsonKey(@Param("deviceId") int deviceId,
+      @Param("jsonKey") String jsonKey);
+
+  @Delete(value = "DELETE FROM \"data\" where deviceId='#{deviceId}'")
+  void deleteByDeviceId(@Param("deviceId") int deviceId);
 }

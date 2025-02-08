@@ -57,6 +57,8 @@ public class Tool {
   @Autowired
   private EventStorageServiceImpl eventStorageService;
   @Autowired
+  private ProductDeviceServiceImpl productDeviceService;
+  @Autowired
   private HardWareServiceImpl hardWareService;
   @Autowired
   private OtaServiceImpl otaService;
@@ -67,6 +69,12 @@ public class Tool {
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
   public JsonResult<?> machineMessage() {
     return ResultTool.success(RuntimeMessage.getMessage());
+  }
+
+  @Operation(summary = "用于获取连接的设备数量", description = "仅包含当前用户绑定的设备")
+  @RequestMapping(value = "/getConnectedNum", method = RequestMethod.GET)
+  public JsonResult<?> getConnectedNum(@RequestHeader("Authorization") String header) {
+    return ResultTool.success(productDeviceService.getProductDeviceConnectedNum(header));
   }
 
   @Operation(summary = "设备属性或服务控制api接口", description = "注意传入参数为ControlParam,属性或服务设置重复时候取第一个")

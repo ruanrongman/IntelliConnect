@@ -35,6 +35,9 @@ public interface EventStorageService {
   List<EventStorageEntity> findAllByTimeBetweenAndDeviceIdAndJsonKey(long time, long time2,
       int deviceId, String jsonKey);
 
+  void deleteAllByDeviceId(int deviceId);
+
+  void deleteAllByDeviceIdAndJsonKey(int deviceId, String jsonKey);
 
   void deleteAllByTimeBeforeAndDeviceIdAndJsonKey(long time, int deviceId, String jsonKey);
 }

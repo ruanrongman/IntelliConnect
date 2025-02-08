@@ -36,6 +36,10 @@ public interface DataRepository extends JpaRepository<DataEntity, Long>,
 
   List<DataEntity> findByCharacteristicAndDeviceId(String characteristic, int deviceId);
 
+  List<DataEntity> findAllByDeviceId(int deviceId);
+
+  List<DataEntity> findAllByDeviceIdAndJsonKey(int deviceId, String jsonKey);
+
   List<DataEntity> findAllByTimeBetweenAndDeviceId(long time, long time2, int deviceId);
 
   @Query(
@@ -44,8 +48,14 @@ public interface DataRepository extends JpaRepository<DataEntity, Long>,
   List<DataEntity> findAllBySort(int deviceId, String jsonKey);
 
   @Transactional
+  List<DataEntity> deleteAllByDeviceIdAndJsonKey(int deviceId, String jsonKey);
+
+  @Transactional
   List<DataEntity> deleteAllByTimeBeforeAndDeviceIdAndJsonKey(long time, int deviceId,
       String jsonKey);
+
+  @Transactional
+  List<DataEntity> deleteByDeviceId(int deviceId);
   /*
    * @Transactional List<DataEntity> deleteById(int id);
    * 

@@ -20,11 +20,12 @@
 package top.rslly.iot.services;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.EventDataEntity;
-import top.rslly.iot.models.ProductEventEntity;
+import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.EventData;
 import top.rslly.iot.utility.JwtTokenUtil;
@@ -50,7 +51,11 @@ public class EventDataServiceImpl implements EventDataService {
   @Resource
   private WxUserRepository wxUserRepository;
   @Resource
+  private ProductDeviceRepository productDeviceRepository;
+  @Resource
   private UserRepository userRepository;
+  @Autowired
+  private EventStorageServiceImpl eventStorageService;
 
   @Override
   public List<EventDataEntity> findAllById(int id) {
@@ -145,6 +150,11 @@ public class EventDataServiceImpl implements EventDataService {
     if (result.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
+      List<ProductDeviceEntity> productDeviceList =
+          productDeviceRepository.findAllByModelId(result.get(0).getModelId());
+      for (var s : productDeviceList) {
+        eventStorageService.deleteAllByDeviceIdAndJsonKey(s.getId(), result.get(0).getJsonKey());
+      }
       return ResultTool.success(result);
     }
 

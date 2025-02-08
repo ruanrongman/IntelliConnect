@@ -32,6 +32,7 @@ public class TimeScheduleEntity {
   private String appid;
 
   @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id")
   public int getId() {
     return id;

@@ -213,7 +213,14 @@ public class Auth {
 
   @Operation(summary = "删除属性", description = "删除物模型的属性")
   @RequestMapping(value = "/ProductData", method = RequestMethod.DELETE)
-  public JsonResult<?> ProductData(@RequestParam("id") int id) {
+  public JsonResult<?> ProductData(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductData(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productDataService.deleteProductData(id);
   }
 

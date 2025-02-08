@@ -108,6 +108,28 @@ public class DataServiceImpl implements DataService {
   }
 
   @Override
+  public void deleteAllByDeviceId(int deviceId) {
+    if (database.equals("influxdb")) {
+      if (!dataTimeRepository.findAllByDeviceId(deviceId).isEmpty())
+        dataTimeRepository.deleteByDeviceId(deviceId);
+    } else {
+      if (!dataRepository.findAllByDeviceId(deviceId).isEmpty())
+        dataRepository.deleteByDeviceId(deviceId);
+    }
+  }
+
+  @Override
+  public void deleteAllByDeviceIdAndJsonKey(int deviceId, String jsonKey) {
+    if (database.equals("influxdb")) {
+      if (!dataTimeRepository.findAllByDeviceIdAndJsonKey(deviceId, jsonKey).isEmpty())
+        dataTimeRepository.deleteAllByDeviceIdAndJsonKey(deviceId, jsonKey);
+    } else {
+      if (!dataRepository.findAllByDeviceIdAndJsonKey(deviceId, jsonKey).isEmpty())
+        dataRepository.deleteAllByDeviceIdAndJsonKey(deviceId, jsonKey);
+    }
+  }
+
+  @Override
   public void deleteAllByTimeBeforeAndDeviceIdAndJsonKey(long time, int deviceId, String jsonKey) {
     if (database.equals("influxdb")) {
       dataTimeRepository.deleteAllByTimeBeforeAndDeviceIdAndJsonKey(time, deviceId, jsonKey);

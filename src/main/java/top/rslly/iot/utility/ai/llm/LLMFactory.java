@@ -19,14 +19,32 @@
  */
 package top.rslly.iot.utility.ai.llm;
 
+import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversation;
+import com.alibaba.dashscope.utils.Constants;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+@Component
 public class LLMFactory {
+  private static String deepSeekApiKey;
+
+  @Value("${ai.deepSeek-key}")
+  public void setApiKey(String apiKey) {
+    deepSeekApiKey = apiKey;
+  }
+
   public static LLM getLLM(String llmName) {
     if (llmName.equals("glm")) {
       return new Glm();
     } else if (llmName.equals("deepSeek")) {
-      return new DeepSeek();
+      return new DeepSeek(deepSeekApiKey);
+    } else if (llmName.equals("silicon-deepSeek-v3")) {
+      return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V3", deepSeekApiKey);
+    } else if (llmName.equals("silicon-deepSeek-v2.5")) {
+      return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
+          deepSeekApiKey);
     } else {
-      return new DeepSeek();
+      return new DeepSeek(deepSeekApiKey);
     }
   }
 }

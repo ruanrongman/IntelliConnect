@@ -85,6 +85,24 @@ public class EventStorageServiceImpl implements EventStorageService {
           jsonKey);
   }
 
+  @Override
+  public void deleteAllByDeviceId(int deviceId) {
+    if (database.equals("influxdb")) {
+      if (!eventStorageTimeRepository.findAllByDeviceId(deviceId).isEmpty())
+        eventStorageTimeRepository.deleteByDeviceId(deviceId);
+    } else if (!eventStorageRepository.findAllByDeviceId(deviceId).isEmpty())
+      eventStorageRepository.deleteByDeviceId(deviceId);
+  }
+
+  @Override
+  public void deleteAllByDeviceIdAndJsonKey(int deviceId, String jsonKey) {
+
+    if (database.equals("influxdb")) {
+      if (!eventStorageTimeRepository.findAllByDeviceIdAndJsonKey(deviceId, jsonKey).isEmpty())
+        eventStorageTimeRepository.deleteAllByDeviceIdAndJsonKey(deviceId, jsonKey);
+    } else if (!eventStorageRepository.findAllByDeviceIdAndJsonKey(deviceId, jsonKey).isEmpty())
+      eventStorageRepository.deleteAllByDeviceIdAndJsonKey(deviceId, jsonKey);
+  }
 
 
   @Override

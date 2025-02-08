@@ -46,8 +46,27 @@ public interface EventStorageTimeRepository extends InfluxDBBaseMapper<EventStor
       resultType = EventStorageEntity.class)
   List<EventStorageEntity> findAllBySort(int deviceId, String jsonKey);
 
+  @Select(
+      value = "SELECT * FROM \"event_storage\" WHERE deviceId='#{deviceId}'",
+      resultType = EventStorageEntity.class)
+  List<EventStorageEntity> findAllByDeviceId(@Param("deviceId") int deviceId);
+
+  @Select(
+      value = "SELECT * FROM \"event_storage\" WHERE deviceId='#{deviceId}' and jsonKey=#{jsonKey}",
+      resultType = EventStorageEntity.class)
+  List<EventStorageEntity> findAllByDeviceIdAndJsonKey(@Param("deviceId") int deviceId,
+      @Param("jsonKey") String jsonKey);
+
   @Delete(
       value = "DELETE FROM \"event_storage\" where time <=#{time}ms and deviceId='#{deviceId}' and jsonKey=#{jsonKey}")
   void deleteAllByTimeBeforeAndDeviceIdAndJsonKey(@Param("time") long time,
       @Param("deviceId") int deviceId, @Param("jsonKey") String jsonKey);
+
+  @Delete(
+      value = "DELETE FROM \"event_storage\" where deviceId='#{deviceId}' and jsonKey=#{jsonKey}")
+  void deleteAllByDeviceIdAndJsonKey(@Param("deviceId") int deviceId,
+      @Param("jsonKey") String jsonKey);
+
+  @Delete(value = "DELETE FROM \"event_storage\" where deviceId='#{deviceId}'")
+  void deleteByDeviceId(@Param("deviceId") int deviceId);
 }

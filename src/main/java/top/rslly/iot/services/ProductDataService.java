@@ -27,6 +27,9 @@ import top.rslly.iot.utility.result.JsonResult;
 import java.util.List;
 
 public interface ProductDataService {
+
+  List<ProductDataEntity> findAllById(int id);
+
   List<ProductDataEntity> findAllByModelId(int modelId);
 
   List<ProductDataEntity> findAllByStorageType(String storageType);
