@@ -7,6 +7,9 @@ spring:
       matching-strategy: ant_path_matcher
   jpa:
     show-sql: false
+    hibernate:
+      #更新或者创建数据库表结构(第一次启动请设置为update)
+      ddl-auto: none
   influx:
     user: cwl
     # 你的数据库url

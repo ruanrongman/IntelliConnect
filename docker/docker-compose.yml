@@ -1,0 +1,79 @@
+version: '2.1'
+services:
+  redis:
+    image: redis:6.2.17
+    container_name: IntelliConnect-ce-redis
+    sysctls:
+      - net.core.somaxconn=1024
+    ports:
+      - "6379:6379"
+    volumes:
+      - "redis-volume:/data"
+    # default password: 1234
+    command: redis-server --requirepass 1234 --appendonly yes
+    environment:
+      - TZ=Asia/Shanghai
+  mysql:
+    image: mysql:5.7.44
+    container_name: IntelliConnect-ce-mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - "mysql-volume:/etc/mysql/conf.d"
+      - "mysql-volume:/var/lib/mysql"
+      - "mysql-volume:/logs"
+    environment:
+      # user: root，password：XzHvhX4CDaN696oQAXdmlcsrqgWbkxRl
+      - MYSQL_ROOT_PASSWORD=XzHvhX4CDaN696oQAXdmlcsrqgWbkxRl
+      - MYSQL_DATABASE=cwliot1.8
+      - TZ=Asia/Shanghai
+    command: ["--default-authentication-plugin=mysql_native_password"]
+  influxdb:
+    image: influxdb:1.6.4
+    container_name: IntelliConnect-ce-influxdb
+    volumes:
+      - "influxdb-volume:/etc/influxdb"
+      - "influxdb-volume:/var/lib/influxdb/data"
+      - "influxdb-volume:/var/lib/influxdb/meta"
+      - "influxdb-volume:/var/lib/influxdb/wal"
+    ports:
+      - 8086:8086
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: cwl
+      DOCKER_INFLUXDB_INIT_PASSWORD: 1234
+      DOCKER_INFLUXDB_INIT_ORG: my-org
+      DOCKER_INFLUXDB_INIT_BUCKET: buketname
+      # DOCKER_INFLUXDB_INIT_RETENTION: 720
+  emqx:
+    image: emqx:5.8.4
+    container_name: IntelliConnect-ce-emqx
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+      interval: 5s
+      timeout: 25s
+      retries: 5
+    networks:
+      emqx-bridge:
+        aliases:
+        - node1.emqx.io
+    ports:
+      - 1883:1883
+      - 8083:8083
+      - 8084:8084
+      - 8883:8883
+      - 18083:18083 
+    volumes:
+      - "emqx-volume:/opt/emqx/log"
+      - "emqx-volume:/opt/emqx/data"
+volumes:
+  mysql-volume:
+  redis-volume:
+  influxdb-volume:
+  emqx-volume:
+networks:
+  emqx-bridge:
+    driver: bridge

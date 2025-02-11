@@ -30,10 +30,12 @@
 * 支持时序数据库influxdb
 
 ## 安装运行
+> 推荐使用docker安装，docker-compose.yaml文件在docker目录下，执行 docker-compose up 可初始化
+mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 * 安装mysql和redis数据库，高性能运行推荐安装时序数据库influxdb
 * 安装EMQX集群,并配置好exhook，本项目使用exhook作为mqtt消息的处理器
 * 安装java17环境
-* 修改配置文件application.yaml
+* 修改配置文件application.yaml(设置ddl-auto为update模式)
 * java -jar IntelliConnect-1.8-SNAPSHOT.jar
 
 ## 项目特色
@@ -46,6 +48,7 @@
 * 技术博客地址https://wordpress.rslly.top
 * 社区地址https://github.com/cwliot
 * 创万联社区公众号：微信直接搜索创万联
+
 ## 相关项目和社区
 * 创万联(cwl): 专注于物联网和人工智能技术的开源社区。
 * Promptulate https://github.com/Undertone0809/promptulate [A LLM application and Agent development framework.]
@@ -55,7 +58,7 @@
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/547c30be46816d92a5667d4d783e157.jpg" width="250px"/>
+    <img src="./docs/images/fd0ac036093fa0c241a58774bc0d78c.jpg" width="250px"/>
 </div>
 
 
