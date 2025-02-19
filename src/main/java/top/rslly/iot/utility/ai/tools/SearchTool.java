@@ -109,11 +109,11 @@ public class SearchTool implements BaseTool<String> {
     driver.manage().window().maximize(); // 最大化窗口
     // 设置隐性等待时间
     // 启动需要打开的网页
-    driver.get("https://www.baidu.com");
-    var el = driver.findElement(By.id("kw"));
+    driver.get("https://cn.bing.com");
+    var el = driver.findElement(By.id("sb_form_q"));
     el.sendKeys(question);
     el.sendKeys(Keys.ENTER);
-    var searchResult = driver.findElements(By.cssSelector(".new-pmd.c-container"));
+    var searchResult = driver.findElements(By.className("b_algo"));
     int i = 0;
     for (var result : searchResult) {
       Map<String, String> resultMap = new HashMap<>();

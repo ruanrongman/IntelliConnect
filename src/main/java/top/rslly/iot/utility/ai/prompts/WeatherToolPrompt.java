@@ -41,7 +41,7 @@ public class WeatherToolPrompt {
            ```json
            {
            "thought": "The thought of what to do and why.(use Chinese)",
-           "action": # the action to take
+           "action":
                {
                "code": "If this is related to weather output 200,else output 400",
                "answer": "Answer vivid,lively,kind and amiable(use Chinese)",

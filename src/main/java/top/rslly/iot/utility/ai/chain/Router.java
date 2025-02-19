@@ -64,6 +64,8 @@ public class Router {
   private ScheduleTool scheduleTool;
   @Autowired
   private SearchTool searchTool;
+  @Autowired
+  private ProductRoleTool productRoleTool;
 
   // chatId in wechat module need to use openid
   public String response(String content, String chatId, int productId, String... microappid) {
@@ -85,6 +87,7 @@ public class Router {
       }
     else
       memory = new ArrayList<>();
+    globalMessage.put("memory", memory);
     var resultMap = classifierTool.run(content, memory);
     String args;
     Object argsObject = resultMap.get("args");
@@ -115,7 +118,7 @@ public class Router {
             toolResult = agent.run(content, globalMessage);
             answer = "以下是智能体处理结果：" + toolResult;
           }
-          case "6" -> answer = chatTool.run(content, memory);
+          case "6" -> answer = chatTool.run(content, globalMessage);
           case "7" -> {
             toolResult = wxBoundProductTool.run(args, globalMessage);
             answer = "以下是微信绑定产品插件结果：" + toolResult;
@@ -134,14 +137,18 @@ public class Router {
           }
           case "10" -> {
             toolResult = searchTool.run(args);
-            answer = "以下是百度搜索插件的结果：" + toolResult;
+            answer = "以下是必应搜索插件的结果：" + toolResult;
+          }
+          case "11" -> {
+            toolResult = productRoleTool.run(args, globalMessage);
+            answer = "以下是产品角色插件的结果：" + toolResult;
           }
           default -> answer = resultMap.get("answer").toString();
         }
       } else
-        answer = chatTool.run(content, memory);
+        answer = chatTool.run(content, globalMessage);
     } else
-      answer = chatTool.run(content, memory);
+      answer = chatTool.run(content, globalMessage);
     if (toolResult.equals(""))
       toolResult = answer;
     ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), content);

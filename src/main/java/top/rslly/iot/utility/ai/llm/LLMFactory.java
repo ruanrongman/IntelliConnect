@@ -40,6 +40,8 @@ public class LLMFactory {
       return new DeepSeek(deepSeekApiKey);
     } else if (llmName.equals("silicon-deepSeek-v3")) {
       return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V3", deepSeekApiKey);
+    } else if (llmName.equals("silicon-Qwen2.5-7B-Instruct")) {
+      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-7B-Instruct", deepSeekApiKey);
     } else if (llmName.equals("silicon-deepSeek-v2.5")) {
       return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
           deepSeekApiKey);

@@ -54,7 +54,7 @@ public class ControlToolPrompt {
           "thought": "The thought of what to do and why.(use Chinese)",
           "action": # the action to take
               {
-              "answer": "Answer vivid,lively,kind to user requests immediately based on data(use Chinese)",
+              "answer": "Respond to user requests with a lively and playful tone, quickly based on business data. If the user inquires about device metrics, be sure to provide the relevant numerical information clearly and in detail in your response.",
               "controlParameters":[
                {
                 "name": "device name,If it doesn't match, please output null",

@@ -17,22 +17,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.dao;
 
-public interface SafetyService {
-  boolean controlAuthorizeProduct(String token, int productId);
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.ProductRoleEntity;
 
-  boolean controlAuthorizeModel(String token, int modelId);
+import java.util.List;
 
-  boolean controlAuthorizeDevice(String token, int deviceId);
+public interface ProductRoleRepository extends JpaRepository<ProductRoleEntity, Integer> {
+  List<ProductRoleEntity> findAllById(int id);
 
-  boolean controlAuthorizeFunction(String token, int functionId);
+  List<ProductRoleEntity> findAllByProductId(int productId);
 
-  boolean controlAuthorizeEvent(String token, int eventId);
-
-  boolean controlAuthorizeEventData(String token, int eventDataId);
-
-  boolean controlAuthorizeProductData(String token, int productDataId);
-
-  boolean controlAuthorizeProductRole(String token, int productRoleId);
+  @Transactional
+  List<ProductRoleEntity> deleteById(int id);
 }

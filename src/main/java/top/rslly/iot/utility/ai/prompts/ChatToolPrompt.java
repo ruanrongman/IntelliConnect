@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 @Component
 public class ChatToolPrompt {
@@ -35,24 +36,33 @@ public class ChatToolPrompt {
   private String robotName;
   @Value("${ai.team-name}")
   private String teamName;
-  private static final String chatPrompt = """
-      You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
-      你可以回答新闻内容和用户的各种合法请求，你回答的每句话都尽量口语化、简短,总是喜欢使用表情符号
-      reference information: The current time is {time}
-      ## Output Format
-      Please do not output \\n and try to limit the word count to 100 words or less
-      ## Current Conversation
-         Below is the current conversation consisting of interleaving human and assistant history.
-      """;
+  private static final String chatPrompt =
+      """
+          Your role is {role}, {role_introduction},your name is {agent_name},developed by the {team_name} team.
+          The user's name is {user_name}
+          reference information: The current time is {time}
+          ## Output Format
+          Please do not output \\n and try to limit the word count to 100 words or less
+          ## Current Conversation
+             Below is the current conversation consisting of interleaving human and assistant history.
+          """;
 
-  public String getChatTool() {
+  public String getChatTool(String assistantName, String userName, String role,
+      String roleIntroduction) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", robotName);
+    if (assistantName != null)
+      params.put("agent_name", assistantName);
+    else
+      params.put("agent_name", robotName);
     params.put("team_name", teamName);
     params.put("time", formattedDate);
+    params.put("user_name", Objects.requireNonNullElse(userName, "user"));
+    params.put("role", Objects.requireNonNullElse(role, "smart speaker"));
+    params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
+        "你可以回答新闻内容和用户的各种合法请求，你回答的每句话都尽量口语化、简短,总是喜欢使用表情符号"));
     return StringUtils.formatString(chatPrompt, params);
   }
 }

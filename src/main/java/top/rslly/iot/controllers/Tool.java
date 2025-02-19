@@ -27,10 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import top.rslly.iot.param.request.AiControl;
-import top.rslly.iot.param.request.ControlParam;
-import top.rslly.iot.param.request.MetaData;
-import top.rslly.iot.param.request.ReadData;
+import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.RuntimeMessage;
@@ -38,6 +35,7 @@ import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.result.JsonResult;
+import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import javax.servlet.ServletOutputStream;
@@ -63,7 +61,11 @@ public class Tool {
   @Autowired
   private OtaServiceImpl otaService;
   @Autowired
+  private ProductRoleServiceImpl productRoleService;
+  @Autowired
   private AiServiceImpl aiService;
+  @Autowired
+  private SafetyServiceImpl safetyService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -142,6 +144,35 @@ public class Tool {
     aiService.audioTmpGet(name, response);
   }
 
+  @Operation(summary = "获取产品角色列表", description = "仅获取当前用户产品角色列表")
+  @RequestMapping(value = "/productRole", method = RequestMethod.GET)
+  public JsonResult<?> getProductRole(@RequestHeader("Authorization") String header) {
+    return productRoleService.getProductRole(header);
+  }
+
+  @Operation(summary = "添加产品角色", description = "仅添加当前用户产品角色")
+  @RequestMapping(value = "/productRole", method = RequestMethod.POST)
+  public JsonResult<?> postProductRole(@RequestBody ProductRole productRole) {
+    return productRoleService.postProductRole(productRole);
+  }
+
+  @Operation(summary = "修改产品角色", description = "仅修改当前用户产品角色")
+  @RequestMapping(value = "/productRole", method = RequestMethod.PUT)
+  public JsonResult<?> putProductRole(@RequestBody ProductRole productRole,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeProduct(header, productRole.getProductId()))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    return productRoleService.putProductRole(productRole);
+  }
+
+  @Operation(summary = "删除产品角色", description = "仅删除当前用户产品角色")
+  @RequestMapping(value = "/productRole", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductRole(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeProductRole(header, id))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    return productRoleService.deleteProductRole(id);
+  }
 
   // ota list and delete
   @RequestMapping(value = "/micro/{name}", method = RequestMethod.GET)

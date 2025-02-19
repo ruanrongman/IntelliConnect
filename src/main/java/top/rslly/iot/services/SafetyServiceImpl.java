@@ -49,6 +49,8 @@ public class SafetyServiceImpl implements SafetyService {
   @Autowired
   private ProductDataServiceImpl productDataService;
   @Autowired
+  private ProductRoleServiceImpl productRoleService;
+  @Autowired
   private UserServiceImpl userService;
   @Autowired
   private WxUserServiceImpl wxUserService;
@@ -106,6 +108,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("productDataId not found!");
     return this.controlAuthorizeModel(token,
         productDataEntityList.get(0).getModelId());
+  }
+
+  @Override
+  public boolean controlAuthorizeProductRole(String token, int productRoleId) {
+    List<ProductRoleEntity> productRoleEntityList = productRoleService.findAllById(productRoleId);
+    if (productRoleEntityList.isEmpty())
+      throw new NullPointerException("productRoleId not found!");
+    return this.controlAuthorizeProduct(token,
+        productRoleEntityList.get(0).getProductId());
   }
 
   @Override

@@ -19,20 +19,23 @@
  */
 package top.rslly.iot.services;
 
-public interface SafetyService {
-  boolean controlAuthorizeProduct(String token, int productId);
+import top.rslly.iot.models.ProductRoleEntity;
+import top.rslly.iot.param.request.ProductRole;
+import top.rslly.iot.utility.result.JsonResult;
 
-  boolean controlAuthorizeModel(String token, int modelId);
+import java.util.List;
 
-  boolean controlAuthorizeDevice(String token, int deviceId);
+public interface ProductRoleService {
 
-  boolean controlAuthorizeFunction(String token, int functionId);
+  List<ProductRoleEntity> findAllById(int id);
 
-  boolean controlAuthorizeEvent(String token, int eventId);
+  List<ProductRoleEntity> findAllByProductId(int productId);
 
-  boolean controlAuthorizeEventData(String token, int eventDataId);
+  JsonResult<?> getProductRole(String token);
 
-  boolean controlAuthorizeProductData(String token, int productDataId);
+  JsonResult<?> postProductRole(ProductRole productRole);
 
-  boolean controlAuthorizeProductRole(String token, int productRoleId);
+  JsonResult<?> putProductRole(ProductRole productRole);
+
+  JsonResult<?> deleteProductRole(int id);
 }

@@ -106,15 +106,16 @@ ai:
   robot-name: 小创
   team-name: 创万联
   agent-epoch-limit: 5
-  chatTool-llm: glm
+  chatTool-llm: silicon-Qwen2.5-7B-Instruct
   classifierTool-llm: silicon-deepSeek-v2.5
   controlTool-llm: silicon-deepSeek-v2.5
-  musicTool-llm: silicon-deepSeek-v2.5
-  weatherTool-llm: silicon-deepSeek-v2.5
-  wxBoundProductTool-llm: silicon-deepSeek-v2.5
-  wxProductActiveTool-llm: silicon-deepSeek-v2.5
+  musicTool-llm: silicon-Qwen2.5-7B-Instruct
+  productRoleTool-llm: silicon-deepSeek-v2.5
+  weatherTool-llm: silicon-Qwen2.5-7B-Instruct
+  wxBoundProductTool-llm: silicon-Qwen2.5-7B-Instruct
+  wxProductActiveTool-llm: silicon-Qwen2.5-7B-Instruct
   scheduleTool-llm: silicon-deepSeek-v2.5
-  searchTool-llm: silicon-deepSeek-v2.5
+  searchTool-llm: silicon-Qwen2.5-7B-Instruct
   agent-llm: silicon-deepSeek-v2.5
 emq:
   api:

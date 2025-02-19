@@ -123,6 +123,7 @@ public class ClassifierToolPrompt {
     classifierMap.put("9", "Schedule management and reminder tasks");
     classifierMap.put("10",
         "Search for online(Please simplify user input to meet the needs of search engines)");
+    classifierMap.put("11", "All user requests for role configuration");
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
     params.put("agent_name", robotName);
