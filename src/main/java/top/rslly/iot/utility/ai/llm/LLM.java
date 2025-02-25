@@ -21,6 +21,7 @@ package top.rslly.iot.utility.ai.llm;
 
 import com.alibaba.fastjson.JSONObject;
 import com.zhipu.oapi.service.v4.model.ChatMessage;
+import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.ModelMessage;
 
 import java.util.List;
@@ -29,4 +30,7 @@ public interface LLM {
   JSONObject jsonChat(String content, List<ModelMessage> messages, boolean search);
 
   String commonChat(String content, List<ModelMessage> messages, boolean search);
+
+  void streamJsonChat(String content, List<ModelMessage> messages, boolean search,
+      EventSourceListener listener);
 }

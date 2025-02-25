@@ -36,7 +36,7 @@ public class ProductRolePrompt {
               {
               "code": "If this is related to Configure roles output 200,else output 400",
               "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
-              "assistant_name": "assistant name,if you not found,output null",
+              "assistant_name": "The name of the assistant is your name,if you not found,output null",
               "user_name":  "user name,if you not found,output null",
               "role":  "role name,if you not found,output null",
               "role_introduction":  "role introduction,if you not found,output null"

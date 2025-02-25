@@ -27,11 +27,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class LLMFactory {
   private static String deepSeekApiKey;
+  private static String siliconFlowApiKey;
+  private static String uniApiKey;
 
   @Value("${ai.deepSeek-key}")
-  public void setApiKey(String apiKey) {
+  public void setDeepSeekApiKey(String apiKey) {
     deepSeekApiKey = apiKey;
   }
+
+  @Value("${ai.siliconFlow-Key}")
+  public void setSiliconFlowApiKey(String apiKey) {
+    siliconFlowApiKey = apiKey;
+  }
+
+  @Value("${ai.uniApi-Key}")
+  public void setUniApiKey(String apiKey) {
+    uniApiKey = apiKey;
+  }
+
 
   public static LLM getLLM(String llmName) {
     if (llmName.equals("glm")) {
@@ -39,12 +52,16 @@ public class LLMFactory {
     } else if (llmName.equals("deepSeek")) {
       return new DeepSeek(deepSeekApiKey);
     } else if (llmName.equals("silicon-deepSeek-v3")) {
-      return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V3", deepSeekApiKey);
+      return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V3",
+          siliconFlowApiKey);
     } else if (llmName.equals("silicon-Qwen2.5-7B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-7B-Instruct", deepSeekApiKey);
+      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-7B-Instruct",
+          siliconFlowApiKey);
     } else if (llmName.equals("silicon-deepSeek-v2.5")) {
       return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
           deepSeekApiKey);
+    } else if (llmName.equals("uniApi-deepSeek")) {
+      return new DeepSeek("https://hk.uniapi.io", "deepseek-chat", uniApiKey);
     } else {
       return new DeepSeek(deepSeekApiKey);
     }

@@ -102,21 +102,24 @@ ai:
   audio-temp-url: https://XXX.com
   glm-key: XXX
   deepSeek-key: XXX
+  siliconFlow-Key: XXX
+  uniApi-Key: XXX
   dashscope-key: XXX
   robot-name: 小创
   team-name: 创万联
   agent-epoch-limit: 5
   chatTool-llm: silicon-Qwen2.5-7B-Instruct
-  classifierTool-llm: silicon-deepSeek-v2.5
-  controlTool-llm: silicon-deepSeek-v2.5
+  classifierTool-llm: uniApi-deepSeek
+  classifierTool-speedUp: true
+  controlTool-llm: uniApi-deepSeek
   musicTool-llm: silicon-Qwen2.5-7B-Instruct
-  productRoleTool-llm: silicon-deepSeek-v2.5
+  productRoleTool-llm: silicon-Qwen2.5-7B-Instruct
   weatherTool-llm: silicon-Qwen2.5-7B-Instruct
   wxBoundProductTool-llm: silicon-Qwen2.5-7B-Instruct
   wxProductActiveTool-llm: silicon-Qwen2.5-7B-Instruct
-  scheduleTool-llm: silicon-deepSeek-v2.5
+  scheduleTool-llm: uniApi-deepSeek
   searchTool-llm: silicon-Qwen2.5-7B-Instruct
-  agent-llm: silicon-deepSeek-v2.5
+  agent-llm: uniApi-deepSeek
 emq:
   api:
     url: http://192.168.49.129:18083/api/v5/clients

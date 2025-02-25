@@ -95,7 +95,9 @@ public class ProductRoleTool implements BaseTool<String> {
       ProductRole productRole = new ProductRole();
       productRole.setProductId(productId);
       productRole.setVoice(null);
-      if (assistantName == null || userName == null || role == null || roleIntroduction == null)
+      if (assistantName == null || userName == null || role == null || roleIntroduction == null
+          || assistantName.equals("null") || userName.equals("null") || role.equals("null")
+          || roleIntroduction.equals("null"))
         throw new IcAiException("information incomplete");
       productRole.setAssistantName(assistantName);
       productRole.setUserName(userName);

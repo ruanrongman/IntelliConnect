@@ -26,12 +26,14 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.unfbx.chatgpt.OpenAiClient;
+import com.unfbx.chatgpt.OpenAiStreamClient;
 import com.unfbx.chatgpt.entity.chat.ChatCompletion;
 import com.unfbx.chatgpt.entity.chat.ChatCompletionResponse;
 import com.unfbx.chatgpt.entity.chat.Message;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
+import okhttp3.sse.EventSourceListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -46,6 +48,7 @@ public class DeepSeek implements LLM {
   private static String model = "deepseek-chat";
   // private static final String glmUrl = "https://open.bigmodel.cn/api/paas/v4/";
   private static OpenAiClient openAiClient;
+  private static OpenAiStreamClient openAiStreamClient;
   private static final ObjectMapper mapper = defaultObjectMapper();
   private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
       .connectTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
@@ -59,6 +62,11 @@ public class DeepSeek implements LLM {
         .okHttpClient(okHttpClient)
         .apiHost(URL)
         .build();
+    openAiStreamClient = OpenAiStreamClient.builder()
+        .apiKey(List.of(apiKey))
+        .okHttpClient(okHttpClient)
+        .apiHost(URL)
+        .build();
   }
 
   public DeepSeek(String url, String model, String apiKey) {
@@ -68,6 +76,11 @@ public class DeepSeek implements LLM {
         .apiKey(List.of(apiKey))
         .okHttpClient(okHttpClient)
         .apiHost(URL)
+        .build();
+    openAiStreamClient = OpenAiStreamClient.builder()
+        .apiKey(List.of(apiKey))
+        .okHttpClient(okHttpClient)
+        .apiHost(URL + "/")
         .build();
   }
 
@@ -101,7 +114,7 @@ public class DeepSeek implements LLM {
           .replace("json", "");
       return JSON.parseObject(temp);
     } catch (Exception e) {
-      e.printStackTrace();
+      log.error("model error:{} ", e.getMessage());
       JSONObject action = new JSONObject();
       JSONObject answer = new JSONObject();
       answer.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
@@ -127,8 +140,24 @@ public class DeepSeek implements LLM {
       log.info("model output:{} ", response);
       return response;
     } catch (Exception e) {
-      e.printStackTrace();
+      log.error("model error:{} ", e.getMessage());
       return "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
+    }
+  }
+
+  @Override
+  public void streamJsonChat(String content, List<ModelMessage> messages, boolean search,
+      EventSourceListener listener) {
+    try {
+      var messageList = this.dealMsg(messages);
+      ChatCompletion chatCompletion = ChatCompletion
+          .builder()
+          .model(model)
+          .stream(Boolean.TRUE)
+          .messages(messageList).build();
+      openAiStreamClient.streamChatCompletion(chatCompletion, listener);
+    } catch (Exception e) {
+      log.error("model error:{} ", e.getMessage());
     }
   }
 

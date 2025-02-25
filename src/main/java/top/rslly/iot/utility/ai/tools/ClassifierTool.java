@@ -21,6 +21,7 @@ package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -36,16 +37,26 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Data
 @Component
+@Slf4j
 public class ClassifierTool {
   @Autowired
   private ClassifierToolPrompt classifierToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  public static final ConcurrentHashMap<String, Object> dataMap = new ConcurrentHashMap<>();
+  public static final Lock lock = new ReentrantLock();
+  public static final Condition dataCondition = lock.newCondition();
   @Value("${ai.classifierTool-llm}")
   private String llmName;
+  @Value("${ai.classifierTool-speedUp}")
+  private boolean speedUp;
   private String name = "classifierTool";
   private String description = """
       This tool is used to classify users' intentions
@@ -66,17 +77,41 @@ public class ClassifierTool {
     }
     messages.add(systemMessage);
     messages.add(userMessage);
-    var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
-    var answer = (String) obj.get("answer");
-    try {
-      var value = process_llm_value(obj);
-      resultMap.put("value", value.get("value"));
-      resultMap.put("args", value.get("args"));
-      resultMap.put("answer", answer);
+    if (speedUp) {
+      dataMap.clear();
+      llm.streamJsonChat(question, messages, true,
+          new ClassifierToolEventSourceListener(question, 6));
+      lock.lock();
+      try {
+        while (dataMap.get("args") == null) {
+          dataCondition.await(); // 等待数据就绪
+        }
+        // System.out.println("Consumer: Received data - " + dataMap.get("value"));
+        log.info("Consumer: Received data - {}", dataMap);
+        resultMap.put("value",
+            JSONObject.parseArray(dataMap.get("value").toString(), String.class));
+        resultMap.put("args", dataMap.get("args"));
+        resultMap.put("answer", dataMap.get("answer"));
+      } catch (Exception e) {
+        log.error("ClassifierTool error{}", e.getMessage());
+        resultMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+        return resultMap;
+      } finally {
+        lock.unlock();
+      }
+    } else {
+      var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
+      var answer = (String) obj.get("answer");
+      try {
+        var value = process_llm_value(obj);
+        resultMap.put("value", value.get("value"));
+        resultMap.put("args", value.get("args"));
+        resultMap.put("answer", answer);
 
-    } catch (Exception e) {
-      resultMap.put("answer", answer);
-      return resultMap;
+      } catch (Exception e) {
+        resultMap.put("answer", answer);
+        return resultMap;
+      }
     }
     return resultMap;
   }

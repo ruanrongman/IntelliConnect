@@ -51,8 +51,8 @@ public class ClassifierToolPrompt {
            "action": # the action to take, must be one of provided tools
                {
                "code": "if success output 200,If it doesn't match any task,output 400",
-               "answer": "Task 1,3,4,5,6 just need to answer "yes",no explanation.other Answer vivid,lively,kind and amiable",
                "value": "one of task No., json list data like [1],If it doesn't match, please output []",
+               "answer": "Task 1,3,4,5,6 just need to answer "yes",no explanation.other Answer vivid,lively,kind and amiable",
                "args": "task input parameters(Combined with Current Conversation,Summarize the context,not null)"
                }
            }
@@ -65,8 +65,8 @@ public class ClassifierToolPrompt {
            "action":
                {
                "code": "200",
-               "answer": "yes",
                "value": "[1]",
+               "answer": "yes",
                "args": "What's the weather like today"
                }
            }
@@ -78,8 +78,8 @@ public class ClassifierToolPrompt {
            "action":
                {
                "code": "200",
-               "answer": "现在时间是 XXX",
                "value": "[2]",
+               "answer": "现在时间是 XXX",
                "args": "ok"
                }
            }
@@ -91,8 +91,8 @@ public class ClassifierToolPrompt {
            "action":
                {
                "code": "200",
-               "answer": "yes",
                "value": "[7]",
+               "answer": "yes",
                "args": "Bundle the lamp product,key is XXX"
                }
            }
