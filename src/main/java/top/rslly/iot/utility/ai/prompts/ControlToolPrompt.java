@@ -62,7 +62,8 @@ public class ControlToolPrompt {
                 "taskType": "If it is a control task, output control; otherwise, output 'query'.",
                 "properties": "electronic input parameters, json list data,If there is no such properties, please output [] and do not include any null values",
                 "properties_value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output [] and do not include any null values",
-                "function": "electronic function parameters, json list data,If there is no such properties, please output [] and do not include any null values",
+                "service_name":"electronic function name,If it doesn't match, please output null"
+                "function_param": "electronic function parameters, json list data,If there is no such properties, please output [] and do not include any null values",
                 "function_value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output [] and do not include any null values"
                }
               ]

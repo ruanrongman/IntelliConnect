@@ -52,38 +52,11 @@ public class ClassifierToolPrompt {
                {
                "code": "if success output 200,If it doesn't match any task,output 400",
                "value": "one of task No., json list data like [1],If it doesn't match, please output []",
-               "answer": "Task 1,3,4,5,6 just need to answer "yes",no explanation.other Answer vivid,lively,kind and amiable",
                "args": "task input parameters(Combined with Current Conversation,Summarize the context,not null)"
                }
            }
            ```
            ## few shot
-           if user input: What's the weather like today ?
-           ```json
-           {
-           "thought": "用户想要查询天气",
-           "action":
-               {
-               "code": "200",
-               "value": "[1]",
-               "answer": "yes",
-               "args": "What's the weather like today"
-               }
-           }
-           ```
-           if user input: what time is it ?
-           ```json
-           {
-           "thought": "用户希望查询时间",
-           "action":
-               {
-               "code": "200",
-               "value": "[2]",
-               "answer": "现在时间是 XXX",
-               "args": "ok"
-               }
-           }
-           ```
            if user input: Bundle the lamp product,key is XXX
            ```json
            {
@@ -92,7 +65,6 @@ public class ClassifierToolPrompt {
                {
                "code": "200",
                "value": "[7]",
-               "answer": "yes",
                "args": "Bundle the lamp product,key is XXX"
                }
            }

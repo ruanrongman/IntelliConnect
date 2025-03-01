@@ -23,10 +23,15 @@
 * private String step;// 属性步长  (默认为null)   
 * private String unit;// 属性单位  (默认为null)
 
+### 物模型属性通讯相关MQTT主题：
+* 属性上报主题：/oc/devices/{device_name}/sys/properties/report 
+* 属性上报响应主题：/oc/devices/{device_name}/sys/properties/report_reply 
+* 平台下发主题：/oc/devices/{device_name}/sys/properties/update 
 > 物模型功能模块适用于更复杂的场景，例如：工作模式、复合指令等。
 
 以下是物模型功能接口的参数列表：
-* private String jsonKey; // 功能名称
+* private String functionName; // 功能名称
+* private String jsonKey; // 功能参数名称
 * private int modelId; // 物模型id
 * private string dataType; // input or output参数类型，input表示输入参数，output表示输出参数
 * private String description; // 功能描述（请注意，该描述应该具体描述该功能的作用，这个描述影响agent智能体的理解，最好提供一些few shot。）
@@ -35,6 +40,12 @@
 * private String min;// 服务参数最小值  (默认为null)
 * private String step;// 服务参数步长  (默认为null)
 * private String unit;// 服务参数单位  (默认为null)
+
+### 物模型功能通讯相关MQTT主题：
+* 功能下发主题：/oc/devices/{devicename}/sys/services/invoke
+* 功能参数主题：/oc/devices/{devicename}/sys/services/report
+* 功能响应主题：/oc/devices/{devicename}/sys/services/update_reply
+* 异步参数响应主题：/oc/devices/{devicename}/sys/services/async_outputData
 
 ## 设备接入
 有了物模型并添加好属性，事件，功能后之后，就可以将设备接入物联网平台了。本平台默认使用`MQTT`协议接入，并且支持`SSL`加密。
@@ -48,3 +59,14 @@
 ## 使用Agent控制设备
 使用Agent控制设备，需要先按照上述流程进行设备接入，成功后请查看控制台的设备列表，确保设备已经接入。并配置application.yaml中
 的key。请仔细考虑具体项目所需的大模型，不同的大模型会影响平台的运行效果。
+
+## 用https协议控制设备
+平台支持使用https协议来控制设备，以下是调用其api进行物模型服务调用一个例子：
+```bash
+curl -X POST "http://localhost:8080/api/v2/control" 
+-H "accept: */*" 
+-H "Authorization: Bearer XXXX" 
+-H "Content-Type: application/json" 
+-d "{\"key\":[\"time\"],\"mode\":\"service\",\"functionName\":\"time_set\",\"name\":\"{device_name}\",\"qos\":1,\"status\":\"sync\",\"value\":[\"off\"]}"
+```
+通过以上指令你可以向你的设备发起物模型同步服务调用，并控制其以`MQTT`协议 `qos=1`的信息质量来进行通信，通过该接口你可以灵活地实现各种设备应用需求。

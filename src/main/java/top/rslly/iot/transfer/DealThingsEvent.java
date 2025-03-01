@@ -58,7 +58,7 @@ public class DealThingsEvent {
     if (deviceEntityList.isEmpty())
       return false;
     String event_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
-        + "/sys/" + "properties/event";
+        + "/sys/" + "event/report";
     if (!event_topic.equals(topic))
       return false;
     int allow = deviceEntityList.get(0).getAllow();
@@ -73,13 +73,17 @@ public class DealThingsEvent {
       mes = JSON.parseObject(message);
       var eventEntities =
           productEventService.findAllByModelIdAndName(modelId, mes.get("event").toString());
+      if (eventEntities.isEmpty()) {
+        log.error("json error:{}", "event is not exits or no param");
+        return false;
+      }
       event_id = eventEntities.get(0).getId();// event_id is the id of event
     } catch (Exception e) {
       log.error("json error{}", e.getMessage());
       return false;
     }
     String reply_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
-        + "/sys/" + "properties/event_reply";
+        + "/sys/" + "events/event_reply";
     for (var s : eventDataEntities) {
       var result = mes.get(s.getJsonKey());
       if (result == null)

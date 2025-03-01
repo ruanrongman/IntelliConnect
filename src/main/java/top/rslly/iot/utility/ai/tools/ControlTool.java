@@ -106,14 +106,16 @@ public class ControlTool implements BaseTool<String> {
       String deviceName = jsonObject.get("name").toString();
       if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
         JSONArray propertyJson = jsonObject.getJSONArray("properties");
-        JSONArray functionJson = jsonObject.getJSONArray("function");
+        String functionsName = jsonObject.getString("service_name");
+        JSONArray functionJson = jsonObject.getJSONArray("function_param");
         JSONArray functionValue = jsonObject.getJSONArray("function_value");
         JSONArray valueJson = jsonObject.getJSONArray("properties_value");
         String taskType = jsonObject.get("taskType").toString();
         if (taskType == null)
           throw new NullPointerException("taskType is null");
         List<String> properties = JSONObject.parseArray(propertyJson.toJSONString(), String.class);
-        List<String> functions = JSONObject.parseArray(functionJson.toJSONString(), String.class);
+        List<String> functionParams =
+            JSONObject.parseArray(functionJson.toJSONString(), String.class);
         List<String> functionValues =
             JSONObject.parseArray(functionValue.toJSONString(), String.class);
         List<String> value = JSONObject.parseArray(valueJson.toJSONString(), String.class);
@@ -128,16 +130,18 @@ public class ControlTool implements BaseTool<String> {
             List<String> errorMessages = new ArrayList<>();
             if (!properties.isEmpty() && !value.isEmpty()) {
               ControlParam controlParam =
-                  new ControlParam(deviceName, "attribute", "null", 1, properties, value);
+                  new ControlParam(deviceName, "attribute", null, "null", 1, properties, value);
               var res = hardWareService.control(controlParam);
               if (res.getErrorCode() != 200) {
                 errorMessages
                     .add(deviceName + (res.getErrorMsg() != null ? res.getErrorMsg() : ""));
               }
             }
-            if (!functions.isEmpty() && !functionValues.isEmpty()) {
+            if (functionsName != null && !functionsName.equals("null") && !functionParams.isEmpty()
+                && !functionValues.isEmpty()) {
               ControlParam controlParam1 =
-                  new ControlParam(deviceName, "service", "async", 1, functions, functionValues);
+                  new ControlParam(deviceName, "service", functionsName, "async", 1, functionParams,
+                      functionValues);
               var res = hardWareService.control(controlParam1);
               if (res.getErrorCode() != 200) {
                 errorMessages

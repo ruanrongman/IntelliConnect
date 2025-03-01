@@ -24,6 +24,7 @@ import lombok.Data;
 @Data
 public class ProductFunctionDescription {
   private String serviceName;
+  private String paramName;
   private String description;
   private String max;
   private String min;

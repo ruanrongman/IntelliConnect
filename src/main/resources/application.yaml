@@ -109,9 +109,9 @@ ai:
   team-name: 创万联
   agent-epoch-limit: 5
   chatTool-llm: silicon-Qwen2.5-7B-Instruct
-  classifierTool-llm: uniApi-deepSeek
+  classifierTool-llm: silicon-Qwen2.5-32B-Instruct
   classifierTool-speedUp: true
-  controlTool-llm: uniApi-deepSeek
+  controlTool-llm: silicon-Qwen2.5-32B-Instruct
   musicTool-llm: silicon-Qwen2.5-7B-Instruct
   productRoleTool-llm: silicon-Qwen2.5-7B-Instruct
   weatherTool-llm: silicon-Qwen2.5-7B-Instruct

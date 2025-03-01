@@ -57,6 +57,12 @@ public class LLMFactory {
     } else if (llmName.equals("silicon-Qwen2.5-7B-Instruct")) {
       return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-7B-Instruct",
           siliconFlowApiKey);
+    } else if (llmName.equals("silicon-Qwen2.5-14B-Instruct")) {
+      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-14B-Instruct",
+          siliconFlowApiKey);
+    } else if (llmName.equals("silicon-Qwen2.5-32B-Instruct")) {
+      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-32B-Instruct",
+          siliconFlowApiKey);
     } else if (llmName.equals("silicon-deepSeek-v2.5")) {
       return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
           deepSeekApiKey);

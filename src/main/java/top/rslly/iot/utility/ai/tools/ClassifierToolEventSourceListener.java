@@ -72,11 +72,10 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         if (content.get("code").equals("200") || content.get("code").equals(200)) {
           var valueJson = content.getJSONArray("value");
           var argsJson = content.getString("args");
-          var answer = content.getString("answer");
           ClassifierTool.dataMap.put("value",
               JSONObject.parseArray(valueJson.toJSONString(), String.class));
           ClassifierTool.dataMap.put("args", argsJson);
-          ClassifierTool.dataMap.put("answer", answer);
+          ClassifierTool.dataMap.put("answer", "yes");
           // ClassifierTool.dataCondition.signal();
         } else
           throw new IcAiException("llm response error");
@@ -120,7 +119,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
       } finally {
         ClassifierTool.lock.unlock();
       }
-      log.info("OpenAI返回数据：{}", content);
+      // log.info("OpenAI返回数据：{}", content);
     } catch (Exception e) {
       log.error("OpenAi error{}", e.getMessage());
     }

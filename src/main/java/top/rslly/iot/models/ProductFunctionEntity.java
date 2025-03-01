@@ -26,8 +26,8 @@ import java.util.Objects;
 @Table(name = "product_function", schema = "cwliot1.8", catalog = "")
 public class ProductFunctionEntity {
 
-
   private int id;
+  private String functionName;
   private String jsonKey;
   private String dataType;
   private int modelId;
@@ -47,6 +47,16 @@ public class ProductFunctionEntity {
 
   public void setId(int id) {
     this.id = id;
+  }
+
+  @Basic
+  @Column(name = "function_name")
+  public String getFunctionName() {
+    return functionName;
+  }
+
+  public void setFunctionName(String functionName) {
+    this.functionName = functionName;
   }
 
   @Basic
@@ -146,7 +156,8 @@ public class ProductFunctionEntity {
     if (o == null || getClass() != o.getClass())
       return false;
     ProductFunctionEntity that = (ProductFunctionEntity) o;
-    return id == that.id && modelId == that.modelId && Objects.equals(jsonKey, that.jsonKey)
+    return id == that.id && modelId == that.modelId
+        && Objects.equals(functionName, that.functionName) && Objects.equals(jsonKey, that.jsonKey)
         && Objects.equals(dataType, that.dataType) && Objects.equals(description, that.description)
         && Objects.equals(type, that.type) && Objects.equals(max, that.max)
         && Objects.equals(min, that.min) && Objects.equals(step, that.step)
@@ -155,6 +166,7 @@ public class ProductFunctionEntity {
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, jsonKey, dataType, modelId, description, type, max, min, step, unit);
+    return Objects.hash(id, functionName, jsonKey, dataType, modelId, description, type, max, min,
+        step, unit);
   }
 }

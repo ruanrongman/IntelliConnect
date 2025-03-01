@@ -68,13 +68,21 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
   }
 
   @Override
+  public List<ProductFunctionEntity> findAllByModelIdAndFunctionNameAndDataType(int modelId,
+      String functionName, String dataType) {
+    return productFunctionRepository.findAllByModelIdAndFunctionNameAndDataType(modelId,
+        functionName, dataType);
+  }
+
+  @Override
   public List<ProductFunctionDescription> getDescription(int modelId) {
     var result = productFunctionRepository.findAllByModelIdAndDataType(modelId, "input");
     List<ProductFunctionDescription> productFunctionDescriptionList = new LinkedList<>();
     if (!result.isEmpty()) {
       for (var s : result) {
         ProductFunctionDescription productFunctionDescription = new ProductFunctionDescription();
-        productFunctionDescription.setServiceName(s.getJsonKey());
+        productFunctionDescription.setServiceName(s.getFunctionName());
+        productFunctionDescription.setParamName(s.getJsonKey());
         productFunctionDescription.setDescription(s.getDescription());
         productFunctionDescription.setMax(s.getMax());
         productFunctionDescription.setMin(s.getMin());
@@ -150,7 +158,8 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
     List<ProductModelEntity> result =
         productModelRepository.findAllById(productFunctionEntity.getModelId());
     List<ProductFunctionEntity> p1 = productFunctionRepository
-        .findAllByModelIdAndJsonKeyAndDataType(productFunctionEntity.getModelId(),
+        .findAllByModelIdAndFunctionNameAndJsonKeyAndDataType(productFunctionEntity.getModelId(),
+            productFunctionEntity.getFunctionName(),
             productFunctionEntity.getJsonKey(), productFunctionEntity.getDataType());
     // List<ProductDataEntity> p2 = productDataRepository.findAllByType(productData.getType());
     HashMap<String, Integer> typeMap = new HashMap<>();

@@ -23,6 +23,7 @@ import lombok.Data;
 
 @Data
 public class ProductFunction {
+  private String functionName;
   private String jsonKey;
   private String dataType;
   private int modelId;

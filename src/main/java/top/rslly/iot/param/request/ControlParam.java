@@ -31,6 +31,7 @@ import java.util.List;
 public class ControlParam {
   String name;
   String mode;
+  String functionName;
   String status;
   int qos;
   List<String> key;

@@ -33,8 +33,11 @@ public interface ProductFunctionRepository extends JpaRepository<ProductFunction
 
   List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);
 
-  List<ProductFunctionEntity> findAllByModelIdAndJsonKeyAndDataType(int modelId, String jsonKey,
-      String dataType);
+  List<ProductFunctionEntity> findAllByModelIdAndFunctionNameAndDataType(int modelId,
+      String functionName, String dataType);
+
+  List<ProductFunctionEntity> findAllByModelIdAndFunctionNameAndJsonKeyAndDataType(int modelId,
+      String functionName, String jsonKey, String dataType);
 
   @Transactional
   List<ProductFunctionEntity> deleteById(int id);

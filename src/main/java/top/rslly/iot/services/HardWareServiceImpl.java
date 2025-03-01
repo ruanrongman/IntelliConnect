@@ -81,8 +81,6 @@ public class HardWareServiceImpl implements HardWareService {
       }
     }
     List<ProductDataEntity> productDataEntities = productDataRepository.findAllByModelId(modelId);
-    List<ProductFunctionEntity> productFunctionEntities =
-        productFunctionRepository.findAllByModelIdAndDataType(modelId, "input");
     List<String> productDataKey = new ArrayList<>();
     Map<String, String> productTypeMap = new HashMap<>();
     Map<String, String> dataMaxMap = new HashMap<>();
@@ -93,6 +91,7 @@ public class HardWareServiceImpl implements HardWareService {
     List<String> dataMax = new ArrayList<>();
     List<String> dataMin = new ArrayList<>();
     if (controlParam.getMode().equals("attribute")) {
+      controlParam.setFunctionName(null); // 关闭服务字段输出
       if (productDataEntities.isEmpty()) {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }
@@ -107,6 +106,12 @@ public class HardWareServiceImpl implements HardWareService {
         }
       }
     } else { // service
+      if (controlParam.getFunctionName() == null) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      List<ProductFunctionEntity> productFunctionEntities =
+          productFunctionRepository.findAllByModelIdAndFunctionNameAndDataType(modelId,
+              controlParam.getFunctionName(), "input");
       if (productFunctionEntities.isEmpty()) {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }
@@ -138,8 +143,11 @@ public class HardWareServiceImpl implements HardWareService {
       }
     }
     StringBuffer res = null;
+    if (controlKey.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     try {
-      res = JsonCreate.create(controlKey, controlValue, productType, dataMax,
+      res = JsonCreate.create(controlParam.getFunctionName(), controlKey, controlValue, productType,
+          dataMax,
           dataMin);
     } catch (IOException | IllegalArgumentException e) {
       log.error(e.getMessage());
@@ -162,6 +170,7 @@ public class HardWareServiceImpl implements HardWareService {
             JSONObject output = JSONObject.parseObject(res1);
             JSONObject input = JSONObject.parseObject(res.toString());
             JSONObject jsonObject = new JSONObject();
+            jsonObject.put("functionName", controlParam.getFunctionName());
             jsonObject.put("input", input);
             jsonObject.put("output", output);
             return ResultTool.success(jsonObject.toJSONString());

@@ -26,10 +26,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.ProductFunctionEntity;
 import top.rslly.iot.services.ProductDeviceServiceImpl;
 import top.rslly.iot.services.ProductFunctionServiceImpl;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
 import top.rslly.iot.utility.RedisUtil;
+
+import java.util.List;
 
 @Component
 @Slf4j
@@ -51,24 +54,27 @@ public class DealThingsFunction {
       return false;
     String deviceName = deviceEntityList.get(0).getName();
     String function_topic = "/oc/devices/" + deviceName
-        + "/sys/" + "service/report";
+        + "/sys/" + "services/report";
     if (!function_topic.equals(topic))
       return false;
     int modelId = deviceEntityList.get(0).getModelId();
-    var functionReplyEntities =
-        productFunctionService.findAllByModelIdAndDataType(modelId, "output");
+    List<ProductFunctionEntity> functionReplyEntities;
     JSONObject mes;
     try {
       mes = JSON.parseObject(message);
+      functionReplyEntities =
+          productFunctionService.findAllByModelIdAndFunctionNameAndDataType(modelId,
+              mes.get("functionName").toString(), "output");
     } catch (JSONException e) {
       log.error("json error{}", e.getMessage());
       return false;
     }
     String reply_topic = "/oc/devices/" + deviceName
-        + "/sys/" + "service/report_reply";
+        + "/sys/" + "services/report_reply";
     String async_outputData_topic = "/oc/devices/" + deviceName
-        + "/sys/" + "service/async_outputData";
+        + "/sys/" + "services/async_outputData";
     JSONObject outputDataObject = new JSONObject();
+    outputDataObject.put("functionName", mes.get("functionName"));
     for (var s : functionReplyEntities) {
       var result = mes.get(s.getJsonKey());
       if (result == null)

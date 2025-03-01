@@ -27,7 +27,8 @@ import java.math.RoundingMode;
 import java.util.List;
 
 public class JsonCreate {
-  public static StringBuffer create(List<String> key, List<String> value, List<String> type,
+  public static StringBuffer create(String functionName, List<String> key, List<String> value,
+      List<String> type,
       List<String> dataMax, List<String> dataMin)
       throws IOException {
     if (key.size() == value.size() && value.size() == type.size() && type.size() == dataMax.size()
@@ -36,6 +37,16 @@ public class JsonCreate {
       for (int i = 0; i < key.size(); i++) {
         if (dataMax.get(i) != null && dataMin.get(i) != null) {
           checkValueRange(value.get(i), dataMax.get(i), dataMin.get(i));
+        }
+        if (functionName != null) {
+          sBuffer.append("\"");
+          sBuffer.append("functionName");
+          sBuffer.append("\"");
+          sBuffer.append(":");
+          sBuffer.append("\"");
+          sBuffer.append(functionName);
+          sBuffer.append("\"");
+          sBuffer.append(",");
         }
         sBuffer.append("\"");
         sBuffer.append(key.get(i));

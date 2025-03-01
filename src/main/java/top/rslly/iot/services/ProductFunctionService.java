@@ -35,6 +35,9 @@ public interface ProductFunctionService {
 
   List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);
 
+  List<ProductFunctionEntity> findAllByModelIdAndFunctionNameAndDataType(int modelId,
+      String functionName, String dataType);
+
   List<ProductFunctionDescription> getDescription(int productId);
 
   JsonResult<?> getProductFunction(String token);

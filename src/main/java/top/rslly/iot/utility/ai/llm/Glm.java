@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
@@ -56,7 +57,11 @@ public class Glm implements LLM {
   @Value("${ai.glm-key}")
   public void setApiKey(String apiKey) {
     // 填写自己的api key
-    client = new ClientV4.Builder(apiKey).build();
+    client = new ClientV4.Builder(apiKey)
+        .enableTokenCache()
+        .networkConfig(30, 10, 10, 10, TimeUnit.SECONDS)
+        .connectionPool(new okhttp3.ConnectionPool(8, 1, TimeUnit.SECONDS))
+        .build();
   }
 
   public static ObjectMapper defaultObjectMapper() {
@@ -140,6 +145,7 @@ public class Glm implements LLM {
       log.info("model output:{} ", response);
       return response;
     } catch (Exception e) {
+      log.error("model error:{} ", e.getMessage());
       return "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
     }
   }

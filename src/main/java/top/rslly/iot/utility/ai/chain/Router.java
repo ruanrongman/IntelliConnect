@@ -143,7 +143,7 @@ public class Router {
             toolResult = productRoleTool.run(args, globalMessage);
             answer = "以下是产品角色插件的结果：" + toolResult;
           }
-          default -> answer = resultMap.get("answer").toString();
+          default -> answer = chatTool.run(content, globalMessage);
         }
       } else
         answer = chatTool.run(content, globalMessage);
