@@ -17,31 +17,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.param.prompt;
 
-import top.rslly.iot.models.ProductModelEntity;
-import top.rslly.iot.models.ProductRoleEntity;
-import top.rslly.iot.param.prompt.ProductRoleDescription;
-import top.rslly.iot.param.request.ProductRole;
-import top.rslly.iot.utility.result.JsonResult;
+import lombok.Data;
 
-import java.util.List;
-
-public interface ProductRoleService {
-
-  List<ProductRoleEntity> findAllById(int id);
-
-  List<ProductRoleEntity> findAllByProductId(int productId);
-
-  List<ProductRoleEntity> deleteByProductId(int productId);
-
-  List<ProductRoleDescription> getDescription(int productId);
-
-  JsonResult<?> getProductRole(String token);
-
-  JsonResult<?> postProductRole(ProductRole productRole);
-
-  JsonResult<?> putProductRole(ProductRole productRole);
-
-  JsonResult<?> deleteProductRole(int id);
+@Data
+public class ProductRoleDescription {
+  private String assistantName;
+  private String userName;
+  private String role;
+  private String roleIntroduction;
+  private String voice;
 }

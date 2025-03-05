@@ -31,5 +31,8 @@ public interface ProductRoleRepository extends JpaRepository<ProductRoleEntity, 
   List<ProductRoleEntity> findAllByProductId(int productId);
 
   @Transactional
+  List<ProductRoleEntity> deleteByProductId(int productId);
+
+  @Transactional
   List<ProductRoleEntity> deleteById(int id);
 }

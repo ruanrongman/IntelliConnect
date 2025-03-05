@@ -74,6 +74,16 @@ public class SafetyServiceImpl implements SafetyService {
   }
 
   @Override
+  public boolean controlAuthorizeDevice(String token, String deviceName) {
+    List<ProductDeviceEntity> productDeviceEntityList =
+        productDeviceService.findAllByName(deviceName);
+    if (productDeviceEntityList.isEmpty())
+      throw new NullPointerException("deviceName not found!");
+    return this.controlAuthorizeModel(token,
+        productDeviceEntityList.get(0).getModelId());
+  }
+
+  @Override
   public boolean controlAuthorizeFunction(String token, int functionId) {
     List<ProductFunctionEntity> productFunctionEntityList =
         productFunctionService.findAllById(functionId);

@@ -19,13 +19,22 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.utility.ai.DescriptionUtil;
+import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class ProductRolePrompt {
+  @Autowired
+  private DescriptionUtil descriptionUtil;
   private static final String productRolePrompt =
       """
           Translate the user's requirements into detailed role configurations.
+          The following are the current user role settings:{role_set}
           ## Output Format
           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
           The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
@@ -35,7 +44,8 @@ public class ProductRolePrompt {
           "action":
               {
               "code": "If this is related to Configure roles output 200,else output 400",
-              "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
+              "answer": "Answer vivid,lively,kind and amiable(use Chinese),If the information queried by the user does not exist, please inform the user directly that it does not exist",
+              "taskType":"set or cancel; otherwise, output 'query'."
               "assistant_name": "The name of the assistant is your name,if you not found,output null",
               "user_name":  "user name,if you not found,output null",
               "role":  "role name,if you not found,output null",
@@ -48,7 +58,9 @@ public class ProductRolePrompt {
           - If the above parameters contain null, please refuse and provide suggestions in the answer.
           """;
 
-  public String getProductRoleTool() {
-    return productRolePrompt;
+  public String getProductRoleTool(int productId) {
+    Map<String, String> params = new HashMap<>();
+    params.put("role_set", descriptionUtil.getProductRole(productId));
+    return StringUtils.formatString(productRolePrompt, params);
   }
 }

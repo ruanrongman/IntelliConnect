@@ -25,6 +25,7 @@ import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.models.ProductRoleEntity;
+import top.rslly.iot.param.prompt.ProductRoleDescription;
 import top.rslly.iot.param.request.Product;
 import top.rslly.iot.param.request.ProductRole;
 import top.rslly.iot.utility.JwtTokenUtil;
@@ -34,6 +35,7 @@ import top.rslly.iot.utility.result.ResultTool;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 @Service
@@ -59,6 +61,28 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   @Override
   public List<ProductRoleEntity> findAllByProductId(int productId) {
     return productRoleRepository.findAllByProductId(productId);
+  }
+
+  @Override
+  public List<ProductRoleEntity> deleteByProductId(int productId) {
+    return productRoleRepository.deleteByProductId(productId);
+  }
+
+  @Override
+  public List<ProductRoleDescription> getDescription(int productId) {
+    var result = productRoleRepository.findAllByProductId(productId);
+    List<ProductRoleDescription> productRoleDescriptionList = new LinkedList<>();
+    if (!result.isEmpty()) {
+      for (var s : result) {
+        ProductRoleDescription productRoleDescription = new ProductRoleDescription();
+        productRoleDescription.setRole(s.getRole());
+        productRoleDescription.setRoleIntroduction(s.getRoleIntroduction());
+        productRoleDescription.setAssistantName(s.getAssistantName());
+        productRoleDescription.setUserName(s.getUserName());
+        productRoleDescriptionList.add(productRoleDescription);
+      }
+    }
+    return productRoleDescriptionList;
   }
 
   @Override

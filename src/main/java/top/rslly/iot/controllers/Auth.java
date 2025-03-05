@@ -56,6 +56,8 @@ public class Auth {
   private MqttUserServiceImpl mqttUserService;
   @Autowired
   private SafetyServiceImpl safetyService;
+  @Autowired
+  private ProductRoleServiceImpl productRoleService;
 
 
   @PreAuthorize("hasRole('ROLE_admin')")
@@ -130,7 +132,10 @@ public class Auth {
 
   @Operation(summary = "创建物模型", description = "创建产品的物模型")
   @RequestMapping(value = "/ProductModel", method = RequestMethod.POST)
-  public JsonResult<?> ProductModel(@RequestBody ProductModel productModel) {
+  public JsonResult<?> ProductModel(@RequestBody ProductModel productModel,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeProduct(header, productModel.getProductId()))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
     return productModelService.postProductModel(productModel);
   }
 
@@ -156,7 +161,14 @@ public class Auth {
 
   @Operation(summary = "提交事件", description = "提交物模型的事件")
   @RequestMapping(value = "/ProductEvent", method = RequestMethod.POST)
-  public JsonResult<?> ProductEvent(@RequestBody ProductEvent productEvent) {
+  public JsonResult<?> ProductEvent(@RequestBody ProductEvent productEvent,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeModel(header, productEvent.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productEventService.postProductEvent(productEvent);
   }
 
@@ -182,7 +194,14 @@ public class Auth {
 
   @Operation(summary = "创建设备", description = "创建物模型的设备")
   @RequestMapping(value = "/ProductDevice", method = RequestMethod.POST)
-  public JsonResult<?> ProductDevice(@RequestBody ProductDevice productDevice) {
+  public JsonResult<?> ProductDevice(@RequestBody ProductDevice productDevice,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeModel(header, productDevice.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productDeviceService.postProductDevice(productDevice);
   }
 
@@ -207,7 +226,14 @@ public class Auth {
 
   @Operation(summary = "创建属性", description = "创建物模型的属性")
   @RequestMapping(value = "/ProductData", method = RequestMethod.POST)
-  public JsonResult<?> ProductData(@RequestBody ProductData productData) {
+  public JsonResult<?> ProductData(@RequestBody ProductData productData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeModel(header, productData.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productDataService.postProductData(productData);
   }
 
@@ -233,7 +259,14 @@ public class Auth {
 
   @Operation(summary = "提交功能", description = "创建物模型的功能")
   @RequestMapping(value = "/ProductFunction", method = RequestMethod.POST)
-  public JsonResult<?> ProductFunction(@RequestBody ProductFunction productFunction) {
+  public JsonResult<?> ProductFunction(@RequestBody ProductFunction productFunction,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeModel(header, productFunction.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return productFunctionService.postProductFunction(productFunction);
   }
 
@@ -258,7 +291,14 @@ public class Auth {
 
   @Operation(summary = "提交事件入参", description = "提交事件入参")
   @RequestMapping(value = "/EventData", method = RequestMethod.POST)
-  public JsonResult<?> EventData(@RequestBody EventData eventData) {
+  public JsonResult<?> EventData(@RequestBody EventData eventData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeModel(header, eventData.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return eventDataService.postEventData(eventData);
   }
 
@@ -275,6 +315,45 @@ public class Auth {
     return eventDataService.deleteEventData(id);
   }
 
+  @Operation(summary = "获取产品角色列表", description = "仅获取当前用户产品角色列表")
+  @RequestMapping(value = "/productRole", method = RequestMethod.GET)
+  public JsonResult<?> getProductRole(@RequestHeader("Authorization") String header) {
+    return productRoleService.getProductRole(header);
+  }
 
+  @Operation(summary = "添加产品角色", description = "仅添加当前用户产品角色")
+  @RequestMapping(value = "/productRole", method = RequestMethod.POST)
+  public JsonResult<?> postProductRole(@RequestBody ProductRole productRole,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productRole.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productRoleService.postProductRole(productRole);
+  }
+
+  @Operation(summary = "修改产品角色", description = "仅修改当前用户产品角色")
+  @RequestMapping(value = "/productRole", method = RequestMethod.PUT)
+  public JsonResult<?> putProductRole(@RequestBody ProductRole productRole,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeProduct(header, productRole.getProductId()))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    return productRoleService.putProductRole(productRole);
+  }
+
+  @Operation(summary = "删除产品角色", description = "仅删除当前用户产品角色")
+  @RequestMapping(value = "/productRole", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductRole(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductRole(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productRoleService.deleteProductRole(id);
+  }
 
 }

@@ -38,6 +38,8 @@ public class DescriptionUtil {
   @Autowired
   private ProductFunctionServiceImpl productFunctionService;
   @Autowired
+  private ProductRoleServiceImpl productRoleService;
+  @Autowired
   private TimeScheduleServiceImpl timeScheduleService;
 
   public String getElectricalName(int productId) {
@@ -73,6 +75,14 @@ public class DescriptionUtil {
       if (!dataList.isEmpty())
         jsonObject.put(s.getName(), dataList);
     }
+    return jsonObject.toJSONString();
+  }
+
+  public String getProductRole(int productId) {
+    JSONObject jsonObject = new JSONObject();
+    var result = productRoleService.getDescription(productId);
+    if (!result.isEmpty())
+      jsonObject.put("productRole", result);
     return jsonObject.toJSONString();
   }
 

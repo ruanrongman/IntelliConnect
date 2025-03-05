@@ -72,7 +72,9 @@ public class ProductRoleTool implements BaseTool<String> {
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), productRolePrompt.getProductRoleTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(),
+            productRolePrompt.getProductRoleTool(productId));
+    // log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
@@ -92,25 +94,35 @@ public class ProductRoleTool implements BaseTool<String> {
       String userName = llmObject.getString("user_name");
       String role = llmObject.getString("role");
       String roleIntroduction = llmObject.getString("role_introduction");
+      String taskType = llmObject.getString("taskType");
       ProductRole productRole = new ProductRole();
       productRole.setProductId(productId);
       productRole.setVoice(null);
-      if (assistantName == null || userName == null || role == null || roleIntroduction == null
-          || assistantName.equals("null") || userName.equals("null") || role.equals("null")
-          || roleIntroduction.equals("null"))
-        throw new IcAiException("information incomplete");
-      productRole.setAssistantName(assistantName);
-      productRole.setUserName(userName);
-      productRole.setRole(role);
-      productRole.setRoleIntroduction(roleIntroduction);
-      var result = productRoleService.postProductRole(productRole);
-      if (result.getErrorCode() != 200) {
-        var result1 = productRoleService.putProductRole(productRole);
-        if (result1.getErrorCode() != 200)
-          throw new IcAiException("database control error!");
-      }
-      return "详细角色信息如下:" + "角色为" + role + "，角色介绍为" + roleIntroduction + "用户名为" + userName
-          + "，智能机器人的名字为" + assistantName;
+      if (taskType.equals("set")) {
+        if (assistantName == null || userName == null || role == null || roleIntroduction == null
+            || assistantName.equals("null") || userName.equals("null") || role.equals("null")
+            || roleIntroduction.equals("null"))
+          throw new IcAiException("information incomplete");
+        productRole.setAssistantName(assistantName);
+        productRole.setUserName(userName);
+        productRole.setRole(role);
+        productRole.setRoleIntroduction(roleIntroduction);
+        var result = productRoleService.postProductRole(productRole);
+        if (result.getErrorCode() != 200) {
+          var result1 = productRoleService.putProductRole(productRole);
+          if (result1.getErrorCode() != 200)
+            throw new IcAiException("database control error!");
+        }
+        return "详细角色信息如下:" + "角色为" + role + "，角色介绍为" + roleIntroduction + "用户名为" + userName
+            + "，智能机器人的名字为" + assistantName;
+      } else if (taskType.equals("cancel")) {
+        var result = productRoleService.deleteByProductId(productId);
+        if (!result.isEmpty()) {
+          return "平台真实响应:删除成功";
+        } else
+          return "平台真实响应:删除失败";
+      } else
+        return "";
     } else
       throw new IcAiException("llm response error");
   }

@@ -61,8 +61,6 @@ public class Tool {
   @Autowired
   private OtaServiceImpl otaService;
   @Autowired
-  private ProductRoleServiceImpl productRoleService;
-  @Autowired
   private AiServiceImpl aiService;
   @Autowired
   private SafetyServiceImpl safetyService;
@@ -89,7 +87,14 @@ public class Tool {
 
   @Operation(summary = "用于获取物联网一段时间的设备数据", description = "时间参数请使用两个毫秒时间戳")
   @RequestMapping(value = "/readData", method = RequestMethod.POST)
-  public JsonResult<?> readData(@RequestBody ReadData readData) {
+  public JsonResult<?> readData(@RequestBody ReadData readData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, readData.getName()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return dataService.findAllByTimeBetweenAndDeviceNameAndJsonKey(readData.getTime1(),
         readData.getTime2(),
         readData.getName(), readData.getJsonKey());
@@ -97,7 +102,14 @@ public class Tool {
 
   @Operation(summary = "用于获取物联网一段时间的设备事件数据", description = "时间参数请使用两个毫秒时间戳")
   @RequestMapping(value = "/readEvent", method = RequestMethod.POST)
-  public JsonResult<?> readEvent(@RequestBody ReadData readData) {
+  public JsonResult<?> readEvent(@RequestBody ReadData readData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, readData.getName()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return eventStorageService.findAllByTimeBetweenAndDeviceNameAndJsonKey(readData.getTime1(),
         readData.getTime2(),
         readData.getName(), readData.getJsonKey());
@@ -105,7 +117,14 @@ public class Tool {
 
   @Operation(summary = "获取属性实时数据", description = "高性能接口(带redis缓存)")
   @RequestMapping(value = "/metaData", method = RequestMethod.POST)
-  public JsonResult<?> metaData(@RequestBody MetaData metaData) {
+  public JsonResult<?> metaData(@RequestBody MetaData metaData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, metaData.getDeviceId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return dataService.metaData(metaData.getDeviceId(), metaData.getJsonKey());
   }
 
@@ -142,36 +161,6 @@ public class Tool {
   public void audioTmpGet(@PathVariable("name") String name, HttpServletResponse response)
       throws IOException {
     aiService.audioTmpGet(name, response);
-  }
-
-  @Operation(summary = "获取产品角色列表", description = "仅获取当前用户产品角色列表")
-  @RequestMapping(value = "/productRole", method = RequestMethod.GET)
-  public JsonResult<?> getProductRole(@RequestHeader("Authorization") String header) {
-    return productRoleService.getProductRole(header);
-  }
-
-  @Operation(summary = "添加产品角色", description = "仅添加当前用户产品角色")
-  @RequestMapping(value = "/productRole", method = RequestMethod.POST)
-  public JsonResult<?> postProductRole(@RequestBody ProductRole productRole) {
-    return productRoleService.postProductRole(productRole);
-  }
-
-  @Operation(summary = "修改产品角色", description = "仅修改当前用户产品角色")
-  @RequestMapping(value = "/productRole", method = RequestMethod.PUT)
-  public JsonResult<?> putProductRole(@RequestBody ProductRole productRole,
-      @RequestHeader("Authorization") String header) {
-    if (!safetyService.controlAuthorizeProduct(header, productRole.getProductId()))
-      return ResultTool.fail(ResultCode.NO_PERMISSION);
-    return productRoleService.putProductRole(productRole);
-  }
-
-  @Operation(summary = "删除产品角色", description = "仅删除当前用户产品角色")
-  @RequestMapping(value = "/productRole", method = RequestMethod.DELETE)
-  public JsonResult<?> deleteProductRole(@RequestParam("id") int id,
-      @RequestHeader("Authorization") String header) {
-    if (!safetyService.controlAuthorizeProductRole(header, id))
-      return ResultTool.fail(ResultCode.NO_PERMISSION);
-    return productRoleService.deleteProductRole(id);
   }
 
   // ota list and delete
