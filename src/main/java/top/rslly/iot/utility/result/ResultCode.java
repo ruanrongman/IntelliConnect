@@ -38,7 +38,8 @@ public enum ResultCode {
       "密码错误"), USER_CREDENTIALS_EXPIRED(2004, "密码过期"), USER_ACCOUNT_DISABLE(2005,
           "账号不可用"), USER_ACCOUNT_LOCKED(2006, "账号被锁定"), USER_ACCOUNT_NOT_EXIST(2007,
               "账号不存在"), USER_ACCOUNT_ALREADY_EXIST(2008,
-                  "账号已存在"), USER_ACCOUNT_USE_BY_OTHERS(2009, "账号下线"),
+                  "账号已存在"), USER_ACCOUNT_USE_BY_OTHERS(2009, "账号下线"), EMAIL_ALREADY_EXIST(2010,
+                      "邮箱已存在"), USER_CODE_ERROR(2011, "验证码错误"),
 
   /* 业务错误 */
   NO_PERMISSION(3001, "没有权限"), HAS_DEPENDENCIES(3002, "存在依赖关系，无法删除"), DEVICE_ABANDON(3003,

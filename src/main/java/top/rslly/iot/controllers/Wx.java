@@ -32,12 +32,10 @@ import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.WxBindProduct;
 import top.rslly.iot.param.request.WxUser;
-import top.rslly.iot.services.WxProductBindServiceImpl;
-import top.rslly.iot.services.WxUserServiceImpl;
+import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
+import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.SHA1;
 import top.rslly.iot.utility.result.JsonResult;
-import top.rslly.iot.utility.result.ResultCode;
-import top.rslly.iot.utility.result.ResultTool;
 import top.rslly.iot.utility.wx.DealWx;
 import top.rslly.iot.utility.wx.SmartRobot;
 

@@ -35,4 +35,6 @@ public interface UserService {
   UserEntity insert(UserEntity userEntity);
 
   JsonResult<?> newUser(User user);
+
+  JsonResult<?> getUserCode(String username, String email);
 }

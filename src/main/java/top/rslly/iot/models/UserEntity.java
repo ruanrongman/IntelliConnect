@@ -20,13 +20,15 @@
 package top.rslly.iot.models;
 
 import javax.persistence.*;
+import java.util.Objects;
 
 @Entity
-@Table(name = "user", schema = "cwliot1.8")
+@Table(name = "user", schema = "cwliot1.8", catalog = "")
 public class UserEntity {
 
   private int id;
   private String username;
+  private String email;
   private String password;
   private String role;
 
@@ -42,7 +44,7 @@ public class UserEntity {
   }
 
   @Basic
-  @Column(name = "username", nullable = false, length = 255)
+  @Column(name = "username")
   public String getUsername() {
     return username;
   }
@@ -52,7 +54,17 @@ public class UserEntity {
   }
 
   @Basic
-  @Column(name = "password", nullable = false, length = 255)
+  @Column(name = "email")
+  public String getEmail() {
+    return email;
+  }
+
+  public void setEmail(String email) {
+    this.email = email;
+  }
+
+  @Basic
+  @Column(name = "password")
   public String getPassword() {
     return password;
   }
@@ -62,7 +74,7 @@ public class UserEntity {
   }
 
   @Basic
-  @Column(name = "role", nullable = false, length = 255)
+  @Column(name = "role")
   public String getRole() {
     return role;
   }
@@ -77,27 +89,14 @@ public class UserEntity {
       return true;
     if (o == null || getClass() != o.getClass())
       return false;
-
     UserEntity that = (UserEntity) o;
-
-    if (id != that.id)
-      return false;
-    if (username != null ? !username.equals(that.username) : that.username != null)
-      return false;
-    if (password != null ? !password.equals(that.password) : that.password != null)
-      return false;
-    if (role != null ? !role.equals(that.role) : that.role != null)
-      return false;
-
-    return true;
+    return id == that.id && Objects.equals(username, that.username)
+        && Objects.equals(email, that.email) && Objects.equals(password, that.password)
+        && Objects.equals(role, that.role);
   }
 
   @Override
   public int hashCode() {
-    int result = id;
-    result = 31 * result + (username != null ? username.hashCode() : 0);
-    result = 31 * result + (password != null ? password.hashCode() : 0);
-    result = 31 * result + (role != null ? role.hashCode() : 0);
-    return result;
+    return Objects.hash(id, username, email, password, role);
   }
 }

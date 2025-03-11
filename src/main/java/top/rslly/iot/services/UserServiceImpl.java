@@ -19,18 +19,26 @@
  */
 package top.rslly.iot.services;
 
+import cn.hutool.Hutool;
+import cn.hutool.captcha.generator.RandomGenerator;
+import cn.hutool.core.lang.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.UserRepository;
 import top.rslly.iot.models.UserEntity;
 import top.rslly.iot.param.request.User;
+import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.utility.SendEmail;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -38,6 +46,10 @@ public class UserServiceImpl implements UserService {
   UserRepository userRepository;
   @Autowired
   private PasswordEncoder passwordEncoder;
+  @Autowired
+  private SendEmail sendEmail;
+  @Autowired
+  private RedisUtil redisUtil;
 
   @Override
   public List<UserEntity> findAllByUsername(String username) {
@@ -63,11 +75,36 @@ public class UserServiceImpl implements UserService {
     if (!userRepository.findAllByUsername(user.getUsername()).isEmpty()) {
       return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
     }
+    if (!redisUtil.hasKey(user.getUsername() + user.getUserCode())) {
+      return ResultTool.fail(ResultCode.USER_CODE_ERROR);
+    }
     UserEntity userEntity = new UserEntity();
     userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(user.getPassword()));
     userEntity.setUsername(user.getUsername());
-    userEntity.setRole(user.getRole());
+    userEntity.setEmail(redisUtil.get(user.getUsername() + user.getUserCode()).toString());
+    userEntity.setRole("guest");
     userRepository.save(userEntity);
+    return ResultTool.success();
+  }
+
+  @Override
+  public JsonResult<?> getUserCode(String username, String email) {
+    if (!userRepository.findAllByUsername(username).isEmpty()) {
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
+    }
+    if (!userRepository.findAllByEmail(email).isEmpty()) {
+      return ResultTool.fail(ResultCode.EMAIL_ALREADY_EXIST);
+    }
+    if (!Validator.isEmail(email)) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    Map<String, Object> map = new HashMap<>();
+    // 随机生成 4 位验证码
+    RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
+    map.put("code", randomGenerator.generate());
+    map.put("username", username);
+    sendEmail.contextLoads(new String[] {email}, "登录验证码", "emailCode", map);
+    redisUtil.set(username + map.get("code"), email, 60 * 5);
     return ResultTool.success();
   }
 }

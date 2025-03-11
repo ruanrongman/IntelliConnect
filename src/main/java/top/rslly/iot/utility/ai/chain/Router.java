@@ -20,16 +20,10 @@
 package top.rslly.iot.utility.ai.chain;
 
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.models.WxProductActiveEntity;
-import top.rslly.iot.services.*;
+import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;

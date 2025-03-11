@@ -108,7 +108,31 @@ wx:
 2. 将项目的api添加到微信开放平台，并配置好回调地址，然后就可以通过微信小程序或者微信服务号进行愉快的玩耍了。
    详情请参考微信开放平台文档。(https://developers.weixin.qq.com/doc/offiaccount/Basic_Information/Access_Overview.html)
 
-### 六、联网搜索selenium安装
+### 六、邮件配置
+> 邮件系统配置对于物联网平台至关重要，它可以提供注册验证，以及后续上线的邮件通知功能和密码找回功能等。
+  请按照以下模板进行配置。
+```yaml
+mail:
+    host: smtp.126.com
+    port: 465
+    protocol: smtps
+    username: ruanzhen1234@126.com[你的邮件地址]
+    password: XXX
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          ssl: true
+  thymeleaf:
+    cache: true
+    mode: html
+    prefix: classpath:/templates/
+    encoding: UTF-8
+    servlet:
+      content-type: text/html
+```
+smtp邮件服务器配置，需要到邮箱服务商申请，并配置好相关参数，相关配置请参考对应的邮件服务商文档。
+### 七、联网搜索selenium安装
 >如果你不需要使用AI联网搜索，那么至此处恭喜你，你已经拥有一个属于自己的物联网平台了，祝你愉快。
 但如果需要使用AI联网搜索，那么你需要安装selenium，selenium是一个开源的浏览器自动化测试工具，
 它可以自动模拟浏览器行为，如点击、输入、提交表单等，从而实现自动化测试和模拟用户操作。

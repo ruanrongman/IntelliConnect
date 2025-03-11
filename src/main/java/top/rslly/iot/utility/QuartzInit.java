@@ -24,7 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.TimeScheduleEntity;
-import top.rslly.iot.services.TimeScheduleServiceImpl;
+import top.rslly.iot.services.agent.TimeScheduleServiceImpl;
 import top.rslly.iot.utility.ai.tools.RemindJob;
 
 import java.util.List;

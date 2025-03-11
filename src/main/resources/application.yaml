@@ -60,6 +60,24 @@ spring:
     password: 1234
     port: 6379
     timeout: 1000
+  mail:
+    host: smtp.126.com
+    port: 465
+    protocol: smtps
+    username: ruanzhen1234@126.com
+    password: XXX
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          ssl: true
+  thymeleaf:
+    cache: true
+    mode: html
+    prefix: classpath:/templates/
+    encoding: UTF-8
+    servlet:
+      content-type: text/html
 grpc:
   server:
     port: 9090

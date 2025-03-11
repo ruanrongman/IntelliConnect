@@ -19,23 +19,18 @@
  */
 package top.rslly.iot.transfer;
 
-import com.alibaba.fastjson.JSON;
 import com.google.protobuf.ByteString;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.beans.factory.annotation.Autowired;
-import top.rslly.iot.models.DataEntity;
-import top.rslly.iot.services.DataServiceImpl;
-import top.rslly.iot.services.ProductDataServiceImpl;
-import top.rslly.iot.services.ProductDeviceServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.utility.EmqTransfer;
 import top.rslly.iot.utility.exhook.*;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.UUID;
 
 @GrpcService
 @Slf4j

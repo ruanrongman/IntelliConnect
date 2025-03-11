@@ -23,8 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.models.*;
-import top.rslly.iot.param.request.ProductModel;
-import top.rslly.iot.param.request.User;
+import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.thingsModel.*;
+import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
+import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 
 import java.util.List;

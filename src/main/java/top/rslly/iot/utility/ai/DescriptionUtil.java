@@ -21,10 +21,14 @@ package top.rslly.iot.utility.ai;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.*;
+import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.agent.TimeScheduleServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductDataServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductFunctionServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductModelServiceImpl;
 import top.rslly.iot.utility.ai.tools.*;
 
 @Component

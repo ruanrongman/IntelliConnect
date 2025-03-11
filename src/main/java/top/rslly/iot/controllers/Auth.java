@@ -26,6 +26,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
+import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.iot.MqttUserServiceImpl;
+import top.rslly.iot.services.thingsModel.*;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -60,11 +63,16 @@ public class Auth {
   private ProductRoleServiceImpl productRoleService;
 
 
-  @PreAuthorize("hasRole('ROLE_admin')")
-  @Operation(summary = "创建新用户", description = "目前仅管理员用户支持")
+  @Operation(summary = "创建新用户", description = "暂不支持创建管理员用户")
   @RequestMapping(value = "/newUser", method = RequestMethod.POST)
   public JsonResult<?> createUser(@RequestBody User user) {
     return userService.newUser(user);
+  }
+
+  @Operation(summary = "获取邮箱验证码", description = "获取邮箱验证码")
+  @RequestMapping(value = "/getUserCode", method = RequestMethod.POST)
+  public JsonResult<?> getUserCode(@RequestBody UserCode userCode) {
+    return userService.getUserCode(userCode.getUsername(), userCode.getEmail());
   }
 
   @Operation(summary = "获取用户产品绑定列表", description = "获取用户产品绑定列表")
@@ -124,6 +132,7 @@ public class Auth {
     return productModelService.getProductModel(header);
   }
 
+  @PreAuthorize("hasRole('ROLE_admin')")
   @Operation(summary = "获取物模型", description = "获取对应产品的物模型")
   @RequestMapping(value = "/ProductModelByproductId", method = RequestMethod.GET)
   public JsonResult<?> ProductModelByproductId(@RequestParam("productId") int productId) {

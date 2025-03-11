@@ -19,8 +19,6 @@
  */
 package top.rslly.iot.controllers;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import io.swagger.annotations.ApiOperation;
 import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,23 +27,20 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
-import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.services.agent.AiServiceImpl;
+import top.rslly.iot.services.iot.HardWareServiceImpl;
+import top.rslly.iot.services.iot.OtaServiceImpl;
+import top.rslly.iot.services.storage.DataServiceImpl;
+import top.rslly.iot.services.storage.EventStorageServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.utility.RuntimeMessage;
 import top.rslly.iot.utility.SseEmitterUtil;
-import top.rslly.iot.utility.ai.chain.Router;
-import top.rslly.iot.utility.ai.tools.ControlTool;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
-import java.io.File;
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 @RestController
 @RequestMapping(value = "/api/v2")

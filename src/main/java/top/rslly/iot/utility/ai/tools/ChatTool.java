@@ -25,7 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.ProductRoleEntity;
-import top.rslly.iot.services.ProductRoleServiceImpl;
+import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;

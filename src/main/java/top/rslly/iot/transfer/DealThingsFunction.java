@@ -27,8 +27,8 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.ProductFunctionEntity;
-import top.rslly.iot.services.ProductDeviceServiceImpl;
-import top.rslly.iot.services.ProductFunctionServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductFunctionServiceImpl;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
 import top.rslly.iot.utility.RedisUtil;
 

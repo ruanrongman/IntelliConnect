@@ -19,13 +19,12 @@
  */
 package top.rslly.iot.utility.wx;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.WxProductActiveServiceImpl;
-import top.rslly.iot.services.WxProductBindServiceImpl;
-import top.rslly.iot.services.WxUserServiceImpl;
+import top.rslly.iot.services.wechat.WxProductActiveServiceImpl;
+import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
+import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -33,7 +32,6 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
-import top.rslly.iot.utility.ai.voice.DashScopeVoice;
 
 import java.io.IOException;
 import java.util.ArrayList;

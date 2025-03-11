@@ -21,8 +21,7 @@ package top.rslly.iot.utility.ai.tools;
 
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.*;
-import top.rslly.iot.services.TimeScheduleServiceImpl;
-import top.rslly.iot.utility.QuartzManager;
+import top.rslly.iot.services.agent.TimeScheduleServiceImpl;
 import top.rslly.iot.utility.SpringBeanUtils;
 
 import java.util.Date;

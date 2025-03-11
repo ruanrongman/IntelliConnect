@@ -87,6 +87,9 @@ public class UserProductBindServiceImpl implements UserProductBindService {
     UserProductBindEntity userProductBindEntity = new UserProductBindEntity();
     userProductBindEntity.setProductId(productList.get(0).getId());
     userProductBindEntity.setUserId(userRepository.findAllByUsername(username).get(0).getId());
+    if (!userProductBindRepository.findAllByUserIdAndProductId(userProductBindEntity.getUserId(),
+        userProductBindEntity.getProductId()).isEmpty())
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
     var res = userProductBindRepository.save(userProductBindEntity);
     return ResultTool.success(res);
   }

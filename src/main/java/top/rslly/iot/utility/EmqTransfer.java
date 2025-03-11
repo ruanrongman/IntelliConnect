@@ -24,7 +24,6 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.ProductDeviceServiceImpl;
 import top.rslly.iot.utility.properties.EmqProperty;
 
 import java.io.IOException;
