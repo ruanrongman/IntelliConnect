@@ -17,12 +17,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.services.agent;
 
-import lombok.Data;
+import top.rslly.iot.models.AgentMemoryEntity;
+import top.rslly.iot.param.request.AgentMemory;
 
-@Data
-public class AiControl {
-  String content;
-  int productId;
+import java.util.List;
+
+public interface AgentMemoryService {
+  List<AgentMemoryEntity> findAllByChatId(String chatId);
+
+  AgentMemoryEntity insertAndUpdate(AgentMemory agentMemory);
 }

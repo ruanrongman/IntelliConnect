@@ -17,12 +17,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.dao;
 
-import lombok.Data;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.AgentMemoryEntity;
 
-@Data
-public class AiControl {
-  String content;
-  int productId;
+import java.util.List;
+
+public interface AgentMemoryRepository extends JpaRepository<AgentMemoryEntity, Long> {
+  List<AgentMemoryEntity> findAllByChatId(String chatId);
 }

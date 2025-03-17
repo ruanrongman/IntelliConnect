@@ -84,7 +84,7 @@ public class ClassifierToolPrompt {
     classifierMap.put("1", "Query weather");
     classifierMap.put("2", "Get the current time");
     classifierMap.put("3",
-        "Operate electrical and query electrical status(Excluding playing music.)");
+        "Operate and query electrical (including various intelligent devices such as robots, excluding playing music)");
     classifierMap.put("4", "Request a song or play music.(including Recommend music.)");
     classifierMap.put("5",
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");

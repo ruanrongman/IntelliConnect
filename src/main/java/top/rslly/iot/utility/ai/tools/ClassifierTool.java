@@ -25,6 +25,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.AgentMemoryEntity;
+import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -33,10 +35,7 @@ import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ClassifierToolPrompt;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -63,14 +62,18 @@ public class ClassifierTool {
       Args: user question(str)
       """;
 
-  public Map<String, Object> run(String question, List<ModelMessage> memory) {
+  public Map<String, Object> run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
     Map<String, Object> resultMap = new HashMap<>();
-
+    // 使用 Optional 进行类型安全的转换
+    List<ModelMessage> memory =
+        Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
+            .orElse(Collections.emptyList());
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(), classifierToolPrompt.getClassifierTool());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
+    // log.info("systemMessage: " + systemMessage.getContent());
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
       systemMessage.setContent(classifierToolPrompt.getClassifierTool() + memory);

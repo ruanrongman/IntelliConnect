@@ -67,13 +67,14 @@ public class AiServiceImpl implements AiService {
     if (!safetyService.controlAuthorizeProduct(token, aiControl.getProductId())) {
       return ResultTool.fail(ResultCode.NO_PERMISSION);
     }
+    String chatId = "chatProduct" + aiControl.getProductId();
     var answer =
-        router.response(aiControl.getContent(), aiControl.getChatId(), aiControl.getProductId());
+        router.response(aiControl.getContent(), chatId, aiControl.getProductId());
     return ResultTool.success(answer);
   }
 
   @Override
-  public JsonResult<?> getAiResponse(String chatId, boolean tts, boolean stream, int productId,
+  public JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token) {
     if (!safetyService.controlAuthorizeProduct(token, productId)) {
       return ResultTool.fail(ResultCode.NO_PERMISSION);
@@ -99,6 +100,7 @@ public class AiServiceImpl implements AiService {
       String result = audio2Text.getText(audioTempUrl + prefix_url + "/" + fileName);
       log.info(audioTempUrl + prefix_url + "/" + fileName);
       log.info(result);
+      String chatId = "chatProduct" + productId;
       String answer = router.response(result, chatId, productId);
       aiResponse.put("text", answer);
       if (tts) {

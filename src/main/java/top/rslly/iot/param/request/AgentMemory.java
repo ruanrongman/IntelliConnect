@@ -19,10 +19,12 @@
  */
 package top.rslly.iot.param.request;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @Data
-public class AiControl {
-  String content;
-  int productId;
+@AllArgsConstructor
+public class AgentMemory {
+  private String chatId;
+  private String content;
 }

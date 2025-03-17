@@ -132,23 +132,23 @@ public class Tool {
 
   @Operation(summary = "使用大模型控制设备(语音)", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl/audio", method = RequestMethod.POST)
-  public JsonResult<?> aiControl(@RequestParam("chatId") String chatId,
+  public JsonResult<?> aiControl(
       @RequestParam("productId") int productId,
       @RequestParam("tts") boolean tts,
       @RequestPart("file") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
-    return aiService.getAiResponse(chatId, tts, false, productId, multipartFile, header);
+    return aiService.getAiResponse(tts, false, productId, multipartFile, header);
   }
 
   // 流式 使用大模型控制设备(语音）
   @Operation(summary = "使用大模型控制设备(语音）", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl/audio/stream", method = RequestMethod.POST)
-  public SseEmitter aiControlStream(@RequestParam("chatId") String chatId,
+  public SseEmitter aiControlStream(
       @RequestParam("productId") int productId,
       @RequestPart("file") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
-    aiService.getAiResponse(chatId, true, true, productId, multipartFile, header);
-    return SseEmitterUtil.connect(chatId);
+    aiService.getAiResponse(true, true, productId, multipartFile, header);
+    return SseEmitterUtil.connect("chatProduct" + productId);
   }
 
   @Operation(summary = "获取缓存音频文件(禁止调用)", description = "禁止调用")

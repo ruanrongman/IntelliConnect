@@ -29,7 +29,7 @@ import java.io.IOException;
 public interface AiService {
   JsonResult<?> getAiResponse(AiControl aiControl, String token);
 
-  JsonResult<?> getAiResponse(String chatId, boolean tts, boolean stream, int productId,
+  JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token);
 
   void audioTmpGet(String name, HttpServletResponse response) throws IOException;

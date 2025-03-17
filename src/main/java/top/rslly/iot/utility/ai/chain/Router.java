@@ -21,6 +21,7 @@ package top.rslly.iot.utility.ai.chain;
 
 
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
@@ -33,6 +34,7 @@ import top.rslly.iot.utility.ai.tools.*;
 import java.util.*;
 
 @Component
+@Slf4j
 public class Router {
   @Autowired
   private ClassifierTool classifierTool;
@@ -60,6 +62,8 @@ public class Router {
   private SearchTool searchTool;
   @Autowired
   private ProductRoleTool productRoleTool;
+  @Autowired
+  private MemoryTool memoryTool;
 
   // chatId in wechat module need to use openid
   public String response(String content, String chatId, int productId, String... microappid) {
@@ -82,7 +86,7 @@ public class Router {
     else
       memory = new ArrayList<>();
     globalMessage.put("memory", memory);
-    var resultMap = classifierTool.run(content, memory);
+    var resultMap = classifierTool.run(content, globalMessage);
     String args;
     Object argsObject = resultMap.get("args");
     if (argsObject != null) {
@@ -152,6 +156,7 @@ public class Router {
     // System.out.println(memory.size());
     // slide memory window
     if (memory.size() > 6) {
+      memoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);

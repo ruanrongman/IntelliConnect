@@ -23,80 +23,69 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
-import top.rslly.iot.models.ProductRoleEntity;
+import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
-import top.rslly.iot.services.agent.ProductRoleServiceImpl;
-import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
-import top.rslly.iot.utility.ai.prompts.ChatToolPrompt;
+import top.rslly.iot.utility.ai.prompts.MemoryToolPrompt;
 
 import java.util.*;
 
 @Data
 @Component
 @Slf4j
-public class ChatTool {
+public class MemoryTool {
   @Autowired
-  private ChatToolPrompt chatToolPrompt;
+  private MemoryToolPrompt memoryToolPrompt;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
-  @Autowired
-  private HttpRequestUtils httpRequestUtils;
-  @Autowired
-  private ProductRoleServiceImpl productRoleService;
-  @Value("${ai.chatTool-llm}")
+  @Value("${ai.memoryTool-llm}")
   private String llmName;
-  private String name = "chatTool";
+  private String name = "memoryTool";
   private String description = """
-      This tool is used to chat with people
+      This tool is used to summarize the conversations
       Args: user question(str)
       """;
 
-  public String run(String question, Map<String, Object> globalMessage) {
+  @Async("taskExecutor")
+  public void run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
-    int productId = (int) globalMessage.get("productId");
+    List<ModelMessage> messages = new ArrayList<>();
     String chatId = (String) globalMessage.get("chatId");
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);
     String currentMemory = "";
     if (!agentMemoryEntities.isEmpty()) {
       currentMemory = agentMemoryEntities.get(0).getContent();
     }
-    List<ModelMessage> messages = new ArrayList<>();
     // 使用 Optional 进行类型安全的转换
     List<ModelMessage> memory =
         Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
             .orElse(Collections.emptyList());
-    List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
-    String assistantName = null;
-    String userName = null;
-    String role = null;
-    String roleIntroduction = null;
-    if (!productRole.isEmpty()) {
-      assistantName = productRole.get(0).getAssistantName();
-      userName = productRole.get(0).getUserName();
-      role = productRole.get(0).getRole();
-      roleIntroduction = productRole.get(0).getRoleIntroduction();
-    }
+
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
-            chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory));
-    // log.info("systemMessage: " + systemMessage.getContent());
+            memoryToolPrompt.getMemoryToolPrompt(currentMemory));
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
       systemMessage.setContent(
-          chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction, currentMemory)
-              + memory);
+          memoryToolPrompt.getMemoryToolPrompt(currentMemory) + memory);
+    } else {
+      return;
     }
     messages.add(systemMessage);
     messages.add(userMessage);
+    // log.info("systemMessage: " + systemMessage.getContent());
+    String answer = llm.commonChat(question, messages, true);
+    if (answer.length() > 254)
+      answer = answer.substring(0, 254);
+    AgentMemory agentMemory = new AgentMemory(chatId, answer);
+    agentMemoryService.insertAndUpdate(agentMemory);
     // log.info("chatTool: " + messages);
-    return llm.commonChat(question, messages, true);
   }
 }

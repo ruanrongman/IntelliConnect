@@ -67,7 +67,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/da674628fd073154224af92f629ccd4.jpg" width="250px"/>
+    <img src="./docs/images/7e2afff97faeafc88bf42b4e70e204a.jpg" width="250px"/>
 </div>
 
 

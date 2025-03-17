@@ -62,6 +62,13 @@
 
 ## 用https协议控制设备
 平台支持使用https协议来控制设备，以下是调用其api进行物模型服务调用一个例子：
+先获取设备的token，并使用以下指令进行控制。
+```bash
+curl --location 'http://localhost:8080/api/v2/login' \
+--header 'Content-Type: application/json' \
+--data '{"username":"{username}","password":"{password}"}'
+```
+控制指令
 ```bash
 curl -X POST "http://localhost:8080/api/v2/control" 
 -H "accept: */*" 
@@ -70,3 +77,32 @@ curl -X POST "http://localhost:8080/api/v2/control"
 -d "{\"key\":[\"time\"],\"mode\":\"service\",\"functionName\":\"time_set\",\"name\":\"{device_name}\",\"qos\":1,\"status\":\"sync\",\"value\":[\"off\"]}"
 ```
 通过以上指令你可以向你的设备发起物模型同步服务调用，并控制其以`MQTT`协议 `qos=1`的信息质量来进行通信，通过该接口你可以灵活地实现各种设备应用需求。
+参数含义：
+* key：表示要操作的属性名称，多个属性用逗号分隔。
+* mode：表示要操作的模式，目前支持：attribute（属性）、service（服务）。
+* functionName：表示要操作的服务名称，多个服务用逗号分隔，没有的服务为空字符串。
+* name：表示要操作的设备名称。
+* qos：表示要操作的设备的QoS等级，可选值为0、1、2。
+* status：表示要操作的设备的服务状态，可选值为sync（同步）、async（异步）。
+* value：表示要操作的设备的属性值，多个属性值用逗号分隔，没有的属性值为空字符串。
+以下是一个简单的Python脚本，用于使用requests库发送HTTP POST请求，并使用JSON格式的数据进行通信。
+```python
+import requests
+import json
+def send_http_request():
+    url = "http://localhost:8080/api/v2/control"
+    headers = {"accept": "*/*", "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiW1JPTEVfZ3Vlc3RdIiwiZXhwIjoxNzQyMjg1NTQ0LCJpYXQiOjE3NDIxOTkxNDQsInVzZXJuYW1lIjoid3VrYWkifQ.hrzZ0ShssfMTol7qOuNYSWY9BlxV2gIYPaT1GEYH4XM", "Content-Type": "application/json"}
+    data = {}
+    data["key"] = ["time"]
+    data["mode"] = "service"
+    data["functionName"] = "time_set"
+    data["name"] = "{device_name}"
+    data["qos"] = 1
+    data["status"] = "sync"
+    data["value"] = ["off"]
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    print(response.text)
+if __name__ == '__main__':
+    send_http_request()
+```
+请注意，上述代码中的`{device_name}`和`{username}`和`{password}`需要替换为实际的设备名称和用户名密码。

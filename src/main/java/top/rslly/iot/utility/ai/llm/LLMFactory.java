@@ -66,6 +66,10 @@ public class LLMFactory {
     } else if (llmName.equals("silicon-deepSeek-v2.5")) {
       return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
           deepSeekApiKey);
+    } else if (llmName.equals("uniApi-Qwen2.5-32B-Instruct")) {
+      return new DeepSeek("https://hk.uniapi.io", "Qwen2.5-32B-Instruct", uniApiKey);
+    } else if (llmName.equals("uniApi-Qwen2.5-72B-Instruct")) {
+      return new DeepSeek("https://hk.uniapi.io", "Qwen2.5-72B-Instruct", uniApiKey);
     } else if (llmName.equals("uniApi-deepSeek")) {
       return new DeepSeek("https://hk.uniapi.io", "deepseek-chat", uniApiKey);
     } else {
