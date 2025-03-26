@@ -17,21 +17,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.param.request;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.UserEntity;
+import lombok.Data;
 
-
-import java.util.List;
-
-public interface UserRepository extends JpaRepository<UserEntity, Long> {
-
-  List<UserEntity> findAllById(int id);
-
-  List<UserEntity> findAllByUsername(String username);
-
-  List<UserEntity> findAllByRole(String role);
-
-  List<UserEntity> findAllByEmail(String email);
+@Data
+public class AlarmEvent {
+  private String name;
+  private int modelId;
 }

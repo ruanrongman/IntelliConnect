@@ -20,18 +20,17 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.UserEntity;
+import top.rslly.iot.models.AlarmEventEntity;
 
-
+import javax.transaction.Transactional;
 import java.util.List;
 
-public interface UserRepository extends JpaRepository<UserEntity, Long> {
+public interface AlarmEventRepository extends JpaRepository<AlarmEventEntity, Long> {
 
-  List<UserEntity> findAllById(int id);
+  List<AlarmEventEntity> findAllById(int id);
 
-  List<UserEntity> findAllByUsername(String username);
+  List<AlarmEventEntity> findAllByEventId(int eventId);
 
-  List<UserEntity> findAllByRole(String role);
-
-  List<UserEntity> findAllByEmail(String email);
+  @Transactional
+  List<AlarmEventEntity> deleteById(int id);
 }

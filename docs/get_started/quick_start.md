@@ -95,6 +95,8 @@ wx:
   debug: true  (生产模式下请设置为false，否则无法获取access_token)
   appid: XXXXXX (服务号appid)
   appsecret: XXXXXX (服务号appsecret)
+  templateUrl: XXXXX (模板消息跳转的链接)
+  alarmTemplateId: XXXXXX (模板消息的模板id)
   micro: (小程序)
     appid: XXXXXX
     appsecret: XXXXXX
@@ -107,7 +109,7 @@ wx:
 ```
 2. 将项目的api添加到微信开放平台，并配置好回调地址，然后就可以通过微信小程序或者微信服务号进行愉快的玩耍了。
    详情请参考微信开放平台文档。(https://developers.weixin.qq.com/doc/offiaccount/Basic_Information/Access_Overview.html)
-
+3. 如果需要使用消息推送功能的用户，请配置好模板消息模板，具体请参考微信开放平台文档。
 ### 六、邮件配置
 > 邮件系统配置对于物联网平台至关重要，它可以提供注册验证，以及后续上线的邮件通知功能和密码找回功能等。
   请按照以下模板进行配置。

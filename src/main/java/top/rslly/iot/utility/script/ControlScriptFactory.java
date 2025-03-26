@@ -28,9 +28,9 @@ public class ControlScriptFactory {
           var jsControl = Java.type('top.rslly.iot.utility.script.js.JsUtils');
           jsControl.timeSleep(second);
       }
-      function control(name, key, value) {
+      function control(name,mode,functionName,status,qos, key, value) {
           var jsControl = Java.type('top.rslly.iot.utility.script.js.JsUtils');
-          var flag = jsControl.control(name,key,value);
+          var flag = jsControl.control(name,mode,functionName,status,qos,key,value);
           if (!flag) {
               throw new Error('严重错误,无法找到该模拟量!!!');
           }

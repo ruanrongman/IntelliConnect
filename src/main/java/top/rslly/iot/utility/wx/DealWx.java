@@ -23,6 +23,7 @@ import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.RedisUtil;
@@ -39,6 +40,10 @@ public class DealWx {
   private HttpRequestUtils httpRequestUtils;
   @Autowired
   private RedisUtil redisUtil;
+  @Value("${wx.appid}")
+  private String appid;
+  @Value("${wx.templateUrl}")
+  private String projectUrl;
 
   public String getAccessToken(String appid, String appSecret) throws IOException {
     String url = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid="
@@ -52,6 +57,26 @@ public class DealWx {
     String url = "https://api.weixin.qq.com/sns/jscode2session?appid=" + microappid + "&secret="
         + microappsecret + "&js_code=" + code + "&grant_type=authorization_code";
     return Objects.requireNonNull(httpRequestUtils.httpGet(url).body()).string();
+  }
+
+  public void templatePost(JSONObject reqdata, String templateid, String openid) {
+    String accessToken = (String) redisUtil.get(appid);
+    String url =
+        "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=" + accessToken;
+    // String reqBody = "{\"touser\":\"" + openid + "\", \"template_id\":\"" + templateid + "\",
+    // \"url\":\"" + fxurl + "\", \"data\": " + reqdata + "}";
+    // 优化reqbody, 不用拼接
+    JSONObject jsonObject = new JSONObject();
+    jsonObject.put("touser", openid);
+    jsonObject.put("template_id", templateid);
+    jsonObject.put("url", projectUrl);
+    jsonObject.put("data", reqdata);
+    try {
+      // log.info("发送模板消息{}", jsonObject.toJSONString());
+      httpRequestUtils.asyncPostByJson(url, jsonObject.toJSONString());
+    } catch (IOException e) {
+      log.error("发送模板消息失败{}", e.getMessage());
+    }
   }
 
   public void sendContent(String openid, String content, String microappid) throws IOException {

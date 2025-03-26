@@ -122,7 +122,7 @@ public class ProductEventServiceImpl implements ProductEventService {
     List<ProductEventEntity> p1 = productEventRepository
         .findAllByModelIdAndName(productEvent.getModelId(), productEvent.getName());
     if (result.isEmpty() || !p1.isEmpty())
-      return ResultTool.fail(ResultCode.COMMON_FAIL);
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
       ProductEventEntity productEventEntity1 = productEventRepository.save(productEventEntity);
       return ResultTool.success(productEventEntity1);

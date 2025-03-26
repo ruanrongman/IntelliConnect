@@ -89,6 +89,8 @@ wx:
   debug: true
   appid: XXXXXX
   appsecret: XXXXXX
+  templateUrl: XXXXX
+  alarmTemplateId: XXXXXX
   micro:
     appid: XXXXXX
     appsecret: XXXXXX

@@ -267,7 +267,7 @@ public class Glm implements LLM {
       log.info("model output:{}", response);
       return response;
     } catch (JsonProcessingException e) {
-      return "不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
+      return "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
     }
 
   }

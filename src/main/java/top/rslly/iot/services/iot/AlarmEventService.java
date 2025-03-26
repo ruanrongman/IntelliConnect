@@ -17,21 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.services.iot;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.UserEntity;
-
+import top.rslly.iot.models.AlarmEventEntity;
+import top.rslly.iot.param.request.AlarmEvent;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
-public interface UserRepository extends JpaRepository<UserEntity, Long> {
+public interface AlarmEventService {
+  List<AlarmEventEntity> findAllById(int id);
 
-  List<UserEntity> findAllById(int id);
+  JsonResult<?> getAlarmEvent(String token);
 
-  List<UserEntity> findAllByUsername(String username);
+  JsonResult<?> postAlarmEvent(AlarmEvent alarmEvent);
 
-  List<UserEntity> findAllByRole(String role);
+  JsonResult<?> deleteAlarmEvent(int id);
 
-  List<UserEntity> findAllByEmail(String email);
+  void alarmEvent(String deviceName, int eventId);
 }

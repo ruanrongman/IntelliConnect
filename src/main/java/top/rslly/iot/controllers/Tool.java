@@ -28,6 +28,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.services.agent.AiServiceImpl;
+import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
 import top.rslly.iot.services.storage.DataServiceImpl;
@@ -57,6 +58,8 @@ public class Tool {
   private OtaServiceImpl otaService;
   @Autowired
   private AiServiceImpl aiService;
+  @Autowired
+  private AlarmEventServiceImpl alarmEventService;
   @Autowired
   private SafetyServiceImpl safetyService;
 
@@ -187,6 +190,34 @@ public class Tool {
     return otaService.otaEnable(name, deviceName);
   }
 
+  @RequestMapping(value = "/alarmEvent", method = RequestMethod.GET)
+  public JsonResult<?> alarmEvent(@RequestHeader("Authorization") String header) {
+    return alarmEventService.getAlarmEvent(header);
+  }
 
+  @RequestMapping(value = "/alarmEvent", method = RequestMethod.POST)
+  public JsonResult<?> postAlarmEvent(@RequestBody AlarmEvent alarmEvent,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeModel(header, alarmEvent.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return alarmEventService.postAlarmEvent(alarmEvent);
+  }
+
+  // delete
+  @RequestMapping(value = "/alarmEvent", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteAlarmEvent(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeAlarmEvent(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return alarmEventService.deleteAlarmEvent(id);
+  }
 
 }

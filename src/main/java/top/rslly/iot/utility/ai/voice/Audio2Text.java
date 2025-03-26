@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.utility.ai.voice;
 
+import com.alibaba.dashscope.audio.asr.recognition.Recognition;
+import com.alibaba.dashscope.audio.asr.recognition.RecognitionParam;
 import com.alibaba.dashscope.audio.asr.transcription.*;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -28,17 +30,28 @@ import com.google.gson.JsonObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.utility.MyFileUtil;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @Slf4j
 public class Audio2Text {
   private String apiKey;
+
+  @Value("${ai.audio-tmp-path}")
+  private String audioPath;
 
   @Value("${ai.dashscope-key}")
   public void setApiKey(String apiKey) {
@@ -93,6 +106,50 @@ public class Audio2Text {
       return "语音识别失败";
     }
 
+  }
+
+  public String getTextRealtime(File file, int sampleRate, String format) {
+    // 创建Recognition实例
+    Recognition recognizer = new Recognition();
+    // 创建RecognitionParam
+    RecognitionParam param =
+        RecognitionParam.builder()
+            // 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
+            .apiKey(apiKey)
+            .model("paraformer-realtime-v2")
+            .format(format)
+            .sampleRate(sampleRate)
+            // “language_hints”只支持paraformer-v2和paraformer-realtime-v2模型
+            .parameter("language_hints", new String[] {"zh", "en"})
+            .build();
+
+    try {
+      // System.out.println("识别结果：" + recognizer.call(param, file));
+      return recognizer.call(param, file);
+    } catch (Exception e) {
+      log.error("语音识别失败{}", e.getMessage());
+      return "语音识别失败";
+    }
+  }
+
+  public String getTextRealtime(String url, int sampleRate, String format) {
+    String filePath = audioPath; // 上传后的路径
+    String fileName = UUID.randomUUID() + "." + format; // 新文件名
+    try {
+      InputStream in = new URL(url).openStream();
+      MyFileUtil.uploadFile(in.readAllBytes(), filePath, fileName);
+      return this.getTextRealtime(new File(filePath + fileName), sampleRate, format);
+    } catch (Exception e) {
+      e.printStackTrace();
+      log.error("语音识别失败{}", e.getMessage());
+      return "语音识别失败";
+    } finally {
+      try {
+        MyFileUtil.deleteFile(filePath + fileName);
+      } catch (Exception e) {
+        log.error("语音识别失败{}", e.getMessage());
+      }
+    }
   }
 
 }

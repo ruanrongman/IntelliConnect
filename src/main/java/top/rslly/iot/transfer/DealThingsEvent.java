@@ -26,6 +26,7 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.EventStorageEntity;
+import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.thingsModel.EventDataServiceImpl;
 import top.rslly.iot.services.storage.EventStorageServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
@@ -45,6 +46,8 @@ public class DealThingsEvent {
   private EventDataServiceImpl eventDataService;
   @Autowired
   private EventStorageServiceImpl eventStorageService;
+  @Autowired
+  private AlarmEventServiceImpl alarmEventService;
 
   public boolean deal(String clientId, String topic, String message) {
     // this clientId is delivered id ,not the sender
@@ -77,6 +80,7 @@ public class DealThingsEvent {
         return false;
       }
       event_id = eventEntities.get(0).getId();// event_id is the id of event
+      alarmEventService.alarmEvent(deviceEntityList.get(0).getName(), event_id);
     } catch (Exception e) {
       log.error("json error{}", e.getMessage());
       return false;

@@ -215,8 +215,6 @@ class DemoApplicationTests {
       log.error("写入音频文件时发生错误: " + e.getMessage());
     }
 
-    log.info(Arrays.toString(audio));
-    TTsMarker.saveHexToFile(audio);
     // log.info(answer);
     // log.info(answer2);
   }
@@ -239,7 +237,7 @@ class DemoApplicationTests {
     // System.out.println(body);
     var jsCode = ControlScriptFactory.generateControlNodeScript("controlFunc",
         """
-            var res=control("light1","attribute","","",1,["switch"],["on"]);
+            var res=control("light1","attribute","","",1,["switch1"],["on"]);
             return res;
             """);
     JsScriptInfo jsScriptInfo = new JsScriptInfo("controlFunc");

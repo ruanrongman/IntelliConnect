@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.thingsModel.*;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
@@ -52,6 +53,8 @@ public class SafetyServiceImpl implements SafetyService {
   private ProductDataServiceImpl productDataService;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  @Autowired
+  private AlarmEventServiceImpl alarmEventService;
   @Autowired
   private UserServiceImpl userService;
   @Autowired
@@ -102,6 +105,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("eventId not found!");
     return this.controlAuthorizeModel(token,
         productEventEntityList.get(0).getModelId());
+  }
+
+  @Override
+  public boolean controlAuthorizeAlarmEvent(String token, int alarmEventId) {
+    List<AlarmEventEntity> alarmEventEntityList = alarmEventService.findAllById(alarmEventId);
+    if (alarmEventEntityList.isEmpty())
+      throw new NullPointerException("alarmEventId not found!");
+    return this.controlAuthorizeEvent(token,
+        alarmEventEntityList.get(0).getEventId());
   }
 
   @Override
