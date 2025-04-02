@@ -36,6 +36,11 @@ mysql,redis,emqx和influxdb环境。
 <source src="../video/demo.mp4" type="video/mp4">
 </video>
 
+## 小智硬件接入效果
+<video  controls="controls" width="500" height="200">
+<source src="../video/demo3.mp4" type="video/mp4">
+</video>
+
 ## Agent语音交互效果
 
 <video  controls="controls" width="500" height="200">
@@ -47,7 +52,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/3ac4a54fe19d92559ee8601b011f499.jpg" width="250px"/>
+    <img src="./images/3314c038abb945830a046ab34a5844b.jpg" width="250px"/>
 </div>
 
 

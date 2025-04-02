@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.agent.AiService;
+import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
@@ -59,6 +60,8 @@ public class AiServiceImpl implements AiService {
   @Autowired
   private Audio2Text audio2Text;
   @Autowired
+  private ProductServiceImpl productService;
+  @Autowired
   private SafetyServiceImpl safetyService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
 
@@ -66,6 +69,9 @@ public class AiServiceImpl implements AiService {
   public JsonResult<?> getAiResponse(AiControl aiControl, String token) {
     if (!safetyService.controlAuthorizeProduct(token, aiControl.getProductId())) {
       return ResultTool.fail(ResultCode.NO_PERMISSION);
+    }
+    if (productService.findAllById(aiControl.getProductId()).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     String chatId = "chatProduct" + aiControl.getProductId();
     var answer =
@@ -78,6 +84,9 @@ public class AiServiceImpl implements AiService {
       MultipartFile multipartFile, String token) {
     if (!safetyService.controlAuthorizeProduct(token, productId)) {
       return ResultTool.fail(ResultCode.NO_PERMISSION);
+    }
+    if (productService.findAllById(productId).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);

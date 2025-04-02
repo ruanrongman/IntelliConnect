@@ -295,6 +295,9 @@
                 <version>2.22.1</version>
                 <configuration>
                     <java>
+                        <excludes>
+                            <exclude>src/main/java/top/rslly/iot/utility/ai/voice/concentus/**</exclude>
+                        </excludes>
                         <eclipse>
                             <file>dev-support/dailymart_spotless_formatter.xml</file>
                         </eclipse>

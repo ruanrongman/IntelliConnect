@@ -35,6 +35,7 @@ Built by RSLLY
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术
 * 支持微信小程序和微信服务号
+* 支持小智AI硬件
 * 使用常见的mysql和redis数据库，上手简单
 * 支持时序数据库influxdb
 
@@ -52,6 +53,12 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 * 完善的物模型抽象，使得iot开发者可以专注于业务本身
 * AI能力丰富，支持Agent智能体技术，快速开发AI智能应用
 
+# 小智 ESP-32 后端服务(xiaozhi-esp32-server)
+本项目能够为开源智能硬件项目 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)
+提供后端服务。根据 [小智通信协议](https://ccnphfhqs21z.feishu.cn/wiki/M0XiwldO9iJwHikpXD5cEx71nKh) 使用 `Java` 实现。
+适合希望本地部署的用户，不同于单纯语音交互，本项目重点在于提供更强大的物联网和智能体能力。
+---
+
 ## 项目文档和视频演示
 * 项目文档和视频演示地址https://ruanrongman.github.io/IntelliConnect/
 * 技术博客地址https://wordpress.rslly.top
@@ -67,9 +74,12 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/3ac4a54fe19d92559ee8601b011f499.jpg" width="250px"/>
+    <img src="./docs/images/3314c038abb945830a046ab34a5844b.jpg" width="250px"/>
 </div>
 
+## 致谢
+* 感谢项目[xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)提供强大的硬件语音交互。
+* 感谢项目[Concentus: Opus for Everyone](https://github.com/lostromb/concentus)提供opus解码和编码。
 
 ## 贡献
 

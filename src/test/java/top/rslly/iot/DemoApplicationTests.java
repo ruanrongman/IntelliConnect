@@ -206,14 +206,6 @@ class DemoApplicationTests {
     } catch (Exception e) {
       e.printStackTrace();
     }
-    audio = Text2audio.VoiceBitChange(audio);
-    // 将音频数据写入文件
-    try (FileOutputStream fos = new FileOutputStream("output_audio.mp3")) {
-      fos.write(audio);
-      log.info("音频文件已成功写入到 output_audio.mp3");
-    } catch (IOException e) {
-      log.error("写入音频文件时发生错误: " + e.getMessage());
-    }
 
     // log.info(answer);
     // log.info(answer2);
