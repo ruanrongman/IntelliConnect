@@ -46,8 +46,6 @@ public class ScheduleToolPrompt {
           Identify the time when the user wants to be reminded and convert it to a cron expression.
           If the user does not provide a specific time, you can plan a time for them.
           ## Output Format
-           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
-           The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
            ```json
            {
            "thought": "The thought of what to do and why.(use Chinese)",

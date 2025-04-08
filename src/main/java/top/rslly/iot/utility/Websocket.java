@@ -29,6 +29,7 @@ import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
@@ -42,6 +43,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,34 +54,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Slf4j
 public class Websocket {
   private static Audio2Text audio2Text;
-  private static final Map<String, Session> clients = new ConcurrentHashMap<>();
+  public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   private static final Map<String, String> voiceContent = new ConcurrentHashMap<>();
   public static volatile boolean isAbort = false;
-  private static volatile boolean isHeartbeat = true;
   private static SafetyServiceImpl safetyService;
   private static Text2audio text2audio;
   private static ProductServiceImpl productService;
+  private static EmotionToolAsync emotionToolAsync;
   private static Router router;
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
-  // 添加异步心跳逻辑
-  Thread heartbeatThread = new Thread(() -> {
-    while (isHeartbeat && !Thread.currentThread().isInterrupted()) {
-      try {
-        clients.get(chatId).getBasicRemote()
-            .sendPing(ByteBuffer.wrap(new byte[] {0x00, 0x00, 0x00, 0x00}));
-        Thread.sleep(1000);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt(); // 重置中断状态
-        log.info("heartbeat interrupted");
-        break;
-      } catch (Exception e) {
-        Thread.currentThread().interrupt();
-        log.info("heartbeat exception");
-        break;
-      }
-    }
-  });
 
   @Autowired
   public void setAudio2Text(Audio2Text audio2Text) {
@@ -106,6 +90,11 @@ public class Websocket {
     Websocket.productService = productService;
   }
 
+  @Autowired
+  public void setEmotionToolAsync(EmotionToolAsync emotionToolAsync) {
+    Websocket.emotionToolAsync = emotionToolAsync;
+  }
+
   /**
    * socket start
    */
@@ -115,7 +104,7 @@ public class Websocket {
       this.chatId = chatId;
       clients.put(chatId, session);
       isAbort = false;
-      String token = getHeader(session, "Authorization");
+      String token = getHeader(session);
       if (!safetyService.controlAuthorizeProduct(token, Integer.parseInt(chatId))) {
         try {
           session.getBasicRemote().sendText("没有权限");
@@ -134,7 +123,6 @@ public class Websocket {
           log.info("发送失败");
         }
       }
-      heartbeatThread.start();
       log.info("header{}", token);
     } else {
       log.info("冲突，无法连接");
@@ -153,8 +141,6 @@ public class Websocket {
   @OnClose
   public void onClose() {
     log.info("close");
-    isHeartbeat = false;
-    heartbeatThread.interrupt();
     if (chatId != null)
       clients.remove(chatId);
   }
@@ -246,7 +232,9 @@ public class Websocket {
             clients.get(chatId).getBasicRemote()
                 .sendText(emotionObject.toJSONString());
             log.info("listen stop,message{}", voiceContent.get(chatId));
-            isHeartbeat = true;
+            Map<String, Object> emotionMessage = new HashMap<>();
+            emotionMessage.put("chatId", chatId);
+            var emotionRes = emotionToolAsync.run(voiceContent.get(chatId), emotionMessage);
             String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
                 Integer.parseInt(chatId));
             if (answer.length() > 200)
@@ -255,8 +243,14 @@ public class Websocket {
             jsonObject.put("type", "tts");
             jsonObject.put("state", "sentence_start");
             jsonObject.put("text", answer);
-            emotionObject.put("emotion", "😂");
-            emotionObject.put("text", "funny");
+            if (emotionRes.isDone()) {
+              emotionObject.put("text", emotionRes.get().get("emoji"));
+              emotionObject.put("emotion", emotionRes.get().get("text"));
+              log.info("emotionObject{}", emotionObject);
+            } else {
+              emotionObject.put("text", "😶");
+              emotionObject.put("emotion", "neutral");
+            }
             clients.get(chatId).getBasicRemote()
                 .sendText(emotionObject.toJSONString());
             clients.get(chatId).getBasicRemote()
@@ -293,8 +287,8 @@ public class Websocket {
     log.error("Error in onError: {}", error.getMessage());
   }
 
-  private static String getHeader(Session session, String headerName) {
-    final String header = (String) session.getUserProperties().get(headerName);
+  private static String getHeader(Session session) {
+    final String header = (String) session.getUserProperties().get("Authorization");
     if (StrUtil.isBlank(header)) {
       log.error("获取header失败，不安全的链接，即将关闭");
       try {

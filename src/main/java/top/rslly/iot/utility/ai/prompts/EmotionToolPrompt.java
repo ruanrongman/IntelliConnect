@@ -19,8 +19,6 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
-
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
@@ -28,35 +26,38 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Component
-public class MusicToolPrompt {
-  @Value("${ai.robot-name}")
-  private String robotName;
-  @Value("${ai.team-name}")
-  private String teamName;
-  private static final String musicPrompt =
+public class EmotionToolPrompt {
+  private static final String emotionToolPrompt =
       """
-          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Translate the user input into a music or singer name, or a combination of both, ensuring that the name is unique.
+          Analyze the conversation context and select the most appropriate emotion name from the given emotion library. Follow the rules strictly.
+          ## emotion Library
+          [
+             "neutral", "happy", "laughing", "funny", "sad",
+             "angry", "crying", "loving", "embarrassed", "surprised",
+             "shocked", "thinking", "winking", "cool", "relaxed",
+             "delicious", "kissy", "confident", "sleepy", "silly", "confused"
+          ]
           ## Output Format
           ```json
           {
           "thought": "The thought of what to do and why.(use Chinese)",
           "action": # the action to take
               {
-              "code": "If this is related to playing music output 200,else output 400",
-              "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
-              "singer": "singer name,if you not found,output null",
-              "music":  "music name,if you not found,output null"
+              "emotion":  "Select an emoji"
               }
           }
           ```
           ## Attention
           - Your output is JSON only and no explanation.
+          ## Current Memory
+             {current_memory}
+          ## Current Conversation
+             Below is the current conversation consisting of interleaving human and assistant history.
           """;
 
-  public String getMusicTool() {
+  public String getEmotionTool(String memory) {
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", robotName);
-    params.put("team_name", teamName);
-    return StringUtils.formatString(musicPrompt, params);
+    params.put("current_memory", memory);
+    return StringUtils.formatString(emotionToolPrompt, params);
   }
 }

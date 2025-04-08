@@ -27,8 +27,6 @@ public class WxBoundProductToolPrompt {
       """
           Identify the product name and key to be bind or unbind based on the user's request
           ## Output Format
-               To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
-               The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
                ```json
                {
                "thought": "The thought of what to do and why.(use Chinese)",

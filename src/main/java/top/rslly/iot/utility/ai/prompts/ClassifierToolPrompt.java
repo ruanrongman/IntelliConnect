@@ -33,18 +33,11 @@ import java.util.Map;
 
 @Component
 public class ClassifierToolPrompt {
-  @Value("${ai.robot-name}")
-  private String robotName;
-  @Value("${ai.team-name}")
-  private String teamName;
   private static final String classifierPrompt =
       """
-           As a smart speaker, your name is {agent_name}, developed by the {team_name} team. You are good at helping people doing the following task
            {task_map}
            You now need to classify based on user input
            ## Output Format
-           To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
-           The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
            ```json
            {
            "thought": "The thought of what to do and why.(use Chinese)",
@@ -69,7 +62,6 @@ public class ClassifierToolPrompt {
                }
            }
            ```
-           reference information: The current time is {time}
            ## Attention
            - Your output is JSON only and no explanation.
            ## Current Conversation
@@ -77,9 +69,6 @@ public class ClassifierToolPrompt {
           """;
 
   public String getClassifierTool() {
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2", "Get the current time");
@@ -98,10 +87,7 @@ public class ClassifierToolPrompt {
     classifierMap.put("11", "All user requests for role configuration");
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
-    params.put("agent_name", robotName);
-    params.put("team_name", teamName);
     params.put("task_map", classifierJson);
-    params.put("time", formattedDate);
     return StringUtils.formatString(classifierPrompt, params);
   }
 }

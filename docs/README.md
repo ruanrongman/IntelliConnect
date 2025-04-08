@@ -52,7 +52,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/3314c038abb945830a046ab34a5844b.jpg" width="250px"/>
+    <img src="./images/708a93148969fdcaa888accff6be865.jpg" width="250px"/>
 </div>
 
 

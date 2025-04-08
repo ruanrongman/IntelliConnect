@@ -27,8 +27,6 @@ public class WxProductActiveToolPrompt {
       """
           Identify the products name that the user wants to control
            ## Output Format
-               To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
-               The output should be formatted as a JSON instance that conforms to the format below. JSON only, no explanation.
                ```json
                {
                "thought": "The thought of what to do and why.(use Chinese)",
