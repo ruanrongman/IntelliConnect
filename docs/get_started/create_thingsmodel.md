@@ -44,7 +44,7 @@
 ### 物模型功能通讯相关MQTT主题：
 * 功能下发主题：/oc/devices/{devicename}/sys/services/invoke
 * 功能参数主题：/oc/devices/{devicename}/sys/services/report
-* 功能响应主题：/oc/devices/{devicename}/sys/services/update_reply
+* 功能响应主题：/oc/devices/{devicename}/sys/services/report_reply
 * 异步参数响应主题：/oc/devices/{devicename}/sys/services/async_outputData
 
 ## 设备接入

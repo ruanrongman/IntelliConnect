@@ -33,6 +33,7 @@ public class ProductDeviceEntity {
   private int allow;
   private String name;
   private String description;
+  private String password;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -115,6 +116,16 @@ public class ProductDeviceEntity {
     this.description = description;
   }
 
+  @Basic
+  @Column(name = "password")
+  public String getPassword() {
+    return password;
+  }
+
+  public void setPassword(String password) {
+    this.password = password;
+  }
+
 
   @Override
   public boolean equals(Object o) {
@@ -127,11 +138,12 @@ public class ProductDeviceEntity {
         && Objects.equals(clientId, that.clientId)
         && Objects.equals(subscribeTopic, that.subscribeTopic)
         && Objects.equals(online, that.online) && Objects.equals(name, that.name)
-        && Objects.equals(description, that.description);
+        && Objects.equals(description, that.description) && Objects.equals(password, that.password);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, name, description, modelId, clientId, subscribeTopic, online, allow);
+    return Objects.hash(id, name, password, description, modelId, clientId, subscribeTopic, online,
+        allow);
   }
 }

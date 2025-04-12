@@ -29,7 +29,6 @@ public class ProductEntity {
   private String productName;
   private String keyvalue;
   private int register;
-  private int mqttUser;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -72,15 +71,6 @@ public class ProductEntity {
     this.register = register;
   }
 
-  @Basic
-  @Column(name = "mqtt_user")
-  public int getMqttUser() {
-    return mqttUser;
-  }
-
-  public void setMqttUser(int mqttUser) {
-    this.mqttUser = mqttUser;
-  }
 
   @Override
   public boolean equals(Object o) {
@@ -89,12 +79,12 @@ public class ProductEntity {
     if (o == null || getClass() != o.getClass())
       return false;
     ProductEntity that = (ProductEntity) o;
-    return id == that.id && register == that.register && mqttUser == that.mqttUser
+    return id == that.id && register == that.register
         && Objects.equals(productName, that.productName) && Objects.equals(keyvalue, that.keyvalue);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, productName, keyvalue, register, mqttUser);
+    return Objects.hash(id, productName, keyvalue, register);
   }
 }

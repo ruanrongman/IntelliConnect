@@ -106,9 +106,10 @@ public class ProductServiceImpl implements ProductService {
     String username = JwtTokenUtil.getUsername(token_deal);
     ProductEntity productEntity = new ProductEntity();
     BeanUtils.copyProperties(product, productEntity);
-    List<MqttUserEntity> result = mqttUserRepository.findALLById(productEntity.getMqttUser());
-    List<ProductEntity> p1 = productRepository.findAllByProductName(productEntity.getProductName());
-    if (result.isEmpty() || !p1.isEmpty())
+    // List<MqttUserEntity> result = mqttUserRepository.findALLById(productEntity.getMqttUser());
+    List<ProductEntity> result =
+        productRepository.findAllByProductName(productEntity.getProductName());
+    if (!result.isEmpty())
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     else {
       ProductEntity productEntity1 = productRepository.save(productEntity);

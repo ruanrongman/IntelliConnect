@@ -17,15 +17,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.dao;
 
-import lombok.Getter;
-import lombok.Setter;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.MqttAclEntity;
 
-@Getter
-@Setter
-public class Product {
-  private String productName;
-  private String keyvalue;
-  private int register;
+import java.util.List;
+
+public interface MqttAclRepository extends JpaRepository<MqttAclEntity, Long> {
+  List<MqttAclEntity> findAllByUsername(String username);
+
+  @Transactional
+  List<MqttAclEntity> deleteByUsername(String username);
 }

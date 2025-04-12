@@ -24,6 +24,8 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
+import top.rslly.iot.models.MqttAclEntity;
+import top.rslly.iot.models.MqttUserEntity;
 import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductDeviceDescription;
@@ -38,7 +40,9 @@ import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import javax.annotation.Resource;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -64,6 +68,10 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   private DataServiceImpl dataService;
   @Resource
   private EventStorageServiceImpl eventStorageService;
+  @Resource
+  private MqttUserRepository mqttUserRepository;
+  @Resource
+  private MqttAclRepository mqttAclRepository;
 
   @Override
   public List<ProductDeviceEntity> findAllBySubscribeTopic(String subscribeTopic) {
@@ -282,12 +290,24 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
         productDeviceRepository.findAllByName(productDeviceEntity.getName());
     if (result.isEmpty() || !p1.isEmpty() || !p2.isEmpty())
       return ResultTool.fail(ResultCode.COMMON_FAIL);
-    else if (productDeviceEntity.getName().matches(".*[\\u4E00-\\u9FA5]+.*"))
+    else if (productDeviceEntity.getName().matches(".*[\\u4E00-\\u9FA5]+.*")
+        || productDeviceEntity.getName().equals("cwl"))
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
+      productDeviceEntity.setPassword(generateSecurePassword());
       productDeviceEntity.setSubscribeTopic(
           "/oc/devices/" + productDeviceEntity.getName() + "/sys/" + "properties/report");
       ProductDeviceEntity productDeviceEntity1 = productDeviceRepository.save(productDeviceEntity);
+      MqttUserEntity mqttUserEntity = new MqttUserEntity();
+      mqttUserEntity.setUsername(productDeviceEntity1.getName());
+      mqttUserEntity.setPassword(productDeviceEntity1.getPassword());
+      mqttUserRepository.save(mqttUserEntity);
+      MqttAclEntity mqttAclEntity = new MqttAclEntity();
+      mqttAclEntity.setUsername(productDeviceEntity1.getName());
+      mqttAclEntity.setPermission("allow");
+      mqttAclEntity.setAction("all");
+      mqttAclEntity.setTopic("/oc/devices/" + productDeviceEntity1.getName() + "/#");
+      mqttAclRepository.save(mqttAclEntity);
       return ResultTool.success(productDeviceEntity1);
     }
   }
@@ -300,7 +320,16 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
     } else {
       dataService.deleteAllByDeviceId(id);
       eventStorageService.deleteAllByDeviceId(id);
+      mqttUserRepository.deleteByUsername(result.get(0).getName());
+      mqttAclRepository.deleteByUsername(result.get(0).getName());
       return ResultTool.success(result);
     }
+  }
+
+  private String generateSecurePassword() {
+    SecureRandom secureRandom = new SecureRandom();
+    byte[] randomBytes = new byte[16];
+    secureRandom.nextBytes(randomBytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
   }
 }
