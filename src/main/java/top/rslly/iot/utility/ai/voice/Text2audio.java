@@ -87,7 +87,7 @@ public class Text2audio {
       // Write Audio to player
       if (message.getAudioFrame() != null) {
         byte[] audio = message.getAudioFrame().array();
-        if (chatId != null) {
+        if (session == null) {
           // audioPlayer.write(message.getAudioFrame());
           JSONObject aiResponse = new JSONObject();
           // audio = VoiceBitChange(audio);
@@ -121,7 +121,7 @@ public class Text2audio {
     @Override
     public void onComplete() {
       System.out.println("synthesis onComplete!");
-      if (chatId != null) {
+      if (session == null) {
         SseEmitterUtil.removeUser(chatId);
       } else {
         List<byte[]> packets = encoder.encodePcmToOpus(new byte[0], true);
@@ -131,7 +131,7 @@ public class Text2audio {
         // Signal end-of-stream by adding an empty array.
         audioQueue.offer(EOS);
         // Asynchronously send the queued frames.
-        asyncSendAudioQueue(session, audioQueue);
+        asyncSendAudioQueue(chatId, session, audioQueue);
       }
       latch.countDown();
     }
@@ -139,7 +139,7 @@ public class Text2audio {
     @Override
     public void onError(Exception e) {
       System.out.println("synthesis onError!");
-      if (chatId != null) {
+      if (session == null) {
         SseEmitterUtil.removeUser(chatId);
       }
       e.printStackTrace();
@@ -229,10 +229,26 @@ public class Text2audio {
   }
 
   @Async("taskExecutor")
-  public void websocketAudio(String text, Session session) {
-    ReactCallback callback = new ReactCallback(null, session);
+  public void websocketAudio(String text, Session session, String chatId) {
+    ReactCallback callback = new ReactCallback(chatId, session);
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
     synthesizer.call(text);
+    try {
+      callback.waitForComplete();
+    } catch (InterruptedException e) {
+      log.error("waitForComplete error{}", e.getMessage());
+    }
+  }
+
+  public void websocketAudioSync(String text, Session session, String chatId) {
+    ReactCallback callback = new ReactCallback(chatId, session);
+    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
+    synthesizer.call(text);
+    try {
+      callback.waitForComplete();
+    } catch (InterruptedException e) {
+      log.error("waitForComplete error{}", e.getMessage());
+    }
   }
 
   private static ByteBuffer byte2Bytebuffer(byte[] byteArray) {
@@ -247,7 +263,7 @@ public class Text2audio {
   }
 
   @Async("taskExecutor")
-  public void asyncSendAudioQueue(Session session, BlockingQueue<byte[]> queue) {
+  public void asyncSendAudioQueue(String chatId, Session session, BlockingQueue<byte[]> queue) {
     try {
       final long startTime = System.nanoTime();
       int playPosition = 0;
@@ -267,7 +283,7 @@ public class Text2audio {
         // log.info("预缓冲帧 {}, 时间: {}ms", i, (System.nanoTime() - startTime) / 1_000_000.0);
       }
       // Continue sending remaining frames with timing control.
-      while (!Websocket.isAbort) {
+      while (!Websocket.isAbort.get(chatId)) {
         byte[] opusPacket = queue.take();
         if (opusPacket.length == 0) { // End-of-stream marker.
           break;
@@ -288,6 +304,7 @@ public class Text2audio {
       }
       queue.clear();
       session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+      Websocket.isAbort.put(chatId, false);
     } catch (Exception e) {
       log.error("Error in asyncSendAudioQueue: {}", e.getMessage(), e);
     }

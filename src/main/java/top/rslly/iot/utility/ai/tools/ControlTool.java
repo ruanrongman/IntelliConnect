@@ -92,12 +92,18 @@ public class ControlTool implements BaseTool<String> {
     String answer = obj.getString("answer");
     StringBuilder ragAnswer = new StringBuilder();
     JSONArray controlParameters = obj.getJSONArray("controlParameters");
-    for (Object controlParameter : controlParameters) {
-      ragAnswer.append(process_llm_result(productId, (JSONObject) controlParameter));
-      if (controlParameters.size() > 1)
-        ragAnswer.append("\n");
+    if (controlParameters != null) {
+      for (Object controlParameter : controlParameters) {
+        ragAnswer.append(process_llm_result(productId, (JSONObject) controlParameter));
+        if (controlParameters.size() > 1)
+          ragAnswer.append("\n");
+      }
+      if (ragAnswer.length() == 0)
+        ragAnswer.append("未设置控制参数");
+      return answer + "平台真实响应:" + ragAnswer;
+    } else {
+      return answer;
     }
-    return answer + "平台真实响应:" + ragAnswer;
   }
 
   private String process_llm_result(int productId, JSONObject jsonObject) {

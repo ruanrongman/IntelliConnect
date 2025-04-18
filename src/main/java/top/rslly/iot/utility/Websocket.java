@@ -31,6 +31,7 @@ import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
+import top.rslly.iot.utility.ai.voice.SlieroVadListener;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
@@ -42,10 +43,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -56,14 +54,18 @@ public class Websocket {
   private static Audio2Text audio2Text;
   public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   private static final Map<String, String> voiceContent = new ConcurrentHashMap<>();
-  public static volatile boolean isAbort = false;
+  private static final Map<String, ByteArrayOutputStream> pcmVadBuffer = new ConcurrentHashMap<>();
+  public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   private static SafetyServiceImpl safetyService;
   private static Text2audio text2audio;
   private static ProductServiceImpl productService;
   private static EmotionToolAsync emotionToolAsync;
   private static Router router;
+  private final SlieroVadListener slieroVadListener = new SlieroVadListener();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
+  private boolean haveVoice = false;
+  private boolean isManual = true;
 
   @Autowired
   public void setAudio2Text(Audio2Text audio2Text) {
@@ -102,13 +104,10 @@ public class Websocket {
   public void onOpen(@PathParam("chatId") String chatId, Session session) {
     if (clients.get(chatId) == null) {
       this.chatId = chatId;
-      clients.put(chatId, session);
-      isAbort = false;
       String token = getHeader(session);
       if (!safetyService.controlAuthorizeProduct(token, Integer.parseInt(chatId))) {
         try {
           session.getBasicRemote().sendText("没有权限");
-          onClose();
           return;
         } catch (IOException e) {
           log.info("发送失败");
@@ -117,12 +116,16 @@ public class Websocket {
       if (productService.findAllById(Integer.parseInt(chatId)).isEmpty()) {
         try {
           session.getBasicRemote().sendText("产品不存在");
-          onClose();
+          session.close();
           return;
         } catch (IOException e) {
           log.info("发送失败");
         }
       }
+      clients.put(chatId, session);
+      isAbort.put(chatId, false);
+      haveVoice = false;
+      slieroVadListener.init();
       log.info("header{}", token);
     } else {
       log.info("冲突，无法连接");
@@ -131,7 +134,11 @@ public class Websocket {
       } catch (IOException e) {
         log.info("发送失败");
       }
-      onClose();
+      try {
+        session.close();
+      } catch (IOException e) {
+        log.error("关闭失败{}", e.getMessage());
+      }
     }
   }
 
@@ -141,8 +148,11 @@ public class Websocket {
   @OnClose
   public void onClose() {
     log.info("close");
-    if (chatId != null)
+    isAbort.put(chatId, false);
+    slieroVadListener.destroy();
+    if (chatId != null) {
       clients.remove(chatId);
+    }
   }
 
   /**
@@ -160,114 +170,49 @@ public class Websocket {
             "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
       } else if (type.equals("listen")) {
         String state = json.getString("state");
+        if (state.equals("detect")) {
+          clients.get(chatId).getBasicRemote().sendText("""
+              {
+                "type": "tts",
+                "state": "start"
+              }""");
+          // 定义问候语列表
+          List<String> greetings = Arrays.asList(
+              "很高兴见到你",
+              "你好啊",
+              "我们又见面了",
+              "最近可好?",
+              "很高兴再次和你谈话",
+              "在干嘛");
+
+          // 生成随机索引
+          Random random = new Random();
+          String selectedGreeting = greetings.get(random.nextInt(greetings.size()));
+
+          // 发送随机问候语
+          text2audio.websocketAudioSync(selectedGreeting, clients.get(chatId), chatId);
+        }
         if (state.equals("start")) {
           String mode = json.getString("mode");
-          if (!mode.equals("manual")) {
+          if (mode.equals("auto")) {
+            isManual = false;
+          } else if (mode.equals("manual")) {
+            isManual = true;
+          } else {
             clients.get(chatId).getBasicRemote()
-                .sendText("{\"type\":\"stt\",\"text\":\"" + "不支持非手动模式" + "\"}");
+                .sendText("{\"type\":\"stt\",\"text\":\"" + "不支持实时模式" + "\"}");
             onClose();
             return;
           }
           log.info("listen start");
           voiceContent.clear();
         } else if (state.equals("stop")) {
-          if (audioList.size() > 20) {
-            // 安全读取字节数据
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            for (byte[] bytes : audioList) {
-              try {
-                // log.info("len{}",bytes.length);
-                byte[] data_packet = new byte[16000];
-                int pcm_frame = decoder.decode(bytes, 0, bytes.length,
-                    data_packet, 0, 960, false);
-                // log.info("data_packet{}",data_packet);
-                bos.write(data_packet, 0, pcm_frame * 2);
-              } catch (Exception e) {
-                log.error("音频转换失败{}", e.getMessage());
-              }
-            }
-            log.info("data_size{}", bos.size());
-            Path tempFile = Files.createTempFile("audio_", ".wav");
-            Files.write(tempFile, bos.toByteArray());
-            bos.close();
-            String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
-            log.info("text{}", text);
-            var jsonObject = JSON.parseObject(text);
-            var sentencesArray = jsonObject.getJSONArray("sentences");
-            StringBuilder sentences = new StringBuilder("");
-            if (sentencesArray.size() > 0) {
-              for (int i = 0; i < sentencesArray.size(); i++) {
-                sentences.append(sentencesArray.getJSONObject(i).getString("text"));
-              }
-            }
-            if (sentences.length() > 0) {
-              if (voiceContent.containsKey(chatId) && voiceContent.get(chatId).length() > 0) {
-                voiceContent.put(chatId, voiceContent.get(chatId) + sentences);
-              } else {
-                voiceContent.put(chatId, sentences.toString());
-              }
-              clients.get(chatId).getBasicRemote()
-                  .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
-              audioList.clear();
-            } else {
-              // 保留音频数据最后10帧
-              audioList = audioList.subList(audioList.size() - 10, audioList.size());
-              clients.get(chatId).getBasicRemote()
-                  .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-              clients.get(chatId).getBasicRemote()
-                  .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-            }
-          } else {
-            clients.get(chatId).getBasicRemote()
-                .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-          }
-          if (voiceContent.containsKey(chatId) && voiceContent.get(chatId).length() > 0) {
-            clients.get(chatId).getBasicRemote()
-                .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                    + "智能助手思考中" + "\"}");
-            JSONObject emotionObject = new JSONObject();
-            emotionObject.put("type", "llm");
-            emotionObject.put("text", "🤔");
-            emotionObject.put("emotion", "thinking");
-            clients.get(chatId).getBasicRemote()
-                .sendText(emotionObject.toJSONString());
-            log.info("listen stop,message{}", voiceContent.get(chatId));
-            Map<String, Object> emotionMessage = new HashMap<>();
-            emotionMessage.put("chatId", chatId);
-            var emotionRes = emotionToolAsync.run(voiceContent.get(chatId), emotionMessage);
-            String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
-                Integer.parseInt(chatId));
-            if (answer.length() > 200)
-              answer = answer.substring(0, 200);
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("type", "tts");
-            jsonObject.put("state", "sentence_start");
-            jsonObject.put("text", answer);
-            if (emotionRes.isDone()) {
-              emotionObject.put("text", emotionRes.get().get("emoji"));
-              emotionObject.put("emotion", emotionRes.get().get("text"));
-              log.info("emotionObject{}", emotionObject);
-            } else {
-              emotionObject.put("text", "😶");
-              emotionObject.put("emotion", "neutral");
-            }
-            clients.get(chatId).getBasicRemote()
-                .sendText(emotionObject.toJSONString());
-            clients.get(chatId).getBasicRemote()
-                .sendText(jsonObject.toJSONString());
-            clients.get(chatId).getBasicRemote().sendText("""
-                {
-                  "type": "tts",
-                  "state": "start"
-                }""");
-            text2audio.websocketAudio(answer, clients.get(chatId));
-          }
+          dealWithAudio();
         } else if (state.equals("abort")) {
-          isAbort = true;
+          isAbort.put(chatId, true);
         }
       }
     } catch (Exception e) {
-      e.printStackTrace();
       log.error("json error{}", e.getMessage());
     }
 
@@ -275,9 +220,73 @@ public class Websocket {
 
   @OnMessage
   public void onBinaryMessage(byte[] message) {
-    log.info("message{}", Arrays.toString(message));
+    if (!isManual) {
+      try {
+        if (audioList.size() > 420 && !haveVoice) {
+          clients.get(chatId).getBasicRemote().sendText("""
+              {
+                "type": "tts",
+                "state": "start"
+              }""");
+          audioList.clear();
+          text2audio.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId);
+          clients.get(chatId).close();
+          return;
+          // 存在问题，导致无法播放
+          // onClose();
+        }
+        byte[] bytes = message.clone();
+        OpusDecoder decoder = new OpusDecoder(16000, 1);
+        byte[] data_packet = new byte[16000];
 
-    // String text = "你好,小智";
+        // 解码音频数据
+        int pcm_frame = decoder.decode(bytes, 0, bytes.length,
+            data_packet, 0, 960, false);
+        int decodedBytes = pcm_frame * 2;
+
+        // 初始化缓冲区
+        if (!pcmVadBuffer.containsKey(chatId)) {
+          pcmVadBuffer.put(chatId, new ByteArrayOutputStream());
+        }
+        ByteArrayOutputStream buffer = pcmVadBuffer.get(chatId);
+
+        // 将解码数据写入缓冲区
+        buffer.write(data_packet, 0, decodedBytes);
+        byte[] bufferArray = buffer.toByteArray();
+        int bufferLength = bufferArray.length;
+        int processed = 0;
+
+        // 循环处理512*2字节的数据块
+        while (processed + 512 * 2 <= bufferLength) {
+          byte[] chunk = Arrays.copyOfRange(
+              bufferArray,
+              processed,
+              processed + 512 * 2);
+          // 处理音频片段
+          var map = slieroVadListener.listen(chunk);
+          if (map != null && map.containsKey("start")) {
+            log.info("map{}", map);
+            haveVoice = true;
+          }
+          if (map != null && map.containsKey("end")) {
+            log.info("map{}", map);
+            dealWithAudio();
+            pcmVadBuffer.remove(chatId);
+            return;
+          }
+          processed += 512 * 2;
+        }
+
+        // 保留未处理数据
+        buffer.reset();
+        if (processed < bufferLength) {
+          buffer.write(bufferArray, processed, bufferLength - processed);
+        }
+
+      } catch (Exception e) {
+        log.error("音频转换失败{}", e.getMessage());
+      }
+    }
     audioList.add(message);
   }
 
@@ -285,6 +294,112 @@ public class Websocket {
   public void onError(Session session, Throwable error) {
     onClose();
     log.error("Error in onError: {}", error.getMessage());
+  }
+
+  private void dealWithAudio() throws Exception {
+
+    OpusDecoder decoder = new OpusDecoder(16000, 1);
+    if (audioList.size() > 20) {
+      if (!isManual) {
+        clients.get(chatId).getBasicRemote().sendText("""
+            {
+              "type": "tts",
+              "state": "start"
+            }""");
+      }
+      // 安全读取字节数据
+      ByteArrayOutputStream bos = new ByteArrayOutputStream();
+      for (byte[] bytes : audioList) {
+        try {
+          // log.info("len{}",bytes.length);
+          byte[] data_packet = new byte[16000];
+          int pcm_frame = decoder.decode(bytes, 0, bytes.length,
+              data_packet, 0, 960, false);
+          // log.info("data_packet{}",data_packet);
+          bos.write(data_packet, 0, pcm_frame * 2);
+        } catch (Exception e) {
+          log.error("音频转换失败{}", e.getMessage());
+        }
+      }
+      log.info("data_size{}", bos.size());
+      Path tempFile = Files.createTempFile("audio_", ".wav");
+      Files.write(tempFile, bos.toByteArray());
+      bos.close();
+      String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
+      log.info("text{}", text);
+      var jsonObject = JSON.parseObject(text);
+      var sentencesArray = jsonObject.getJSONArray("sentences");
+      StringBuilder sentences = new StringBuilder("");
+      if (sentencesArray.size() > 0) {
+        for (int i = 0; i < sentencesArray.size(); i++) {
+          sentences.append(sentencesArray.getJSONObject(i).getString("text"));
+        }
+      }
+      if (sentences.length() > 0) {
+        if (voiceContent.containsKey(chatId) && voiceContent.get(chatId).length() > 0) {
+          voiceContent.put(chatId, voiceContent.get(chatId) + sentences);
+        } else {
+          voiceContent.put(chatId, sentences.toString());
+        }
+        clients.get(chatId).getBasicRemote()
+            .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
+        audioList.clear();
+      } else {
+        // 保留音频数据最后10帧
+        audioList = audioList.subList(audioList.size() - 10, audioList.size());
+        clients.get(chatId).getBasicRemote()
+            .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+        clients.get(chatId).getBasicRemote()
+            .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+      }
+    } else {
+      clients.get(chatId).getBasicRemote()
+          .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+    }
+    if (voiceContent.containsKey(chatId) && voiceContent.get(chatId).length() > 0) {
+      clients.get(chatId).getBasicRemote()
+          .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
+              + "智能助手思考中" + "\"}");
+      JSONObject emotionObject = new JSONObject();
+      emotionObject.put("type", "llm");
+      emotionObject.put("text", "🤔");
+      emotionObject.put("emotion", "thinking");
+      clients.get(chatId).getBasicRemote()
+          .sendText(emotionObject.toJSONString());
+      log.info("listen stop,message{}", voiceContent.get(chatId));
+      Map<String, Object> emotionMessage = new HashMap<>();
+      emotionMessage.put("chatId", chatId);
+      var emotionRes = emotionToolAsync.run(voiceContent.get(chatId), emotionMessage);
+      String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
+          Integer.parseInt(chatId));
+      if (answer.length() > 200)
+        answer = answer.substring(0, 200);
+      JSONObject jsonObject = new JSONObject();
+      jsonObject.put("type", "tts");
+      jsonObject.put("state", "sentence_start");
+      jsonObject.put("text", answer);
+      if (emotionRes.isDone()) {
+        emotionObject.put("text", emotionRes.get().get("emoji"));
+        emotionObject.put("emotion", emotionRes.get().get("text"));
+        log.info("emotionObject{}", emotionObject);
+      } else {
+        emotionObject.put("text", "😶");
+        emotionObject.put("emotion", "neutral");
+      }
+      clients.get(chatId).getBasicRemote()
+          .sendText(emotionObject.toJSONString());
+      clients.get(chatId).getBasicRemote()
+          .sendText(jsonObject.toJSONString());
+      haveVoice = false;
+      if (isManual) {
+        clients.get(chatId).getBasicRemote().sendText("""
+            {
+              "type": "tts",
+              "state": "start"
+            }""");
+      }
+      text2audio.websocketAudio(answer, clients.get(chatId), chatId);
+    }
   }
 
   private static String getHeader(Session session) {

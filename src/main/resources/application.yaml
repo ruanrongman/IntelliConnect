@@ -111,8 +111,8 @@ js:
     maxInvokeRequestsTimeout: 5
     js_thread_pool_size: 50
 ota:
-   bin:
-     path: D://temp-rainy//
+  bin:
+    path: D://temp-rainy//
 weather:
   key: XXX
 ai:
@@ -129,6 +129,7 @@ ai:
   team-name: 创万联
   agent-epoch-limit: 5
   chatTool-llm: silicon-Qwen2.5-7B-Instruct
+  emotionTool-llm: silicon-Qwen2.5-7B-Instruct
   memoryTool-llm: silicon-Qwen2.5-14B-Instruct
   classifierTool-llm: silicon-Qwen2.5-32B-Instruct
   classifierTool-speedUp: true

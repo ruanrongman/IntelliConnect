@@ -66,7 +66,7 @@ public class EmqTransfer {
      */
   }
 
-  public Map<String, String> ConnectMap() throws IOException {
+  public Map<String, String> ConnectMap() throws Exception {
     var emqResponse = httpRequestUtils.httpGetAuthentication(emqProperty.getKey(),
         emqProperty.getSecret(), emqProperty.getUrl());
     String msg = Objects.requireNonNull(emqResponse.body()).string();

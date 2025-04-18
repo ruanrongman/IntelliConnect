@@ -260,6 +260,12 @@
             <artifactId>jave-all-deps</artifactId>
             <version>3.5.0</version>
         </dependency>
+        <!-- vad模型 -->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>1.16.0-rc1</version>
+        </dependency>
     </dependencies>
 
     <build>

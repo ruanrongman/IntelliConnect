@@ -64,7 +64,7 @@ public class HookProviderImpl extends HookProviderGrpc.HookProviderImplBase {
             s.getClientId());
       }
       log.info("Emq connected information init success");
-    } catch (IOException e) {
+    } catch (Exception e) {
       e.printStackTrace();
     }
   }
