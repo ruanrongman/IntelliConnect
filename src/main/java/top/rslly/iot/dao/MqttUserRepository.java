@@ -20,6 +20,7 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.MqttUserEntity;
@@ -31,10 +32,12 @@ public interface MqttUserRepository extends JpaRepository<MqttUserEntity, Long> 
 
   List<MqttUserEntity> findALLById(int id);
 
+  @Modifying
+  @Transactional
   @Query(
       value = "INSERT INTO mqtt_user(username, password, salt, is_superuser,created) VALUES (?1, SHA2(?2, 256), NULL , 0,NULL)",
       nativeQuery = true)
-  List<MqttUserEntity> insertHash(String username, String password);
+  void insertHash(String username, String password);
 
   @Transactional
   List<MqttUserEntity> deleteByUsername(String username);

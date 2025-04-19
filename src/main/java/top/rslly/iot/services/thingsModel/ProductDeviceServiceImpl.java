@@ -298,10 +298,8 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
       productDeviceEntity.setSubscribeTopic(
           "/oc/devices/" + productDeviceEntity.getName() + "/sys/" + "properties/report");
       ProductDeviceEntity productDeviceEntity1 = productDeviceRepository.save(productDeviceEntity);
-      MqttUserEntity mqttUserEntity = new MqttUserEntity();
-      mqttUserEntity.setUsername(productDeviceEntity1.getName());
-      mqttUserEntity.setPassword(productDeviceEntity1.getPassword());
-      mqttUserRepository.save(mqttUserEntity);
+      mqttUserRepository.insertHash(productDeviceEntity1.getName(),
+          productDeviceEntity1.getPassword());
       MqttAclEntity mqttAclEntity = new MqttAclEntity();
       mqttAclEntity.setUsername(productDeviceEntity1.getName());
       mqttAclEntity.setPermission("allow");
