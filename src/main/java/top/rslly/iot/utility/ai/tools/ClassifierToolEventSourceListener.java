@@ -98,7 +98,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
       var delta = JSON.parseObject(jsonObject.toString()).getString("delta");
       var content = JSON.parseObject(delta).get("content");
       if (content == null) {
-        log.warn("Received null data from OpenAI");
+        // log.warn("Received null data from OpenAI");
         return;
       }
       ClassifierTool.lock.lock();

@@ -22,9 +22,10 @@ package top.rslly.iot;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import top.rslly.iot.utility.ai.tools.SearchTool;
 
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class searchToolTests {
   @Autowired
   private SearchTool searchTool;

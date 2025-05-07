@@ -19,13 +19,16 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
+import com.alibaba.fastjson.JSON;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
+import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 public class ProductRolePrompt {
@@ -33,8 +36,9 @@ public class ProductRolePrompt {
   private DescriptionUtil descriptionUtil;
   private static final String productRolePrompt =
       """
-          Translate the user's requirements into detailed role configurations.
+          Translate the user's requirements into detailed role and VoiceTimbre configurations.
           The following are the current user role settings:{role_set}
+          The timbre list is as follows:{timbre_map}
           ## Output Format
           ```json
           {
@@ -47,7 +51,8 @@ public class ProductRolePrompt {
               "assistant_name": "The name of the assistant is your name,if you not found,output null",
               "user_name":  "user name,if you not found,output null",
               "role":  "role name,if you not found,output null",
-              "role_introduction":  "role introduction,if you not found,output null"
+              "role_introduction":  "role introduction,if the user does not specify, it can be selected based on the role,can not be null",
+              "voice_timbre":"Set the voice_timbre according to the user's request. If the user does not specify, it can be selected based on the role, but in any case, it must be one of the voice_timbre options from the above list"
               }
           }
           ```
@@ -59,6 +64,15 @@ public class ProductRolePrompt {
   public String getProductRoleTool(int productId) {
     Map<String, String> params = new HashMap<>();
     params.put("role_set", descriptionUtil.getProductRole(productId));
+    params.put("timbre_map", JSON.toJSONString(
+        VoiceTimbre.stream()
+            .map(vt -> new HashMap<String, String>() {
+              {
+                put("timbre", vt.name());
+                put("timbreDescription", vt.getTimbreDescription());
+              }
+            })
+            .collect(Collectors.toList())));
     return StringUtils.formatString(productRolePrompt, params);
   }
 }

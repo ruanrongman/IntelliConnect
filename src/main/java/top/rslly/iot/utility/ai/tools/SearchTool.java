@@ -55,6 +55,7 @@ public class SearchTool implements BaseTool<String> {
   private String chromeDrivePath;
   @Value("${ai.chrome-path}")
   private String chromePath;
+  private static ExecutorService executor = Executors.newFixedThreadPool(20);
   private String name = "searchTool";
   private String description = """
       Tools for online search
@@ -73,7 +74,7 @@ public class SearchTool implements BaseTool<String> {
     // 设置谷歌浏览器路径
     options.setBinary(chromePath);
     options.addArguments(
-        "user-agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36'");
+        "user-agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0'");
     options.addArguments("--disable-gpu");
     options.addArguments("--headless");
     options.addArguments("--no-sandbox");
@@ -136,7 +137,6 @@ public class SearchTool implements BaseTool<String> {
 
   public static String process_search_result(String question, String chromeDrivePath,
       String chromePath) {
-    ExecutorService executor = Executors.newFixedThreadPool(10);
     var results = getResult(question, chromeDrivePath, chromePath);
 
     Map<CompletableFuture<String>, Map<String, String>> futureToUrl = new HashMap<>();

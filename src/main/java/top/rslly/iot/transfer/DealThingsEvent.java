@@ -60,7 +60,7 @@ public class DealThingsEvent {
     if (deviceEntityList.isEmpty())
       return false;
     String event_topic = "/oc/devices/" + deviceEntityList.get(0).getName()
-        + "/sys/" + "event/report";
+        + "/sys/" + "events/report";
     if (!event_topic.equals(topic))
       return false;
     int allow = deviceEntityList.get(0).getAllow();

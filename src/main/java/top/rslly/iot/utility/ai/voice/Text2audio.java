@@ -28,9 +28,11 @@ import com.alibaba.dashscope.common.ResultCallback;
 import com.alibaba.dashscope.utils.Constants;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.Websocket;
 import top.rslly.iot.utility.ai.voice.concentus.OpusApplication;
@@ -60,6 +62,8 @@ public class Text2audio {
   private static final String model = "cosyvoice-v1";
   private static final String voice = "longxiaochun";
   private static SpeechSynthesisParam param;
+  @Autowired
+  private ProductRoleServiceImpl productRoleService;
 
   // Frame duration in milliseconds (matching Opus encoding)
   private static final int FRAME_DURATION = 60;
@@ -231,6 +235,10 @@ public class Text2audio {
   @Async("taskExecutor")
   public void websocketAudio(String text, Session session, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, session);
+    var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+    if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
+      param.setVoice(roles.get(0).getVoice());
+    }
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
     synthesizer.call(text);
     try {
@@ -242,6 +250,10 @@ public class Text2audio {
 
   public void websocketAudioSync(String text, Session session, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, session);
+    var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+    if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
+      param.setVoice(roles.get(0).getVoice());
+    }
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
     synthesizer.call(text);
     try {

@@ -30,13 +30,11 @@ import com.unfbx.chatgpt.OpenAiStreamClient;
 import com.unfbx.chatgpt.entity.chat.ChatCompletion;
 import com.unfbx.chatgpt.entity.chat.ChatCompletionResponse;
 import com.unfbx.chatgpt.entity.chat.Message;
-import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.sse.EventSourceListener;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,13 +42,12 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class DeepSeek implements LLM {
-  private static String URL = "https://api.deepseek.com";
-  private static String model = "deepseek-chat";
+  private String URL = "https://api.deepseek.com";
+  private String model = "deepseek-chat";
   // private static final String glmUrl = "https://open.bigmodel.cn/api/paas/v4/";
-  private static OpenAiClient openAiClient;
-  private static OpenAiStreamClient openAiStreamClient;
-  private static final ObjectMapper mapper = defaultObjectMapper();
-  private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
+  private final OpenAiClient openAiClient;
+  private final OpenAiStreamClient openAiStreamClient;
+  private final static OkHttpClient okHttpClient = new OkHttpClient.Builder()
       .connectTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
       .writeTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
       .readTimeout(3000, TimeUnit.SECONDS)// 自定义超时时间
@@ -70,8 +67,8 @@ public class DeepSeek implements LLM {
   }
 
   public DeepSeek(String url, String model, String apiKey) {
-    DeepSeek.URL = url;
-    DeepSeek.model = model;
+    this.URL = url;
+    this.model = model;
     openAiClient = OpenAiClient.builder()
         .apiKey(List.of(apiKey))
         .okHttpClient(okHttpClient)
@@ -112,7 +109,10 @@ public class DeepSeek implements LLM {
       log.info("model output:{} ", response);
       var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "")
           .replace("json", "");
-      return JSON.parseObject(temp);
+      JSONObject jsonResponse = JSON.parseObject(temp);
+      if (jsonResponse == null)
+        throw new Exception("json parse error");
+      return jsonResponse;
     } catch (Exception e) {
       log.error("model error:{} ", e.getMessage());
       JSONObject action = new JSONObject();
@@ -164,13 +164,13 @@ public class DeepSeek implements LLM {
   private List<Message> dealMsg(List<ModelMessage> messages) {
     List<Message> messageList = new ArrayList<>();
     for (var s : messages) {
-      if (s.getRole().equals(ChatMessageRole.SYSTEM.value()))
+      if (s.getRole().equals(ModelMessageRole.SYSTEM.value()))
         messageList.add(
             Message.builder().role(Message.Role.SYSTEM).content(s.getContent().toString()).build());
-      else if (s.getRole().equals(ChatMessageRole.USER.value()))
+      else if (s.getRole().equals(ModelMessageRole.USER.value()))
         messageList.add(
             Message.builder().role(Message.Role.USER).content(s.getContent().toString()).build());
-      else if (s.getRole().equals(ChatMessageRole.ASSISTANT.value()))
+      else if (s.getRole().equals(ModelMessageRole.ASSISTANT.value()))
         messageList.add(Message.builder().role(Message.Role.ASSISTANT)
             .content(s.getContent().toString()).build());
     }

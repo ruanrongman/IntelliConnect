@@ -24,6 +24,9 @@ import com.alibaba.dashscope.utils.Constants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 @Component
 public class LLMFactory {
   private static String deepSeekApiKey;
@@ -47,6 +50,22 @@ public class LLMFactory {
 
 
   public static LLM getLLM(String llmName) {
+    // 在 buildRequest 方法中添加以下匹配逻辑
+    boolean enableThinking = false;
+    int thinkingBudget = 128;
+
+    // 使用正则匹配 think-数字 模式
+    Pattern pattern = Pattern.compile("think-(\\d+)");
+    Matcher matcher = pattern.matcher(llmName);
+    if (matcher.find()) {
+      enableThinking = true;
+      thinkingBudget = Integer.parseInt(matcher.group(1));
+    }
+    // 如果只需要包含 think 就开启（即使没有数字）
+    else if (llmName.contains("think")) {
+      enableThinking = true;
+    }
+
     if (llmName.equals("glm")) {
       return new Glm();
     } else if (llmName.equals("deepSeek")) {
@@ -66,6 +85,12 @@ public class LLMFactory {
     } else if (llmName.equals("silicon-Qwen2.5-72B-Instruct")) {
       return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-72B-Instruct",
           siliconFlowApiKey);
+    } else if (llmName.startsWith("silicon-Qwen3-30B-A3B")) {
+      return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-30B-A3B", enableThinking, thinkingBudget);
+    } else if (llmName.startsWith("silicon-Qwen3-235B-A22B")) {
+      return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-235B-A22B", enableThinking, thinkingBudget);
+    } else if (llmName.startsWith("silicon-Qwen3-8B")) {
+      return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-8B", enableThinking, thinkingBudget);
     } else if (llmName.equals("silicon-deepSeek-v2.5")) {
       return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
           deepSeekApiKey);

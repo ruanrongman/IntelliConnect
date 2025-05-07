@@ -78,6 +78,7 @@ public class ProductRoleServiceImpl implements ProductRoleService {
         productRoleDescription.setRoleIntroduction(s.getRoleIntroduction());
         productRoleDescription.setAssistantName(s.getAssistantName());
         productRoleDescription.setUserName(s.getUserName());
+        productRoleDescription.setVoice(s.getVoice());
         productRoleDescriptionList.add(productRoleDescription);
       }
     }

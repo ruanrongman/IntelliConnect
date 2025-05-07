@@ -34,6 +34,7 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ProductRolePrompt;
+import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -95,9 +96,14 @@ public class ProductRoleTool implements BaseTool<String> {
       String role = llmObject.getString("role");
       String roleIntroduction = llmObject.getString("role_introduction");
       String taskType = llmObject.getString("taskType");
+      String voiceTimbre = llmObject.getString("voice_timbre");
       ProductRole productRole = new ProductRole();
       productRole.setProductId(productId);
-      productRole.setVoice(null);
+      try {
+        productRole.setVoice(VoiceTimbre.valueOf(voiceTimbre).getTimbre());
+      } catch (IllegalArgumentException e) {
+        productRole.setVoice(VoiceTimbre.CosyVoiceLongXiaoChun.getTimbre());
+      }
       if (taskType.equals("set")) {
         if (assistantName == null || userName == null || role == null || roleIntroduction == null
             || assistantName.equals("null") || userName.equals("null") || role.equals("null")
@@ -114,7 +120,7 @@ public class ProductRoleTool implements BaseTool<String> {
             throw new IcAiException("database control error!");
         }
         return "详细角色信息如下:" + "角色为" + role + "，角色介绍为" + roleIntroduction + "用户名为" + userName
-            + "，智能机器人的名字为" + assistantName;
+            + "，智能机器人的名字为" + assistantName + "，声音为" + voiceTimbre;
       } else if (taskType.equals("cancel")) {
         var result = productRoleService.deleteByProductId(productId);
         if (!result.isEmpty()) {

@@ -34,7 +34,7 @@
 * private String jsonKey; // 功能参数名称
 * private int modelId; // 物模型id
 * private string dataType; // input or output参数类型，input表示输入参数，output表示输出参数
-* private String description; // 功能描述（请注意，该描述应该具体描述该功能的作用，这个描述影响agent智能体的理解，最好提供一些few shot。）
+* private String description; // 功能描述（请注意，该描述应该具体描述该功能参数的作用，这个描述影响agent智能体的理解，最好提供一些few shot。）
 * private String type;// 服务参数类型，目前支持：int、float、string（后续将支持更多的属性类型）
 * private String max;// 服务参数最大值  (默认为null)
 * private String min;// 服务参数最小值  (默认为null)
@@ -46,6 +46,25 @@
 * 功能参数主题：/oc/devices/{devicename}/sys/services/report
 * 功能响应主题：/oc/devices/{devicename}/sys/services/report_reply
 * 异步参数响应主题：/oc/devices/{devicename}/sys/services/async_outputData
+
+> 物模型事件模块适用于设备告警，用于通知平台或其他系统设备发生了需要及时处理或通知的状况。这些信息无法通过查询设备属性得知，通常具有突发性和重要性。
+
+以下是物模型提交事件入参接口的参数列表（事件接口由两组接口组成，提交事件和提交事件入参组成）：
+* private String description // 事件描述 （请注意，该描述应该具体描述该事件参数的作用，这个描述影响agent智能体的理解，最好提供一些few shot。）
+* private String jsonKey; // 功能参数名称 
+* private int modelId; // 物模型id
+* private String type;// 事件参数类型，目前支持：int、float、string（后续将支持更多的属性类型）
+
+以下是物模型事件接口的参数列表（事件接口由两组接口组成，提交事件和提交事件入参组成）：
+* private String description // 事件描述 （请注意，该描述应该具体描述该事件参数的作用，这个描述影响agent智能体的理解，最好提供一些few shot。）
+* private int modelId; // 物模型id
+* private String name; // 事件名称
+
+上述接口联合使用，提交事件和提交事件入参接口，提交事件入参接口用于提交事件入参，提交事件接口用于创建事件。
+
+## 物模型事件通讯相关MQTT主题：
+* 事件上报主题：/oc/devices/{devicename}/sys/events/report
+* 事件响应主题：/oc/devices/{devicename}/sys/events/event_reply
 
 ## 设备接入
 有了物模型并添加好属性，事件，功能后之后，就可以将设备接入物联网平台了。本平台默认使用`MQTT`协议接入，并且支持`SSL`加密。
@@ -70,10 +89,10 @@ curl --location 'http://localhost:8080/api/v2/login' \
 ```
 控制指令
 ```bash
-curl -X POST "http://localhost:8080/api/v2/control" 
--H "accept: */*" 
--H "Authorization: Bearer XXXX" 
--H "Content-Type: application/json" 
+curl -X POST "http://localhost:8080/api/v2/control" \
+-H "accept: */*" \
+-H "Authorization: Bearer XXXX" \
+-H "Content-Type: application/json" \
 -d "{\"key\":[\"time\"],\"mode\":\"service\",\"functionName\":\"time_set\",\"name\":\"{device_name}\",\"qos\":1,\"status\":\"sync\",\"value\":[\"off\"]}"
 ```
 通过以上指令你可以向你的设备发起物模型同步服务调用，并控制其以`MQTT`协议 `qos=1`的信息质量来进行通信，通过该接口你可以灵活地实现各种设备应用需求。
@@ -106,3 +125,22 @@ if __name__ == '__main__':
     send_http_request()
 ```
 请注意，上述代码中的`{device_name}`和`{username}`和`{password}`需要替换为实际的设备名称和用户名密码。
+
+## 获取事件记录
+平台支持获取事件记录，可以使用以下指令进行获取,token获取方法如上述所示：
+```bash
+curl --location 'http://localhost:8080/api/v2/readEvent' \
+-H "Authorization: Bearer XXXX"\
+--header 'Content-Type: application/json' \
+--data '{
+  "jsonKey": "power",
+  "name": "light1",
+  "time1": 0,
+  "time2": {当前毫秒时间戳}
+}'
+```
+参数含义：
+* jsonKey：表示要读取的事件参数名称。
+* name：表示要读取的设备名称。
+* time1：表示要读取的起始时间，单位为毫秒。
+* time2：表示要读取的结束时间，单位为毫秒，表示读取当前时间之前的所有事件。

@@ -78,13 +78,13 @@ public class ClassifierToolPrompt {
     classifierMap.put("5",
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
     classifierMap.put("6",
-        "Other tasks (including chatting,coding,write paper,Get news or unknown events,translate and etc.)");
+        "Other tasks (including chatting,coding,write paper,translate and etc.)");
     classifierMap.put("7", "Bind or Unbinding the product");
     classifierMap.put("8", "handoff controlled products");
     classifierMap.put("9", "Schedule management and reminder tasks");
     classifierMap.put("10",
         "Search for online(Please simplify user input to meet the needs of search engines)");
-    classifierMap.put("11", "All user requests for role configuration");
+    classifierMap.put("11", "All about role and voice");
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
     params.put("task_map", classifierJson);

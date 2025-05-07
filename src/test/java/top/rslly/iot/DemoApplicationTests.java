@@ -61,7 +61,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 
-@SpringBootTest()
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @RunWith(SpringRunner.class)
 @Slf4j
 class DemoApplicationTests {
@@ -294,7 +294,7 @@ class DemoApplicationTests {
     Map<String, Object> globalMessage = new HashMap<>();
     globalMessage.put("openid", "test");
     globalMessage.put("microappid", "test");
-    scheduleTool.run("我现在有哪些日程", globalMessage);
+    scheduleTool.run("5分钟后提醒我", globalMessage);
     Thread.sleep(100000);
   }
 

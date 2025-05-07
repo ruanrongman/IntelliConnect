@@ -47,7 +47,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-@ServerEndpoint(value = "/websocket/{chatId}", configurator = WebSocketConfig.class)
+@ServerEndpoint(value = "/xiaozhi/v1/{chatId}", configurator = WebSocketConfig.class)
 @Component
 @Slf4j
 public class Websocket {
