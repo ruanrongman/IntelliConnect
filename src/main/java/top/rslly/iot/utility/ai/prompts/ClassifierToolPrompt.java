@@ -85,6 +85,7 @@ public class ClassifierToolPrompt {
     classifierMap.put("10",
         "Search for online(Please simplify user input to meet the needs of search engines)");
     classifierMap.put("11", "All about role and voice");
+    classifierMap.put("12", "All use mcp(model context protocol) server to do anything");
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
     params.put("task_map", classifierJson);

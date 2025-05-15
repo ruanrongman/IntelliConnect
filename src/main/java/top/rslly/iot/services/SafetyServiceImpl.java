@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.models.*;
+import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.thingsModel.*;
@@ -59,6 +60,8 @@ public class SafetyServiceImpl implements SafetyService {
   private UserServiceImpl userService;
   @Autowired
   private WxUserServiceImpl wxUserService;
+  @Autowired
+  private McpServerServiceImpl mcpServerService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -141,6 +144,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("productRoleId not found!");
     return this.controlAuthorizeProduct(token,
         productRoleEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeMcpServer(String token, int mcpServerId) {
+    List<McpServerEntity> mcpServerEntityList = mcpServerService.findALLById(mcpServerId);
+    if (mcpServerEntityList.isEmpty())
+      throw new NullPointerException("mcpServerId not found!");
+    return this.controlAuthorizeProduct(token,
+        mcpServerEntityList.get(0).getProductId());
   }
 
   @Override

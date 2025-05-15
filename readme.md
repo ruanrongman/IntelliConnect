@@ -31,6 +31,7 @@ Built by RSLLY
 * 本项目基于springboot2.7开发，使用spring security作为安全框架
 * 配备物模型(属性，功能和事件模块)和完善的监控模块
 * 支持多种大模型(Qwen3系列，GLM系列和deepSeek等先进模型)和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用(首个基于Agent智能体设计的物联网平台)
+* 支持MCP协议（模型上下文协议）可以自由扩展智能体能力
 * 支持快速构建智能语音应用，支持语音识别和语音合成
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术
@@ -74,7 +75,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/2a964e4673b190fe0344695f5020c6a.jpg" width="250px"/>
+    <img src="./docs/images/0adc10f4a08c7eccb93a036d2ec0d2a.jpg" width="250px"/>
 </div>
 
 ## 致谢

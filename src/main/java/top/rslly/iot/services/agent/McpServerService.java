@@ -17,28 +17,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.services.agent;
 
-public interface SafetyService {
-  boolean controlAuthorizeProduct(String token, int productId);
+import top.rslly.iot.models.McpServerEntity;
+import top.rslly.iot.param.request.McpServerParam;
+import top.rslly.iot.utility.result.JsonResult;
 
-  boolean controlAuthorizeModel(String token, int modelId);
+import java.util.List;
 
-  boolean controlAuthorizeDevice(String token, int deviceId);
+public interface McpServerService {
 
-  boolean controlAuthorizeDevice(String token, String deviceName);
+  List<McpServerEntity> findALLById(int id);
 
-  boolean controlAuthorizeFunction(String token, int functionId);
+  List<McpServerEntity> findAllByProductId(int productId);
 
-  boolean controlAuthorizeEvent(String token, int eventId);
+  JsonResult<?> getMcpServerList(String token);
 
-  boolean controlAuthorizeAlarmEvent(String token, int alarmEventId);
+  JsonResult<?> postMcpServer(McpServerParam mcpServerParam);
 
-  boolean controlAuthorizeEventData(String token, int eventDataId);
-
-  boolean controlAuthorizeProductData(String token, int productDataId);
-
-  boolean controlAuthorizeProductRole(String token, int productRoleId);
-
-  boolean controlAuthorizeMcpServer(String token, int mcpServerId);
+  JsonResult<?> deleteMcpServer(int id);
 }

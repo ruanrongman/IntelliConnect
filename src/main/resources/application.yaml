@@ -142,6 +142,9 @@ ai:
   scheduleTool-llm: silicon-Qwen3-30B-A3B-think-128
   searchTool-llm: silicon-Qwen2.5-7B-Instruct
   agent-llm: uniApi-deepSeek
+  mcp:
+    agent-llm: uniApi-deepSeek
+    agent-epoch-limit: 5
 emq:
   api:
     url: http://192.168.49.129:18083/api/v5/clients

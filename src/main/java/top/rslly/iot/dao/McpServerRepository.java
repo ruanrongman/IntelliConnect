@@ -17,28 +17,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.dao;
 
-public interface SafetyService {
-  boolean controlAuthorizeProduct(String token, int productId);
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.McpServerEntity;
 
-  boolean controlAuthorizeModel(String token, int modelId);
+import java.util.List;
 
-  boolean controlAuthorizeDevice(String token, int deviceId);
+public interface McpServerRepository extends JpaRepository<McpServerEntity, Long> {
+  List<McpServerEntity> findALLById(int id);
 
-  boolean controlAuthorizeDevice(String token, String deviceName);
+  List<McpServerEntity> findAllByProductId(int productId);
 
-  boolean controlAuthorizeFunction(String token, int functionId);
+  List<McpServerEntity> findAllByUrl(String url);
 
-  boolean controlAuthorizeEvent(String token, int eventId);
+  List<McpServerEntity> findAllByDescription(String description);
 
-  boolean controlAuthorizeAlarmEvent(String token, int alarmEventId);
-
-  boolean controlAuthorizeEventData(String token, int eventDataId);
-
-  boolean controlAuthorizeProductData(String token, int productDataId);
-
-  boolean controlAuthorizeProductRole(String token, int productRoleId);
-
-  boolean controlAuthorizeMcpServer(String token, int mcpServerId);
+  @Transactional
+  List<McpServerEntity> deleteById(int id);
 }

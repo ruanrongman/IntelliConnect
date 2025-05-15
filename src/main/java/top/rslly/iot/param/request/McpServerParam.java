@@ -17,28 +17,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services;
+package top.rslly.iot.param.request;
 
-public interface SafetyService {
-  boolean controlAuthorizeProduct(String token, int productId);
+import lombok.Data;
 
-  boolean controlAuthorizeModel(String token, int modelId);
-
-  boolean controlAuthorizeDevice(String token, int deviceId);
-
-  boolean controlAuthorizeDevice(String token, String deviceName);
-
-  boolean controlAuthorizeFunction(String token, int functionId);
-
-  boolean controlAuthorizeEvent(String token, int eventId);
-
-  boolean controlAuthorizeAlarmEvent(String token, int alarmEventId);
-
-  boolean controlAuthorizeEventData(String token, int eventDataId);
-
-  boolean controlAuthorizeProductData(String token, int productDataId);
-
-  boolean controlAuthorizeProductRole(String token, int productRoleId);
-
-  boolean controlAuthorizeMcpServer(String token, int mcpServerId);
+@Data
+public class McpServerParam {
+  private String url;
+  private String description;
+  private int productId;
+  private String sseEndpoint;
 }

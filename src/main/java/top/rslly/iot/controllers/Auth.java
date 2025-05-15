@@ -26,6 +26,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
+import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.iot.MqttUserServiceImpl;
 import top.rslly.iot.services.thingsModel.*;
@@ -61,6 +62,8 @@ public class Auth {
   private SafetyServiceImpl safetyService;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  @Autowired
+  private McpServerServiceImpl mcpServerService;
 
 
   @Operation(summary = "创建新用户", description = "暂不支持创建管理员用户")
@@ -365,4 +368,35 @@ public class Auth {
     return productRoleService.deleteProductRole(id);
   }
 
+  @Operation(summary = "获取mcp服务器列表", description = "仅获取当前用户产品mcp服务器列表")
+  @RequestMapping(value = "/mcpServer", method = RequestMethod.GET)
+  public JsonResult<?> getMcpServer(@RequestHeader("Authorization") String header) {
+    return mcpServerService.getMcpServerList(header);
+  }
+
+  @Operation(summary = "添加mcp服务器", description = "仅添加当前用户产品mcp服务器")
+  @RequestMapping(value = "/mcpServer", method = RequestMethod.POST)
+  public JsonResult<?> postMcpServer(@RequestBody McpServerParam mcpServerParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, mcpServerParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return mcpServerService.postMcpServer(mcpServerParam);
+  }
+
+  @Operation(summary = "删除mcp服务器", description = "仅删除当前用户产品mcp服务器")
+  @RequestMapping(value = "/mcpServer", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteMcpServer(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeMcpServer(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return mcpServerService.deleteMcpServer(id);
+  }
 }

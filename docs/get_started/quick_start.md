@@ -189,7 +189,7 @@ ai:
 安装部署后，启动后访问呢http://localhost:8080/swagger-ui/index.html
 即可获得完整的接口文档，使用这些接口既可以快速开发物联网应用，也可以作为基础模块来搭建物联网应用。
 本文档也会详细介绍如何使用该平台内核，并介绍该内核的设计思想，以下是一般接入物联网平台内核的步骤：
-1.[创建物模型和设备接入](get_started/create_thingsmodel.md)。
+* 1.[创建物模型和设备接入](get_started/create_thingsmodel.md)
 
 
 ## 接入微信服务号使用效果

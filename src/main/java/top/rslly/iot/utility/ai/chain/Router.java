@@ -28,6 +28,7 @@ import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 
@@ -62,6 +63,8 @@ public class Router {
   private SearchTool searchTool;
   @Autowired
   private ProductRoleTool productRoleTool;
+  @Autowired
+  private McpAgent mcpAgent;
   @Autowired
   private MemoryTool memoryTool;
 
@@ -141,13 +144,17 @@ public class Router {
             toolResult = productRoleTool.run(args, globalMessage);
             answer = "以下是产品角色插件的结果：" + toolResult;
           }
+          case "12" -> {
+            toolResult = mcpAgent.run(args, globalMessage);
+            answer = "以下是mcp智能体的结果：" + toolResult;
+          }
           default -> answer = chatTool.run(content, globalMessage);
         }
       } else
         answer = chatTool.run(content, globalMessage);
     } else
       answer = chatTool.run(content, globalMessage);
-    if (toolResult.equals(""))
+    if (toolResult == null || toolResult.equals(""))
       toolResult = answer;
     ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), content);
     ModelMessage chatMessage = new ModelMessage(ChatMessageRole.ASSISTANT.value(), toolResult);
