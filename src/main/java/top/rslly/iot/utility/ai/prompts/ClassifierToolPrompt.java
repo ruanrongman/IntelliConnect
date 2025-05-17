@@ -78,14 +78,14 @@ public class ClassifierToolPrompt {
     classifierMap.put("5",
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
     classifierMap.put("6",
-        "Other tasks (including chatting,coding,write paper,translate and etc.)");
+        "Common chat");
     classifierMap.put("7", "Bind or Unbinding the product");
     classifierMap.put("8", "handoff controlled products");
     classifierMap.put("9", "Schedule management and reminder tasks");
     classifierMap.put("10",
-        "Search for online(Please simplify user input to meet the needs of search engines)");
+        "Search for online(simplified to keywords)");
     classifierMap.put("11", "All about role and voice");
-    classifierMap.put("12", "All use mcp(model context protocol) server to do anything");
+    classifierMap.put("12", "All use mcp server to do anything");
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
     params.put("task_map", classifierJson);

@@ -41,4 +41,6 @@ public interface SafetyService {
   boolean controlAuthorizeProductRole(String token, int productRoleId);
 
   boolean controlAuthorizeMcpServer(String token, int mcpServerId);
+
+  boolean controlAuthorizeOta(String token, String name);
 }

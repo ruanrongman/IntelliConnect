@@ -25,7 +25,6 @@ import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductEventEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.ProductEvent;
-import top.rslly.iot.services.thingsModel.ProductEventService;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;

@@ -26,4 +26,6 @@ import java.util.List;
 
 public interface OtaRepository extends JpaRepository<OtaEntity, Long> {
   List<OtaEntity> findAllByName(String name);
+
+  List<OtaEntity> findAllByProductId(int productId);
 }

@@ -29,7 +29,6 @@ import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.EventData;
 import top.rslly.iot.services.storage.EventStorageServiceImpl;
-import top.rslly.iot.services.thingsModel.EventDataService;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;

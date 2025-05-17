@@ -20,16 +20,21 @@
 package top.rslly.iot.services.iot;
 
 import org.springframework.web.multipart.MultipartFile;
+import top.rslly.iot.models.OtaEntity;
 import top.rslly.iot.utility.result.JsonResult;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.List;
 
 public interface OtaService {
-  JsonResult<?> uploadBin(String name, MultipartFile multipartFile);
 
-  JsonResult<?> otaList();
+  List<OtaEntity> findAllByName(String name);
+
+  JsonResult<?> uploadBin(String name, int productId, MultipartFile multipartFile);
+
+  JsonResult<?> otaList(String token);
 
   void otaDevice(String name, HttpServletResponse response) throws IOException;
 

@@ -28,9 +28,9 @@ public class OtaEntity {
   private int id;
   private String path;
   private String name;
+  private int productId;
 
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id")
   public int getId() {
     return id;
@@ -60,6 +60,16 @@ public class OtaEntity {
     this.name = name;
   }
 
+  @Basic
+  @Column(name = "product_id")
+  public int getProductId() {
+    return productId;
+  }
+
+  public void setProductId(int productId) {
+    this.productId = productId;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o)
@@ -67,12 +77,12 @@ public class OtaEntity {
     if (o == null || getClass() != o.getClass())
       return false;
     OtaEntity otaEntity = (OtaEntity) o;
-    return id == otaEntity.id && Objects.equals(path, otaEntity.path)
-        && Objects.equals(name, otaEntity.name);
+    return id == otaEntity.id && productId == otaEntity.productId
+        && Objects.equals(path, otaEntity.path) && Objects.equals(name, otaEntity.name);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, path, name);
+    return Objects.hash(id, path, name, productId);
   }
 }

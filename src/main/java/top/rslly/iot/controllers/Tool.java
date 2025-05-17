@@ -170,23 +170,46 @@ public class Tool {
 
   @RequestMapping(value = "/otaUpload", method = RequestMethod.POST)
   public JsonResult<?> ota(@RequestParam("name") String name,
-      @RequestPart("file") MultipartFile multipartFile) {
-    return otaService.uploadBin(name, multipartFile);
+      @RequestParam("productId") int productId,
+      @RequestPart("file") MultipartFile multipartFile,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaService.uploadBin(name, productId, multipartFile);
   }
 
   @RequestMapping(value = "/otaList", method = RequestMethod.GET)
-  public JsonResult<?> otaList() {
-    return otaService.otaList();
+  public JsonResult<?> otaList(@RequestHeader("Authorization") String header) {
+    return otaService.otaList(header);
   }
 
   @RequestMapping(value = "/otaDelete", method = RequestMethod.DELETE)
-  public JsonResult<?> otaDelete(@RequestParam("name") String name) {
+  public JsonResult<?> otaDelete(@RequestParam("name") String name,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeOta(header, name))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return otaService.deleteBin(name);
   }
 
   @RequestMapping(value = "/otaEnable", method = RequestMethod.POST)
   public JsonResult<?> otaEnable(@RequestParam("name") String name,
-      @RequestParam("deviceName") String deviceName) {
+      @RequestParam("deviceName") String deviceName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, deviceName)
+          || !safetyService.controlAuthorizeOta(header, name))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     return otaService.otaEnable(name, deviceName);
   }
 

@@ -23,14 +23,15 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
-import top.rslly.iot.models.*;
+import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.models.ProductModelEntity;
+import top.rslly.iot.models.UserProductBindEntity;
+import top.rslly.iot.models.WxProductBindEntity;
 import top.rslly.iot.param.request.Product;
-import top.rslly.iot.services.thingsModel.ProductService;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
-
 
 import javax.annotation.Resource;
 import java.util.ArrayList;

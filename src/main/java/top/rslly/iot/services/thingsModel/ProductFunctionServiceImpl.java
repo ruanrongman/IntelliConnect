@@ -27,7 +27,6 @@ import top.rslly.iot.models.ProductFunctionEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductFunctionDescription;
 import top.rslly.iot.param.request.ProductFunction;
-import top.rslly.iot.services.thingsModel.ProductFunctionService;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;

@@ -30,7 +30,6 @@ import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductDataDescription;
 import top.rslly.iot.param.request.ProductData;
 import top.rslly.iot.services.storage.DataServiceImpl;
-import top.rslly.iot.services.thingsModel.ProductDataService;
 import top.rslly.iot.utility.DataSave;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
