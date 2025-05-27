@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.utility;
 
+import cn.hutool.captcha.generator.RandomGenerator;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -61,6 +62,7 @@ public class Websocket {
   private static ProductServiceImpl productService;
   private static EmotionToolAsync emotionToolAsync;
   private static Router router;
+  private static RedisUtil redisUtil;
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
@@ -97,11 +99,39 @@ public class Websocket {
     Websocket.emotionToolAsync = emotionToolAsync;
   }
 
+  @Autowired
+  public void setRedisUtil(RedisUtil redisUtil) {
+    Websocket.redisUtil = redisUtil;
+  }
+
   /**
    * socket start
    */
   @OnOpen
   public void onOpen(@PathParam("chatId") String chatId, Session session) {
+    if (chatId == null) {
+      try {
+        session.getBasicRemote().sendText("chatId为null");
+        return;
+      } catch (IOException e) {
+        log.info("发送失败");
+        return;
+      }
+    }
+    if (chatId.equals("register")) {
+      this.chatId = "register" + UUID.randomUUID();
+      log.info("注册成功{}", this.chatId);
+      try {
+        clients.put(this.chatId, session);
+        isAbort.put(this.chatId, false);
+        haveVoice = false;
+        slieroVadListener.init();
+        return;
+      } catch (Exception e) {
+        log.info("发送失败");
+        return;
+      }
+    }
     if (clients.get(chatId) == null) {
       this.chatId = chatId;
       String token = getHeader(session);
@@ -193,6 +223,22 @@ public class Websocket {
           text2audio.websocketAudioSync(selectedGreeting, clients.get(chatId), chatId);
         }
         if (state.equals("start")) {
+          if (this.chatId.startsWith("register")) {
+            RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
+            String code = randomGenerator.generate();
+            String registerMsg = "请登录到控制面板添加设备，输入验证码" + code;
+            redisUtil.set(code, getDeviceId(clients.get(chatId)), 60 * 5);
+            clients.get(chatId).getBasicRemote()
+                .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
+                    + registerMsg + "\"}");
+            clients.get(this.chatId).getBasicRemote().sendText("""
+                {
+                "type": "tts",
+                "state": "start"
+                }""");
+            text2audio.websocketAudioSync(registerMsg, clients.get(this.chatId), chatId);
+            clients.get(chatId).close();
+          }
           String mode = json.getString("mode");
           if (mode.equals("auto")) {
             isManual = false;
@@ -413,6 +459,19 @@ public class Websocket {
       }
     }
     return header;
+  }
+
+  private static String getDeviceId(Session session) {
+    final String deviceId = (String) session.getUserProperties().get("Device-Id");
+    if (StrUtil.isBlank(deviceId)) {
+      log.error("获取deviceId失败，不安全的链接，即将关闭");
+      try {
+        session.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+    return deviceId;
   }
 
 

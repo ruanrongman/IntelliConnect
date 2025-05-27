@@ -28,6 +28,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.services.agent.AiServiceImpl;
+import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
@@ -62,6 +63,8 @@ public class Tool {
   private AlarmEventServiceImpl alarmEventService;
   @Autowired
   private SafetyServiceImpl safetyService;
+  @Autowired
+  private OtaXiaozhiServiceImpl otaXiaozhiService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -241,6 +244,30 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return alarmEventService.deleteAlarmEvent(id);
+  }
+
+  @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.GET)
+  public JsonResult<?> xiaoZhiOtaList(@RequestHeader("Authorization") String header) {
+    return otaXiaozhiService.otaList(header);
+  }
+
+  @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.POST)
+  public JsonResult<?> xiaoZhiOtaBind(@RequestBody OtaXiaozhi otaXiaozhi,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, otaXiaozhi.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaXiaozhiService.bindDevice(otaXiaozhi, header);
+  }
+
+  // this deviceId is mac address
+  @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.DELETE)
+  public JsonResult<?> xiaoZhiOtaUnbind(@RequestParam("deviceId") String deviceId,
+      @RequestHeader("Authorization") String header) {
+    return otaXiaozhiService.unbound(deviceId, header);
   }
 
 }

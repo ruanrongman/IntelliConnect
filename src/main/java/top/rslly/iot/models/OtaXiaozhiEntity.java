@@ -23,12 +23,13 @@ import javax.persistence.*;
 import java.util.Objects;
 
 @Entity
-@Table(name = "ota", schema = "cwliot1.8", catalog = "")
-public class OtaEntity {
+@Table(name = "ota_xiaozhi", schema = "cwliot1.8", catalog = "")
+public class OtaXiaozhiEntity {
   private int id;
-  private String path;
-  private String name;
+  private String deviceId;
   private int productId;
+  private String userName;
+  private String role;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,23 +43,13 @@ public class OtaEntity {
   }
 
   @Basic
-  @Column(name = "path")
-  public String getPath() {
-    return path;
+  @Column(name = "device_id")
+  public String getDeviceId() {
+    return deviceId;
   }
 
-  public void setPath(String path) {
-    this.path = path;
-  }
-
-  @Basic
-  @Column(name = "name")
-  public String getName() {
-    return name;
-  }
-
-  public void setName(String name) {
-    this.name = name;
+  public void setDeviceId(String deviceId) {
+    this.deviceId = deviceId;
   }
 
   @Basic
@@ -71,19 +62,39 @@ public class OtaEntity {
     this.productId = productId;
   }
 
+  @Basic
+  @Column(name = "user_name")
+  public String getUserName() {
+    return userName;
+  }
+
+  public void setUserName(String userName) {
+    this.userName = userName;
+  }
+
+  @Basic
+  @Column(name = "role")
+  public String getRole() {
+    return role;
+  }
+
+  public void setRole(String role) {
+    this.role = role;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o)
       return true;
     if (o == null || getClass() != o.getClass())
       return false;
-    OtaEntity otaEntity = (OtaEntity) o;
-    return id == otaEntity.id && productId == otaEntity.productId
-        && Objects.equals(path, otaEntity.path) && Objects.equals(name, otaEntity.name);
+    OtaXiaozhiEntity that = (OtaXiaozhiEntity) o;
+    return id == that.id && productId == that.productId && Objects.equals(deviceId, that.deviceId)
+        && Objects.equals(userName, that.userName) && Objects.equals(role, that.role);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, path, name, productId);
+    return Objects.hash(id, deviceId, productId, userName, role);
   }
 }

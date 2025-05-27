@@ -235,9 +235,13 @@ public class Text2audio {
   @Async("taskExecutor")
   public void websocketAudio(String text, Session session, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, session);
-    var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
-    if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-      param.setVoice(roles.get(0).getVoice());
+    try {
+      var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+      if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
+        param.setVoice(roles.get(0).getVoice());
+      }
+    } catch (Exception e) {
+      log.error("websocketAudio error{}", e.getMessage());
     }
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
     synthesizer.call(text);
@@ -250,9 +254,13 @@ public class Text2audio {
 
   public void websocketAudioSync(String text, Session session, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, session);
-    var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
-    if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-      param.setVoice(roles.get(0).getVoice());
+    try {
+      var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+      if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
+        param.setVoice(roles.get(0).getVoice());
+      }
+    } catch (Exception e) {
+      log.error("websocketAudio error{}", e.getMessage());
     }
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
     synthesizer.call(text);

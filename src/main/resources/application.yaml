@@ -113,6 +113,8 @@ js:
 ota:
   bin:
     path: D://temp-rainy//
+  xiaozhi:
+    url: ws://127.0.0.1:8080
 weather:
   key: XXX
 ai:

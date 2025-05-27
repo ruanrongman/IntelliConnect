@@ -99,7 +99,7 @@ public class UserServiceImpl implements UserService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     Map<String, Object> map = new HashMap<>();
-    // 随机生成 4 位验证码
+    // 随机生成 6 位验证码
     RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
     map.put("code", randomGenerator.generate());
     map.put("username", username);

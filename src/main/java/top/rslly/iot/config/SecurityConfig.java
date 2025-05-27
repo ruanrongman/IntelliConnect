@@ -72,6 +72,8 @@ public class SecurityConfig {
         "/api/v2/ai/tmp_voice/**",
         "/wxLogin",
         "/wxRegister",
+        "/xiaozhi/ota/**",
+        "/xiaozhi/ota/activate/**",
         // "/api/v2/startProcess/**",
         // "/api/v2/stop/**",
         // "/api/v2/reset/**",
