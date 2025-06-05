@@ -114,12 +114,12 @@ public class McpServerServiceImpl implements McpServerService {
     if (mcpServerParam.getUrl() == null || mcpServerParam.getDescription() == null
         || mcpServerParam.getProductId() == 0)
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    List<McpServerEntity> p1 = mcpServerRepository.findAllByUrl(mcpServerParam.getUrl());
-    List<McpServerEntity> p2 =
-        mcpServerRepository.findAllByDescription(mcpServerParam.getDescription());
+    List<McpServerEntity> p1 =
+        mcpServerRepository.findAllByProductIdAndDescription(mcpServerParam.getProductId(),
+            mcpServerParam.getDescription());
     List<ProductEntity> result =
         productRepository.findAllById(mcpServerParam.getProductId());
-    if (result.isEmpty() || !p1.isEmpty() || !p2.isEmpty())
+    if (result.isEmpty() || !p1.isEmpty())
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     else {
       McpServerEntity mcpServerEntity1 = mcpServerRepository.save(mcpServerEntity);

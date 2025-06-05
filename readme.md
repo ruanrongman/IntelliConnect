@@ -70,12 +70,17 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 * 创万联(cwl): 专注于物联网和人工智能技术的开源社区。
 * Promptulate https://github.com/Undertone0809/promptulate [A LLM application and Agent development framework.]
 * Rymcu https://github.com/rymcu [为数百万人服务的开源嵌入式知识学习交流平台]
+
+## 智控台和小智ota地址(仅用于测试，不保证稳定，请勿用于生产环境)
+* [智控台] (https://control.rslly.top)
+* [小智ota地址] (https://api.rslly.top/xiaozhi/ota/)
+
 ## 交流群
 
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/656441ff51dd899364f4b705d617b8b.jpg" width="250px"/>
+    <img src="./docs/images/2d3f73b6356ea93c256e97fdbf3416d.jpg" width="250px"/>
 </div>
 
 ## 致谢

@@ -57,7 +57,7 @@ public class WeatherToolPrompt {
            Below is the current conversation consisting of interleaving human and assistant history.
           """;
   private static final String weatherArrangePrompt = """
-      请根据用户的请求，合理使用下列信息，使用人类友善的语言来回答，并推荐用户穿衣以及出行建议,可以配合使用一些表情符号来丰富表达。
+      请根据用户的请求，合理使用下列信息，使用人类友善的语言来回答，并推荐用户穿衣以及出行建议,句子尽量不要出现markdown等符号以方便tts系统。
       ## weather information
       当前天气信息{lives}
       未来几天的天气信息{forecast}

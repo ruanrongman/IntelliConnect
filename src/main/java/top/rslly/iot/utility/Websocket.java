@@ -200,62 +200,67 @@ public class Websocket {
             "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
       } else if (type.equals("listen")) {
         String state = json.getString("state");
-        if (state.equals("detect")) {
-          clients.get(chatId).getBasicRemote().sendText("""
-              {
-                "type": "tts",
-                "state": "start"
-              }""");
-          // 定义问候语列表
-          List<String> greetings = Arrays.asList(
-              "很高兴见到你",
-              "你好啊",
-              "我们又见面了",
-              "最近可好?",
-              "很高兴再次和你谈话",
-              "在干嘛");
-
-          // 生成随机索引
-          Random random = new Random();
-          String selectedGreeting = greetings.get(random.nextInt(greetings.size()));
-
-          // 发送随机问候语
-          text2audio.websocketAudioSync(selectedGreeting, clients.get(chatId), chatId);
-        }
-        if (state.equals("start")) {
-          if (this.chatId.startsWith("register")) {
-            RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
-            String code = randomGenerator.generate();
-            String registerMsg = "请登录到控制面板添加设备，输入验证码" + code;
-            redisUtil.set(code, getDeviceId(clients.get(chatId)), 60 * 5);
-            clients.get(chatId).getBasicRemote()
-                .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                    + registerMsg + "\"}");
-            clients.get(this.chatId).getBasicRemote().sendText("""
+        switch (state) {
+          case "detect" -> {
+            clients.get(chatId).getBasicRemote().sendText("""
                 {
-                "type": "tts",
-                "state": "start"
+                  "type": "tts",
+                  "state": "start"
                 }""");
-            text2audio.websocketAudioSync(registerMsg, clients.get(this.chatId), chatId);
-            clients.get(chatId).close();
+            // 定义问候语列表
+            List<String> greetings = Arrays.asList(
+                "很高兴见到你",
+                "你好啊",
+                "我们又见面了",
+                "最近可好?",
+                "很高兴再次和你谈话",
+                "在干嘛");
+
+            // 生成随机索引
+            Random random = new Random();
+            String selectedGreeting = greetings.get(random.nextInt(greetings.size()));
+
+            // 发送随机问候语
+            text2audio.websocketAudioSync(selectedGreeting, clients.get(chatId), chatId);
+            clients.get(chatId).getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+            isAbort.put(chatId, false);
           }
-          String mode = json.getString("mode");
-          if (mode.equals("auto")) {
-            isManual = false;
-          } else if (mode.equals("manual")) {
-            isManual = true;
-          } else {
-            clients.get(chatId).getBasicRemote()
-                .sendText("{\"type\":\"stt\",\"text\":\"" + "不支持实时模式" + "\"}");
-            onClose();
-            return;
+          case "start" -> {
+            if (this.chatId.startsWith("register")) {
+              RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
+              String code = randomGenerator.generate();
+              String registerMsg = "请登录到控制面板添加设备，输入验证码" + code;
+              redisUtil.set(code, getDeviceId(clients.get(chatId)), 60 * 5);
+              clients.get(chatId).getBasicRemote()
+                  .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
+                      + registerMsg + "\"}");
+              clients.get(this.chatId).getBasicRemote().sendText("""
+                  {
+                  "type": "tts",
+                  "state": "start"
+                  }""");
+              text2audio.websocketAudioSync(registerMsg, clients.get(this.chatId), chatId);
+              clients.get(chatId).getBasicRemote()
+                  .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+              isAbort.put(chatId, false);
+              clients.get(chatId).close();
+            }
+            String mode = json.getString("mode");
+            if (mode.equals("auto")) {
+              isManual = false;
+            } else if (mode.equals("manual")) {
+              isManual = true;
+            } else {
+              clients.get(chatId).getBasicRemote()
+                  .sendText("{\"type\":\"stt\",\"text\":\"" + "不支持实时模式" + "\"}");
+              onClose();
+              return;
+            }
+            log.info("listen start");
+            voiceContent.clear();
           }
-          log.info("listen start");
-          voiceContent.clear();
-        } else if (state.equals("stop")) {
-          dealWithAudio();
-        } else if (state.equals("abort")) {
-          isAbort.put(chatId, true);
+          case "stop" -> dealWithAudio();
+          case "abort" -> isAbort.put(chatId, true);
         }
       }
     } catch (Exception e) {
@@ -276,6 +281,8 @@ public class Websocket {
               }""");
           audioList.clear();
           text2audio.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId);
+          clients.get(chatId).getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+          isAbort.put(chatId, false);
           clients.get(chatId).close();
           return;
           // 存在问题，导致无法播放
@@ -418,12 +425,9 @@ public class Websocket {
       var emotionRes = emotionToolAsync.run(voiceContent.get(chatId), emotionMessage);
       String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
           Integer.parseInt(chatId));
-      if (answer.length() > 200)
-        answer = answer.substring(0, 200);
-      JSONObject jsonObject = new JSONObject();
-      jsonObject.put("type", "tts");
-      jsonObject.put("state", "sentence_start");
-      jsonObject.put("text", answer);
+      if (answer == null || answer.equals("")) {
+        answer = "抱歉，我暂时无法理解您的问题。";
+      }
       if (emotionRes.isDone()) {
         emotionObject.put("text", emotionRes.get().get("emoji"));
         emotionObject.put("emotion", emotionRes.get().get("text"));
@@ -434,9 +438,9 @@ public class Websocket {
       }
       clients.get(chatId).getBasicRemote()
           .sendText(emotionObject.toJSONString());
-      clients.get(chatId).getBasicRemote()
-          .sendText(jsonObject.toJSONString());
-      haveVoice = false;
+      if (answer.length() > 500)
+        answer = answer.substring(0, 500);
+      String[] sentences = answer.split("(?<=[。？！；：])");
       if (isManual) {
         clients.get(chatId).getBasicRemote().sendText("""
             {
@@ -444,7 +448,22 @@ public class Websocket {
               "state": "start"
             }""");
       }
-      text2audio.websocketAudio(answer, clients.get(chatId), chatId);
+      for (String sentence : sentences) {
+        sentence = sentence.trim();
+        if (sentence.isEmpty())
+          continue;
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("type", "tts");
+        jsonObject.put("state", "sentence_start");
+        jsonObject.put("text", sentence);
+        log.info(sentence);
+        clients.get(chatId).getBasicRemote()
+            .sendText(jsonObject.toJSONString());
+        text2audio.websocketAudioSync(sentence, clients.get(chatId), chatId);
+      }
+      clients.get(chatId).getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+      haveVoice = false;
+      isAbort.put(chatId, false);
     }
   }
 

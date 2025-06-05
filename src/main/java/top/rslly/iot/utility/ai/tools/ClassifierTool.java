@@ -70,13 +70,15 @@ public class ClassifierTool {
     List<ModelMessage> memory =
         Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
             .orElse(Collections.emptyList());
+    int productId = (int) globalMessage.get("productId");
     ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(), classifierToolPrompt.getClassifierTool());
+        new ModelMessage(ModelMessageRole.SYSTEM.value(),
+            classifierToolPrompt.getClassifierTool(productId));
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     // log.info("systemMessage: " + systemMessage.getContent());
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
-      systemMessage.setContent(classifierToolPrompt.getClassifierTool() + memory);
+      systemMessage.setContent(classifierToolPrompt.getClassifierTool(productId) + memory);
     }
     messages.add(systemMessage);
     messages.add(userMessage);

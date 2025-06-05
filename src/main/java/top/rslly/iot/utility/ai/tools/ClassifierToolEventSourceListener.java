@@ -60,8 +60,8 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
       return;
     }
     if ("[DONE]".equals(data)) {
-      log.info("OpenAI返回数据结束了");
-      log.info("OpenAI最终返回数据：{}", jsonBuffer.toString());
+      // log.info("OpenAI返回数据结束了");
+      // log.info("OpenAI最终返回数据：{}", jsonBuffer.toString());
       var lock = ClassifierTool.lock;
       lock.lock();
       try {

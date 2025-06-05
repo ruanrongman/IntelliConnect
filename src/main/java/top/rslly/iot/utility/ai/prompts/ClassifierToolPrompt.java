@@ -23,6 +23,7 @@ import com.alibaba.fastjson.JSON;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
@@ -33,6 +34,8 @@ import java.util.Map;
 
 @Component
 public class ClassifierToolPrompt {
+  @Autowired
+  private McpServerServiceImpl mcpServerService;
   private static final String classifierPrompt =
       """
            {task_map}
@@ -64,11 +67,12 @@ public class ClassifierToolPrompt {
            ```
            ## Attention
            - Your output is JSON only and no explanation.
+           - Minimize the use of networking to improve response speed
            ## Current Conversation
            Below is the current conversation consisting of interleaving human and assistant history.
           """;
 
-  public String getClassifierTool() {
+  public String getClassifierTool(int productId) {
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2", "Get the current time");
@@ -85,7 +89,15 @@ public class ClassifierToolPrompt {
     classifierMap.put("10",
         "Search for online(simplified to keywords)");
     classifierMap.put("11", "All about role and voice");
-    classifierMap.put("12", "All use mcp server to do anything");
+    var mcpServerList = mcpServerService.findAllByProductId(productId);
+    if (!mcpServerList.isEmpty()) {
+      StringBuilder mcpServerString = new StringBuilder();
+      for (var mcpServerEntity : mcpServerList) {
+        mcpServerString.append(mcpServerEntity.getDescription());
+        mcpServerString.append("|");
+      }
+      classifierMap.put("12", mcpServerString.toString());
+    }
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();
     params.put("task_map", classifierJson);

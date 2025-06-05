@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 @Component
 @Slf4j
@@ -62,7 +63,7 @@ public class McpAgent {
 
   private final StringBuffer conversationPrompt = new StringBuffer();
 
-  public void initClients(int productId) throws Exception {
+  public void initClients(int productId) throws IllegalArgumentException {
     // 解析配置
     var mcpServerEntities = mcpServerService.findAllByProductId(productId);
     for (var mcpServerEntity : mcpServerEntities) {
@@ -84,7 +85,7 @@ public class McpAgent {
             .build();
         client.initialize();
         client.ping();
-        clientMap.put(key, client);
+        clientMap.put(client.getServerInfo().name(), client);
         log.info("Initialized MCP server [{}] at {}", key, url);
       } catch (Exception e) {
         log.error("Failed to initialize MCP server [{}] at {}", key, url);
@@ -105,7 +106,12 @@ public class McpAgent {
       return "连接mcp服务器失败";
     }
     // 构建 system prompt，包括所有服务器的工具描述
-    String system = reactPrompt.getReact(combineToolDescriptions(), question);
+    String system;
+    try {
+      system = reactPrompt.getReact(combineToolDescriptions(), question);
+    } catch (Exception e) {
+      return "获取工具描述失败";
+    }
     // log.info("system: {}", system);
 
     List<ModelMessage> messages = new ArrayList<>();
@@ -141,16 +147,19 @@ public class McpAgent {
         }
         String serverKey = parts[0];
         String toolName = parts[1];
-        McpSyncClient client = clientMap.get(serverKey);
-        if (client == null) {
-          throw new IllegalArgumentException("Unknown server key: " + serverKey);
-        }
-
         // 调用指定服务器的工具
-        McpSchema.CallToolResult result = client.callTool(
-            new McpSchema.CallToolRequest(toolName, args));
-        toolResult = result.content().get(0).toString();
-
+        try {
+          McpSyncClient client = clientMap.get(serverKey);
+          if (client == null) {
+            throw new IllegalArgumentException("Unknown server key: " + serverKey);
+          }
+          McpSchema.CallToolResult result = client.callTool(
+              new McpSchema.CallToolRequest(toolName, args));
+          toolResult = result.content().get(0).toString();
+        } catch (Exception e) {
+          log.error("Error during tool call{}", e.getMessage());
+          toolResult = "Error calling tool, please try again";
+        }
         // 更新对话
         conversationPrompt.append(obj.toJSONString());
         conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
@@ -158,7 +167,9 @@ public class McpAgent {
         log.info("Observation ({}): {}", fullName, toolResult);
 
       } catch (Exception e) {
-        log.error("Error during tool call", e);
+        log.error("Error during tool call{}", e.getMessage());
+        if (answer == null)
+          answer = "mcp服务器调用发生严重错误，请检查mcp服务器";
         return answer;
       }
       iteration++;

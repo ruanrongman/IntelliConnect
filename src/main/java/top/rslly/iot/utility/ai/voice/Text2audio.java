@@ -248,7 +248,14 @@ public class Text2audio {
     try {
       callback.waitForComplete();
     } catch (InterruptedException e) {
-      log.error("waitForComplete error{}", e.getMessage());
+      log.error("waitForComplete interrupted: {}", e.getMessage());
+    } finally {
+      try {
+        session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+      } catch (IOException ex) {
+        log.warn("Failed to send stop message: {}", ex.getMessage());
+      }
+      Websocket.isAbort.put(chatId, false);
     }
   }
 
@@ -323,8 +330,6 @@ public class Text2audio {
         playPosition += FRAME_DURATION;
       }
       queue.clear();
-      session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-      Websocket.isAbort.put(chatId, false);
     } catch (Exception e) {
       log.error("Error in asyncSendAudioQueue: {}", e.getMessage(), e);
     }

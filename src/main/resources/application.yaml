@@ -145,7 +145,7 @@ ai:
   searchTool-llm: silicon-Qwen2.5-7B-Instruct
   agent-llm: uniApi-deepSeek
   mcp:
-    agent-llm: uniApi-deepSeek
+    agent-llm: silicon-Qwen2.5-72B-Instruct
     agent-epoch-limit: 5
 emq:
   api:

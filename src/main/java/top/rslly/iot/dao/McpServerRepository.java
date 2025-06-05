@@ -32,7 +32,7 @@ public interface McpServerRepository extends JpaRepository<McpServerEntity, Long
 
   List<McpServerEntity> findAllByUrl(String url);
 
-  List<McpServerEntity> findAllByDescription(String description);
+  List<McpServerEntity> findAllByProductIdAndDescription(int productId, String description);
 
   @Transactional
   List<McpServerEntity> deleteById(int id);
