@@ -36,6 +36,10 @@ import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ChatToolPrompt;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Data
 @Component
@@ -49,8 +53,13 @@ public class ChatTool {
   private HttpRequestUtils httpRequestUtils;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  public static final Lock lock = new ReentrantLock();
+  public static final ConcurrentHashMap<String, String> dataMap = new ConcurrentHashMap<>();
+  public static final Condition dataCondition = lock.newCondition();
   @Value("${ai.chatTool-llm}")
   private String llmName;
+  @Value("${ai.chatTool-speedUp}")
+  private boolean speedUp;
   private String name = "chatTool";
   private String description = """
       This tool is used to chat with people
@@ -60,6 +69,8 @@ public class ChatTool {
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     int productId = (int) globalMessage.get("productId");
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);
     String currentMemory = "";
@@ -97,6 +108,23 @@ public class ChatTool {
     messages.add(systemMessage);
     messages.add(userMessage);
     // log.info("chatTool: " + messages);
-    return llm.commonChat(question, messages, true);
+    if (speedUp) {
+      dataMap.clear();
+      llm.streamJsonChat(question, messages, true,
+          new ChatToolEventSourceListener(queueMap, chatId));
+      lock.lock();
+      try {
+        while (dataMap.get("answer") == null) {
+          dataCondition.await();
+        }
+      } catch (Exception e) {
+        log.info("ChatTool error{}", e.getMessage());
+      } finally {
+        lock.unlock();
+      }
+      return dataMap.get("answer");
+    } else {
+      return llm.commonChat(question, messages, true);
+    }
   }
 }

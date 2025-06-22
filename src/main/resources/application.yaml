@@ -131,6 +131,7 @@ ai:
   team-name: 创万联
   agent-epoch-limit: 5
   chatTool-llm: silicon-Qwen2.5-7B-Instruct
+  chatTool-speedUp: true
   emotionTool-llm: silicon-Qwen3-30B-A3B-think-32
   memoryTool-llm: silicon-Qwen2.5-14B-Instruct
   classifierTool-llm: silicon-Qwen2.5-32B-Instruct

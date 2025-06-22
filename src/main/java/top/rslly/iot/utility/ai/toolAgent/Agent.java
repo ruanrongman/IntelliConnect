@@ -34,10 +34,7 @@ import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Component
 @Slf4j
@@ -56,6 +53,13 @@ public class Agent {
 
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    String chatId = (String) globalMessage.get("chatId");
+    var queue = queueMap.get(chatId);
+    if (queue != null) {
+      queue.add("以下是智能体处理结果：");
+    }
     String system = reactPrompt.getReact(descriptionUtil.getTools(), question);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
@@ -76,18 +80,35 @@ public class Agent {
         Map<String, String> res = process_llm_result(obj);
         if (res.get("action_name").equals("finish")) {
           String args = res.get("action_parameters");
-          return JSON.parseObject(args).getString("content");
+          String content = JSON.parseObject(args).getString("content");
+          if (queue != null) {
+            queue.add(content);
+            queue.add("[DONE]");
+          }
+          return content;
         }
         toolResult =
             manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
         conversationPrompt.append(obj);
         conversationPrompt.append(String.format("Observation: %s\n", toolResult));
+        if (queue != null) {
+          queue.add(res.get("thought"));
+          queue.add("成功调用工具:" + res.get("action_name") + "。");
+        }
         log.info("Thought:{}", res.get("thought"));
         log.info("Observation:{}", toolResult);
       } catch (Exception e) {
+        if (queue != null) {
+          queue.add(answer);
+          queue.add("[DONE]");
+        }
         return answer;
       }
       iteration += 1;
+    }
+    if (queue != null) {
+      queue.add(toolResult);
+      queue.add("[DONE]");
     }
     return toolResult;
   }

@@ -33,6 +33,7 @@ import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @Slf4j
@@ -67,6 +68,7 @@ public class Router {
   private McpAgent mcpAgent;
   @Autowired
   private MemoryTool memoryTool;
+  public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in wechat module need to use openid
   public String response(String content, String chatId, int productId, String... microappid) {
@@ -76,6 +78,9 @@ public class Router {
     Map<String, Object> globalMessage = new HashMap<>();
     globalMessage.put("productId", productId);
     globalMessage.put("chatId", chatId);
+    globalMessage.put("queueMap", queueMap);
+    Queue<String> queue = new LinkedList<>();
+    queueMap.put(chatId, queue);
     if (microappid.length > 0)
       globalMessage.put("microappid", microappid[0]);
     var memory_cache = redisUtil.get("memory" + chatId);

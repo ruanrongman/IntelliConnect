@@ -80,7 +80,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/2d3f73b6356ea93c256e97fdbf3416d.jpg" width="250px"/>
+    <img src="./docs/images/ead6a1db6c5f332834e18fb0e1c2913.jpg" width="250px"/>
 </div>
 
 ## 致谢
@@ -95,6 +95,10 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
     - 遵循 [Apache 2.0 协议](https://www.apache.org/licenses/LICENSE-2.0)
 - 商业授权
     - 商业使用请联系 [创万联 官方](https://wordpress.rslly.top) 获取授权
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ruanrongman/IntelliConnect&type=Date)](https://www.star-history.com/#ruanrongman/IntelliConnect&Date)
 ## 贡献
 
 本人正在尝试一些更加完善的抽象模式，支持更多的物联网协议和数据存储形式，如果你有更好的建议，欢迎一起讨论交流。

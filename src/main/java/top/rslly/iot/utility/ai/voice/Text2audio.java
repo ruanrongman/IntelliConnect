@@ -19,13 +19,11 @@
  */
 package top.rslly.iot.utility.ai.voice;
 
-import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversation;
 import com.alibaba.dashscope.audio.tts.SpeechSynthesisResult;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
 import com.alibaba.dashscope.common.ResultCallback;
-import com.alibaba.dashscope.utils.Constants;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,11 +32,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.SseEmitterUtil;
-import top.rslly.iot.utility.Websocket;
-import top.rslly.iot.utility.ai.voice.concentus.OpusApplication;
-import top.rslly.iot.utility.ai.voice.concentus.OpusEncoder;
-import top.rslly.iot.utility.ai.voice.concentus.OpusException;
-import top.rslly.iot.utility.ai.voice.concentus.OpusSignal;
+import top.rslly.iot.utility.smartVoice.Websocket;
 import ws.schild.jave.Encoder;
 import ws.schild.jave.MultimediaObject;
 import ws.schild.jave.encode.AudioAttributes;
@@ -236,45 +230,54 @@ public class Text2audio {
   public void websocketAudio(String text, Session session, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
-      var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
-      if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-        param.setVoice(roles.get(0).getVoice());
+      try {
+        var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+        if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
+          param.setVoice(roles.get(0).getVoice());
+        }
+      } catch (Exception ignored) {
+      }
+
+      SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
+      synthesizer.call(text);
+      try {
+        callback.waitForComplete();
+      } catch (InterruptedException e) {
+        log.error("waitForComplete interrupted: {}", e.getMessage());
+      } finally {
+        try {
+          session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+        } catch (IOException ex) {
+          log.warn("Failed to send stop message: {}", ex.getMessage());
+        }
+        Websocket.isAbort.put(chatId, false);
       }
     } catch (Exception e) {
       log.error("websocketAudio error{}", e.getMessage());
-    }
-    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
-    synthesizer.call(text);
-    try {
-      callback.waitForComplete();
-    } catch (InterruptedException e) {
-      log.error("waitForComplete interrupted: {}", e.getMessage());
-    } finally {
-      try {
-        session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-      } catch (IOException ex) {
-        log.warn("Failed to send stop message: {}", ex.getMessage());
-      }
-      Websocket.isAbort.put(chatId, false);
     }
   }
 
   public void websocketAudioSync(String text, Session session, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
-      var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
-      if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-        param.setVoice(roles.get(0).getVoice());
+      try {
+        var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+        if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
+          param.setVoice(roles.get(0).getVoice());
+        }
+      } catch (Exception ignored) {
+      }
+
+      SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
+      synthesizer.call(text);
+      try {
+        callback.waitForComplete();
+      } catch (InterruptedException e) {
+        log.error("waitForComplete error{}", e.getMessage());
       }
     } catch (Exception e) {
       log.error("websocketAudio error{}", e.getMessage());
-    }
-    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
-    synthesizer.call(text);
-    try {
-      callback.waitForComplete();
-    } catch (InterruptedException e) {
-      log.error("waitForComplete error{}", e.getMessage());
+      e.printStackTrace();
     }
   }
 

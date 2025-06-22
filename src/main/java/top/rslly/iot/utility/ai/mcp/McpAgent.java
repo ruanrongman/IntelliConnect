@@ -36,10 +36,7 @@ import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 
 @Component
@@ -112,6 +109,13 @@ public class McpAgent {
     } catch (Exception e) {
       return "获取工具描述失败";
     }
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    String chatId = (String) globalMessage.get("chatId");
+    var queue = queueMap.get(chatId);
+    if (queue != null) {
+      queue.add("以下是mcp智能体处理结果：");
+    }
     // log.info("system: {}", system);
 
     List<ModelMessage> messages = new ArrayList<>();
@@ -143,7 +147,12 @@ public class McpAgent {
             client.close();
           }
           // finish or invalid format
-          return JSON.parseObject(args).getString("content");
+          String content = JSON.parseObject(args).getString("content");
+          if (queue != null) {
+            queue.add(content);
+            queue.add("[DONE]");
+          }
+          return content;
         }
         String serverKey = parts[0];
         String toolName = parts[1];
@@ -163,6 +172,10 @@ public class McpAgent {
         // 更新对话
         conversationPrompt.append(obj.toJSONString());
         conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
+        if (queue != null) {
+          queue.add(thought);
+          queue.add("成功调用工具:" + toolName + "。");
+        }
         log.info("Thought: {}", thought);
         log.info("Observation ({}): {}", fullName, toolResult);
 
@@ -170,6 +183,10 @@ public class McpAgent {
         log.error("Error during tool call{}", e.getMessage());
         if (answer == null)
           answer = "mcp服务器调用发生严重错误，请检查mcp服务器";
+        if (queue != null) {
+          queue.add(answer);
+          queue.add("[DONE]");
+        }
         return answer;
       }
       iteration++;
@@ -177,6 +194,10 @@ public class McpAgent {
     // 释放mcp客户端
     for (var client : clientMap.values()) {
       client.close();
+    }
+    if (queue != null) {
+      queue.add(toolResult);
+      queue.add("[DONE]");
     }
     return toolResult;
   }
