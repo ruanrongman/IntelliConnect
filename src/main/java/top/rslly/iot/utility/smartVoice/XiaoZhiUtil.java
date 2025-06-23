@@ -167,11 +167,24 @@ public class XiaoZhiUtil {
         if (Router.queueMap.containsKey("chatProduct" + chatId)) {
           String element = Router.queueMap.get("chatProduct" + chatId).poll();
           if (element != null && element.equals("[DONE]")) {
+            if (answerBuilder.length() > 0) {
+              // 立即发送已累积的内容
+              JSONObject jsonObject = new JSONObject();
+              jsonObject.put("type", "tts");
+              jsonObject.put("state", "sentence_start");
+              jsonObject.put("text", answerBuilder.toString());
+              Websocket.clients.get(chatId).getBasicRemote()
+                  .sendText(jsonObject.toJSONString());
+              text2audio.websocketAudioSync(answerBuilder.toString(), Websocket.clients.get(chatId),
+                  chatId);
+              answerBuilder.setLength(0);
+            }
             Websocket.clients.get(chatId).getBasicRemote()
                 .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
             Router.queueMap.remove("chatProduct" + chatId);
             return;
           } else if (element != null) {
+            element = element.replace("\n", "");
             // 查找字符串中的第一个标点位置
             int punctuationIndex = -1;
             for (int i = 0; i < element.length(); i++) {
@@ -235,23 +248,7 @@ public class XiaoZhiUtil {
       }
       if (answer.length() > 500)
         answer = answer.substring(0, 500);
-      String[] sentences = answer.split("(?<=[。？！；：])");
-      for (String sentence : sentences) {
-        sentence = sentence.trim();
-        if (Websocket.isAbort.get(chatId)) {
-          return;
-        }
-        if (sentence.isEmpty())
-          continue;
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("type", "tts");
-        jsonObject.put("state", "sentence_start");
-        jsonObject.put("text", sentence);
-        log.info(sentence);
-        Websocket.clients.get(chatId).getBasicRemote()
-            .sendText(jsonObject.toJSONString());
-        text2audio.websocketAudioSync(sentence, Websocket.clients.get(chatId), chatId);
-      }
+      splitSentences(answer, chatId);
       Websocket.clients.get(chatId).getBasicRemote()
           .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
     }
@@ -298,6 +295,27 @@ public class XiaoZhiUtil {
     text2audio.websocketAudioSync(registerMsg, Websocket.clients.get(chatId), chatId);
     Websocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+  }
+
+  // 分割句子
+  private void splitSentences(String answer, String chatId) throws IOException {
+    String[] sentences = answer.split("(?<=[。？！；：])");
+    for (String sentence : sentences) {
+      sentence = sentence.trim();
+      if (Websocket.isAbort.get(chatId)) {
+        return;
+      }
+      if (sentence.isEmpty())
+        continue;
+      JSONObject jsonObject = new JSONObject();
+      jsonObject.put("type", "tts");
+      jsonObject.put("state", "sentence_start");
+      jsonObject.put("text", sentence);
+      log.info(sentence);
+      Websocket.clients.get(chatId).getBasicRemote()
+          .sendText(jsonObject.toJSONString());
+      text2audio.websocketAudioSync(sentence, Websocket.clients.get(chatId), chatId);
+    }
   }
 
 }

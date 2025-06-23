@@ -140,7 +140,8 @@ public class Text2audio {
       if (session == null) {
         SseEmitterUtil.removeUser(chatId);
       }
-      e.printStackTrace();
+      latch.countDown(); // 确保释放等待锁
+      log.error("TTS合成失败: {}", e.getMessage());
     }
 
     public void waitForComplete() throws InterruptedException {
@@ -277,7 +278,6 @@ public class Text2audio {
       }
     } catch (Exception e) {
       log.error("websocketAudio error{}", e.getMessage());
-      e.printStackTrace();
     }
   }
 
