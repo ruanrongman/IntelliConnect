@@ -53,6 +53,7 @@ public class Agent {
 
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
+    int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
@@ -60,7 +61,7 @@ public class Agent {
     if (queue != null) {
       queue.add("以下是智能体处理结果：");
     }
-    String system = reactPrompt.getReact(descriptionUtil.getTools(), question);
+    String system = reactPrompt.getReact(descriptionUtil.getTools(productId), question);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);

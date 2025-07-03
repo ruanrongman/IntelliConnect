@@ -25,6 +25,7 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,7 @@ import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
+import top.rslly.iot.utility.ai.tools.BaseTool;
 
 import java.time.Duration;
 import java.util.*;
@@ -41,12 +43,14 @@ import java.util.concurrent.TimeoutException;
 
 @Component
 @Slf4j
-public class McpAgent {
+@Data
+public class McpAgent implements BaseTool<String> {
   @Value("${ai.mcp.agent-llm}")
   private String llmName;
 
   @Value("${ai.mcp.agent-epoch-limit:8}")
   private int epochLimit;
+  private String name = "mcpAgent";
 
   @Autowired
   private ReactPrompt reactPrompt;
@@ -59,6 +63,21 @@ public class McpAgent {
   private final Map<String, McpSyncClient> clientMap = new LinkedHashMap<>();
 
   private final StringBuffer conversationPrompt = new StringBuffer();
+
+  public String getDescription(int productId) {
+    var mcpServerEntities = mcpServerService.findAllByProductId(productId);
+    if (mcpServerEntities.isEmpty()) {
+      return "工具无效，请勿调用";
+    }
+    StringBuilder toolDescriptions = new StringBuilder();
+    for (var mcpServerEntity : mcpServerEntities) {
+      toolDescriptions.append(mcpServerEntity.getDescription()).append("|");
+    }
+    return toolDescriptions.toString();
+    /*
+     * return """ This tool is used to classify users' intentions Args: user question(str) """;
+     */
+  }
 
   public void initClients(int productId) throws IllegalArgumentException {
     // 解析配置
@@ -93,6 +112,12 @@ public class McpAgent {
     }
   }
 
+  @Override
+  public String run(String question) {
+    return null;
+  }
+
+  @Override
   public String run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
     if (mcpServerService.findAllByProductId(productId).isEmpty())

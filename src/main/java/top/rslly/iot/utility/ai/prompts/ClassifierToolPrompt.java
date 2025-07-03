@@ -52,19 +52,6 @@ public class ClassifierToolPrompt {
                }
            }
            ```
-           ## few shot
-           if user input: Bundle the lamp product,key is XXX
-           ```json
-           {
-           "thought": "用户想要绑定产品",
-           "action":
-               {
-               "code": "200",
-               "value": "[7]",
-               "args": "Bundle the lamp product,key is XXX"
-               }
-           }
-           ```
            ## Attention
            - Your output is JSON only and no explanation.
            - Minimize the use of networking to improve response speed
@@ -75,20 +62,17 @@ public class ClassifierToolPrompt {
   public String getClassifierTool(int productId) {
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
-    classifierMap.put("2", "Get the current time");
-    classifierMap.put("3",
+    classifierMap.put("2",
         "Operate and query electrical (including various intelligent devices such as robots, excluding playing music)");
-    classifierMap.put("4", "Request a song or play music.(including Recommend music.)");
-    classifierMap.put("5",
+    classifierMap.put("3", "Request a song or play music.(including Recommend music.)");
+    classifierMap.put("4",
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
-    classifierMap.put("6",
+    classifierMap.put("5",
         "Common chat");
-    classifierMap.put("7", "Bind or Unbinding the product");
-    classifierMap.put("8", "handoff controlled products");
-    classifierMap.put("9", "Schedule management and reminder tasks");
-    classifierMap.put("10",
-        "Search for online(simplified to keywords)");
-    classifierMap.put("11", "All about role and voice");
+    classifierMap.put("6", "Bind and unbind products");
+    classifierMap.put("7", "handoff controlled products");
+    classifierMap.put("8", "Schedule management and reminder tasks");
+    classifierMap.put("9", "All about role and voice");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
     if (!mcpServerList.isEmpty()) {
       StringBuilder mcpServerString = new StringBuilder();
@@ -96,7 +80,7 @@ public class ClassifierToolPrompt {
         mcpServerString.append(mcpServerEntity.getDescription());
         mcpServerString.append("|");
       }
-      classifierMap.put("12", mcpServerString.toString());
+      classifierMap.put("10", mcpServerString.toString());
     }
     String classifierJson = JSON.toJSONString(classifierMap);
     Map<String, String> params = new HashMap<>();

@@ -61,8 +61,6 @@ public class Router {
   @Autowired
   private ScheduleTool scheduleTool;
   @Autowired
-  private SearchTool searchTool;
-  @Autowired
   private ProductRoleTool productRoleTool;
   @Autowired
   private McpAgent mcpAgent;
@@ -110,30 +108,30 @@ public class Router {
             toolResult = weatherTool.run(args);
             answer = "以下是高德天气插件结果：" + toolResult;
           }
-          case "3" -> {
+          case "2" -> {
             toolResult = controlTool.run(args, globalMessage);
             answer = "以下是智能控制插件结果：" + toolResult;
           }
-          case "4" -> {
+          case "3" -> {
             var musicMap = musicTool.run(args);
             toolResult = musicMap.get("answer");
             answer = "以下是网易云音乐插件结果：" + toolResult + musicMap.get("url");
           }
-          case "5" -> {
+          case "4" -> {
 
             toolResult = agent.run(content, globalMessage);
             answer = "以下是智能体处理结果：" + toolResult;
           }
-          case "6" -> answer = chatTool.run(content, globalMessage);
-          case "7" -> {
+          case "5" -> answer = chatTool.run(content, globalMessage);
+          case "6" -> {
             toolResult = wxBoundProductTool.run(args, globalMessage);
             answer = "以下是微信绑定产品插件结果：" + toolResult;
           }
-          case "8" -> {
+          case "7" -> {
             toolResult = wxProductActiveTool.run(args, globalMessage);
             answer = "以下是微信切换产品插件结果：" + toolResult;
           }
-          case "9" -> {
+          case "8" -> {
             if (wxUserService.findAllByOpenid(chatId).isEmpty())
               toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
             else {
@@ -141,15 +139,11 @@ public class Router {
             }
             answer = "以下是定时任务插件的结果：" + toolResult;
           }
-          case "10" -> {
-            toolResult = searchTool.run(args);
-            answer = "以下是必应搜索插件的结果：" + toolResult;
-          }
-          case "11" -> {
+          case "9" -> {
             toolResult = productRoleTool.run(args, globalMessage);
             answer = "以下是产品角色插件的结果：" + toolResult;
           }
-          case "12" -> {
+          case "10" -> {
             toolResult = mcpAgent.run(args, globalMessage);
             answer = "以下是mcp智能体的结果：" + toolResult;
           }

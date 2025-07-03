@@ -29,6 +29,7 @@ import top.rslly.iot.services.thingsModel.ProductDataServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductFunctionServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductModelServiceImpl;
+import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.tools.*;
 
 @Component
@@ -45,6 +46,8 @@ public class DescriptionUtil {
   private ProductRoleServiceImpl productRoleService;
   @Autowired
   private TimeScheduleServiceImpl timeScheduleService;
+  @Autowired
+  private McpAgent mcpAgent;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
@@ -99,18 +102,15 @@ public class DescriptionUtil {
     return jsonObject.toJSONString();
   }
 
-  public String getTools() {
+  public String getTools(int productId) {
     ControlTool controlTool = new ControlTool();
     WeatherTool weatherTool = new WeatherTool();
     MusicTool musicTool = new MusicTool();
-    SearchTool searchTool = new SearchTool();
-    ScheduleTool scheduleTool = new ScheduleTool();
     JSONObject jsonObject = new JSONObject();
     jsonObject.put(controlTool.getName(), controlTool.getDescription());
     jsonObject.put(weatherTool.getName(), weatherTool.getDescription());
     jsonObject.put(musicTool.getName(), musicTool.getDescription());
-    jsonObject.put(searchTool.getName(), searchTool.getDescription());
-    jsonObject.put(scheduleTool.getName(), scheduleTool.getDescription());
+    jsonObject.put(mcpAgent.getName(), mcpAgent.getDescription(productId));
     return jsonObject.toJSONString();
   }
 }

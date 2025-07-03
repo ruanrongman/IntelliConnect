@@ -280,6 +280,11 @@ public class Websocket {
           if (map != null && map.containsKey("start")) {
             log.info("map{}", map);
             haveVoice = true;
+            // 保留音频数据最后10帧（直接修改原始列表）
+            int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
+            if (audioList.size() > keepFrames) {
+              audioList.subList(0, audioList.size() - keepFrames).clear();
+            }
           }
           if (map != null && map.containsKey("end")) {
             log.info("map{}", map);

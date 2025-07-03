@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 @Component
+@Deprecated
 @Data
 @Slf4j
 public class SearchTool implements BaseTool<String> {

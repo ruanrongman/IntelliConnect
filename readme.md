@@ -52,7 +52,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 ## 项目特色
 * 极简主义，层次分明，符合mvc分层结构
 * 完善的物模型抽象，使得iot开发者可以专注于业务本身
-* AI能力丰富，支持Agent智能体技术，快速开发AI智能应用
+* AI能力丰富，支持Multi-Agent技术，快速开发AI智能应用
 
 # 小智 ESP-32 后端服务(xiaozhi-esp32-server)
 本项目能够为开源智能硬件项目 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)
@@ -80,7 +80,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/ead6a1db6c5f332834e18fb0e1c2913.jpg" width="250px"/>
+    <img src="./docs/images/086a6073c7897a8c1f47b5aa3a6bf36.jpg" width="250px"/>
 </div>
 
 ## 致谢
