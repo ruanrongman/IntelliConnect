@@ -17,17 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.services.iot;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.OtaEntity;
+import top.rslly.iot.models.OtaPassiveEntity;
+import top.rslly.iot.param.request.OtaPassive;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
-public interface OtaRepository extends JpaRepository<OtaEntity, Long> {
-  List<OtaEntity> findAllById(int id);
+public interface OtaPassiveService {
+  List<OtaPassiveEntity> findAllById(int id);
 
-  List<OtaEntity> findAllByName(String name);
+  JsonResult<?> otaPassiveList(String token);
 
-  List<OtaEntity> findAllByProductId(int productId);
+  JsonResult<?> otaPassiveEnable(String deviceName);
+
+  JsonResult<?> otaPassivePost(OtaPassive otaPassive);
+
+  JsonResult<?> otaPassiveDelete(int id);
 }

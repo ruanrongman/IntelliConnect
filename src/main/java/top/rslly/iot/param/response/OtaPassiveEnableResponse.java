@@ -17,17 +17,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.param.response;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.OtaEntity;
+import lombok.Data;
 
-import java.util.List;
-
-public interface OtaRepository extends JpaRepository<OtaEntity, Long> {
-  List<OtaEntity> findAllById(int id);
-
-  List<OtaEntity> findAllByName(String name);
-
-  List<OtaEntity> findAllByProductId(int productId);
+@Data
+public class OtaPassiveEnableResponse {
+  private String fileName;
+  private String version;
+  private String md5;
 }

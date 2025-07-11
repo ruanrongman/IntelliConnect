@@ -111,6 +111,8 @@ public class XiaoZhiUtil {
         }
         Websocket.clients.get(chatId).getBasicRemote()
             .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+        Websocket.clients.get(chatId).getBasicRemote()
+            .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
       }
     } else {
       Websocket.clients.get(chatId).getBasicRemote()

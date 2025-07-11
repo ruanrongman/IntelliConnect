@@ -31,6 +31,7 @@ import top.rslly.iot.services.agent.AiServiceImpl;
 import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
+import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
 import top.rslly.iot.services.storage.DataServiceImpl;
 import top.rslly.iot.services.storage.EventStorageServiceImpl;
@@ -63,6 +64,8 @@ public class Tool {
   private AlarmEventServiceImpl alarmEventService;
   @Autowired
   private SafetyServiceImpl safetyService;
+  @Autowired
+  private OtaPassiveServiceImpl otaPassiveService;
   @Autowired
   private OtaXiaozhiServiceImpl otaXiaozhiService;
 
@@ -214,6 +217,40 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return otaService.otaEnable(name, deviceName);
+  }
+
+  @RequestMapping(value = "/otaPassive", method = RequestMethod.GET)
+  public JsonResult<?> otaPassiveList(@RequestHeader("Authorization") String header) {
+    return otaPassiveService.otaPassiveList(header);
+  }
+
+  @RequestMapping(value = "/otaPassive", method = RequestMethod.POST)
+  public JsonResult<?> otaPassivePost(@RequestBody OtaPassive otaPassive,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, otaPassive.getDeviceName()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaPassiveService.otaPassivePost(otaPassive);
+  }
+
+  @RequestMapping(value = "/otaPassiveEnable", method = RequestMethod.GET)
+  public JsonResult<?> otaPassiveEnable(@RequestParam("deviceName") String deviceName) {
+    return otaPassiveService.otaPassiveEnable(deviceName);
+  }
+
+  @RequestMapping(value = "/otaPassive", method = RequestMethod.DELETE)
+  public JsonResult<?> otaPassiveDelete(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeOtaPassive(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaPassiveService.otaPassiveDelete(id);
   }
 
   @RequestMapping(value = "/alarmEvent", method = RequestMethod.GET)

@@ -52,8 +52,6 @@ import java.util.*;
 @Slf4j
 public class OtaServiceImpl implements OtaService {
   @Resource
-  private ProductRepository productRepository;
-  @Resource
   private WxProductBindRepository wxProductBindRepository;
   @Resource
   private UserProductBindRepository userProductBindRepository;

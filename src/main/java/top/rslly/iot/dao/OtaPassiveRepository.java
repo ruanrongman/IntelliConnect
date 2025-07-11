@@ -20,14 +20,18 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.OtaEntity;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.OtaPassiveEntity;
 
 import java.util.List;
 
-public interface OtaRepository extends JpaRepository<OtaEntity, Long> {
-  List<OtaEntity> findAllById(int id);
+public interface OtaPassiveRepository extends JpaRepository<OtaPassiveEntity, Long> {
+  List<OtaPassiveEntity> findAllById(int id);
 
-  List<OtaEntity> findAllByName(String name);
+  List<OtaPassiveEntity> findAllByOtaId(int otaId);
 
-  List<OtaEntity> findAllByProductId(int productId);
+  List<OtaPassiveEntity> findAllByDeviceId(int deviceId);
+
+  @Transactional
+  List<OtaPassiveEntity> deleteAllById(int id);
 }

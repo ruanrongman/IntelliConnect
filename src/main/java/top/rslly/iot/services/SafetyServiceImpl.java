@@ -26,6 +26,7 @@ import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
+import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
 import top.rslly.iot.services.thingsModel.*;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
@@ -65,6 +66,8 @@ public class SafetyServiceImpl implements SafetyService {
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private OtaServiceImpl otaService;
+  @Autowired
+  private OtaPassiveServiceImpl otaPassiveService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -165,6 +168,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("otaName not found!");
     return this.controlAuthorizeProduct(token,
         otaEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeOtaPassive(String token, int id) {
+    List<OtaPassiveEntity> otaPassiveEntityList = otaPassiveService.findAllById(id);
+    if (otaPassiveEntityList.isEmpty())
+      throw new NullPointerException("otaPassiveId not found!");
+    return this.controlAuthorizeDevice(token,
+        otaPassiveEntityList.get(0).getDeviceId());
   }
 
   @Override

@@ -21,6 +21,7 @@ package top.rslly.iot.controllers;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +30,7 @@ import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 
 @RestController
 @Slf4j
@@ -36,7 +38,8 @@ public class XiaoZhi {
   @Autowired
   private OtaXiaozhiServiceImpl otaXiaozhiService;
 
-  @RequestMapping(value = "/xiaozhi/ota", method = RequestMethod.POST)
+  @RequestMapping(value = "/xiaozhi/ota", method = RequestMethod.POST,
+      produces = MediaType.APPLICATION_JSON_VALUE)
   public String ota(HttpServletRequest httpServletRequest) {
     return otaXiaozhiService.otaEnable(httpServletRequest);
   }

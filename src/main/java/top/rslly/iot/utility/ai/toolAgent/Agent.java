@@ -57,6 +57,7 @@ public class Agent {
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
+    globalMessage.put("mcpIsTool", true);
     var queue = queueMap.get(chatId);
     if (queue != null) {
       queue.add("以下是智能体处理结果：");

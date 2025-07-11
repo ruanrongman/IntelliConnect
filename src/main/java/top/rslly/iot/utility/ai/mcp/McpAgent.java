@@ -120,6 +120,9 @@ public class McpAgent implements BaseTool<String> {
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
+    boolean mcpIsTool = false;
+    if (globalMessage.containsKey("mcpIsTool"))
+      mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
     if (mcpServerService.findAllByProductId(productId).isEmpty())
       return "产品下面没有任何mcp服务器，请先绑定mcp服务器";
     try {
@@ -175,7 +178,8 @@ public class McpAgent implements BaseTool<String> {
           String content = JSON.parseObject(args).getString("content");
           if (queue != null) {
             queue.add(content);
-            queue.add("[DONE]");
+            if (!mcpIsTool)
+              queue.add("[DONE]");
           }
           return content;
         }
@@ -210,7 +214,8 @@ public class McpAgent implements BaseTool<String> {
           answer = "mcp服务器调用发生严重错误，请检查mcp服务器";
         if (queue != null) {
           queue.add(answer);
-          queue.add("[DONE]");
+          if (!mcpIsTool)
+            queue.add("[DONE]");
         }
         return answer;
       }
@@ -222,7 +227,8 @@ public class McpAgent implements BaseTool<String> {
     }
     if (queue != null) {
       queue.add(toolResult);
-      queue.add("[DONE]");
+      if (!mcpIsTool)
+        queue.add("[DONE]");
     }
     return toolResult;
   }
