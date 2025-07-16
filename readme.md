@@ -18,9 +18,10 @@ Built by RSLLY
     <a target="_blank" href=''>
         <img src="https://img.shields.io/badge/release-v0.1-blue?style=flat-square"/>
     </a>
-    <a target="_blank" href="">
+    <a target="_blank" href="https://wordpress.rslly.top">
         <img src="https://img.shields.io/badge/cwl-project1.8-green?style=flat-square&link=https://wordpress.rslly.top"/>
     </a>
+    <a href="https://deepwiki.com/ruanrongman/IntelliConnect"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 <p align="center">
@@ -80,7 +81,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/0828166f8439e397dccf53e055a63c9.jpg" width="250px"/>
+    <img src="./docs/images/2ce4fd6931129eadcaec38607e26b6c.jpg" width="250px"/>
 </div>
 
 ## 致谢

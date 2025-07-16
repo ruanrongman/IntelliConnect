@@ -71,6 +71,8 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   private RedisUtil redisUtil;
   @Value("${ota.xiaozhi.url}")
   private String otaUrl;
+  @Value("${ota.xiaozhi.version}")
+  private String otaVersion;
 
   @Override
   public JsonResult<?> otaList(String token) {
@@ -184,7 +186,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
 
       // firmware based on activation status
       Map<String, Object> firmware = new HashMap<>();
-      firmware.put("version", "1.6.2");
+      firmware.put("version", otaVersion);
       firmware.put("url", "");
       response.put("firmware", firmware);
 

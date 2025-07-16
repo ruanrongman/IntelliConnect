@@ -49,10 +49,10 @@ public class Agent {
   private DescriptionUtil descriptionUtil;
   @Value("${ai.agent-epoch-limit}")
   private int epochLimit = 8;
-  private final StringBuffer conversationPrompt = new StringBuffer();
 
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
+    StringBuilder conversationPrompt = new StringBuilder();
     int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
@@ -62,7 +62,7 @@ public class Agent {
     if (queue != null) {
       queue.add("以下是智能体处理结果：");
     }
-    String system = reactPrompt.getReact(descriptionUtil.getTools(productId), question);
+    String system = reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);

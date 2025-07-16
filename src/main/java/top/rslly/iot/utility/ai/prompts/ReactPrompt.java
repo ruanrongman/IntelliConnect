@@ -84,6 +84,7 @@ public class ReactPrompt {
           ## Attention
           - Your output is JSON only and no explanation.
           - Choose only ONE tool and you can't do without using any tools in one step.
+          - thought use chinese
           - Your final answer and middle step output language should be consistent with the language used by the user.
           - Whether the action input is JSON or str depends on the definition of the tool.
           - After three failed attempts on a hardware control task, do not try again, as too many attempts may cause the device to malfunction.

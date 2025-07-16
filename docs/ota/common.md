@@ -41,6 +41,7 @@ curl --location --request POST 'http://localhost:8080/api/v2/otaEnable?name=seri
 > 被动OTA升级，是指设备主动向服务器请求升级包，然后服务器返回升级包给设备，进行升级，适用于某些特殊场景。
 * 1.上传软件升级包到服务器，使用上述方法步骤进行上传。
 * 2.指定待升级的固件，请使用以下命令进行设置：
+
 ```bash
 curl --location 'http://localhost:8080/api/v2/otaPassive' \
 --header 'Authorization: {your token}' \
@@ -51,12 +52,16 @@ curl --location 'http://localhost:8080/api/v2/otaPassive' \
   "versionName": "{versionName}"
 }'
 ```
+
 替换{deviceName}为设备名称，{your token}为token,{name}为升级包名称，{versionName}为升级包指定的版本名称。
+
 * 3.设备端通过通过网络连接，通过以下接口获取待升级的固件信息:
+
 ```bash
 curl -X GET "http://localhost:8080/api/v2/otaPassiveEnable?deviceName={deviceName}" -H "accept: */*"
 ```
 替换{deviceName}为设备名称。
+
 服务端将会返回下载升级包的信息，如下所示：
 ```json
 {

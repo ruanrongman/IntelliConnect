@@ -44,7 +44,7 @@ public class ThreadPoolTaskConfig {
   /** 核心线程数（默认线程数） */
   private static final int corePoolSize = 20;
   /** 最大线程数 */
-  private static final int maxPoolSize = 100;
+  private static final int maxPoolSize = 300;
   /** 允许线程空闲时间（单位：默认为秒） */
   private static final int keepAliveTime = 10;
   /** 缓冲队列大小 */

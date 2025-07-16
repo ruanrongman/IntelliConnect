@@ -53,11 +53,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Component
 @Slf4j
 public class Websocket {
-  private static Audio2Text audio2Text;
   public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   public static final Map<String, String> voiceContent = new ConcurrentHashMap<>();
   private static final Map<String, ByteArrayOutputStream> pcmVadBuffer = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
+  public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
   private static SafetyServiceImpl safetyService;
   private static Text2audio text2audio;
   private static ProductServiceImpl productService;
@@ -65,13 +65,8 @@ public class Websocket {
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
-  private boolean haveVoice = false;
   private boolean isManual = true;
-
-  @Autowired
-  public void setAudio2Text(Audio2Text audio2Text) {
-    Websocket.audio2Text = audio2Text;
-  }
+  private boolean isRealTime = false;
 
   @Autowired
   public void setText2audio(Text2audio text2audio) {
@@ -114,7 +109,7 @@ public class Websocket {
       try {
         clients.put(this.chatId, session);
         isAbort.put(this.chatId, false);
-        haveVoice = false;
+        haveVoice.put(this.chatId, false);
         slieroVadListener.init();
         return;
       } catch (Exception e) {
@@ -144,7 +139,7 @@ public class Websocket {
       }
       clients.put(chatId, session);
       isAbort.put(chatId, false);
-      haveVoice = false;
+      haveVoice.put(chatId, false);
       slieroVadListener.init();
       log.info("header{}", token);
     } else {
@@ -170,6 +165,7 @@ public class Websocket {
     log.info("close");
     isAbort.put(chatId, false);
     slieroVadListener.destroy();
+    xiaoZhiUtil.destroyMcp(chatId);
     if (chatId != null) {
       clients.remove(chatId);
     }
@@ -182,12 +178,15 @@ public class Websocket {
   public void onMessage(String message) {
     log.info("message{}", message);
     try {
-      OpusDecoder decoder = new OpusDecoder(16000, 1);
+      // OpusDecoder decoder = new OpusDecoder(16000, 1);
       var json = JSON.parseObject(message);
       String type = json.getString("type");
       if (type.equals("hello")) {
-        clients.get(chatId).getBasicRemote().sendText(
-            "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
+        xiaoZhiUtil.dealHello(chatId, json);
+      } else if (type.equals("mcp")) {
+        xiaoZhiUtil.dealMcp(chatId, json);
+      } else if (type.equals("abort")) {
+        isAbort.put(chatId, true);
       } else if (type.equals("listen")) {
         String state = json.getString("state");
         switch (state) {
@@ -204,23 +203,20 @@ public class Websocket {
             String mode = json.getString("mode");
             if (mode.equals("auto")) {
               isManual = false;
+              isRealTime = false;
             } else if (mode.equals("manual")) {
               isManual = true;
-            } else {
-              clients.get(chatId).getBasicRemote()
-                  .sendText("{\"type\":\"stt\",\"text\":\"" + "不支持实时模式" + "\"}");
-              onClose();
-              return;
+              isRealTime = false;
+            } else if (mode.equals("realtime")) {
+              isManual = false;
+              isRealTime = true;
             }
             log.info("listen start");
             voiceContent.clear();
           }
           case "stop" -> {
             xiaoZhiUtil.dealWithAudio(audioList, chatId, isManual);
-            haveVoice = false;
-            isAbort.put(chatId, false);
           }
-          case "abort" -> isAbort.put(chatId, true);
         }
       }
     } catch (Exception e) {
@@ -233,7 +229,7 @@ public class Websocket {
   public void onBinaryMessage(byte[] message) {
     if (!isManual) {
       try {
-        if (audioList.size() > 420 && !haveVoice) {
+        if (audioList.size() > 420 && !haveVoice.get(chatId)) {
           clients.get(chatId).getBasicRemote().sendText("""
               {
                 "type": "tts",
@@ -279,7 +275,10 @@ public class Websocket {
           var map = slieroVadListener.listen(chunk);
           if (map != null && map.containsKey("start")) {
             log.info("map{}", map);
-            haveVoice = true;
+            haveVoice.put(chatId, true);
+            if (isRealTime) {
+              isAbort.put(chatId, true);
+            }
             // 保留音频数据最后10帧（直接修改原始列表）
             int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
             if (audioList.size() > keepFrames) {
@@ -288,9 +287,10 @@ public class Websocket {
           }
           if (map != null && map.containsKey("end")) {
             log.info("map{}", map);
+            if (isRealTime) {
+              isAbort.put(chatId, false);
+            }
             xiaoZhiUtil.dealWithAudio(audioList, chatId, isManual);
-            haveVoice = false;
-            isAbort.put(chatId, false);
             pcmVadBuffer.remove(chatId);
             return;
           }

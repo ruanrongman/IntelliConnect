@@ -21,12 +21,16 @@ package top.rslly.iot.utility.smartVoice;
 
 import cn.hutool.captcha.generator.RandomGenerator;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
+import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.Text2audio;
@@ -53,6 +57,79 @@ public class XiaoZhiUtil {
   @Autowired
   private RedisUtil redisUtil;
 
+  public void dealHello(String chatId, JSONObject helloObject) throws IOException {
+    boolean mcpCanUse = false;
+    if (helloObject.containsKey("features")) {
+      mcpCanUse = helloObject.getJSONObject("features").getBoolean("mcp");
+    }
+    Websocket.clients.get(chatId).getBasicRemote().sendText(
+        "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
+    log.info("mcp...{}", mcpCanUse);
+    if (mcpCanUse && !chatId.startsWith("register")) {
+      Websocket.clients.get(chatId).getBasicRemote().sendText(McpProtocolSend.sendInitialize());
+      Websocket.clients.get(chatId).getBasicRemote().sendText(McpProtocolSend.sendToolList(""));
+    }
+  }
+
+  public void dealMcp(String chatId, JSONObject mcpObject) throws IOException {
+    if (mcpObject.containsKey("payload")) {
+      JSONObject payloadObject = mcpObject.getJSONObject("payload");
+      if (payloadObject.containsKey("result")) {
+        JSONObject resultObject = payloadObject.getJSONObject("result");
+        if (resultObject.containsKey("content")) {
+          if (resultObject.containsKey("isError")) {
+            if (resultObject.getBoolean("isError")) {
+              redisUtil.set(McpWebsocket.serverName + chatId + "toolResult", "call tool error");
+            } else {
+              log.info("result{}", resultObject.getString("content"));
+              redisUtil.set(McpWebsocket.serverName + chatId + "toolResult",
+                  resultObject.getString("content"));
+            }
+          }
+        }
+        if (resultObject.containsKey("tools")) {
+          if (resultObject.containsKey("error")) {
+            redisUtil.set(McpWebsocket.serverName + chatId + "toolResult", "call tool error");
+            log.error("tool调用错误:{}", resultObject.getJSONObject("error").getString("message"));
+          }
+        }
+        if (resultObject.containsKey("tools")) {
+          String tools = resultObject.getString("tools");
+          String nextCursor = resultObject.getString("nextCursor");
+          List<Map<String, Object>> toolList;
+          if (redisUtil.hasKey(McpWebsocket.serverName + chatId)) {
+            toolList = (List<Map<String, Object>>) redisUtil.get(McpWebsocket.serverName + chatId);
+            if (toolList == null) {
+              toolList = new ArrayList<>();
+            }
+          } else
+            toolList = new ArrayList<>();
+          JSONArray toolArray = JSON.parseArray(tools);
+          for (int i = 0; i < toolArray.size(); i++) {
+            Map<String, Object> tool = new HashMap<>();
+            tool.put("name", toolArray.getJSONObject(i).getString("name"));
+            tool.put("description", toolArray.getJSONObject(i).getString("description"));
+            tool.put("inputSchema", toolArray.getJSONObject(i).getJSONObject("inputSchema"));
+            toolList.add(tool);
+          }
+          redisUtil.set(McpWebsocket.serverName + chatId, toolList);
+          if (nextCursor != null && !nextCursor.equals("")) {
+            Websocket.clients.get(chatId).getBasicRemote()
+                .sendText(McpProtocolSend.sendToolList(nextCursor));
+          }
+        }
+      }
+    }
+  }
+
+  public void destroyMcp(String chatId) {
+    redisUtil.del(McpWebsocket.serverName + chatId);
+    if (redisUtil.hasKey(McpWebsocket.serverName + chatId + "toolResult")) {
+      redisUtil.del(McpWebsocket.serverName + chatId + "toolResult");
+    }
+  }
+
+  @Async("taskExecutor")
   public void dealWithAudio(List<byte[]> audioList, String chatId, boolean isManual)
       throws Exception {
 
@@ -161,7 +238,11 @@ public class XiaoZhiUtil {
           emotionFlag = true;
         }
         if (Websocket.isAbort.get(chatId)) {
+          Websocket.haveVoice.put(chatId, false);
+          Websocket.isAbort.put(chatId, false);
           Router.queueMap.remove("chatProduct" + chatId);
+          Websocket.clients.get(chatId).getBasicRemote()
+              .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
           return;
         }
         if (Router.queueMap.containsKey("chatProduct" + chatId)) {
@@ -181,6 +262,8 @@ public class XiaoZhiUtil {
             }
             Websocket.clients.get(chatId).getBasicRemote()
                 .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+            Websocket.haveVoice.put(chatId, false);
+            Websocket.isAbort.put(chatId, false);
             Router.queueMap.remove("chatProduct" + chatId);
             return;
           } else if (element != null) {
@@ -249,6 +332,8 @@ public class XiaoZhiUtil {
       if (answer.length() > 500)
         answer = answer.substring(0, 500);
       splitSentences(answer, chatId);
+      Websocket.haveVoice.put(chatId, false);
+      Websocket.isAbort.put(chatId, false);
       Websocket.clients.get(chatId).getBasicRemote()
           .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
     }

@@ -56,30 +56,25 @@ public class McpAgent implements BaseTool<String> {
   private ReactPrompt reactPrompt;
   @Autowired
   private McpServerServiceImpl mcpServerService;
+  @Autowired
+  private McpWebsocket mcpWebsocket;
 
-  /**
-   * Map<serverKey, McpSyncClient>
-   */
-  private final Map<String, McpSyncClient> clientMap = new LinkedHashMap<>();
-
-  private final StringBuffer conversationPrompt = new StringBuffer();
-
-  public String getDescription(int productId) {
+  public String getDescription(int productId, String chatId) {
     var mcpServerEntities = mcpServerService.findAllByProductId(productId);
-    if (mcpServerEntities.isEmpty()) {
+    var mcpWebSocketRunning = mcpWebsocket.isRunning(chatId);
+    if (mcpServerEntities.isEmpty() && !mcpWebSocketRunning) {
       return "工具无效，请勿调用";
     }
     StringBuilder toolDescriptions = new StringBuilder();
     for (var mcpServerEntity : mcpServerEntities) {
       toolDescriptions.append(mcpServerEntity.getDescription()).append("|");
     }
+    toolDescriptions.append(mcpWebsocket.getIntention(chatId));
     return toolDescriptions.toString();
-    /*
-     * return """ This tool is used to classify users' intentions Args: user question(str) """;
-     */
   }
 
-  public void initClients(int productId) throws IllegalArgumentException {
+  public void initClients(int productId, Map<String, McpSyncClient> clientMap)
+      throws IllegalArgumentException {
     // 解析配置
     var mcpServerEntities = mcpServerService.findAllByProductId(productId);
     for (var mcpServerEntity : mcpServerEntities) {
@@ -119,21 +114,30 @@ public class McpAgent implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
+    Map<String, McpSyncClient> clientMap = new LinkedHashMap<>();
+    StringBuilder conversationPrompt = new StringBuilder();
     int productId = (int) globalMessage.get("productId");
     boolean mcpIsTool = false;
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
-    if (mcpServerService.findAllByProductId(productId).isEmpty())
+    if (mcpServerService.findAllByProductId(productId).isEmpty()
+        && !mcpWebsocket.isRunning(String.valueOf(productId)))
       return "产品下面没有任何mcp服务器，请先绑定mcp服务器";
-    try {
-      initClients(productId);
-    } catch (Exception e) {
-      return "连接mcp服务器失败";
+    if (!mcpServerService.findAllByProductId(productId).isEmpty()) {
+      try {
+        initClients(productId, clientMap);
+      } catch (Exception e) {
+        return "连接mcp服务器失败";
+      }
     }
     // 构建 system prompt，包括所有服务器的工具描述
     String system;
     try {
-      system = reactPrompt.getReact(combineToolDescriptions(), question);
+      String toolDescriptions = combineToolDescriptions(clientMap);
+      if (mcpWebsocket.isRunning(String.valueOf(productId))) {
+        toolDescriptions += mcpWebsocket.combineToolDescription(String.valueOf(productId));
+      }
+      system = reactPrompt.getReact(toolDescriptions, question);
     } catch (Exception e) {
       return "获取工具描述失败";
     }
@@ -174,6 +178,7 @@ public class McpAgent implements BaseTool<String> {
           for (var client : clientMap.values()) {
             client.close();
           }
+          clientMap.clear();
           // finish or invalid format
           String content = JSON.parseObject(args).getString("content");
           if (queue != null) {
@@ -187,13 +192,17 @@ public class McpAgent implements BaseTool<String> {
         String toolName = parts[1];
         // 调用指定服务器的工具
         try {
-          McpSyncClient client = clientMap.get(serverKey);
-          if (client == null) {
-            throw new IllegalArgumentException("Unknown server key: " + serverKey);
+          if (serverKey.equals("xiaozhi_device")) {
+            toolResult = mcpWebsocket.sendToolCall(String.valueOf(productId), toolName, args);
+          } else {
+            McpSyncClient client = clientMap.get(serverKey);
+            if (client == null) {
+              throw new IllegalArgumentException("Unknown server key: " + serverKey);
+            }
+            McpSchema.CallToolResult result = client.callTool(
+                new McpSchema.CallToolRequest(toolName, args));
+            toolResult = result.content().get(0).toString();
           }
-          McpSchema.CallToolResult result = client.callTool(
-              new McpSchema.CallToolRequest(toolName, args));
-          toolResult = result.content().get(0).toString();
         } catch (Exception e) {
           log.error("Error during tool call{}", e.getMessage());
           toolResult = "Error calling tool, please try again";
@@ -225,6 +234,7 @@ public class McpAgent implements BaseTool<String> {
     for (var client : clientMap.values()) {
       client.close();
     }
+    clientMap.clear();
     if (queue != null) {
       queue.add(toolResult);
       if (!mcpIsTool)
@@ -236,7 +246,7 @@ public class McpAgent implements BaseTool<String> {
   /**
    * 汇总所有服务器的工具描述，名称前添加 serverKey 前缀
    */
-  private String combineToolDescriptions() {
+  private String combineToolDescriptions(Map<String, McpSyncClient> clientMap) {
     StringBuilder sb = new StringBuilder();
     for (var entry : clientMap.entrySet()) {
       String key = entry.getKey();

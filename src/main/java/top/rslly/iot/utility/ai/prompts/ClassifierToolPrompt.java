@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
+import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
 import java.text.SimpleDateFormat;
@@ -36,6 +37,8 @@ import java.util.Map;
 public class ClassifierToolPrompt {
   @Autowired
   private McpServerServiceImpl mcpServerService;
+  @Autowired
+  private McpWebsocket mcpWebsocket;
   private static final String classifierPrompt =
       """
            {task_map}
@@ -54,7 +57,8 @@ public class ClassifierToolPrompt {
            ```
            ## Attention
            - Your output is JSON only and no explanation.
-           - Minimize the use of networking to improve response speed
+           - Electrical control tools are not allowed when the user requests xiaozhi_device operations.
+           - If the 10 intention exists and the user requests xiaozhi_device, please always use the 10 intention
            ## Current Conversation
            Below is the current conversation consisting of interleaving human and assistant history.
           """;
@@ -63,7 +67,7 @@ public class ClassifierToolPrompt {
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2",
-        "Operate and query electrical (including various intelligent devices such as robots, excluding playing music)");
+        "Operate and query electrical (excluding playing music and xiaozhi_device)");
     classifierMap.put("3", "Request a song or play music.(including Recommend music.)");
     classifierMap.put("4",
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
@@ -74,11 +78,16 @@ public class ClassifierToolPrompt {
     classifierMap.put("8", "Schedule management and reminder tasks");
     classifierMap.put("9", "All about role and voice");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
-    if (!mcpServerList.isEmpty()) {
+    if (!mcpServerList.isEmpty() || mcpWebsocket.isRunning(String.valueOf(productId))) {
       StringBuilder mcpServerString = new StringBuilder();
-      for (var mcpServerEntity : mcpServerList) {
-        mcpServerString.append(mcpServerEntity.getDescription());
-        mcpServerString.append("|");
+      if (!mcpServerList.isEmpty()) {
+        for (var mcpServerEntity : mcpServerList) {
+          mcpServerString.append(mcpServerEntity.getDescription());
+          mcpServerString.append("|");
+        }
+      }
+      if (mcpWebsocket.isRunning(String.valueOf(productId))) {
+        mcpServerString.append(mcpWebsocket.getIntention(String.valueOf(productId)));
       }
       classifierMap.put("10", mcpServerString.toString());
     }

@@ -102,7 +102,7 @@ public class DescriptionUtil {
     return jsonObject.toJSONString();
   }
 
-  public String getTools(int productId) {
+  public String getTools(int productId, String chatId) {
     ControlTool controlTool = new ControlTool();
     WeatherTool weatherTool = new WeatherTool();
     MusicTool musicTool = new MusicTool();
@@ -110,7 +110,7 @@ public class DescriptionUtil {
     jsonObject.put(controlTool.getName(), controlTool.getDescription());
     jsonObject.put(weatherTool.getName(), weatherTool.getDescription());
     jsonObject.put(musicTool.getName(), musicTool.getDescription());
-    jsonObject.put(mcpAgent.getName(), mcpAgent.getDescription(productId));
+    jsonObject.put(mcpAgent.getName(), mcpAgent.getDescription(productId, chatId));
     return jsonObject.toJSONString();
   }
 }

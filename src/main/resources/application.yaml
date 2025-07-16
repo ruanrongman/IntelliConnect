@@ -115,6 +115,7 @@ ota:
     path: D://temp-rainy//
   xiaozhi:
     url: ws://127.0.0.1:8080
+    version: 1.7.6
 weather:
   key: XXX
 ai:
