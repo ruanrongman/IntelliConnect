@@ -29,6 +29,7 @@ import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.IcAiException;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
@@ -42,10 +43,15 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
   private final StringBuilder jsonBuffer = new StringBuilder();
   private final String question;
   public int filter;
+  private final ClassifierTool classifierTool;
+  private final String chatId;
 
-  public ClassifierToolEventSourceListener(String question, int filter) {
+  public ClassifierToolEventSourceListener(String question, int filter, String chatId,
+      ClassifierTool classifierTool) {
     this.question = question;
     this.filter = filter;
+    this.chatId = chatId;
+    this.classifierTool = classifierTool;
   }
 
   @Override
@@ -62,7 +68,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
     if ("[DONE]".equals(data)) {
       // log.info("OpenAI返回数据结束了");
       // log.info("OpenAI最终返回数据：{}", jsonBuffer.toString());
-      var lock = ClassifierTool.lock;
+      var lock = classifierTool.getLockMap().get(chatId);
       lock.lock();
       try {
         var content = JSON.parseObject(
@@ -72,23 +78,26 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         if (content.get("code").equals("200") || content.get("code").equals(200)) {
           var valueJson = content.getJSONArray("value");
           var argsJson = content.getString("args");
-          ClassifierTool.dataMap.put("value",
-              JSONObject.parseArray(valueJson.toJSONString(), String.class));
-          ClassifierTool.dataMap.put("args", argsJson);
-          ClassifierTool.dataMap.put("answer", "yes");
+          Map<String, Object> dataMap = new ConcurrentHashMap<>();
+          dataMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
+          dataMap.put("args", argsJson);
+          dataMap.put("answer", "yes");
+          classifierTool.getDataMap().get(chatId).putAll(dataMap);
           // ClassifierTool.dataCondition.signal();
         } else
           throw new IcAiException("llm response error");
-        ClassifierTool.dataCondition.signal();
-        log.info("数据{}", ClassifierTool.dataMap);
+        classifierTool.getConditionMap().get(chatId).signal();
+        log.info("数据{}", classifierTool.getDataMap().get(chatId));
       } catch (Exception e) {
         log.error("OpenAi error{}", e.getMessage());
-        ClassifierTool.dataCondition.signal();
-        ClassifierTool.dataMap.put("value", "");
-        ClassifierTool.dataMap.put("args", "");
-        ClassifierTool.dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+        classifierTool.getConditionMap().get(chatId).signal();
+        Map<String, Object> dataMap = new ConcurrentHashMap<>();
+        dataMap.put("value", "");
+        dataMap.put("args", "");
+        dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+        classifierTool.getDataMap().get(chatId).putAll(dataMap);
       } finally {
-        ClassifierTool.dataCondition.signal();
+        classifierTool.getConditionMap().get(chatId).signal();
         lock.unlock();
       }
       return;
@@ -101,7 +110,8 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         // log.warn("Received null data from OpenAI");
         return;
       }
-      ClassifierTool.lock.lock();
+      var lock = classifierTool.getLockMap().get(chatId);
+      lock.lock();
       try {
         jsonBuffer.append(content);
         String regex = "\\[([^\\]]*)\\]";
@@ -109,15 +119,18 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         Matcher matcher = pattern.matcher(jsonBuffer.toString());
         while (matcher.find()) {
           if (matcher.group().equals("[" + filter + "]") || matcher.group().equals("[]")) {
-            ClassifierTool.dataMap.put("value", matcher.group());
-            ClassifierTool.dataMap.put("args", question);
-            ClassifierTool.dataMap.put("answer", "yes");
-            ClassifierTool.dataCondition.signal();
+            Map<String, Object> dataMap = new ConcurrentHashMap<>();
+            dataMap.put("value", matcher.group());
+            dataMap.put("args", question);
+            dataMap.put("answer", "yes");
+            classifierTool.getDataMap().put(chatId, dataMap);
+            classifierTool.getDataMap().get(chatId).putAll(dataMap);
+            classifierTool.getConditionMap().get(chatId).signal();
             return;
           }
         }
       } finally {
-        ClassifierTool.lock.unlock();
+        lock.unlock();
       }
       // log.info("OpenAI返回数据：{}", content);
     } catch (Exception e) {
@@ -136,14 +149,17 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
   public void onFailure(EventSource eventSource, Throwable t, Response response) {
     if (Objects.isNull(response)) {
       log.error("OpenAI  sse连接异常:{}", t.getMessage());
-      ClassifierTool.lock.lock();
+      var lock = classifierTool.getLockMap().get(chatId);
+      lock.lock();
       try {
         if (eventSource != null)
           eventSource.cancel();
-        ClassifierTool.dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
-        ClassifierTool.dataCondition.signal();
+        Map<String, Object> dataMap = new ConcurrentHashMap<>();
+        dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+        classifierTool.getDataMap().get(chatId).putAll(dataMap);
+        classifierTool.getConditionMap().get(chatId).signal();
       } finally {
-        ClassifierTool.lock.unlock();
+        lock.lock();
       }
       return;
     }

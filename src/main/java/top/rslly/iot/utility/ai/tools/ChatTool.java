@@ -53,9 +53,12 @@ public class ChatTool {
   private HttpRequestUtils httpRequestUtils;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
-  public static final Lock lock = new ReentrantLock();
-  public static final ConcurrentHashMap<String, String> dataMap = new ConcurrentHashMap<>();
-  public static final Condition dataCondition = lock.newCondition();
+
+  // 将锁和条件变量改为每个 chatId 独立
+  private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
+  private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
+  private final Map<String, String> dataMap = new ConcurrentHashMap<>();
+
   @Value("${ai.chatTool-llm}")
   private String llmName;
   @Value("${ai.chatTool-speedUp}")
@@ -72,6 +75,11 @@ public class ChatTool {
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
+
+    // 初始化当前会话的锁和条件变量
+    lockMap.putIfAbsent(chatId, new ReentrantLock());
+    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);
     String currentMemory = "";
     if (!agentMemoryEntities.isEmpty()) {
@@ -109,20 +117,25 @@ public class ChatTool {
     messages.add(userMessage);
     // log.info("chatTool: " + messages);
     if (speedUp) {
-      dataMap.clear();
+      dataMap.remove(chatId); // 使用 chatId 作为 key
       llm.streamJsonChat(question, messages, true,
-          new ChatToolEventSourceListener(queueMap, chatId));
-      lock.lock();
+          new ChatToolEventSourceListener(queueMap, chatId, this));
+      Lock chatLock = lockMap.get(chatId);
+      Condition chatCondition = conditionMap.get(chatId);
+      chatLock.lock();
       try {
-        while (dataMap.get("answer") == null) {
-          dataCondition.await();
+        while (dataMap.get(chatId) == null) {
+          chatCondition.await();
         }
       } catch (Exception e) {
-        log.info("ChatTool error{}", e.getMessage());
+        log.error("ChatTool error{}", e.getMessage());
       } finally {
-        lock.unlock();
+        chatLock.unlock();
       }
-      return dataMap.get("answer");
+      dataMap.remove(chatId);
+      conditionMap.remove(chatId);
+      lockMap.remove(chatId);
+      return dataMap.get(chatId);
     } else {
       return llm.commonChat(question, messages, true);
     }

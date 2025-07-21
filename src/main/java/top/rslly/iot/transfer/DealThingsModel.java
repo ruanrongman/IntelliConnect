@@ -53,7 +53,7 @@ public class DealThingsModel {
   // private final Lock lock = new ReentrantLock();
   public boolean deal(String clientId, String topic, String message) {
     // this clientId is delivered id ,not the sender
-    log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
+    // log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
     String characteristic = UUID.randomUUID().toString();
     // var deviceEntityList = productDeviceService.findAllBySubscribeTopic(topic);
     // if (deviceEntityList.isEmpty()||!clientId.equals(MqttConnectionUtils.clientId))
@@ -97,7 +97,7 @@ public class DealThingsModel {
           // log.info("热点过期时间{}",
           // redisUtil.getExpire(deviceEntityList.get(0).getId()+s.getJsonKey()));
         }
-        log.info("{}", dataEntity);
+        // log.info("{}", dataEntity);
         dataService.insert(dataEntity);
       } catch (Exception e) {
         log.error("DealThingsModel save error:{}", e.getMessage());

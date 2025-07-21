@@ -58,10 +58,10 @@ public class Websocket {
   private static final Map<String, ByteArrayOutputStream> pcmVadBuffer = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
-  private static SafetyServiceImpl safetyService;
-  private static Text2audio text2audio;
-  private static ProductServiceImpl productService;
-  private static XiaoZhiUtil xiaoZhiUtil;
+  private static volatile SafetyServiceImpl safetyService;
+  private static volatile Text2audio text2audio;
+  private static volatile ProductServiceImpl productService;
+  private static volatile XiaoZhiUtil xiaoZhiUtil;
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
@@ -70,22 +70,30 @@ public class Websocket {
 
   @Autowired
   public void setText2audio(Text2audio text2audio) {
-    Websocket.text2audio = text2audio;
+    if (Websocket.text2audio == null) {
+      Websocket.text2audio = text2audio;
+    }
   }
 
   @Autowired
   public void setXiaoZhiUtil(XiaoZhiUtil xiaoZhiUtil) {
-    Websocket.xiaoZhiUtil = xiaoZhiUtil;
+    if (Websocket.xiaoZhiUtil == null) {
+      Websocket.xiaoZhiUtil = xiaoZhiUtil;
+    }
   }
 
   @Autowired
   public void setSafetyService(SafetyServiceImpl safetyService) {
-    Websocket.safetyService = safetyService;
+    if (Websocket.safetyService == null) {
+      Websocket.safetyService = safetyService;
+    }
   }
 
   @Autowired
   public void setProductService(ProductServiceImpl productService) {
-    Websocket.productService = productService;
+    if (Websocket.productService == null) {
+      Websocket.productService = productService;
+    }
   }
 
 
@@ -163,11 +171,14 @@ public class Websocket {
   @OnClose
   public void onClose() {
     log.info("close");
-    isAbort.put(chatId, false);
     slieroVadListener.destroy();
-    xiaoZhiUtil.destroyMcp(chatId);
     if (chatId != null) {
+      xiaoZhiUtil.destroyMcp(chatId);
       clients.remove(chatId);
+      isAbort.remove(chatId);
+      haveVoice.remove(chatId);
+      pcmVadBuffer.remove(chatId); // 清理缓冲区
+      voiceContent.remove(chatId); // 清理语音内容
     }
   }
 

@@ -25,8 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.models.AgentMemoryEntity;
-import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -49,9 +47,9 @@ public class ClassifierTool {
   private ClassifierToolPrompt classifierToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
-  public static final ConcurrentHashMap<String, Object> dataMap = new ConcurrentHashMap<>();
-  public static final Lock lock = new ReentrantLock();
-  public static final Condition dataCondition = lock.newCondition();
+  private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
+  private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Object>> dataMap = new ConcurrentHashMap<>();
   @Value("${ai.classifierTool-llm}")
   private String llmName;
   @Value("${ai.classifierTool-speedUp}")
@@ -71,6 +69,11 @@ public class ClassifierTool {
         Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
             .orElse(Collections.emptyList());
     int productId = (int) globalMessage.get("productId");
+    String chatId = (String) globalMessage.get("chatId");
+    // 初始化当前会话的同步资源
+    lockMap.putIfAbsent(chatId, new ReentrantLock());
+    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    dataMap.putIfAbsent(chatId, new HashMap<>());
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             classifierToolPrompt.getClassifierTool(productId));
@@ -83,26 +86,30 @@ public class ClassifierTool {
     messages.add(systemMessage);
     messages.add(userMessage);
     if (speedUp) {
-      dataMap.clear();
+      // 清除当前会话的旧数据
+      dataMap.get(chatId).clear();
       llm.streamJsonChat(question, messages, true,
-          new ClassifierToolEventSourceListener(question, 6));
-      lock.lock();
+          new ClassifierToolEventSourceListener(question, 6, chatId, this));
+      lockMap.get(chatId).lock();
       try {
-        while (dataMap.get("args") == null) {
-          dataCondition.await(); // 等待数据就绪
+        while (dataMap.get(chatId).get("args") == null) {
+          conditionMap.get(chatId).await();// 等待数据就绪
         }
         // System.out.println("Consumer: Received data - " + dataMap.get("value"));
         log.info("Consumer: Received data - {}", dataMap);
         resultMap.put("value",
-            JSONObject.parseArray(dataMap.get("value").toString(), String.class));
-        resultMap.put("args", dataMap.get("args"));
-        resultMap.put("answer", dataMap.get("answer"));
+            JSONObject.parseArray(dataMap.get(chatId).get("value").toString(), String.class));
+        resultMap.put("args", dataMap.get(chatId).get("args"));
+        resultMap.put("answer", dataMap.get(chatId).get("answer"));
       } catch (Exception e) {
         log.error("ClassifierTool error{}", e.getMessage());
         resultMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
         return resultMap;
       } finally {
-        lock.unlock();
+        lockMap.get(chatId).unlock();
+        dataMap.remove(chatId);
+        conditionMap.remove(chatId);
+        lockMap.remove(chatId);
       }
     } else {
       var obj = llm.jsonChat(question, messages, true).getJSONObject("action");

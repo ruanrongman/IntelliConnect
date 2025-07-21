@@ -27,7 +27,6 @@ import okhttp3.ResponseBody;
 import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
@@ -35,13 +34,15 @@ import java.util.Queue;
 @Slf4j
 public class ChatToolEventSourceListener extends EventSourceListener {
   private final StringBuilder jsonBuffer = new StringBuilder();
-  private Map<String, Queue<String>> queueMap;
-  private String chatId;
+  private final Map<String, Queue<String>> queueMap;
+  private final String chatId;
+  private final ChatTool chatTool; // 持有ChatTool实例引用
 
-  public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId) {
+  public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
+      ChatTool chatTool) {
     this.queueMap = queueMap;
     this.chatId = chatId;
-    log.info(chatId);
+    this.chatTool = chatTool;
   }
 
   @Override
@@ -57,17 +58,18 @@ public class ChatToolEventSourceListener extends EventSourceListener {
     }
     if ("[DONE]".equals(data)) {
       log.info("OpenAI返回数据结束了");
-      ChatTool.lock.lock();
+      var lock = chatTool.getLockMap().get(chatId);
+      lock.lock();
       try {
         var queue = queueMap.get(chatId);
         queue.add("[DONE]");
-        ChatTool.dataMap.put("answer", jsonBuffer.toString());
-        ChatTool.dataCondition.signal();
+        chatTool.getDataMap().put(chatId, jsonBuffer.toString());
+        chatTool.getConditionMap().get(chatId).signal();
       } catch (Exception e) {
-        ChatTool.dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+        chatTool.getDataMap().put(chatId, "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
         log.error("OpenAI  sse连接异常:{}", e.getMessage());
       } finally {
-        ChatTool.lock.unlock();
+        lock.unlock();
       }
       return;
     }
@@ -75,7 +77,6 @@ public class ChatToolEventSourceListener extends EventSourceListener {
     var delta = JSON.parseObject(jsonObject.toString()).getString("delta");
     var content = JSON.parseObject(delta).get("content");
     if (content == null || content.toString().trim().isEmpty()) {
-      // log.warn("Received null data from OpenAI");
       return;
     }
     String processedContent = content.toString()
@@ -85,12 +86,10 @@ public class ChatToolEventSourceListener extends EventSourceListener {
     var queue = queueMap.get(chatId);
     queue.add(processedContent); // 使用处理后的内容
     jsonBuffer.append(content);
-    // log.info("OpenAI返回数据：{}", processedContent); // 日志也输出处理后的内容
   }
 
   @Override
   public void onClosed(EventSource eventSource) {
-    // ClassifierTool.dataCondition.signal();
     log.info("OpenAI关闭sse连接...");
   }
 
@@ -99,18 +98,19 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   public void onFailure(EventSource eventSource, Throwable t, Response response) {
     if (Objects.isNull(response)) {
       log.error("OpenAI  sse连接异常:{}", t.getMessage());
-      ChatTool.lock.lock();
+      var lock = chatTool.getLockMap().get(chatId);
+      lock.lock();
       try {
         if (eventSource != null)
           eventSource.cancel();
         var queue = queueMap.get(chatId);
         queue.add("[DONE]");
-        ChatTool.dataCondition.signal();
-        ChatTool.dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+        chatTool.getConditionMap().get(chatId).signal();
+        chatTool.getDataMap().put(chatId, "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
       } catch (Exception e) {
         log.error("OpenAI  sse连接异常:{}", e.getMessage());
       } finally {
-        ChatTool.lock.unlock();
+        lock.unlock();
       }
       return;
     }

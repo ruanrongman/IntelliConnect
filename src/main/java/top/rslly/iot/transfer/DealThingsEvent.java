@@ -51,7 +51,7 @@ public class DealThingsEvent {
 
   public boolean deal(String clientId, String topic, String message) {
     // this clientId is delivered id ,not the sender
-    log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
+    // log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
     String characteristic = UUID.randomUUID().toString();
     // var deviceEntityList = productDeviceService.findAllBySubscribeTopic(topic);
     // if (deviceEntityList.isEmpty()||!clientId.equals(MqttConnectionUtils.clientId))
@@ -100,7 +100,7 @@ public class DealThingsEvent {
       try {
         long time = System.currentTimeMillis();
         eventStorageEntity.setTime(time);
-        log.info("{}", eventStorageEntity);
+        // log.info("{}", eventStorageEntity);
         eventStorageService.insert(eventStorageEntity);
       } catch (Exception e) {
         log.error("DealThingsEvent save error:{}", e.getMessage());

@@ -101,7 +101,6 @@ public class McpWebsocket {
 
   public boolean isRunning(String chatId) {
     String key = serverName + chatId;
-    log.info("isRunning{}", key);
     return redisUtil.hasKey(key);
   }
 }

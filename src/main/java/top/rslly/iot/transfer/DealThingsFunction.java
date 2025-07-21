@@ -48,7 +48,7 @@ public class DealThingsFunction {
   // private final Lock lock = new ReentrantLock();
   public boolean deal(String clientId, String topic, String message) {
     // this clientId is delivered id ,not the sender
-    log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
+    // log.info("clientId:{},topic:{},message:{}", clientId, topic, message);
     var deviceEntityList = productDeviceService.findAllByClientId(clientId);
     if (deviceEntityList.isEmpty())
       return false;
@@ -84,7 +84,7 @@ public class DealThingsFunction {
         // redisUtil.set("service"+deviceEntityList.get(0).getId() + s.getJsonKey(), result, 120);
         // log.info("热点过期时间{}",
         // redisUtil.getExpire(deviceEntityList.get(0).getId()+s.getJsonKey()));
-        log.info("key:{},value:{}", s.getJsonKey(), result);
+        // log.info("key:{},value:{}", s.getJsonKey(), result);
       } catch (Exception e) {
         log.error("DealThingsModel save error:{}", e.getMessage());
       }
