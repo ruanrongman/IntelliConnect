@@ -44,6 +44,7 @@ import top.rslly.iot.utility.result.ResultTool;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/api/v2")
@@ -305,6 +306,12 @@ public class Tool {
   public JsonResult<?> xiaoZhiOtaUnbind(@RequestParam("deviceId") String deviceId,
       @RequestHeader("Authorization") String header) {
     return otaXiaozhiService.unbound(deviceId, header);
+  }
+
+  @RequestMapping(value = "/vision/explain", method = RequestMethod.POST)
+  public String aiVision(@RequestParam("question") String question,
+      @RequestPart("file") MultipartFile imageFile) {
+    return aiService.getAiVisionIntent(question, imageFile);
   }
 
 }

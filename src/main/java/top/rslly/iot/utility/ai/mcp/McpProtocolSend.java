@@ -25,12 +25,38 @@ import top.rslly.iot.utility.ai.mcp.protocol.Initialize;
 import top.rslly.iot.utility.ai.mcp.protocol.ToolCall;
 import top.rslly.iot.utility.ai.mcp.protocol.ToolList;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class McpProtocolSend {
-  public static String sendInitialize() {
+  public static String sendInitialize(String url, String token) {
+    // {
+    // "jsonrpc": "2.0",
+    // "method": "initialize",
+    // "params": {
+    // "capabilities": {
+    // // 客户端能力，可选
+    //
+    // // 摄像头视觉相关
+    // "vision": {
+    // "url": "...", //摄像头: 图片处理地址(必须是http地址, 不是websocket地址)
+    // "token": "..." // url token
+    // }
+    //
+    // // ... 其他客户端能力
+    // }
+    // },
+    // "id": 1 // 请求 ID
+    // }
     Initialize initialize = new Initialize();
     initialize.setId(1);
+    Map<String, Object> initializeParams = initialize.getParams();
+    Map<String, Object> initializeVision = new HashMap<>();
+    Map<String, Object> capabilities = new HashMap<>();
+    initializeVision.put("url", url);
+    initializeVision.put("token", token);
+    capabilities.put("vision", initializeVision);
+    initializeParams.put("capabilities", capabilities);
     JSONObject responseObject = new JSONObject();
     responseObject.put("type", "mcp");
     responseObject.put("payload", JSON.parseObject(JSON.toJSONString(initialize)));

@@ -27,16 +27,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.unfbx.chatgpt.OpenAiClient;
 import com.unfbx.chatgpt.OpenAiStreamClient;
-import com.unfbx.chatgpt.entity.chat.ChatCompletion;
-import com.unfbx.chatgpt.entity.chat.ChatCompletionResponse;
-import com.unfbx.chatgpt.entity.chat.Message;
+import com.unfbx.chatgpt.entity.chat.*;
+import com.unfbx.chatgpt.interceptor.OpenAILogger;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
+import okhttp3.logging.HttpLoggingInterceptor;
 import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -158,6 +159,35 @@ public class DeepSeek implements LLM {
       openAiStreamClient.streamChatCompletion(chatCompletion, listener);
     } catch (Exception e) {
       log.error("model error:{} ", e.getMessage());
+    }
+  }
+
+  public String imageToWord(String question, String url) {
+    try {
+      Content textContent =
+          Content.builder().text(question).type(Content.Type.TEXT.getName()).build();
+      ImageUrl imageUrl = ImageUrl.builder().url(url).build();
+      Content imageContent =
+          Content.builder().imageUrl(imageUrl).type(Content.Type.IMAGE_URL.getName()).build();
+      List<Content> contentList = new ArrayList<>();
+      contentList.add(textContent);
+      contentList.add(imageContent);
+      // log.info("contentList:{}", contentList);
+      MessagePicture message =
+          MessagePicture.builder().role(Message.Role.USER).content(contentList).build();
+      // #####请求参数使用ChatCompletionWithPicture类
+      ChatCompletionWithPicture chatCompletion = ChatCompletionWithPicture
+          .builder()
+          .messages(Collections.singletonList(message))
+          .model(model)
+          .build();
+      ChatCompletionResponse chatCompletionResponse = openAiClient.chatCompletion(chatCompletion);
+      var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
+      log.info("model output:{} ", response);
+      return response;
+    } catch (Exception e) {
+      log.error("model error:{} ", e.getMessage());
+      return "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
     }
   }
 

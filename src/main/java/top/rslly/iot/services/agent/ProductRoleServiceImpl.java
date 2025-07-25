@@ -63,8 +63,8 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   }
 
   @Override
-  public List<ProductRoleEntity> deleteByProductId(int productId) {
-    return productRoleRepository.deleteByProductId(productId);
+  public List<ProductRoleEntity> deleteAllByProductId(int productId) {
+    return productRoleRepository.deleteAllByProductId(productId);
   }
 
   @Override

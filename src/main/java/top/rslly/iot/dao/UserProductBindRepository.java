@@ -36,5 +36,5 @@ public interface UserProductBindRepository extends JpaRepository<UserProductBind
   List<UserProductBindEntity> deleteById(int id);
 
   @Transactional
-  List<UserProductBindEntity> deleteByProductId(int productId);
+  List<UserProductBindEntity> deleteAllByProductId(int productId);
 }

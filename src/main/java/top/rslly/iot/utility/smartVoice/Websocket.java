@@ -193,7 +193,8 @@ public class Websocket {
       var json = JSON.parseObject(message);
       String type = json.getString("type");
       if (type.equals("hello")) {
-        xiaoZhiUtil.dealHello(chatId, json);
+        String token = getHeader(clients.get(chatId));
+        xiaoZhiUtil.dealHello(chatId, json, token);
       } else if (type.equals("mcp")) {
         xiaoZhiUtil.dealMcp(chatId, json);
       } else if (type.equals("abort")) {

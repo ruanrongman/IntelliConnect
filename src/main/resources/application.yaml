@@ -2,6 +2,10 @@ spring:
   banner:
     charset: UTF-8
     location: classpath:banner.txt
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
@@ -123,6 +127,8 @@ ai:
   chrome-path: XXX
   audio-tmp-path: D://temp-music//
   audio-temp-url: https://XXX.com
+  vision-explain-url: http://127.0.0.1:8080/api/v2/vision/explain
+  vision-model: silicon-Qwen2.5-vl-32B-Instruct
   glm-key: XXX
   deepSeek-key: XXX
   siliconFlow-Key: XXX

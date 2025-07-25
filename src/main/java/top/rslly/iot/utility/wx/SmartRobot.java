@@ -31,6 +31,7 @@ import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.Glm;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
 
 import java.io.IOException;
@@ -86,7 +87,7 @@ public class SmartRobot {
       return;
     }
     List<ModelMessage> memory;
-    String content = Glm.testImageToWord(imageUrl);
+    String content = LLMFactory.getLLM("glm").imageToWord("图里有什么", imageUrl);
     var memory_cache = redisUtil.get("memory" + openid);
     if (memory_cache != null)
       try {

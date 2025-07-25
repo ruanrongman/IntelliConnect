@@ -25,12 +25,15 @@ import top.rslly.iot.utility.result.JsonResult;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 
 public interface AiService {
   JsonResult<?> getAiResponse(AiControl aiControl, String token);
 
   JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token);
+
+  String getAiVisionIntent(String question, MultipartFile imageFile);
 
   void audioTmpGet(String name, HttpServletResponse response) throws IOException;
 }

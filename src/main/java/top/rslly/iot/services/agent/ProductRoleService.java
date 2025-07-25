@@ -33,7 +33,7 @@ public interface ProductRoleService {
 
   List<ProductRoleEntity> findAllByProductId(int productId);
 
-  List<ProductRoleEntity> deleteByProductId(int productId);
+  List<ProductRoleEntity> deleteAllByProductId(int productId);
 
   List<ProductRoleDescription> getDescription(int productId);
 

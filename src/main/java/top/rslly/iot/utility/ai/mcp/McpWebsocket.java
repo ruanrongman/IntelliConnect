@@ -79,7 +79,7 @@ public class McpWebsocket {
           new TypeReference<>() {});
       String jsonStr = McpProtocolSend.callTool(toolName, params);
       Websocket.clients.get(chatId).getBasicRemote().sendText(jsonStr);
-      for (int i = 0; i < 20; i++) {
+      for (int i = 0; i < 70; i++) {
         try {
           if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
             String result = redisUtil.get(serverName + chatId + "toolResult").toString();
@@ -92,7 +92,7 @@ public class McpWebsocket {
           return "calling this tool error";
         }
       }
-      return "calling this tool error";
+      return "calling this tool timeout,please try again";
     } catch (Exception e) {
       e.printStackTrace();
       return "calling this tool error";

@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.OtaEntity;
+import top.rslly.iot.models.OtaPassiveEntity;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
 import top.rslly.iot.utility.JwtTokenUtil;
@@ -65,6 +66,8 @@ public class OtaServiceImpl implements OtaService {
   private ProductDeviceRepository productDeviceRepository;
   @Resource
   private ProductModelRepository productModelRepository;
+  @Resource
+  private OtaPassiveRepository otaPassiveRepository;
   @Value("${ota.bin.path}")
   private String binPath;
 
@@ -217,13 +220,19 @@ public class OtaServiceImpl implements OtaService {
     var otaList = otaRepository.findAllByName(name);
     if (otaList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    try {
-      MyFileUtil.deleteFile(binPath + otaList.get(0).getPath());
-    } catch (IOException e) {
-      log.error(e.getMessage());
-      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    List<OtaPassiveEntity> otaPassiveEntityList =
+        otaPassiveRepository.findAllByOtaId(otaList.get(0).getId());
+    if (otaPassiveEntityList.isEmpty()) {
+      try {
+        MyFileUtil.deleteFile(binPath + otaList.get(0).getPath());
+      } catch (IOException e) {
+        log.error(e.getMessage());
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      otaRepository.delete(otaList.get(0));
+      return ResultTool.success();
+    } else {
+      return ResultTool.fail(ResultCode.HAS_DEPENDENCIES);
     }
-    otaRepository.delete(otaList.get(0));
-    return ResultTool.success();
   }
 }

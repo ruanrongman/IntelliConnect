@@ -23,10 +23,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
-import top.rslly.iot.models.ProductEntity;
-import top.rslly.iot.models.ProductModelEntity;
-import top.rslly.iot.models.UserProductBindEntity;
-import top.rslly.iot.models.WxProductBindEntity;
+import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.Product;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
@@ -48,11 +45,19 @@ public class ProductServiceImpl implements ProductService {
   @Resource
   private UserProductBindRepository userProductBindRepository;
   @Resource
-  private MqttUserRepository mqttUserRepository;
-  @Resource
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
+  @Resource
+  private OtaRepository otaRepository;
+  @Resource
+  private McpServerRepository mcpServerRepository;
+  @Resource
+  private OtaXiaozhiRepository otaXiaozhiRepository;
+  @Resource
+  private ProductRoleRepository productRoleRepository;
+  @Resource
+  private AgentMemoryRepository agentMemoryRepository;
 
 
   @Override
@@ -145,13 +150,30 @@ public class ProductServiceImpl implements ProductService {
         wxProductBindRepository.findAllByProductId(id);
     List<UserProductBindEntity> userProductBindEntityList =
         userProductBindRepository.findAllByProductId(id);
-    if (productModelEntityList.isEmpty() && wxProductBindEntityList.isEmpty()) {
+    List<OtaEntity> otaEntityList = otaRepository.findAllByProductId(id);
+    List<OtaXiaozhiEntity> otaXiaozhiEntityList = otaXiaozhiRepository.findAllByProductId(id);
+    List<McpServerEntity> mcpServerEntityList = mcpServerRepository.findAllByProductId(id);
+    List<ProductRoleEntity> productRoleEntityList = productRoleRepository.findAllByProductId(id);
+    List<AgentMemoryEntity> agentMemoryEntityList =
+        agentMemoryRepository.findAllByChatId("chatProduct" + id);
+    boolean p1 = productModelEntityList.isEmpty();
+    boolean p2 = wxProductBindEntityList.isEmpty();
+    boolean p3 = otaEntityList.isEmpty();
+    boolean p4 = otaXiaozhiEntityList.isEmpty();
+    boolean p5 = mcpServerEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       else {
-        if (userProductBindEntityList.isEmpty()) {
-          userProductBindRepository.deleteByProductId(id);
+        if (!userProductBindEntityList.isEmpty()) {
+          userProductBindRepository.deleteAllByProductId(id);
+        }
+        if (!productRoleEntityList.isEmpty()) {
+          productRoleRepository.deleteAllByProductId(id);
+        }
+        if (!agentMemoryEntityList.isEmpty()) {
+          agentMemoryRepository.deleteAllByChatId("chatProduct" + id);
         }
         return ResultTool.success(result);
       }

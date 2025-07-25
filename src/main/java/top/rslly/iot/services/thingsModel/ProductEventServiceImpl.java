@@ -22,6 +22,7 @@ package top.rslly.iot.services.thingsModel;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.*;
+import top.rslly.iot.models.AlarmEventEntity;
 import top.rslly.iot.models.ProductEventEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.ProductEvent;
@@ -48,6 +49,8 @@ public class ProductEventServiceImpl implements ProductEventService {
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
+  @Resource
+  private AlarmEventRepository alarmEventRepository;
 
   @Override
   public List<ProductEventEntity> findAllById(int id) {
@@ -130,12 +133,16 @@ public class ProductEventServiceImpl implements ProductEventService {
 
   @Override
   public JsonResult<?> deleteProductEvent(int id) {
-
-    List<ProductEventEntity> result = productEventRepository.deleteById(id);
-    if (result.isEmpty())
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    else {
-      return ResultTool.success(result);
+    List<AlarmEventEntity> alarmEventEntityList = alarmEventRepository.findAllByEventId(id);
+    if (alarmEventEntityList.isEmpty()) {
+      List<ProductEventEntity> result = productEventRepository.deleteById(id);
+      if (result.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      else {
+        return ResultTool.success(result);
+      }
+    } else {
+      return ResultTool.fail(ResultCode.HAS_DEPENDENCIES);
     }
 
   }

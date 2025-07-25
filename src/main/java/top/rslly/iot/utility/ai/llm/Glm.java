@@ -234,33 +234,35 @@ public class Glm implements LLM {
    *
    * @return
    */
-  public static String testImageToWord(String url) {
-    List<ChatMessage> messages = new ArrayList<>();
-    List<Map<String, Object>> contentList = new ArrayList<>();
-    Map<String, Object> textMap = new HashMap<>();
-    textMap.put("type", "text");
-    textMap.put("text", "图里有什么");
-    Map<String, Object> typeMap = new HashMap<>();
-    typeMap.put("type", "image_url");
-    Map<String, Object> urlMap = new HashMap<>();
-    urlMap.put("url", url);
-    typeMap.put("image_url", urlMap);
-    contentList.add(textMap);
-    contentList.add(typeMap);
-    ChatMessage chatMessage = new ChatMessage(ChatMessageRole.USER.value(), contentList);
-    messages.add(chatMessage);
-    String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
-
-
-    ChatCompletionRequest chatCompletionRequest =
-        ChatCompletionRequest.builder()
-            .model("GLM-4V-Flash")
-            .stream(Boolean.FALSE)
-            .invokeMethod(Constants.invokeMethod)
-            .messages(messages)
-            .requestId(requestId).build();
-    ModelApiResponse modelApiResponse = client.invokeModelApi(chatCompletionRequest);
+  @Override
+  public String imageToWord(String question, String url) {
     try {
+      List<ChatMessage> messages = new ArrayList<>();
+      List<Map<String, Object>> contentList = new ArrayList<>();
+      Map<String, Object> textMap = new HashMap<>();
+      textMap.put("type", "text");
+      textMap.put("text", question);
+      Map<String, Object> typeMap = new HashMap<>();
+      typeMap.put("type", "image_url");
+      Map<String, Object> urlMap = new HashMap<>();
+      urlMap.put("url", url);
+      typeMap.put("image_url", urlMap);
+      contentList.add(textMap);
+      contentList.add(typeMap);
+      ChatMessage chatMessage = new ChatMessage(ChatMessageRole.USER.value(), contentList);
+      messages.add(chatMessage);
+      String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
+
+
+      ChatCompletionRequest chatCompletionRequest =
+          ChatCompletionRequest.builder()
+              .model("GLM-4V-Flash")
+              .stream(Boolean.FALSE)
+              .invokeMethod(Constants.invokeMethod)
+              .messages(messages)
+              .requestId(requestId).build();
+      ModelApiResponse modelApiResponse = client.invokeModelApi(chatCompletionRequest);
+
       var response = mapper.writeValueAsString(
           modelApiResponse.getData().getChoices().get(0).getMessage().getContent());
       // System.out.println("model output:" + response);

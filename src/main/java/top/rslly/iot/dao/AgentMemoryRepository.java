@@ -20,10 +20,14 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.AgentMemoryEntity;
 
 import java.util.List;
 
 public interface AgentMemoryRepository extends JpaRepository<AgentMemoryEntity, Long> {
   List<AgentMemoryEntity> findAllByChatId(String chatId);
+
+  @Transactional
+  List<AgentMemoryEntity> deleteAllByChatId(String chatId);
 }

@@ -25,6 +25,7 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.RedisUtil;
@@ -56,8 +57,10 @@ public class XiaoZhiUtil {
   private Router router;
   @Autowired
   private RedisUtil redisUtil;
+  @Value("${ai.vision-explain-url}")
+  private String visionExplainUrl;
 
-  public void dealHello(String chatId, JSONObject helloObject) throws IOException {
+  public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     boolean mcpCanUse = false;
     if (helloObject.containsKey("features")) {
       mcpCanUse = helloObject.getJSONObject("features").getBoolean("mcp");
@@ -66,7 +69,8 @@ public class XiaoZhiUtil {
         "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
     log.info("mcp...{}", mcpCanUse);
     if (mcpCanUse && !chatId.startsWith("register")) {
-      Websocket.clients.get(chatId).getBasicRemote().sendText(McpProtocolSend.sendInitialize());
+      Websocket.clients.get(chatId).getBasicRemote()
+          .sendText(McpProtocolSend.sendInitialize(visionExplainUrl, token));
       Websocket.clients.get(chatId).getBasicRemote().sendText(McpProtocolSend.sendToolList(""));
     }
   }

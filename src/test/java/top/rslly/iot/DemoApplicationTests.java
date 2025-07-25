@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.quartz.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -42,7 +43,9 @@ import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.llm.DeepSeek;
 import top.rslly.iot.utility.ai.llm.Glm;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
@@ -195,19 +198,13 @@ class DemoApplicationTests {
   public void Ai() {
     SpringBeanUtils.setApplicationContext(applicationContext);
     // var answer = agent.run("根据新会的天气播放音乐", 1);
-    // var answer = Glm.testImageToWord(
-    // "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
+    var answer = LLMFactory.getLLM("silicon-Qwen2.5-vl-32B-Instruct").imageToWord("图片里有什么，请简单描述",
+        "https://sfile.chatglm.cn/testpath/275ae5b6-5390-51ca-a81a-60332d1a7cac_0.png");
     // var answer= chatTool.run("你好", new ArrayList<>());
     // String answer2 = audio2Text.getText(
     // "https://dashscope.oss-cn-beijing.aliyuncs.com/audios/2channel_16K.wav");
-    byte[] audio = new byte[0];
-    try {
-      audio = Text2audio.synthesizeAndSaveAudio("豫章故郡").array();
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
 
-    // log.info(answer);
+    log.info(answer);
     // log.info(answer2);
   }
 

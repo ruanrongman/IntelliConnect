@@ -20,6 +20,7 @@
 package top.rslly.iot.services.agent;
 
 import com.alibaba.fastjson.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,7 @@ import top.rslly.iot.services.agent.AiService;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.result.JsonResult;
@@ -43,8 +45,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Base64;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -53,6 +54,8 @@ public class AiServiceImpl implements AiService {
   private String audioPath;
   @Value("${ai.audio-temp-url}")
   private String audioTempUrl;
+  @Value("${ai.vision-model}")
+  private String visionModel;
   @Autowired
   private Router router;
   @Autowired
@@ -131,6 +134,57 @@ public class AiServiceImpl implements AiService {
       }
     }
     return ResultTool.success(aiResponse);
+  }
+
+  @Override
+  public String getAiVisionIntent(String question, MultipartFile imageFile) {
+    Map<String, Object> result = new HashMap<>();
+    try {
+      // 获取图片字节内容
+      byte[] imageData = imageFile.getBytes();
+      // 获取文件 MIME 类型
+      String contentType = imageFile.getContentType(); // 可能是 image/jpeg, image/jpg, image/png 等
+      if (contentType == null || !contentType.startsWith("image/")) {
+        result.put("success", false);
+        result.put("message", "请上传图片文件");
+        return new ObjectMapper().writeValueAsString(result);
+      }
+
+      // 统一 MIME 类型（image/jpg -> image/jpeg）
+      if ("image/jpg".equalsIgnoreCase(contentType)) {
+        contentType = "image/jpeg";
+      }
+
+      // 支持的图片类型列表
+      List<String> supportedTypes = Arrays.asList("image/jpeg", "image/png", "image/webp");
+      if (!supportedTypes.contains(contentType)) {
+        result.put("success", false);
+        result.put("message", "不支持的图片格式");
+        return new ObjectMapper().writeValueAsString(result);
+      }
+
+      // 图片大小限制（如超过 4MB）
+      long maxSizeBytes = 4 * 1024 * 1024;
+      if (imageFile.getSize() > maxSizeBytes) {
+        result.put("success", false);
+        result.put("message", "图片大小超过限制");
+        return new ObjectMapper().writeValueAsString(result);
+      }
+
+      // 转为 base64 并拼接为 data URL
+      String imageBase64 = Base64.getEncoder().encodeToString(imageData);
+      String dataUrl = "data:" + contentType + ";base64," + imageBase64;
+
+      // 调用 LLM 视觉模型接口
+      String answer = LLMFactory.getLLM(visionModel).imageToWord(question, dataUrl);
+
+      // 返回结果
+      result.put("success", true);
+      result.put("text", answer);
+      return new ObjectMapper().writeValueAsString(result);
+    } catch (Exception ignored) {
+      return "无可以使用的视觉模型";
+    }
   }
 
   @Override

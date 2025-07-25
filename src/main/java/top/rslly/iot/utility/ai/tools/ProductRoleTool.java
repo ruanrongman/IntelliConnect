@@ -122,7 +122,7 @@ public class ProductRoleTool implements BaseTool<String> {
         return "详细角色信息如下:" + "角色为" + role + "，角色介绍为" + roleIntroduction + "用户名为" + userName
             + "，智能机器人的名字为" + assistantName + "，声音为" + voiceTimbre;
       } else if (taskType.equals("cancel")) {
-        var result = productRoleService.deleteByProductId(productId);
+        var result = productRoleService.deleteAllByProductId(productId);
         if (!result.isEmpty()) {
           return "平台真实响应:删除成功";
         } else

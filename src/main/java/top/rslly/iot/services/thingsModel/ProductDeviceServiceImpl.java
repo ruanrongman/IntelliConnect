@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.MqttAclEntity;
+import top.rslly.iot.models.OtaPassiveEntity;
 import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.prompt.ProductDeviceDescription;
@@ -70,6 +71,8 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   private MqttUserRepository mqttUserRepository;
   @Resource
   private MqttAclRepository mqttAclRepository;
+  @Resource
+  private OtaPassiveRepository otaPassiveRepository;
 
   @Override
   public List<ProductDeviceEntity> findAllBySubscribeTopic(String subscribeTopic) {
@@ -309,16 +312,22 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProductDevice(int id) {
-    List<ProductDeviceEntity> result = productDeviceRepository.deleteById(id);
-    if (result.isEmpty()) {
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<OtaPassiveEntity> otaPassiveEntityList = otaPassiveRepository.findAllByDeviceId(id);
+    if (otaPassiveEntityList.isEmpty()) {
+      List<ProductDeviceEntity> result = productDeviceRepository.deleteById(id);
+      if (result.isEmpty()) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      } else {
+        dataService.deleteAllByDeviceId(id);
+        eventStorageService.deleteAllByDeviceId(id);
+        mqttUserRepository.deleteByUsername(result.get(0).getName());
+        mqttAclRepository.deleteByUsername(result.get(0).getName());
+        return ResultTool.success(result);
+      }
     } else {
-      dataService.deleteAllByDeviceId(id);
-      eventStorageService.deleteAllByDeviceId(id);
-      mqttUserRepository.deleteByUsername(result.get(0).getName());
-      mqttAclRepository.deleteByUsername(result.get(0).getName());
-      return ResultTool.success(result);
+      return ResultTool.fail(ResultCode.HAS_DEPENDENCIES);
     }
   }
 

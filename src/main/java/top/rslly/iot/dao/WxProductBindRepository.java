@@ -42,5 +42,8 @@ public interface WxProductBindRepository extends JpaRepository<WxProductBindEnti
   List<WxProductBindEntity> deleteById(int id);
 
   @Transactional
+  List<WxProductBindEntity> deleteAllByProductId(int productId);
+
+  @Transactional
   List<WxProductBindEntity> deleteByOpenidAndProductId(String openid, int productId);
 }

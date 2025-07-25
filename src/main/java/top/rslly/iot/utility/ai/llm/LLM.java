@@ -33,4 +33,6 @@ public interface LLM {
 
   void streamJsonChat(String content, List<ModelMessage> messages, boolean search,
       EventSourceListener listener);
+
+  String imageToWord(String question, String url);
 }

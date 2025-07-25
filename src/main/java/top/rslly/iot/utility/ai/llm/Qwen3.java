@@ -119,6 +119,11 @@ public class Qwen3 implements LLM {
     }
   }
 
+  @Override
+  public String imageToWord(String question, String url) {
+    return null;
+  }
+
   private List<Map<String, String>> buildMessages(List<ModelMessage> messages, String newContent) {
     List<Map<String, String>> messageList = new ArrayList<>();
     for (ModelMessage msg : messages) {

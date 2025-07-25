@@ -132,10 +132,11 @@ public class ChatTool {
       } finally {
         chatLock.unlock();
       }
+      String data = dataMap.get(chatId);
       dataMap.remove(chatId);
       conditionMap.remove(chatId);
       lockMap.remove(chatId);
-      return dataMap.get(chatId);
+      return data;
     } else {
       return llm.commonChat(question, messages, true);
     }

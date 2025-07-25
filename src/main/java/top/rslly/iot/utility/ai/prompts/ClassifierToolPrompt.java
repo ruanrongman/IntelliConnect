@@ -59,6 +59,7 @@ public class ClassifierToolPrompt {
            - Your output is JSON only and no explanation.
            - Electrical control tools are not allowed when the user requests xiaozhi_device operations.
            - If the 10 intention exists and the user requests xiaozhi_device, please always use the 10 intention
+           - If the 10 intention exists and the user requests you to look at what is in front of you, you always use 10 intention
            ## Current Conversation
            Below is the current conversation consisting of interleaving human and assistant history.
           """;
