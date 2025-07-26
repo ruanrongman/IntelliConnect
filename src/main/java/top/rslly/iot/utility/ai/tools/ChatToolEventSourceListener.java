@@ -96,31 +96,23 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   @SneakyThrows
   @Override
   public void onFailure(EventSource eventSource, Throwable t, Response response) {
-    if (Objects.isNull(response)) {
-      log.error("OpenAI  sse连接异常:{}", t.getMessage());
-      var lock = chatTool.getLockMap().get(chatId);
+    log.error("OpenAI  sse连接异常");
+    var lock = chatTool.getLockMap().get(chatId);
+    if (lock != null) {
       lock.lock();
-      try {
-        if (eventSource != null)
-          eventSource.cancel();
-        var queue = queueMap.get(chatId);
-        queue.add("[DONE]");
-        chatTool.getConditionMap().get(chatId).signal();
-        chatTool.getDataMap().put(chatId, "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
-      } catch (Exception e) {
-        log.error("OpenAI  sse连接异常:{}", e.getMessage());
-      } finally {
+    }
+    try {
+      if (eventSource != null)
+        eventSource.cancel();
+      var queue = queueMap.get(chatId);
+      queue.add("[DONE]");
+      chatTool.getConditionMap().get(chatId).signal();
+      chatTool.getDataMap().put(chatId, "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+    } catch (Exception e) {
+      log.error("OpenAI  sse连接异常:{}", e.getMessage());
+    } finally {
+      if (lock != null)
         lock.unlock();
-      }
-      return;
     }
-    ResponseBody body = response.body();
-    if (Objects.nonNull(body)) {
-      log.error("OpenAI  sse连接异常data：{}，异常：{}", body.string(), t);
-    } else {
-      log.error("OpenAI  sse连接异常data：{}，异常：{}", response, t);
-    }
-    if (eventSource != null)
-      eventSource.cancel();
   }
 }

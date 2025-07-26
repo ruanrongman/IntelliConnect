@@ -89,7 +89,7 @@ public class ClassifierTool {
       // 清除当前会话的旧数据
       dataMap.get(chatId).clear();
       llm.streamJsonChat(question, messages, true,
-          new ClassifierToolEventSourceListener(question, 6, chatId, this));
+          new ClassifierToolEventSourceListener(question, 5, chatId, this));
       lockMap.get(chatId).lock();
       try {
         while (dataMap.get(chatId).get("args") == null) {

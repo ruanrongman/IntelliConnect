@@ -126,6 +126,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
             classifierTool.getDataMap().put(chatId, dataMap);
             classifierTool.getDataMap().get(chatId).putAll(dataMap);
             classifierTool.getConditionMap().get(chatId).signal();
+            eventSource.cancel();
             return;
           }
         }
@@ -147,29 +148,22 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
   @SneakyThrows
   @Override
   public void onFailure(EventSource eventSource, Throwable t, Response response) {
-    if (Objects.isNull(response)) {
-      log.error("OpenAI  sse连接异常:{}", t.getMessage());
-      var lock = classifierTool.getLockMap().get(chatId);
+    log.error("OpenAI  sse连接异常");
+    var lock = classifierTool.getLockMap().get(chatId);
+    if (lock != null)
       lock.lock();
-      try {
-        if (eventSource != null)
-          eventSource.cancel();
-        Map<String, Object> dataMap = new ConcurrentHashMap<>();
-        dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
-        classifierTool.getDataMap().get(chatId).putAll(dataMap);
-        classifierTool.getConditionMap().get(chatId).signal();
-      } finally {
-        lock.lock();
-      }
-      return;
+    try {
+      if (eventSource != null)
+        eventSource.cancel();
+      Map<String, Object> dataMap = new ConcurrentHashMap<>();
+      dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+      classifierTool.getDataMap().get(chatId).putAll(dataMap);
+      classifierTool.getConditionMap().get(chatId).signal();
+    } catch (Exception e) {
+      log.error("OpenAI  sse连接异常:{}", e.getMessage());
+    } finally {
+      if (lock != null)
+        lock.unlock();
     }
-    ResponseBody body = response.body();
-    if (Objects.nonNull(body)) {
-      log.error("OpenAI  sse连接异常data：{}，异常：{}", body.string(), t);
-    } else {
-      log.error("OpenAI  sse连接异常data：{}，异常：{}", response, t);
-    }
-    if (eventSource != null)
-      eventSource.cancel();
   }
 }

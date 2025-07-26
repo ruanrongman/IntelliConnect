@@ -75,7 +75,7 @@ public class ClassifierToolPrompt {
     classifierMap.put("5",
         "Common chat");
     classifierMap.put("6", "Bind and unbind products");
-    classifierMap.put("7", "handoff controlled products");
+    classifierMap.put("7", "switch controlled products");
     classifierMap.put("8", "Schedule management and reminder tasks");
     classifierMap.put("9", "All about role and voice");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
