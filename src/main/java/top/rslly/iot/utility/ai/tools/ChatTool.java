@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
+import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -53,6 +54,8 @@ public class ChatTool {
   private HttpRequestUtils httpRequestUtils;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  @Autowired
+  private KnowledgeChatServiceImpl knowledgeChatService;
 
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -101,16 +104,20 @@ public class ChatTool {
       role = productRole.get(0).getRole();
       roleIntroduction = productRole.get(0).getRoleIntroduction();
     }
+    String information =
+        knowledgeChatService.searchByProductId(String.valueOf(productId), question);
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory));
-    // log.info("systemMessage: " + systemMessage.getContent());
+                currentMemory, information));
+    log.info(llmName);
+    log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
       systemMessage.setContent(
-          chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction, currentMemory)
+          chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction, currentMemory,
+              information)
               + memory);
     }
     messages.add(systemMessage);

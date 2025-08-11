@@ -46,9 +46,9 @@ public class ThreadPoolTaskConfig {
   /** 最大线程数 */
   private static final int maxPoolSize = 300;
   /** 允许线程空闲时间（单位：默认为秒） */
-  private static final int keepAliveTime = 10;
+  private static final int keepAliveTime = 60;
   /** 缓冲队列大小 */
-  private static final int queueCapacity = 200;
+  private static final int queueCapacity = 100;
   /** 线程池名前缀 */
   private static final String threadNamePrefix = "Async-Service-";
 

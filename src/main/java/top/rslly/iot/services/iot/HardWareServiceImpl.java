@@ -62,7 +62,6 @@ public class HardWareServiceImpl implements HardWareService {
   private RedisUtil redisUtil;
 
   @Override
-  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> control(ControlParam controlParam, String... header) throws MqttException {
     var deviceEntityList = productDeviceRepository.findAllByName(controlParam.getName());
     if (deviceEntityList.isEmpty()) {

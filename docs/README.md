@@ -8,6 +8,7 @@
 * 本项目基于springboot2.7开发，使用spring security作为安全框架
 * 配备物模型和完善的监控模块
 * 支持多种大模型(Qwen3系列，GLM系列和deepSeek等先进模型)和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用(首个基于Agent智能体设计的物联网平台)
+* 支持知识库技术，可以针对专有领域构建知识库使得智能体更贴心
 * 支持MCP协议（模型上下文协议）可以自由扩展智能体能力
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术
@@ -53,7 +54,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/9de17b0d11395da91b6eddd190a1710.jpg" width="250px"/>
+    <img src="./images/8109c962cf3b7219f4508d0113964383.jpg" width="250px"/>
 </div>
 
 

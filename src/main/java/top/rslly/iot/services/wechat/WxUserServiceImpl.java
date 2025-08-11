@@ -23,6 +23,7 @@ import com.alibaba.fastjson.JSON;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.WxUserRepository;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.WxUser;
@@ -61,6 +62,7 @@ public class WxUserServiceImpl implements WxUserService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> wxRegister(WxUser wxUser) throws IOException {
     String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     String openid = (String) JSON.parseObject(s).get("openid");
@@ -75,6 +77,7 @@ public class WxUserServiceImpl implements WxUserService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public WxUserEntity wxRegister(String openid) {
     // 校验 openid 是否有效
     if (openid == null || openid.trim().isEmpty()) {

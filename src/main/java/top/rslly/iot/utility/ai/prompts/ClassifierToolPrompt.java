@@ -68,12 +68,12 @@ public class ClassifierToolPrompt {
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2",
-        "Operate and query electrical (excluding playing music and xiaozhi_device)");
+        "Control and query electrical (excluding playing music and xiaozhi_device)");
     classifierMap.put("3", "Request a song or play music.(including Recommend music.)");
     classifierMap.put("4",
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
     classifierMap.put("5",
-        "Common chat");
+        "Common chat or Unable to match the task");
     classifierMap.put("6", "Bind and unbind products");
     classifierMap.put("7", "switch controlled products");
     classifierMap.put("8", "Schedule management and reminder tasks");

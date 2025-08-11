@@ -22,7 +22,9 @@ package top.rslly.iot.services;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import top.rslly.iot.dao.KnowledgeChatRepository;
 import top.rslly.iot.models.*;
+import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
@@ -68,6 +70,8 @@ public class SafetyServiceImpl implements SafetyService {
   private OtaServiceImpl otaService;
   @Autowired
   private OtaPassiveServiceImpl otaPassiveService;
+  @Autowired
+  private KnowledgeChatServiceImpl knowledgeChatService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -177,6 +181,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("otaPassiveId not found!");
     return this.controlAuthorizeDevice(token,
         otaPassiveEntityList.get(0).getDeviceId());
+  }
+
+  @Override
+  public boolean controlAuthorizeKnowledgeChat(String token, int id) {
+    List<KnowledgeChatEntity> knowledgeChatEntityList = knowledgeChatService.findAllById(id);
+    if (knowledgeChatEntityList.isEmpty())
+      throw new NullPointerException("knowledgeChatId not found!");
+    return this.controlAuthorizeProduct(token,
+        knowledgeChatEntityList.get(0).getProductId());
   }
 
   @Override

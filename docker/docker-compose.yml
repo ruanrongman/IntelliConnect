@@ -13,6 +13,7 @@ services:
     command: redis-server --requirepass 1234 --appendonly yes
     environment:
       - TZ=Asia/Shanghai
+
   mysql:
     image: mysql:5.7.44
     container_name: IntelliConnect-ce-mysql
@@ -28,6 +29,7 @@ services:
       - MYSQL_DATABASE=cwliot1.8
       - TZ=Asia/Shanghai
     command: ["--default-authentication-plugin=mysql_native_password"]
+
   influxdb:
     image: influxdb:1.6.4
     container_name: IntelliConnect-ce-influxdb
@@ -45,6 +47,7 @@ services:
       DOCKER_INFLUXDB_INIT_ORG: my-org
       DOCKER_INFLUXDB_INIT_BUCKET: buketname
       # DOCKER_INFLUXDB_INIT_RETENTION: 720
+
   emqx:
     image: emqx:5.8.4
     container_name: IntelliConnect-ce-emqx
@@ -69,11 +72,36 @@ services:
     volumes:
       - "emqx-volume:/opt/emqx/log"
       - "emqx-volume:/opt/emqx/data"
+
+  chromadb:
+    image: chromadb/chroma:0.4.24
+    container_name: IntelliConnect-ce-chromadb
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - "chromadb-volume:/chroma/chroma"
+    environment:
+      - TZ=Asia/Shanghai
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      # 可选：设置认证相关环境变量
+      # - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/chroma/auth.txt
+      # - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.basic.BasicAuthCredentialsProvider
+    # 可选：健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   mysql-volume:
   redis-volume:
   influxdb-volume:
   emqx-volume:
+  chromadb-volume:  # 新增 ChromaDB 数据卷
+
 networks:
   emqx-bridge:
     driver: bridge

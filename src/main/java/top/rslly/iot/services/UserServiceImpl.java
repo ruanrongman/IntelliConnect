@@ -25,6 +25,7 @@ import cn.hutool.core.lang.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.UserRepository;
 import top.rslly.iot.models.UserEntity;
 import top.rslly.iot.param.request.User;
@@ -62,6 +63,7 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public UserEntity insert(UserEntity userEntity) {
     userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(userEntity.getPassword()));// adapt
                                                                                           // new
@@ -71,6 +73,7 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> newUser(User user) {
     if (!userRepository.findAllByUsername(user.getUsername()).isEmpty()) {
       return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);

@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.AlarmEvent;
@@ -138,6 +139,7 @@ public class AlarmEventServiceImpl implements AlarmEventService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postAlarmEvent(AlarmEvent alarmEvent) {
     AlarmEventEntity alarmEventEntity = new AlarmEventEntity();
     List<ProductEventEntity> productEventEntityList =
@@ -155,6 +157,7 @@ public class AlarmEventServiceImpl implements AlarmEventService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAlarmEvent(int id) {
     List<AlarmEventEntity> result = alarmEventRepository.deleteById(id);
     if (result.isEmpty())

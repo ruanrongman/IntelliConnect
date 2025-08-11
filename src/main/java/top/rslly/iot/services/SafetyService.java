@@ -45,4 +45,6 @@ public interface SafetyService {
   boolean controlAuthorizeOta(String token, String name);
 
   boolean controlAuthorizeOtaPassive(String token, int id);
+
+  boolean controlAuthorizeKnowledgeChat(String token, int id);
 }

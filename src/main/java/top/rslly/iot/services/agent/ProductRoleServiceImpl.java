@@ -21,6 +21,7 @@ package top.rslly.iot.services.agent;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.ProductRoleEntity;
@@ -132,6 +133,7 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductRole(ProductRole productRole) {
     ProductRoleEntity productRoleEntity = new ProductRoleEntity();
     BeanUtils.copyProperties(productRole, productRoleEntity);
@@ -147,6 +149,7 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> putProductRole(ProductRole productRole) {
     List<ProductRoleEntity> productRoleEntityList =
         productRoleRepository.findAllByProductId(productRole.getProductId());
@@ -162,6 +165,7 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProductRole(int id) {
     List<ProductRoleEntity> productRoleEntityList = productRoleRepository.findAllById(id);
     if (productRoleEntityList.isEmpty())

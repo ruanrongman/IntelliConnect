@@ -28,6 +28,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.services.agent.AiServiceImpl;
+import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
 import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
@@ -69,6 +70,8 @@ public class Tool {
   private OtaPassiveServiceImpl otaPassiveService;
   @Autowired
   private OtaXiaozhiServiceImpl otaXiaozhiService;
+  @Autowired
+  private KnowledgeChatServiceImpl knowledgeChatService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -159,6 +162,38 @@ public class Tool {
       @RequestHeader("Authorization") String header) {
     aiService.getAiResponse(true, true, productId, multipartFile, header);
     return SseEmitterUtil.connect("chatProduct" + productId);
+  }
+
+  // 知识库
+  @RequestMapping(value = "/knowledgeChat", method = RequestMethod.GET)
+  public JsonResult<?> getKnowledgeChat(@RequestHeader("Authorization") String header) {
+    return knowledgeChatService.getKnowledgeChat(header);
+  }
+
+  @RequestMapping(value = "/knowledgeChat", method = RequestMethod.POST)
+  public JsonResult<?> postKnowledgeChat(@RequestParam("productId") int productId,
+      @RequestParam("filename") String fileName,
+      @RequestPart("file") MultipartFile multipartFile,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeChatService.postKnowledgeChat(productId, fileName, multipartFile);
+  }
+
+  @RequestMapping(value = "/knowledgeChat", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteKnowledgeChat(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeKnowledgeChat(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeChatService.deleteKnowledgeChat(id);
   }
 
   @Operation(summary = "获取缓存音频文件(禁止调用)", description = "禁止调用")

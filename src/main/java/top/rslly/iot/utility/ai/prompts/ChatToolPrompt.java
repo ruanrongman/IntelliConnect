@@ -40,7 +40,7 @@ public class ChatToolPrompt {
       """
           Your role is {role}, {role_introduction},your name is {agent_name},developed by the {team_name} team.
           The user's name is {user_name}
-          reference information: The current time is {time}
+          reference information: The current time is {time} . {information}
           ## Current Memory
             {current_memory}
           ## Output Format
@@ -50,7 +50,7 @@ public class ChatToolPrompt {
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
-      String roleIntroduction, String memory) {
+      String roleIntroduction, String memory, String information) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
@@ -62,6 +62,7 @@ public class ChatToolPrompt {
     params.put("team_name", teamName);
     params.put("time", formattedDate);
     params.put("current_memory", memory);
+    params.put("information", "知识库:" + information);
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
     params.put("role", Objects.requireNonNullElse(role, "smart speaker"));
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,

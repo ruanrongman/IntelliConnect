@@ -110,7 +110,6 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
-  @Transactional(rollbackFor = Exception.class)
   public List<ProductDeviceDescription> getDescription(int modelId) {
     var devices = productDeviceRepository.findAllByModelId(modelId);
     var productDataEntities = productDataRepository.findAllByModelId(modelId);

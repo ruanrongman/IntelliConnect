@@ -146,6 +146,7 @@ public class EventDataServiceImpl implements EventDataService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteEventData(int id) {
     List<EventDataEntity> result = eventDataRepository.deleteById(id);
     if (result.isEmpty())

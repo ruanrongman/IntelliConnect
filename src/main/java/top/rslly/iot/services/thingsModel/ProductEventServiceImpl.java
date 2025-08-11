@@ -21,6 +21,7 @@ package top.rslly.iot.services.thingsModel;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.AlarmEventEntity;
 import top.rslly.iot.models.ProductEventEntity;
@@ -117,6 +118,7 @@ public class ProductEventServiceImpl implements ProductEventService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductEvent(ProductEvent productEvent) {
     ProductEventEntity productEventEntity = new ProductEventEntity();
     BeanUtils.copyProperties(productEvent, productEventEntity);
@@ -132,6 +134,7 @@ public class ProductEventServiceImpl implements ProductEventService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProductEvent(int id) {
     List<AlarmEventEntity> alarmEventEntityList = alarmEventRepository.findAllByEventId(id);
     if (alarmEventEntityList.isEmpty()) {

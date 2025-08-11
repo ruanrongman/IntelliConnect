@@ -25,6 +25,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.OtaEntity;
@@ -77,6 +78,7 @@ public class OtaServiceImpl implements OtaService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> uploadBin(String name, int productId, MultipartFile multipartFile) {
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
@@ -214,6 +216,7 @@ public class OtaServiceImpl implements OtaService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteBin(String name) {
     if (name == null)
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);

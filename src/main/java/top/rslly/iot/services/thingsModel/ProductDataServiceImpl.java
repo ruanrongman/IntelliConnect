@@ -193,6 +193,7 @@ public class ProductDataServiceImpl implements ProductDataService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProductData(int id) {
     List<ProductDataEntity> result = productDataRepository.deleteById(id);
     if (result.isEmpty())

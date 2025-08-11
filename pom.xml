@@ -259,6 +259,31 @@
             <artifactId>websdk-java-speech</artifactId>
             <version>2.0.3</version>
         </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>1.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-chroma</artifactId>
+            <version>1.1.0-beta7</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-embeddings-bge-small-zh-v15-q</artifactId>
+            <version>1.1.0-beta7</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>1.0.0-beta3</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-document-parser-apache-pdfbox</artifactId>
+            <version>1.0.0-beta3</version>
+        </dependency>
         <!-- 音频处理 -->
         <dependency>
             <groupId>ws.schild</groupId>

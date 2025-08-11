@@ -21,6 +21,7 @@ package top.rslly.iot.services.agent;
 
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.AgentMemoryRepository;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.param.request.AgentMemory;
@@ -39,6 +40,7 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public AgentMemoryEntity insertAndUpdate(AgentMemory agentMemory) {
     AgentMemoryEntity agentMemoryEntity = new AgentMemoryEntity();
     List<AgentMemoryEntity> agentMemoryEntities =

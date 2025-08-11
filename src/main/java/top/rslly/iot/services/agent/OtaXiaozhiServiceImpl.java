@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import springfox.documentation.oas.mappers.OasLicenceMapper;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.OtaXiaozhiEntity;
@@ -121,6 +122,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> bindDevice(OtaXiaozhi otaXiaozhi, String token) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
@@ -265,6 +267,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> unbound(String deviceId, String token) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);

@@ -186,6 +186,7 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> otaPassiveDelete(int id) {
     var otaPassiveEntityList = otaPassiveRepository.findAllById(id);
     if (otaPassiveEntityList.isEmpty()) {
