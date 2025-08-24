@@ -57,8 +57,18 @@ public class ProductServiceImpl implements ProductService {
   @Resource
   private ProductRoleRepository productRoleRepository;
   @Resource
+  private KnowledgeChatRepository knowledgeChatRepository;
+  @Resource
   private AgentMemoryRepository agentMemoryRepository;
 
+
+  @Override
+  public JsonResult<?> getProductName(int id) {
+    var productList = productRepository.findAllById(id);
+    if (!productList.isEmpty())
+      return ResultTool.success(productList.get(0).getProductName());
+    return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+  }
 
   @Override
   public JsonResult<?> getProduct(String token) {
@@ -156,12 +166,15 @@ public class ProductServiceImpl implements ProductService {
     List<ProductRoleEntity> productRoleEntityList = productRoleRepository.findAllByProductId(id);
     List<AgentMemoryEntity> agentMemoryEntityList =
         agentMemoryRepository.findAllByChatId("chatProduct" + id);
+    List<KnowledgeChatEntity> knowledgeChatEntityList =
+        knowledgeChatRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
     boolean p4 = otaXiaozhiEntityList.isEmpty();
     boolean p5 = mcpServerEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5) {
+    boolean p6 = knowledgeChatEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5 && p6) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);

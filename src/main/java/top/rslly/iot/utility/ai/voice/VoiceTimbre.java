@@ -21,7 +21,9 @@ package top.rslly.iot.utility.ai.voice;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+import java.util.Arrays;
 import java.util.stream.Stream;
 
 @AllArgsConstructor
@@ -39,5 +41,20 @@ public enum VoiceTimbre {
 
   public static Stream<VoiceTimbre> stream() {
     return Stream.of(VoiceTimbre.values());
+  }
+
+  /**
+   * 校验声音音色是否存在
+   * 
+   * @param voice 音色名称
+   * @return 是否存在
+   */
+  public static boolean isValidVoice(String voice) {
+    if (voice == null || voice.trim().isEmpty()) {
+      return false;
+    }
+    boolean result = Arrays.stream(values())
+        .anyMatch(timbre -> timbre.getTimbre().equals(voice.trim()));
+    return result;
   }
 }

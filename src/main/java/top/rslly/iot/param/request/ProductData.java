@@ -22,14 +22,25 @@ package top.rslly.iot.param.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Getter
 @Setter
 public class ProductData {
+  @NotBlank(message = "jsonKey 不能为空")
+  @Size(min = 1, max = 255, message = "jsonKey 长度必须在 1 到 255 之间")
   private String jsonKey;
   private int modelId;
+  @NotBlank(message = "description 不能为空")
+  @Size(min = 1, max = 255, message = "description 长度必须在 1 到 255 之间")
   private String description;
+  @NotBlank(message = "storageType 不能为空")
+  @Size(min = 1, max = 255, message = "storageType 长度必须在 1 到 255 之间")
   private String storageType;
   private int rRw;
+  @NotBlank(message = "type 不能为空")
+  @Size(min = 1, max = 255, message = "type 长度必须在 1 到 255 之间")
   private String type;
   private String max;
   private String min;

@@ -22,13 +22,22 @@ package top.rslly.iot.param.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Getter
 @Setter
 public class ProductDevice {
   private int modelId;
+  @NotBlank(message = "clientId 不能为空")
+  @Size(min = 1, max = 255, message = "clientId 长度必须在 1 到 255 之间")
   private String clientId;
   private int allow;
+  @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间")
   private String name;
+  @NotBlank(message = "description 不能为空")
+  @Size(min = 1, max = 255, message = "description 长度必须在 1 到 255 之间")
   private String description;
 
 }

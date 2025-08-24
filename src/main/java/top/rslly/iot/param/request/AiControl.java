@@ -21,8 +21,13 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class AiControl {
+  @NotBlank(message = "content 不能为空")
+  @Size(min = 1, max = 2048, message = "content 长度必须在 1 到 2048 之间")
   String content;
   int productId;
 }

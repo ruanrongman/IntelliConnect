@@ -21,12 +21,25 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class ProductRole {
   private int productId;
+  @NotBlank(message = "assistantName 不能为空")
+  @Size(min = 1, max = 255, message = "assistantName 长度必须在 1 到 255 之间")
   private String assistantName;
+  @NotBlank(message = "userName 不能为空")
+  @Size(min = 1, max = 255, message = "userName 长度必须在 1 到 255 之间")
   private String userName;
+  @NotBlank(message = "role 不能为空")
+  @Size(min = 1, max = 255, message = "role 长度必须在 1 到 255 之间")
   private String role;
+  @NotBlank(message = "roleIntroduction 不能为空")
+  @Size(min = 1, max = 255, message = "roleIntroduction 长度必须在 1 到 255 之间")
   private String roleIntroduction;
+  @NotBlank(message = "voice 不能为空")
+  @Size(min = 1, max = 255, message = "voice 长度必须在 1 到 255 之间")
   private String voice;
 }

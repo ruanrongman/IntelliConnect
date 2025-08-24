@@ -23,6 +23,7 @@ package top.rslly.iot.controllers;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
@@ -34,8 +35,11 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
+import javax.validation.Valid;
+
 @RestController
 @RequestMapping(value = "/api/v2")
+@Validated
 public class Auth {
 
   @Autowired
@@ -68,13 +72,13 @@ public class Auth {
 
   @Operation(summary = "创建新用户", description = "暂不支持创建管理员用户")
   @RequestMapping(value = "/newUser", method = RequestMethod.POST)
-  public JsonResult<?> createUser(@RequestBody User user) {
+  public JsonResult<?> createUser(@Valid @RequestBody User user) {
     return userService.newUser(user);
   }
 
   @Operation(summary = "获取邮箱验证码", description = "获取邮箱验证码")
   @RequestMapping(value = "/getUserCode", method = RequestMethod.POST)
-  public JsonResult<?> getUserCode(@RequestBody UserCode userCode) {
+  public JsonResult<?> getUserCode(@Valid @RequestBody UserCode userCode) {
     return userService.getUserCode(userCode.getUsername(), userCode.getEmail());
   }
 
@@ -86,14 +90,14 @@ public class Auth {
 
   @Operation(summary = "用户产品绑定", description = "用户产品绑定")
   @RequestMapping(value = "/userProductBind", method = RequestMethod.POST)
-  public JsonResult<?> userProductBind(@RequestBody UserBindProduct userBindProduct,
+  public JsonResult<?> userProductBind(@Valid @RequestBody UserBindProduct userBindProduct,
       @RequestHeader("Authorization") String token) {
     return userProductBindService.userProductBind(userBindProduct, token);
   }
 
   @Operation(summary = "用户产品解绑", description = "用户产品解绑")
   @RequestMapping(value = "/userProductUnbind", method = RequestMethod.POST)
-  public JsonResult<?> userProductUnbind(@RequestBody UserBindProduct userBindProduct,
+  public JsonResult<?> userProductUnbind(@Valid @RequestBody UserBindProduct userBindProduct,
       @RequestHeader("Authorization") String token) {
     return userProductBindService.userProductUnbind(userBindProduct, token);
   }
@@ -106,6 +110,15 @@ public class Auth {
     return mqttUserService.getMqttUser();
   }
 
+  @Operation(summary = "通过产品id获取产品名称", description = "获取所有产品列表")
+  @RequestMapping(value = "/getProductName", method = RequestMethod.GET)
+  public JsonResult<?> getProductName(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    if (!safetyService.controlAuthorizeProduct(header, id))
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    return productService.getProductName(id);
+  }
+
   @Operation(summary = "获取产品信息", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.GET)
   public JsonResult<?> Product(@RequestHeader("Authorization") String header) {
@@ -115,7 +128,7 @@ public class Auth {
   // 添加产品信息，如产品密钥这些，后续版本将会添加更多细节。
   @Operation(summary = "提交产品信息", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.POST)
-  public JsonResult<?> Product(@RequestBody Product product,
+  public JsonResult<?> Product(@Valid @RequestBody Product product,
       @RequestHeader("Authorization") String header) {
     return productService.postProduct(product, header);
   }
@@ -144,7 +157,7 @@ public class Auth {
 
   @Operation(summary = "创建物模型", description = "创建产品的物模型")
   @RequestMapping(value = "/ProductModel", method = RequestMethod.POST)
-  public JsonResult<?> ProductModel(@RequestBody ProductModel productModel,
+  public JsonResult<?> ProductModel(@Valid @RequestBody ProductModel productModel,
       @RequestHeader("Authorization") String header) {
     if (!safetyService.controlAuthorizeProduct(header, productModel.getProductId()))
       return ResultTool.fail(ResultCode.NO_PERMISSION);
@@ -173,7 +186,7 @@ public class Auth {
 
   @Operation(summary = "提交事件", description = "提交物模型的事件")
   @RequestMapping(value = "/ProductEvent", method = RequestMethod.POST)
-  public JsonResult<?> ProductEvent(@RequestBody ProductEvent productEvent,
+  public JsonResult<?> ProductEvent(@Valid @RequestBody ProductEvent productEvent,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeModel(header, productEvent.getModelId()))
@@ -206,7 +219,7 @@ public class Auth {
 
   @Operation(summary = "创建设备", description = "创建物模型的设备")
   @RequestMapping(value = "/ProductDevice", method = RequestMethod.POST)
-  public JsonResult<?> ProductDevice(@RequestBody ProductDevice productDevice,
+  public JsonResult<?> ProductDevice(@Valid @RequestBody ProductDevice productDevice,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeModel(header, productDevice.getModelId()))
@@ -238,7 +251,7 @@ public class Auth {
 
   @Operation(summary = "创建属性", description = "创建物模型的属性")
   @RequestMapping(value = "/ProductData", method = RequestMethod.POST)
-  public JsonResult<?> ProductData(@RequestBody ProductData productData,
+  public JsonResult<?> ProductData(@Valid @RequestBody ProductData productData,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeModel(header, productData.getModelId()))
@@ -271,7 +284,7 @@ public class Auth {
 
   @Operation(summary = "提交功能", description = "创建物模型的功能")
   @RequestMapping(value = "/ProductFunction", method = RequestMethod.POST)
-  public JsonResult<?> ProductFunction(@RequestBody ProductFunction productFunction,
+  public JsonResult<?> ProductFunction(@Valid @RequestBody ProductFunction productFunction,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeModel(header, productFunction.getModelId()))
@@ -303,7 +316,7 @@ public class Auth {
 
   @Operation(summary = "提交事件入参", description = "提交事件入参")
   @RequestMapping(value = "/EventData", method = RequestMethod.POST)
-  public JsonResult<?> EventData(@RequestBody EventData eventData,
+  public JsonResult<?> EventData(@Valid @RequestBody EventData eventData,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeModel(header, eventData.getModelId()))
@@ -335,7 +348,7 @@ public class Auth {
 
   @Operation(summary = "添加产品角色", description = "仅添加当前用户产品角色")
   @RequestMapping(value = "/productRole", method = RequestMethod.POST)
-  public JsonResult<?> postProductRole(@RequestBody ProductRole productRole,
+  public JsonResult<?> postProductRole(@Valid @RequestBody ProductRole productRole,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, productRole.getProductId()))
@@ -348,7 +361,7 @@ public class Auth {
 
   @Operation(summary = "修改产品角色", description = "仅修改当前用户产品角色")
   @RequestMapping(value = "/productRole", method = RequestMethod.PUT)
-  public JsonResult<?> putProductRole(@RequestBody ProductRole productRole,
+  public JsonResult<?> putProductRole(@Valid @RequestBody ProductRole productRole,
       @RequestHeader("Authorization") String header) {
     if (!safetyService.controlAuthorizeProduct(header, productRole.getProductId()))
       return ResultTool.fail(ResultCode.NO_PERMISSION);
@@ -376,7 +389,7 @@ public class Auth {
 
   @Operation(summary = "添加mcp服务器", description = "仅添加当前用户产品mcp服务器")
   @RequestMapping(value = "/mcpServer", method = RequestMethod.POST)
-  public JsonResult<?> postMcpServer(@RequestBody McpServerParam mcpServerParam,
+  public JsonResult<?> postMcpServer(@Valid @RequestBody McpServerParam mcpServerParam,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, mcpServerParam.getProductId()))

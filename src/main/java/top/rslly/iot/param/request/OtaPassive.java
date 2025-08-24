@@ -21,9 +21,18 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class OtaPassive {
+  @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间")
   private String name;
+  @NotBlank(message = "deviceName 不能为空")
+  @Size(min = 1, max = 255, message = "deviceName 长度必须在 1 到 255 之间")
   private String deviceName;
+  @NotBlank(message = "versionName 不能为空")
+  @Size(min = 1, max = 255, message = "versionName 长度必须在 1 到 255 之间")
   private String versionName;
 }

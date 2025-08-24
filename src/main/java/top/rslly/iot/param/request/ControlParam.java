@@ -23,17 +23,26 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 import java.util.List;
 
 @AllArgsConstructor
 @Getter
 @Setter
 public class ControlParam {
+  @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间")
   String name;
+  @NotBlank(message = "mode 不能为空")
+  @Size(min = 1, max = 255, message = "mode 长度必须在 1 到 255 之间")
   String mode;
   String functionName;
   String status;
   int qos;
+  @NotNull
   List<String> key;
+  @NotNull
   List<String> value;
 }

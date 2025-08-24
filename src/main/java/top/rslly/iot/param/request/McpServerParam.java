@@ -21,10 +21,19 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class McpServerParam {
+  @NotBlank(message = "url 不能为空")
+  @Size(min = 1, max = 255, message = "url 长度必须在 1 到 255 之间")
   private String url;
+  @NotBlank(message = "description 不能为空")
+  @Size(min = 1, max = 255, message = "description 长度必须在 1 到 255 之间")
   private String description;
   private int productId;
+  @NotBlank(message = "sseEndpoint 不能为空")
+  @Size(min = 1, max = 255, message = "sseEndpoint 长度必须在 1 到 255 之间")
   private String sseEndpoint;
 }

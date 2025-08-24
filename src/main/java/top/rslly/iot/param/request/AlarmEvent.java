@@ -21,8 +21,13 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class AlarmEvent {
+  @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间")
   private String name;
   private int modelId;
 }

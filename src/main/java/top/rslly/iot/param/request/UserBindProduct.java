@@ -21,8 +21,15 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class UserBindProduct {
+  @NotBlank(message = "productName 不能为空")
+  @Size(min = 1, max = 255, message = "productName 长度必须在 1 到 255 之间")
   String productName;
+  @NotBlank(message = "productKey 不能为空")
+  @Size(min = 1, max = 255, message = "productKey 长度必须在 1 到 255 之间")
   String productKey;
 }

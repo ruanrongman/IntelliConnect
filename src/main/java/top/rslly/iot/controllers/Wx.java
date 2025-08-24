@@ -29,6 +29,7 @@ import org.dom4j.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.DigestUtils;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.WxBindProduct;
 import top.rslly.iot.param.request.WxUser;
@@ -41,6 +42,7 @@ import top.rslly.iot.utility.wx.SmartRobot;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.validation.Valid;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -49,6 +51,7 @@ import java.util.Arrays;
 
 @RestController
 @Slf4j
+@Validated
 public class Wx {
 
   @Autowired
@@ -76,12 +79,12 @@ public class Wx {
 
 
   @RequestMapping(value = "/wxLogin", method = RequestMethod.POST)
-  public JsonResult<?> wxLogin(@RequestBody WxUser wxUser) throws IOException {
+  public JsonResult<?> wxLogin(@Valid @RequestBody WxUser wxUser) throws IOException {
     return wxUserService.wxLogin(wxUser);
   }
 
   @RequestMapping(value = "/wxRegister", method = RequestMethod.POST)
-  public JsonResult<?> wxRegister(@RequestBody WxUser wxUser) throws IOException {
+  public JsonResult<?> wxRegister(@Valid @RequestBody WxUser wxUser) throws IOException {
     return wxUserService.wxRegister(wxUser);
   }
 
@@ -91,13 +94,13 @@ public class Wx {
   }
 
   @RequestMapping(value = "/wxBindProduct", method = RequestMethod.POST)
-  public JsonResult<?> wxBindProduct(@RequestBody WxBindProduct wxBindProduct,
+  public JsonResult<?> wxBindProduct(@Valid @RequestBody WxBindProduct wxBindProduct,
       @RequestHeader("Authorization") String header) {
     return wxProductBindService.wxBindProduct(wxBindProduct, header);
   }
 
   @RequestMapping(value = "/wxBindProduct", method = RequestMethod.DELETE)
-  public JsonResult<?> wxUnBindProduct(@RequestBody WxBindProduct wxBindProduct,
+  public JsonResult<?> wxUnBindProduct(@Valid @RequestBody WxBindProduct wxBindProduct,
       @RequestHeader("Authorization") String header) {
     return wxProductBindService.wxUnBindProduct(wxBindProduct, header);
   }

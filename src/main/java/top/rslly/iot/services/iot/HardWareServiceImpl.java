@@ -107,7 +107,7 @@ public class HardWareServiceImpl implements HardWareService {
         }
       }
     } else { // service
-      if (controlParam.getFunctionName() == null) {
+      if (controlParam.getFunctionName() == null || controlParam.getStatus() == null) {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }
       List<ProductFunctionEntity> productFunctionEntities =
@@ -162,7 +162,7 @@ public class HardWareServiceImpl implements HardWareService {
     MqttConnectionUtils.publish(
         "/oc/devices/" + controlParam.getName() + "/sys/" + prefix_topic, res.toString(),
         controlParam.getQos());
-    if (controlParam.getStatus().equals("sync")) {
+    if (controlParam.getMode().equals("service") && controlParam.getStatus().equals("sync")) {
       for (int i = 0; i < 80; i++) {
         try {
           if (redisUtil.hasKey("service" + controlParam.getName())) {

@@ -22,10 +22,17 @@ package top.rslly.iot.param.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Getter
 @Setter
 public class Product {
+  @NotBlank(message = "productName 不能为空")
+  @Size(min = 1, max = 255, message = "productName 长度必须在 1 到 255 之间")
   private String productName;
+  @NotBlank(message = "keyvalue 不能为空")
+  @Size(min = 1, max = 255, message = "keyvalue 长度必须在 1 到 255 之间")
   private String keyvalue;
   private int register;
 }

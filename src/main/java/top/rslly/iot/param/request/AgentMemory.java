@@ -22,9 +22,16 @@ package top.rslly.iot.param.request;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 @AllArgsConstructor
 public class AgentMemory {
+  @NotBlank(message = "chatId 不能为空")
+  @Size(min = 1, max = 255, message = "chatId 长度必须在 1 到 255 之间")
   private String chatId;
+  @NotBlank(message = "content 不能为空")
+  @Size(min = 1, max = 255, message = "content 长度必须在 1 到 255 之间")
   private String content;
 }

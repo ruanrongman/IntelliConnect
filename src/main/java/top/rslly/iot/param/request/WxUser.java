@@ -22,9 +22,14 @@ package top.rslly.iot.param.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Getter
 @Setter
 public class WxUser {
+  @NotBlank(message = "code 不能为空")
+  @Size(min = 1, max = 255, message = "code 长度必须在 1 到 255 之间")
   private String code;
 
 }

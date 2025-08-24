@@ -22,11 +22,21 @@ package top.rslly.iot.param.request;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+
 @Getter
 @Setter
 public class ReadData {
+  @NotNull
   Long time1;
+  @NotNull
   Long time2;
+  @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间")
   String name;
+  @NotBlank(message = "jsonKey 不能为空")
+  @Size(min = 1, max = 255, message = "jsonKey 长度必须在 1 到 255 之间")
   String jsonKey;
 }

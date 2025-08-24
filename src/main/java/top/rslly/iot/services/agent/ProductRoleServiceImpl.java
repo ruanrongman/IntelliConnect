@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.services.agent;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ import top.rslly.iot.param.prompt.ProductRoleDescription;
 import top.rslly.iot.param.request.ProductRole;
 import top.rslly.iot.services.agent.ProductRoleService;
 import top.rslly.iot.utility.JwtTokenUtil;
+import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -39,6 +41,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 @Service
+@Slf4j
 public class ProductRoleServiceImpl implements ProductRoleService {
   @Resource
   private ProductRepository productRepository;
@@ -140,6 +143,10 @@ public class ProductRoleServiceImpl implements ProductRoleService {
     List<ProductEntity> result = productRepository.findAllById(productRole.getProductId());
     List<ProductRoleEntity> p1 = productRoleRepository
         .findAllByProductId(productRole.getProductId());
+    // 校验声音voice是否在VoiceTimbre enum中
+    if (!VoiceTimbre.isValidVoice(productRole.getVoice())) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     if (result.isEmpty() || !p1.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
@@ -153,6 +160,10 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   public JsonResult<?> putProductRole(ProductRole productRole) {
     List<ProductRoleEntity> productRoleEntityList =
         productRoleRepository.findAllByProductId(productRole.getProductId());
+    // 校验声音voice是否在VoiceTimbre enum中
+    if (!VoiceTimbre.isValidVoice(productRole.getVoice())) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     if (productRoleEntityList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {

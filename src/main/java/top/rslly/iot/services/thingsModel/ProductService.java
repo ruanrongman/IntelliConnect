@@ -28,6 +28,8 @@ import java.util.List;
 
 public interface ProductService {
 
+  JsonResult<?> getProductName(int id);
+
   JsonResult<?> getProduct(String token);
 
   JsonResult<?> postProduct(Product product, String token);

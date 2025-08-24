@@ -22,6 +22,7 @@ package top.rslly.iot.controllers;
 import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -44,11 +45,17 @@ import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.validation.Valid;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 import java.io.IOException;
 import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/api/v2")
+@Validated
 public class Tool {
   @Autowired
   private DataServiceImpl dataService;
@@ -87,7 +94,7 @@ public class Tool {
 
   @Operation(summary = "设备属性或服务控制api接口", description = "注意传入参数为ControlParam,属性或服务设置重复时候取第一个")
   @RequestMapping(value = "/control", method = RequestMethod.POST)
-  public JsonResult<?> control(@RequestBody ControlParam controlParam,
+  public JsonResult<?> control(@Valid @RequestBody ControlParam controlParam,
       @RequestHeader("Authorization") String header) throws MqttException {
 
     return hardWareService.control(controlParam, header);
@@ -95,7 +102,7 @@ public class Tool {
 
   @Operation(summary = "用于获取物联网一段时间的设备数据", description = "时间参数请使用两个毫秒时间戳")
   @RequestMapping(value = "/readData", method = RequestMethod.POST)
-  public JsonResult<?> readData(@RequestBody ReadData readData,
+  public JsonResult<?> readData(@Valid @RequestBody ReadData readData,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeDevice(header, readData.getName()))
@@ -110,7 +117,7 @@ public class Tool {
 
   @Operation(summary = "用于获取物联网一段时间的设备事件数据", description = "时间参数请使用两个毫秒时间戳")
   @RequestMapping(value = "/readEvent", method = RequestMethod.POST)
-  public JsonResult<?> readEvent(@RequestBody ReadData readData,
+  public JsonResult<?> readEvent(@Valid @RequestBody ReadData readData,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeDevice(header, readData.getName()))
@@ -125,7 +132,7 @@ public class Tool {
 
   @Operation(summary = "获取属性实时数据", description = "高性能接口(带redis缓存)")
   @RequestMapping(value = "/metaData", method = RequestMethod.POST)
-  public JsonResult<?> metaData(@RequestBody MetaData metaData,
+  public JsonResult<?> metaData(@Valid @RequestBody MetaData metaData,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeDevice(header, metaData.getDeviceId()))
@@ -138,7 +145,7 @@ public class Tool {
 
   @Operation(summary = "使用大模型控制设备", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl", method = RequestMethod.POST)
-  public JsonResult<?> aiControl(@RequestBody AiControl aiControl,
+  public JsonResult<?> aiControl(@Valid @RequestBody AiControl aiControl,
       @RequestHeader("Authorization") String header) {
     return aiService.getAiResponse(aiControl, header);
   }
@@ -148,7 +155,7 @@ public class Tool {
   public JsonResult<?> aiControl(
       @RequestParam("productId") int productId,
       @RequestParam("tts") boolean tts,
-      @RequestPart("file") MultipartFile multipartFile,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
     return aiService.getAiResponse(tts, false, productId, multipartFile, header);
   }
@@ -158,22 +165,25 @@ public class Tool {
   @RequestMapping(value = "/aiControl/audio/stream", method = RequestMethod.POST)
   public SseEmitter aiControlStream(
       @RequestParam("productId") int productId,
-      @RequestPart("file") MultipartFile multipartFile,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
     aiService.getAiResponse(true, true, productId, multipartFile, header);
     return SseEmitterUtil.connect("chatProduct" + productId);
   }
 
   // 知识库
+  @Operation(summary = "知识库", description = "获取产品的知识库")
   @RequestMapping(value = "/knowledgeChat", method = RequestMethod.GET)
   public JsonResult<?> getKnowledgeChat(@RequestHeader("Authorization") String header) {
     return knowledgeChatService.getKnowledgeChat(header);
   }
 
+  @Operation(summary = "知识库", description = "提交产品的知识库")
   @RequestMapping(value = "/knowledgeChat", method = RequestMethod.POST)
   public JsonResult<?> postKnowledgeChat(@RequestParam("productId") int productId,
-      @RequestParam("filename") String fileName,
-      @RequestPart("file") MultipartFile multipartFile,
+      @RequestParam("filename") @NotBlank(message = "filename 不能为空")
+      @Size(min = 1, max = 255, message = "fileName 长度必须在 1 到 255 之间") String fileName,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, productId))
@@ -198,22 +208,27 @@ public class Tool {
 
   @Operation(summary = "获取缓存音频文件(禁止调用)", description = "禁止调用")
   @RequestMapping(value = "/ai/tmp_voice/{name}", method = RequestMethod.GET)
-  public void audioTmpGet(@PathVariable("name") String name, HttpServletResponse response)
+  public void audioTmpGet(@PathVariable("name") @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间") String name,
+      HttpServletResponse response)
       throws IOException {
     aiService.audioTmpGet(name, response);
   }
 
   // ota list and delete
   @RequestMapping(value = "/micro/{name}", method = RequestMethod.GET)
-  public void micro(@PathVariable("name") String name, HttpServletResponse response)
+  public void micro(@PathVariable("name") @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间") String name,
+      HttpServletResponse response)
       throws IOException {
     otaService.otaDevice(name, response);
   }
 
   @RequestMapping(value = "/otaUpload", method = RequestMethod.POST)
-  public JsonResult<?> ota(@RequestParam("name") String name,
+  public JsonResult<?> ota(@RequestParam("name") @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间") String name,
       @RequestParam("productId") int productId,
-      @RequestPart("file") MultipartFile multipartFile,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, productId))
@@ -242,8 +257,10 @@ public class Tool {
   }
 
   @RequestMapping(value = "/otaEnable", method = RequestMethod.POST)
-  public JsonResult<?> otaEnable(@RequestParam("name") String name,
-      @RequestParam("deviceName") String deviceName,
+  public JsonResult<?> otaEnable(@RequestParam("name") @NotBlank(message = "name 不能为空")
+  @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间") String name,
+      @RequestParam("deviceName") @NotBlank(message = "deviceName 不能为空")
+      @Size(min = 1, max = 255, message = "deviceName 长度必须在 1 到 255 之间") String deviceName,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeDevice(header, deviceName)
@@ -261,7 +278,7 @@ public class Tool {
   }
 
   @RequestMapping(value = "/otaPassive", method = RequestMethod.POST)
-  public JsonResult<?> otaPassivePost(@RequestBody OtaPassive otaPassive,
+  public JsonResult<?> otaPassivePost(@Valid @RequestBody OtaPassive otaPassive,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeDevice(header, otaPassive.getDeviceName()))
@@ -273,7 +290,9 @@ public class Tool {
   }
 
   @RequestMapping(value = "/otaPassiveEnable", method = RequestMethod.GET)
-  public JsonResult<?> otaPassiveEnable(@RequestParam("deviceName") String deviceName) {
+  public JsonResult<?> otaPassiveEnable(
+      @RequestParam("deviceName") @NotBlank(message = "deviceName 不能为空")
+      @Size(min = 1, max = 255, message = "deviceName 长度必须在 1 到 255 之间") String deviceName) {
     return otaPassiveService.otaPassiveEnable(deviceName);
   }
 
@@ -295,7 +314,7 @@ public class Tool {
   }
 
   @RequestMapping(value = "/alarmEvent", method = RequestMethod.POST)
-  public JsonResult<?> postAlarmEvent(@RequestBody AlarmEvent alarmEvent,
+  public JsonResult<?> postAlarmEvent(@Valid @RequestBody AlarmEvent alarmEvent,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeModel(header, alarmEvent.getModelId()))
@@ -325,7 +344,7 @@ public class Tool {
   }
 
   @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.POST)
-  public JsonResult<?> xiaoZhiOtaBind(@RequestBody OtaXiaozhi otaXiaozhi,
+  public JsonResult<?> xiaoZhiOtaBind(@Valid @RequestBody OtaXiaozhi otaXiaozhi,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, otaXiaozhi.getProductId()))
@@ -344,8 +363,9 @@ public class Tool {
   }
 
   @RequestMapping(value = "/vision/explain", method = RequestMethod.POST)
-  public String aiVision(@RequestParam("question") String question,
-      @RequestPart("file") MultipartFile imageFile) {
+  public String aiVision(@RequestParam("question") @NotBlank(message = "question 不能为空")
+  @Size(min = 1, max = 2048, message = "question 长度必须在 1 到 2048 之间") String question,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile imageFile) {
     return aiService.getAiVisionIntent(question, imageFile);
   }
 

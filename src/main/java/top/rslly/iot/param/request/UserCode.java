@@ -21,8 +21,15 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
 @Data
 public class UserCode {
+  @NotBlank(message = "username 不能为空")
+  @Size(min = 1, max = 255, message = "username 长度必须在 1 到 255 之间")
   String username;
+  @NotBlank(message = "email 不能为空")
+  @Size(min = 1, max = 255, message = "email 长度必须在 1 到 255 之间")
   String email;
 }
