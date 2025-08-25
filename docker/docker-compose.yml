@@ -28,7 +28,7 @@ services:
       - MYSQL_ROOT_PASSWORD=XzHvhX4CDaN696oQAXdmlcsrqgWbkxRl
       - MYSQL_DATABASE=cwliot1.8
       - TZ=Asia/Shanghai
-    command: ["--default-authentication-plugin=mysql_native_password"]
+    command: [ "--default-authentication-plugin=mysql_native_password" ]
 
   influxdb:
     image: influxdb:1.6.4
@@ -53,16 +53,20 @@ services:
     container_name: IntelliConnect-ce-emqx
     restart: always
     environment:
+      # 设置 Dashboard 的默认管理员用户名
+      - EMQX_BOOTSTRAP_DEFAULT_ADMIN_USERNAME=admin
+      # 设置 Dashboard 的默认管理员密码 (请务必修改为一个强密码)
+      - EMQX_BOOTSTRAP_DEFAULT_ADMIN_PASSWORD=XdmlcsrqgWbkxRl1.
       - TZ=Asia/Shanghai
     healthcheck:
-      test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+      test: [ "CMD", "/opt/emqx/bin/emqx_ctl", "status" ]
       interval: 5s
       timeout: 25s
       retries: 5
     networks:
       emqx-bridge:
         aliases:
-        - node1.emqx.io
+          - node1.emqx.io
     ports:
       - 1883:1883
       - 8083:8083
