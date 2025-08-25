@@ -68,7 +68,7 @@ services:
       - 8083:8083
       - 8084:8084
       - 8883:8883
-      - 18083:18083 
+      - 18083:18083
     volumes:
       - "emqx-volume:/opt/emqx/log"
       - "emqx-volume:/opt/emqx/data"
@@ -90,7 +90,7 @@ services:
       # - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.basic.BasicAuthCredentialsProvider
     # 可选：健康检查
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: [ "CMD", "/bin/bash", "-c", "cat < /dev/null > /dev/tcp/localhost/8000" ]
       interval: 30s
       timeout: 10s
       retries: 3
