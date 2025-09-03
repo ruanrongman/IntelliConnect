@@ -23,10 +23,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.KnowledgeChatRepository;
+import top.rslly.iot.dao.ProductRouterSetRepository;
 import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
@@ -72,6 +74,8 @@ public class SafetyServiceImpl implements SafetyService {
   private OtaPassiveServiceImpl otaPassiveService;
   @Autowired
   private KnowledgeChatServiceImpl knowledgeChatService;
+  @Autowired
+  private ProductRouterSetServiceImpl productRouterSetService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -190,6 +194,16 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("knowledgeChatId not found!");
     return this.controlAuthorizeProduct(token,
         knowledgeChatEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeProductRouterSet(String token, int id) {
+    List<ProductRouterSetEntity> productRouterSetEntityList =
+        productRouterSetService.findAllById(id);
+    if (productRouterSetEntityList.isEmpty())
+      throw new NullPointerException("productRouterSetId not found!");
+    return this.controlAuthorizeProduct(token,
+        productRouterSetEntityList.get(0).getProductId());
   }
 
   @Override

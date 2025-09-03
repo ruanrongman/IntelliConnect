@@ -87,7 +87,7 @@ public class ReactPrompt {
           - thought use chinese
           - Your final answer and middle step output language should be consistent with the language used by the user.
           - Whether the action input is JSON or str depends on the definition of the tool.
-          - After three failed attempts on a hardware control task, do not try again, as too many attempts may cause the device to malfunction.
+          - Try to complete the task using as few steps as possible. After three failed attempts, please refrain from further attempts, as excessive attempts may cause equipment malfunction.
 
           ## User question
           {question}

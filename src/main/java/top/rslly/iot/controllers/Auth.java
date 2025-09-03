@@ -29,6 +29,7 @@ import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
 import top.rslly.iot.services.iot.MqttUserServiceImpl;
 import top.rslly.iot.services.thingsModel.*;
 import top.rslly.iot.utility.result.JsonResult;
@@ -68,6 +69,8 @@ public class Auth {
   private ProductRoleServiceImpl productRoleService;
   @Autowired
   private McpServerServiceImpl mcpServerService;
+  @Autowired
+  private ProductRouterSetServiceImpl productRouterSetService;
 
 
   @Operation(summary = "创建新用户", description = "暂不支持创建管理员用户")
@@ -379,6 +382,38 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productRoleService.deleteProductRole(id);
+  }
+
+  @Operation(summary = "获取产品语义路由设置列表", description = "仅获取当前用户产品语义路由设置列表")
+  @RequestMapping(value = "/productRouterSet", method = RequestMethod.GET)
+  public JsonResult<?> getProductRouterSet(@RequestHeader("Authorization") String header) {
+    return productRouterSetService.getProductRouterSet(header);
+  }
+
+  @Operation(summary = "添加产品语义路由设置", description = "仅添加当前用户产品语义路由设置")
+  @RequestMapping(value = "/productRouterSet", method = RequestMethod.POST)
+  public JsonResult<?> postProductRouterSet(@Valid @RequestBody ProductRouterSet productRouterSet,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productRouterSet.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productRouterSetService.postProductRouterSet(productRouterSet);
+  }
+
+  @Operation(summary = "删除产品语义路由设置", description = "仅删除当前用户产品语义路由设置")
+  @RequestMapping(value = "/productRouterSet", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductRouterSet(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductRouterSet(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productRouterSetService.deleteProductRouterSet(id);
   }
 
   @Operation(summary = "获取mcp服务器列表", description = "仅获取当前用户产品mcp服务器列表")

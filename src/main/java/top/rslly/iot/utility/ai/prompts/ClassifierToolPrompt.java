@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
+import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
@@ -39,8 +40,11 @@ public class ClassifierToolPrompt {
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private McpWebsocket mcpWebsocket;
+  @Autowired
+  private ProductRouterSetServiceImpl productRouterSetService;
   private static final String classifierPrompt =
       """
+           {router_set}
            {task_map}
            You now need to classify based on user input
            ## Output Format
@@ -93,7 +97,13 @@ public class ClassifierToolPrompt {
       classifierMap.put("10", mcpServerString.toString());
     }
     String classifierJson = JSON.toJSONString(classifierMap);
+    var productRouterSetList = productRouterSetService.findAllByProductId(productId);
     Map<String, String> params = new HashMap<>();
+    if (!productRouterSetList.isEmpty()) {
+      params.put("router_set", productRouterSetList.get(0).getPrompt());
+    } else {
+      params.put("router_set", "");
+    }
     params.put("task_map", classifierJson);
     return StringUtils.formatString(classifierPrompt, params);
   }

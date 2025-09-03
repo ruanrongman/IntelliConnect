@@ -60,6 +60,8 @@ public class ProductServiceImpl implements ProductService {
   private KnowledgeChatRepository knowledgeChatRepository;
   @Resource
   private AgentMemoryRepository agentMemoryRepository;
+  @Resource
+  private ProductRouterSetRepository productRouterSetRepository;
 
 
   @Override
@@ -168,13 +170,16 @@ public class ProductServiceImpl implements ProductService {
         agentMemoryRepository.findAllByChatId("chatProduct" + id);
     List<KnowledgeChatEntity> knowledgeChatEntityList =
         knowledgeChatRepository.findAllByProductId(id);
+    List<ProductRouterSetEntity> productRouterSetEntityList =
+        productRouterSetRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
     boolean p4 = otaXiaozhiEntityList.isEmpty();
     boolean p5 = mcpServerEntityList.isEmpty();
     boolean p6 = knowledgeChatEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6) {
+    boolean p7 = productRouterSetEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5 && p6 && p7) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
