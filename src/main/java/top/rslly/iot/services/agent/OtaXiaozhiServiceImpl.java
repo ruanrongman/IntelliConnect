@@ -136,7 +136,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
     }
     String mac = (String) redisUtil.get(otaXiaozhi.getCode());
     var p1 = otaXiaozhiRepository.findAllByDeviceId(mac);
-    var p2 = otaXiaozhiRepository.findAllByProductId(otaXiaozhi.getProductId());
+    var p2 = otaXiaozhiRepository.findAllByProductIdAndDeviceId(otaXiaozhi.getProductId(), mac);
     if (!p1.isEmpty() || !p2.isEmpty()) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     }

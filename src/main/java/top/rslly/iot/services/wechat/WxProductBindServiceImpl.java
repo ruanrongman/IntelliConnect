@@ -136,9 +136,11 @@ public class WxProductBindServiceImpl implements WxProductBindService {
       return false;
     wxProductBindRepository.deleteByOpenidAndProductId(openid, productList.get(0).getId());
     // 设置成这样是为了将其归位，让用户重新选择
-    var wxProductActiveList = wxProductActiveRepository.findAllByOpenid(openid);
-    if (wxProductActiveList.get(0).getProductId() == productList.get(0).getId()) {
-      wxProductActiveRepository.updateProperty(openid, 0);
+    if (!wxProductActiveRepository.findAllByOpenid(openid).isEmpty()) {
+      var wxProductActiveList = wxProductActiveRepository.findAllByOpenid(openid);
+      if (wxProductActiveList.get(0).getProductId() == productList.get(0).getId()) {
+        wxProductActiveRepository.updateProperty(openid, 0);
+      }
     }
     return true;
   }

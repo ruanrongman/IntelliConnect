@@ -20,14 +20,23 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.AgentMemoryEntity;
 
 import java.util.List;
 
 public interface AgentMemoryRepository extends JpaRepository<AgentMemoryEntity, Long> {
+  // 以chatId开头的记录
+  List<AgentMemoryEntity> findAllByChatIdStartingWith(String chatId);
+
   List<AgentMemoryEntity> findAllByChatId(String chatId);
 
   @Transactional
   List<AgentMemoryEntity> deleteAllByChatId(String chatId);
+
+  // 以chatId开头的记录
+  @Modifying
+  @Transactional
+  List<AgentMemoryEntity> deleteAllByChatIdStartingWith(String chatId);
 }

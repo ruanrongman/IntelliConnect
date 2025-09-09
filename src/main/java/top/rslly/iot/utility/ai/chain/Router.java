@@ -66,6 +66,8 @@ public class Router {
   private McpAgent mcpAgent;
   @Autowired
   private MemoryTool memoryTool;
+  @Autowired
+  private GoodByeTool goodByeTool;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in wechat module need to use openid
@@ -146,6 +148,10 @@ public class Router {
           case "10" -> {
             toolResult = mcpAgent.run(args, globalMessage);
             answer = "以下是mcp智能体的结果：" + toolResult;
+          }
+          case "11" -> {
+            toolResult = goodByeTool.run(args, globalMessage);
+            answer = "以下是byebye插件的结果：" + toolResult;
           }
           default -> answer = chatTool.run(content, globalMessage);
         }

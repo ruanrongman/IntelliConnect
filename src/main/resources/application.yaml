@@ -119,10 +119,10 @@ ota:
     path: D://temp-rainy//
   xiaozhi:
     url: ws://127.0.0.1:8080
-    version: 1.7.6
+    version: 1.8.8
 rag:
-    embedding_modelName: bge-small-zh-v1.5-quantized
-    knowledge_chat_embeddingStore_url: http://localhost:8000
+  embedding_modelName: bge-small-zh-v1.5-quantized
+  knowledge_chat_embeddingStore_url: http://localhost:8000
 weather:
   key: XXX
 ai:

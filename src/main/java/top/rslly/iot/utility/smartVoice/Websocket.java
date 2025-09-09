@@ -65,6 +65,7 @@ public class Websocket {
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
+  private int productId;
   private boolean isManual = true;
   private boolean isRealTime = false;
 
@@ -125,10 +126,12 @@ public class Websocket {
         return;
       }
     }
-    if (clients.get(chatId) == null) {
-      this.chatId = chatId;
-      String token = getHeader(session);
-      if (!safetyService.controlAuthorizeProduct(token, Integer.parseInt(chatId))) {
+    String deviceId = getDeviceId(session);
+    String token = getHeader(session);
+    if (clients.get("chatProduct" + chatId + deviceId) == null) {
+      this.chatId = "chatProduct" + chatId + deviceId;
+      this.productId = Integer.parseInt(chatId);
+      if (!safetyService.controlAuthorizeProduct(token, productId)) {
         try {
           session.getBasicRemote().sendText("没有权限");
           return;
@@ -136,7 +139,7 @@ public class Websocket {
           log.info("发送失败");
         }
       }
-      if (productService.findAllById(Integer.parseInt(chatId)).isEmpty()) {
+      if (productService.findAllById(productId).isEmpty()) {
         try {
           session.getBasicRemote().sendText("产品不存在");
           session.close();
@@ -145,9 +148,9 @@ public class Websocket {
           log.info("发送失败");
         }
       }
-      clients.put(chatId, session);
-      isAbort.put(chatId, false);
-      haveVoice.put(chatId, false);
+      clients.put(this.chatId, session);
+      isAbort.put(this.chatId, false);
+      haveVoice.put(this.chatId, false);
       slieroVadListener.init();
       log.info("header{}", token);
     } else {
@@ -203,12 +206,12 @@ public class Websocket {
         String state = json.getString("state");
         switch (state) {
           case "detect" -> {
-            xiaoZhiUtil.dealDetect(chatId);
+            xiaoZhiUtil.dealDetect(chatId, productId);
             isAbort.put(chatId, false);
           }
           case "start" -> {
             if (this.chatId.startsWith("register")) {
-              xiaoZhiUtil.dealRegister(chatId);
+              xiaoZhiUtil.dealRegister(chatId, productId);
               isAbort.put(chatId, false);
               clients.get(chatId).close();
             }
@@ -227,7 +230,7 @@ public class Websocket {
             voiceContent.clear();
           }
           case "stop" -> {
-            xiaoZhiUtil.dealWithAudio(audioList, chatId, isManual);
+            xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual);
           }
         }
       }
@@ -241,14 +244,18 @@ public class Websocket {
   public void onBinaryMessage(byte[] message) {
     if (!isManual) {
       try {
-        if (audioList.size() > 420 && !haveVoice.get(chatId)) {
+        int timeOutSize = 420;
+        if (isRealTime) {
+          timeOutSize = 420 * 7;
+        }
+        if (audioList.size() > timeOutSize && !haveVoice.get(chatId)) {
           clients.get(chatId).getBasicRemote().sendText("""
               {
                 "type": "tts",
                 "state": "start"
               }""");
           audioList.clear();
-          text2audio.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId);
+          text2audio.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId, productId);
           clients.get(chatId).getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
           isAbort.put(chatId, false);
           clients.get(chatId).close();
@@ -302,7 +309,7 @@ public class Websocket {
             if (isRealTime) {
               isAbort.put(chatId, false);
             }
-            xiaoZhiUtil.dealWithAudio(audioList, chatId, isManual);
+            xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual);
             pcmVadBuffer.remove(chatId);
             return;
           }

@@ -134,208 +134,214 @@ public class XiaoZhiUtil {
   }
 
   @Async("taskExecutor")
-  public void dealWithAudio(List<byte[]> audioList, String chatId, boolean isManual)
-      throws Exception {
-
-    OpusDecoder decoder = new OpusDecoder(16000, 1);
-    if (audioList.size() > 20) {
-      if (!isManual) {
-        Websocket.clients.get(chatId).getBasicRemote().sendText("""
-            {
-              "type": "tts",
-              "state": "start"
-            }""");
-      }
-      // 安全读取字节数据
-      ByteArrayOutputStream bos = new ByteArrayOutputStream();
-      for (byte[] bytes : audioList) {
-        try {
-          // log.info("len{}",bytes.length);
-          byte[] data_packet = new byte[16000];
-          int pcm_frame = decoder.decode(bytes, 0, bytes.length,
-              data_packet, 0, 960, false);
-          // log.info("data_packet{}",data_packet);
-          bos.write(data_packet, 0, pcm_frame * 2);
-        } catch (Exception e) {
-          log.error("音频转换失败{}", e.getMessage());
+  public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual)
+      throws IOException {
+    try {
+      OpusDecoder decoder = new OpusDecoder(16000, 1);
+      if (audioList.size() > 20) {
+        if (!isManual) {
+          Websocket.clients.get(chatId).getBasicRemote().sendText("""
+              {
+                "type": "tts",
+                "state": "start"
+              }""");
         }
-      }
-      log.info("data_size{}", bos.size());
-      Path tempFile = Files.createTempFile("audio_", ".wav");
-      Files.write(tempFile, bos.toByteArray());
-      bos.close();
-      String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
-      log.info("text{}", text);
-      var jsonObject = JSON.parseObject(text);
-      var sentencesArray = jsonObject.getJSONArray("sentences");
-      StringBuilder sentences = new StringBuilder("");
-      if (sentencesArray.size() > 0) {
-        for (int i = 0; i < sentencesArray.size(); i++) {
-          sentences.append(sentencesArray.getJSONObject(i).getString("text"));
+        // 安全读取字节数据
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        for (byte[] bytes : audioList) {
+          try {
+            // log.info("len{}",bytes.length);
+            byte[] data_packet = new byte[16000];
+            int pcm_frame = decoder.decode(bytes, 0, bytes.length,
+                data_packet, 0, 960, false);
+            // log.info("data_packet{}",data_packet);
+            bos.write(data_packet, 0, pcm_frame * 2);
+          } catch (Exception e) {
+            log.error("音频转换失败{}", e.getMessage());
+          }
         }
-      }
-      if (sentences.length() > 0) {
-        if (Websocket.voiceContent.containsKey(chatId)
-            && Websocket.voiceContent.get(chatId).length() > 0) {
-          Websocket.voiceContent.put(chatId, Websocket.voiceContent.get(chatId) + sentences);
-        } else {
-          Websocket.voiceContent.put(chatId, sentences.toString());
+        log.info("data_size{}", bos.size());
+        Path tempFile = Files.createTempFile("audio_", ".wav");
+        Files.write(tempFile, bos.toByteArray());
+        bos.close();
+        String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
+        log.info("text{}", text);
+        var jsonObject = JSON.parseObject(text);
+        var sentencesArray = jsonObject.getJSONArray("sentences");
+        StringBuilder sentences = new StringBuilder("");
+        if (sentencesArray.size() > 0) {
+          for (int i = 0; i < sentencesArray.size(); i++) {
+            sentences.append(sentencesArray.getJSONObject(i).getString("text"));
+          }
         }
-        Websocket.clients.get(chatId).getBasicRemote()
-            .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
-        audioList.clear();
-      } else {
-        // 保留音频数据最后10帧（直接修改原始列表）
-        int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-        if (audioList.size() > keepFrames) {
-          audioList.subList(0, audioList.size() - keepFrames).clear();
-        }
-        Websocket.clients.get(chatId).getBasicRemote()
-            .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-        Websocket.clients.get(chatId).getBasicRemote()
-            .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-      }
-    } else {
-      Websocket.clients.get(chatId).getBasicRemote()
-          .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-    }
-    if (Websocket.voiceContent.containsKey(chatId)
-        && Websocket.voiceContent.get(chatId).length() > 0) {
-      Websocket.clients.get(chatId).getBasicRemote()
-          .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-              + "智能助手思考中" + "\"}");
-      JSONObject emotionObject = new JSONObject();
-      emotionObject.put("type", "llm");
-      emotionObject.put("text", "🤔");
-      emotionObject.put("emotion", "thinking");
-      Websocket.clients.get(chatId).getBasicRemote()
-          .sendText(emotionObject.toJSONString());
-      log.info("listen stop,message{}", Websocket.voiceContent.get(chatId));
-      Map<String, Object> emotionMessage = new HashMap<>();
-      emotionMessage.put("chatId", chatId);
-      var emotionRes = emotionToolAsync.run(Websocket.voiceContent.get(chatId), emotionMessage);
-      // 异步执行router,成功后把回复发送给前端，future 返回结果
-      var res = CompletableFuture
-          .supplyAsync(
-              () -> router.response(Websocket.voiceContent.get(chatId), "chatProduct" + chatId,
-                  Integer.parseInt(chatId)));
-      // String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
-      // Integer.parseInt(chatId));
-      String answer;
-      StringBuilder answerBuilder = new StringBuilder();
-      boolean emotionFlag = false;
-      if (isManual) {
-        Websocket.clients.get(chatId).getBasicRemote().sendText("""
-            {
-              "type": "tts",
-              "state": "start"
-            }""");
-      }
-      while (!res.isDone() || Router.queueMap.containsKey("chatProduct" + chatId)
-          && Router.queueMap.get("chatProduct" + chatId).size() > 0) {
-        if (emotionRes.isDone() && !emotionFlag) {
-          emotionObject.put("text", emotionRes.get().get("emoji"));
-          emotionObject.put("emotion", emotionRes.get().get("text"));
-          log.info("emotionObject{}", emotionObject);
+        if (sentences.length() > 0) {
+          if (Websocket.voiceContent.containsKey(chatId)
+              && Websocket.voiceContent.get(chatId).length() > 0) {
+            Websocket.voiceContent.put(chatId, Websocket.voiceContent.get(chatId) + sentences);
+          } else {
+            Websocket.voiceContent.put(chatId, sentences.toString());
+          }
           Websocket.clients.get(chatId).getBasicRemote()
-              .sendText(emotionObject.toJSONString());
-          emotionFlag = true;
-        }
-        if (Websocket.isAbort.get(chatId)) {
-          Websocket.haveVoice.put(chatId, false);
-          Websocket.isAbort.put(chatId, false);
-          Router.queueMap.remove("chatProduct" + chatId);
+              .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
+          audioList.clear();
+        } else {
+          // 保留音频数据最后10帧（直接修改原始列表）
+          int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
+          if (audioList.size() > keepFrames) {
+            audioList.subList(0, audioList.size() - keepFrames).clear();
+          }
+          Websocket.clients.get(chatId).getBasicRemote()
+              .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
           Websocket.clients.get(chatId).getBasicRemote()
               .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-          return;
         }
-        if (Router.queueMap.containsKey("chatProduct" + chatId)) {
-          String element = Router.queueMap.get("chatProduct" + chatId).poll();
-          if (element != null && element.equals("[DONE]")) {
-            if (answerBuilder.length() > 0) {
-              // 立即发送已累积的内容
-              JSONObject jsonObject = new JSONObject();
-              jsonObject.put("type", "tts");
-              jsonObject.put("state", "sentence_start");
-              jsonObject.put("text", answerBuilder.toString());
-              Websocket.clients.get(chatId).getBasicRemote()
-                  .sendText(jsonObject.toJSONString());
-              text2audio.websocketAudioSync(answerBuilder.toString(), Websocket.clients.get(chatId),
-                  chatId);
-              answerBuilder.setLength(0);
-            }
+      } else {
+        Websocket.clients.get(chatId).getBasicRemote()
+            .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+      }
+      if (Websocket.voiceContent.containsKey(chatId)
+          && Websocket.voiceContent.get(chatId).length() > 0) {
+        Websocket.clients.get(chatId).getBasicRemote()
+            .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
+                + "智能助手思考中" + "\"}");
+        JSONObject emotionObject = new JSONObject();
+        emotionObject.put("type", "llm");
+        emotionObject.put("text", "🤔");
+        emotionObject.put("emotion", "thinking");
+        Websocket.clients.get(chatId).getBasicRemote()
+            .sendText(emotionObject.toJSONString());
+        log.info("listen stop,message{}", Websocket.voiceContent.get(chatId));
+        Map<String, Object> emotionMessage = new HashMap<>();
+        emotionMessage.put("chatId", chatId);
+        var emotionRes = emotionToolAsync.run(Websocket.voiceContent.get(chatId), emotionMessage);
+        // 异步执行router,成功后把回复发送给前端，future 返回结果
+        var res = CompletableFuture
+            .supplyAsync(
+                () -> router.response(Websocket.voiceContent.get(chatId), chatId,
+                    productId));
+        // String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
+        // Integer.parseInt(chatId));
+        String answer;
+        StringBuilder answerBuilder = new StringBuilder();
+        boolean emotionFlag = false;
+        if (isManual) {
+          Websocket.clients.get(chatId).getBasicRemote().sendText("""
+              {
+                "type": "tts",
+                "state": "start"
+              }""");
+        }
+        while (!res.isDone() || Router.queueMap.containsKey(chatId)
+            && Router.queueMap.get(chatId).size() > 0) {
+          if (emotionRes.isDone() && !emotionFlag) {
+            emotionObject.put("text", emotionRes.get().get("emoji"));
+            emotionObject.put("emotion", emotionRes.get().get("text"));
+            log.info("emotionObject{}", emotionObject);
             Websocket.clients.get(chatId).getBasicRemote()
-                .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+                .sendText(emotionObject.toJSONString());
+            emotionFlag = true;
+          }
+          if (Websocket.isAbort.get(chatId)) {
             Websocket.haveVoice.put(chatId, false);
             Websocket.isAbort.put(chatId, false);
-            Router.queueMap.remove("chatProduct" + chatId);
+            Router.queueMap.remove(chatId);
+            Websocket.clients.get(chatId).getBasicRemote()
+                .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
             return;
-          } else if (element != null) {
-            element = element.replace("\n", "");
-            // 查找字符串中的第一个标点位置
-            int punctuationIndex = -1;
-            for (int i = 0; i < element.length(); i++) {
-              char c = element.charAt(i);
-              if (c == '。' || c == '？' || c == '！' || c == '；' || c == '：' || c == '.') {
-                punctuationIndex = i;
-                break;
-              }
-            }
-
-            if (punctuationIndex != -1) {
-              // 截取标点之前的内容（包括标点）
-              String partBeforePunctuation = element.substring(0, punctuationIndex + 1);
-              answerBuilder.append(partBeforePunctuation);
-
-              // 立即发送已累积的内容
-              JSONObject jsonObject = new JSONObject();
-              jsonObject.put("type", "tts");
-              jsonObject.put("state", "sentence_start");
-              jsonObject.put("text", answerBuilder.toString());
-              Websocket.clients.get(chatId).getBasicRemote()
-                  .sendText(jsonObject.toJSONString());
-              text2audio.websocketAudioSync(answerBuilder.toString(), Websocket.clients.get(chatId),
-                  chatId);
-              answerBuilder.setLength(0);
-
-              // 将剩余部分添加到builder中（不发送）
-              String remainingPart = element.substring(punctuationIndex + 1);
-              if (!remainingPart.isEmpty()) {
-                answerBuilder.append(remainingPart);
-              }
-            } else {
-              // 没有标点，直接添加整个元素
-              answerBuilder.append(element);
-
-              // 检查是否需要发送（基于长度条件）
-              if (answerBuilder.length() > 100) {
+          }
+          if (Router.queueMap.containsKey(chatId)) {
+            String element = Router.queueMap.get(chatId).poll();
+            if (element != null && element.equals("[DONE]")) {
+              if (answerBuilder.length() > 0) {
+                // 立即发送已累积的内容
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("type", "tts");
+                jsonObject.put("state", "sentence_start");
+                jsonObject.put("text", answerBuilder.toString());
                 Websocket.clients.get(chatId).getBasicRemote()
-                    .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                        + answerBuilder + "\"}");
+                    .sendText(jsonObject.toJSONString());
                 text2audio.websocketAudioSync(answerBuilder.toString(),
                     Websocket.clients.get(chatId),
-                    chatId);
+                    chatId, productId);
                 answerBuilder.setLength(0);
+              }
+              Websocket.clients.get(chatId).getBasicRemote()
+                  .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+              Websocket.haveVoice.put(chatId, false);
+              Websocket.isAbort.put(chatId, false);
+              Router.queueMap.remove(chatId);
+              return;
+            } else if (element != null) {
+              element = element.replace("\n", "");
+              // 查找字符串中的第一个标点位置
+              int punctuationIndex = -1;
+              for (int i = 0; i < element.length(); i++) {
+                char c = element.charAt(i);
+                if (c == '。' || c == '？' || c == '！' || c == '；' || c == '：' || c == '.') {
+                  punctuationIndex = i;
+                  break;
+                }
+              }
+
+              if (punctuationIndex != -1) {
+                // 截取标点之前的内容（包括标点）
+                String partBeforePunctuation = element.substring(0, punctuationIndex + 1);
+                answerBuilder.append(partBeforePunctuation);
+
+                // 立即发送已累积的内容
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("type", "tts");
+                jsonObject.put("state", "sentence_start");
+                jsonObject.put("text", answerBuilder.toString());
+                Websocket.clients.get(chatId).getBasicRemote()
+                    .sendText(jsonObject.toJSONString());
+                text2audio.websocketAudioSync(answerBuilder.toString(),
+                    Websocket.clients.get(chatId),
+                    chatId, productId);
+                answerBuilder.setLength(0);
+
+                // 将剩余部分添加到builder中（不发送）
+                String remainingPart = element.substring(punctuationIndex + 1);
+                if (!remainingPart.isEmpty()) {
+                  answerBuilder.append(remainingPart);
+                }
+              } else {
+                // 没有标点，直接添加整个元素
+                answerBuilder.append(element);
+
+                // 检查是否需要发送（基于长度条件）
+                if (answerBuilder.length() > 100) {
+                  Websocket.clients.get(chatId).getBasicRemote()
+                      .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
+                          + answerBuilder + "\"}");
+                  text2audio.websocketAudioSync(answerBuilder.toString(),
+                      Websocket.clients.get(chatId),
+                      chatId, productId);
+                  answerBuilder.setLength(0);
+                }
               }
             }
           }
+          // 延时，防止cpu空转
+          Thread.sleep(10);
         }
-        // 延时，防止cpu空转
-        Thread.sleep(10);
+        if (!emotionFlag) {
+          emotionObject.put("text", "😶");
+          emotionObject.put("emotion", "neutral");
+          Websocket.clients.get(chatId).getBasicRemote()
+              .sendText(emotionObject.toJSONString());
+        }
+        answer = res.get();
+        if (answer == null || answer.equals("")) {
+          answer = "抱歉，我暂时无法理解您的问题。";
+        }
+        if (answer.length() > 500)
+          answer = answer.substring(0, 500);
+        splitSentences(answer, chatId, productId);
       }
-      if (!emotionFlag) {
-        emotionObject.put("text", "😶");
-        emotionObject.put("emotion", "neutral");
-        Websocket.clients.get(chatId).getBasicRemote()
-            .sendText(emotionObject.toJSONString());
-      }
-      answer = res.get();
-      if (answer == null || answer.equals("")) {
-        answer = "抱歉，我暂时无法理解您的问题。";
-      }
-      if (answer.length() > 500)
-        answer = answer.substring(0, 500);
-      splitSentences(answer, chatId);
+    } catch (Exception e) {
+      log.error("Error in dealWithAudio: {}", e.getMessage(), e);
+    } finally {
       Websocket.haveVoice.put(chatId, false);
       Websocket.isAbort.put(chatId, false);
       Websocket.clients.get(chatId).getBasicRemote()
@@ -343,7 +349,7 @@ public class XiaoZhiUtil {
     }
   }
 
-  public void dealDetect(String chatId) throws IOException {
+  public void dealDetect(String chatId, int productId) throws IOException {
     Websocket.clients.get(chatId).getBasicRemote().sendText("""
         {
           "type": "tts",
@@ -363,12 +369,13 @@ public class XiaoZhiUtil {
     String selectedGreeting = greetings.get(random.nextInt(greetings.size()));
 
     // 发送随机问候语
-    text2audio.websocketAudioSync(selectedGreeting, Websocket.clients.get(chatId), chatId);
+    text2audio.websocketAudioSync(selectedGreeting, Websocket.clients.get(chatId), chatId,
+        productId);
     Websocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
   }
 
-  public void dealRegister(String chatId) throws IOException {
+  public void dealRegister(String chatId, int productId) throws IOException {
     RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
     String code = randomGenerator.generate();
     String registerMsg = "请登录到控制面板添加设备，输入验证码" + code;
@@ -381,13 +388,13 @@ public class XiaoZhiUtil {
         "type": "tts",
         "state": "start"
         }""");
-    text2audio.websocketAudioSync(registerMsg, Websocket.clients.get(chatId), chatId);
+    text2audio.websocketAudioSync(registerMsg, Websocket.clients.get(chatId), chatId, productId);
     Websocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
   }
 
   // 分割句子
-  private void splitSentences(String answer, String chatId) throws IOException {
+  private void splitSentences(String answer, String chatId, int productId) throws IOException {
     String[] sentences = answer.split("(?<=[。？！；：])");
     for (String sentence : sentences) {
       sentence = sentence.trim();
@@ -403,7 +410,7 @@ public class XiaoZhiUtil {
       log.info(sentence);
       Websocket.clients.get(chatId).getBasicRemote()
           .sendText(jsonObject.toJSONString());
-      text2audio.websocketAudioSync(sentence, Websocket.clients.get(chatId), chatId);
+      text2audio.websocketAudioSync(sentence, Websocket.clients.get(chatId), chatId, productId);
     }
   }
 

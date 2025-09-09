@@ -21,6 +21,7 @@ package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,7 @@ import java.util.Map;
 
 @Data
 @Component
+@Slf4j
 public class WxBoundProductTool implements BaseTool<String> {
   @Autowired
   private WxBoundProductToolPrompt wxBoundProductToolPrompt;
@@ -80,6 +82,7 @@ public class WxBoundProductTool implements BaseTool<String> {
       return process_llm_result(obj, chatId);
     } catch (Exception e) {
       // e.printStackTrace();
+      log.error("LLM error: " + e.getMessage());
       return "对不起小主人,绑定产品操作发生了异常，请重新尝试";
     }
   }

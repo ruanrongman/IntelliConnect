@@ -228,11 +228,11 @@ public class Text2audio {
   }
 
   @Async("taskExecutor")
-  public void websocketAudio(String text, Session session, String chatId) {
+  public void websocketAudio(String text, Session session, String chatId, int productId) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
       try {
-        var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+        var roles = productRoleService.findAllByProductId(productId);
         if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
           param.setVoice(roles.get(0).getVoice());
         }
@@ -258,11 +258,11 @@ public class Text2audio {
     }
   }
 
-  public void websocketAudioSync(String text, Session session, String chatId) {
+  public void websocketAudioSync(String text, Session session, String chatId, int productId) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
       try {
-        var roles = productRoleService.findAllByProductId(Integer.parseInt(chatId));
+        var roles = productRoleService.findAllByProductId(productId);
         if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
           param.setVoice(roles.get(0).getVoice());
         }

@@ -116,12 +116,13 @@ public class McpAgent implements BaseTool<String> {
   public String run(String question, Map<String, Object> globalMessage) {
     Map<String, McpSyncClient> clientMap = new LinkedHashMap<>();
     StringBuilder conversationPrompt = new StringBuilder();
+    String chatId = (String) globalMessage.get("chatId");
     int productId = (int) globalMessage.get("productId");
     boolean mcpIsTool = false;
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
     if (mcpServerService.findAllByProductId(productId).isEmpty()
-        && !mcpWebsocket.isRunning(String.valueOf(productId)))
+        && !mcpWebsocket.isRunning(chatId))
       return "产品下面没有任何mcp服务器，请先绑定mcp服务器";
     if (!mcpServerService.findAllByProductId(productId).isEmpty()) {
       try {
@@ -134,8 +135,8 @@ public class McpAgent implements BaseTool<String> {
     String system;
     try {
       String toolDescriptions = combineToolDescriptions(clientMap);
-      if (mcpWebsocket.isRunning(String.valueOf(productId))) {
-        toolDescriptions += mcpWebsocket.combineToolDescription(String.valueOf(productId));
+      if (mcpWebsocket.isRunning(chatId)) {
+        toolDescriptions += mcpWebsocket.combineToolDescription(chatId);
       }
       system = reactPrompt.getReact(toolDescriptions, question);
     } catch (Exception e) {
@@ -143,7 +144,6 @@ public class McpAgent implements BaseTool<String> {
     }
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
-    String chatId = (String) globalMessage.get("chatId");
     var queue = queueMap.get(chatId);
     if (queue != null) {
       queue.add("以下是mcp智能体处理结果：");
@@ -193,7 +193,7 @@ public class McpAgent implements BaseTool<String> {
         // 调用指定服务器的工具
         try {
           if (serverKey.equals("xiaozhi_device")) {
-            toolResult = mcpWebsocket.sendToolCall(String.valueOf(productId), toolName, args);
+            toolResult = mcpWebsocket.sendToolCall(chatId, toolName, args);
           } else {
             McpSyncClient client = clientMap.get(serverKey);
             if (client == null) {

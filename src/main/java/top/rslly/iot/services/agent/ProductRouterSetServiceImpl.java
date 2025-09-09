@@ -52,6 +52,8 @@ public class ProductRouterSetServiceImpl implements ProductRouterSetService {
   private ProductServiceImpl productService;
   @Resource
   private WxProductActiveRepository wxProductActiveRepository;
+  @Resource
+  private OtaXiaozhiRepository otaXiaozhiRepository;
   @Autowired
   private RedisUtil redisUtil;
 
@@ -126,6 +128,14 @@ public class ProductRouterSetServiceImpl implements ProductRouterSetService {
     productRouterSetEntity.setPrompt(productRouterSet.getPrompt());
     if (redisUtil.hasKey("memory" + "chatProduct" + productRouterSet.getProductId())) {
       redisUtil.del("memory" + "chatProduct" + productRouterSet.getProductId());
+    }
+    var otaXiaozhiEntityList =
+        otaXiaozhiRepository.findAllByProductId(productRouterSet.getProductId());
+    for (var s : otaXiaozhiEntityList) {
+      if (redisUtil
+          .hasKey("memory" + "chatProduct" + productRouterSet.getProductId() + s.getDeviceId())) {
+        redisUtil.del("memory" + "chatProduct" + productRouterSet.getProductId() + s.getDeviceId());
+      }
     }
     var wxProductActiveEntityList =
         wxProductActiveRepository.findAllByProductId(productRouterSet.getProductId());

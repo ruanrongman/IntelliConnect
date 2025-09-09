@@ -76,12 +76,12 @@ public class ClassifierTool {
     dataMap.putIfAbsent(chatId, new HashMap<>());
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
-            classifierToolPrompt.getClassifierTool(productId));
+            classifierToolPrompt.getClassifierTool(productId, chatId));
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     // log.info("systemMessage: " + systemMessage.getContent());
     if (!memory.isEmpty()) {
       // messages.addAll(memory);
-      systemMessage.setContent(classifierToolPrompt.getClassifierTool(productId) + memory);
+      systemMessage.setContent(classifierToolPrompt.getClassifierTool(productId, chatId) + memory);
     }
     messages.add(systemMessage);
     messages.add(userMessage);
@@ -89,7 +89,7 @@ public class ClassifierTool {
       // 清除当前会话的旧数据
       dataMap.get(chatId).clear();
       llm.streamJsonChat(question, messages, true,
-          new ClassifierToolEventSourceListener(question, 5, chatId, this));
+          new ClassifierToolEventSourceListener(question, new int[] {5, 11}, chatId, this));
       lockMap.get(chatId).lock();
       try {
         while (dataMap.get(chatId).get("args") == null) {

@@ -167,7 +167,7 @@ public class ProductServiceImpl implements ProductService {
     List<McpServerEntity> mcpServerEntityList = mcpServerRepository.findAllByProductId(id);
     List<ProductRoleEntity> productRoleEntityList = productRoleRepository.findAllByProductId(id);
     List<AgentMemoryEntity> agentMemoryEntityList =
-        agentMemoryRepository.findAllByChatId("chatProduct" + id);
+        agentMemoryRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
     List<KnowledgeChatEntity> knowledgeChatEntityList =
         knowledgeChatRepository.findAllByProductId(id);
     List<ProductRouterSetEntity> productRouterSetEntityList =
@@ -191,7 +191,7 @@ public class ProductServiceImpl implements ProductService {
           productRoleRepository.deleteAllByProductId(id);
         }
         if (!agentMemoryEntityList.isEmpty()) {
-          agentMemoryRepository.deleteAllByChatId("chatProduct" + id);
+          agentMemoryRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
         }
         return ResultTool.success(result);
       }

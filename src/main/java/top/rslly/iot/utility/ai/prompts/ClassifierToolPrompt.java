@@ -55,7 +55,7 @@ public class ClassifierToolPrompt {
                {
                "code": "if success output 200,If it doesn't match any task,output 400",
                "value": "one of task No., json list data like [1],If it doesn't match, please output []",
-               "args": "task input parameters(Combined with Current Conversation,Summarize the context,not null)"
+               "args": "Combined with Current Conversation,Summarize the context,Be sure to convey the intention completely,not null"
                }
            }
            ```
@@ -68,7 +68,7 @@ public class ClassifierToolPrompt {
            Below is the current conversation consisting of interleaving human and assistant history.
           """;
 
-  public String getClassifierTool(int productId) {
+  public String getClassifierTool(int productId, String chatId) {
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2",
@@ -78,9 +78,11 @@ public class ClassifierToolPrompt {
         "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
     classifierMap.put("5",
         "Common chat or Unable to match the task");
-    classifierMap.put("6", "Bind and unbind products");
-    classifierMap.put("7", "switch controlled products");
-    classifierMap.put("8", "Schedule management and reminder tasks");
+    if (!chatId.startsWith("chatProduct")) {
+      classifierMap.put("6", "Bind or unbind products");
+      classifierMap.put("7", "switch controlled products");
+      classifierMap.put("8", "Schedule management and reminder tasks");
+    }
     classifierMap.put("9", "All about role and voice");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
     if (!mcpServerList.isEmpty() || mcpWebsocket.isRunning(String.valueOf(productId))) {
@@ -95,6 +97,9 @@ public class ClassifierToolPrompt {
         mcpServerString.append(mcpWebsocket.getIntention(String.valueOf(productId)));
       }
       classifierMap.put("10", mcpServerString.toString());
+    }
+    if (chatId.startsWith("chatProduct")) {
+      classifierMap.put("11", "Say goodbye or request to step down");
     }
     String classifierJson = JSON.toJSONString(classifierMap);
     var productRouterSetList = productRouterSetService.findAllByProductId(productId);

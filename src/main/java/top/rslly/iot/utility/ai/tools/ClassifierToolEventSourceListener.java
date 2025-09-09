@@ -42,11 +42,11 @@ import java.util.regex.Pattern;
 public class ClassifierToolEventSourceListener extends EventSourceListener {
   private final StringBuilder jsonBuffer = new StringBuilder();
   private final String question;
-  public int filter;
+  public int[] filter;
   private final ClassifierTool classifierTool;
   private final String chatId;
 
-  public ClassifierToolEventSourceListener(String question, int filter, String chatId,
+  public ClassifierToolEventSourceListener(String question, int[] filter, String chatId,
       ClassifierTool classifierTool) {
     this.question = question;
     this.filter = filter;
@@ -118,7 +118,18 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(jsonBuffer.toString());
         while (matcher.find()) {
-          if (matcher.group().equals("[" + filter + "]") || matcher.group().equals("[]")) {
+          if (matcher.group().equals("[" + filter[0] + "]") || matcher.group().equals("[]")) {
+            Map<String, Object> dataMap = new ConcurrentHashMap<>();
+            dataMap.put("value", matcher.group());
+            dataMap.put("args", question);
+            dataMap.put("answer", "yes");
+            classifierTool.getDataMap().put(chatId, dataMap);
+            classifierTool.getDataMap().get(chatId).putAll(dataMap);
+            classifierTool.getConditionMap().get(chatId).signal();
+            eventSource.cancel();
+            return;
+          }
+          if (matcher.group().equals("[" + filter[1] + "]")) {
             Map<String, Object> dataMap = new ConcurrentHashMap<>();
             dataMap.put("value", matcher.group());
             dataMap.put("args", question);

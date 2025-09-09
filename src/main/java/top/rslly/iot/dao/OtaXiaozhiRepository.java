@@ -28,6 +28,8 @@ import java.util.List;
 public interface OtaXiaozhiRepository extends JpaRepository<OtaXiaozhiEntity, Long> {
   List<OtaXiaozhiEntity> findAllByProductId(int productId);
 
+  List<OtaXiaozhiEntity> findAllByProductIdAndDeviceId(int productId, String deviceId);
+
   List<OtaXiaozhiEntity> findAllByDeviceId(String deviceId);
 
   List<OtaXiaozhiEntity> findAllByDeviceIdAndUserNameAndRole(String deviceId, String userName,
