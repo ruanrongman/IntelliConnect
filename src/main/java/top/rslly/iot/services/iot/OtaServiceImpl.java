@@ -73,16 +73,22 @@ public class OtaServiceImpl implements OtaService {
   private String binPath;
 
   @Override
-  public List<OtaEntity> findAllByName(String name) {
-    return otaRepository.findAllByName(name);
+  public List<OtaEntity> findAllById(int id) {
+    return otaRepository.findAllById(id);
   }
+
+  @Override
+  public List<OtaEntity> findAllByProductIdAndName(int productId, String name) {
+    return otaRepository.findAllByProductIdAndName(productId, name);
+  }
+
 
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> uploadBin(String name, int productId, MultipartFile multipartFile) {
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
-    if (!otaRepository.findAllByName(name).isEmpty())
+    if (!otaRepository.findAllByProductIdAndName(productId, name).isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     // String binName = UUID.randomUUID().toString();
 
@@ -186,7 +192,12 @@ public class OtaServiceImpl implements OtaService {
     var productDeviceEntityList = productDeviceRepository.findAllByName(deviceName);
     if (productDeviceEntityList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    var otaList = otaRepository.findAllByName(name);
+    var productModelEntityList =
+        productModelRepository.findAllById(productDeviceEntityList.get(0).getModelId());
+    if (productModelEntityList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    int productId = productModelEntityList.get(0).getProductId();
+    var otaList = otaRepository.findAllByProductIdAndName(productId, name);
     if (otaList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     if (otaList.get(0).getProductId() != productModelRepository
@@ -217,10 +228,8 @@ public class OtaServiceImpl implements OtaService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> deleteBin(String name) {
-    if (name == null)
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    var otaList = otaRepository.findAllByName(name);
+  public JsonResult<?> deleteBin(int id) {
+    var otaList = otaRepository.findAllById(id);
     if (otaList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     List<OtaPassiveEntity> otaPassiveEntityList =

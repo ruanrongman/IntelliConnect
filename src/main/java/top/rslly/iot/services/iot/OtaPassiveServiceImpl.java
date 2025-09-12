@@ -32,6 +32,7 @@ import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.param.request.OtaPassive;
 import top.rslly.iot.param.response.OtaPassiveEnableResponse;
+import top.rslly.iot.param.response.OtaPassiveListResponse;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -118,10 +119,22 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
     } else {
       result = otaPassiveRepository.findAll();
     }
+    List<OtaPassiveListResponse> otaPassiveListResponses = new ArrayList<>();
+    for (var s : result) {
+      OtaPassiveListResponse otaPassiveListResponse = new OtaPassiveListResponse();
+      otaPassiveListResponse.setId(s.getId());
+      otaPassiveListResponse.setOtaId(s.getOtaId());
+      otaPassiveListResponse.setDeviceId(s.getDeviceId());
+      otaPassiveListResponse.setVersionName(s.getVersionName());
+      otaPassiveListResponse.setOtaName(otaRepository.findAllById(s.getOtaId()).get(0).getName());
+      otaPassiveListResponse.setDeviceName(
+          productDeviceRepository.findAllById(s.getDeviceId()).get(0).getName());
+      otaPassiveListResponses.add(otaPassiveListResponse);
+    }
     if (result.isEmpty()) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     } else
-      return ResultTool.success(result);
+      return ResultTool.success(otaPassiveListResponses);
   }
 
   @Override
@@ -159,7 +172,12 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
     if (productDeviceEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    var otaList = otaRepository.findAllByName(otaPassive.getName());
+    var productModelEntityList =
+        productModelRepository.findAllById(productDeviceEntityList.get(0).getModelId());
+    if (productModelEntityList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    int productId = productModelEntityList.get(0).getProductId();
+    var otaList = otaRepository.findAllByProductIdAndName(productId, otaPassive.getName());
     if (otaList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }

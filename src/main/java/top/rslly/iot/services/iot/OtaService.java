@@ -30,7 +30,9 @@ import java.util.List;
 
 public interface OtaService {
 
-  List<OtaEntity> findAllByName(String name);
+  List<OtaEntity> findAllById(int id);
+
+  List<OtaEntity> findAllByProductIdAndName(int productId, String name);
 
   JsonResult<?> uploadBin(String name, int productId, MultipartFile multipartFile);
 
@@ -40,5 +42,5 @@ public interface OtaService {
 
   JsonResult<?> otaEnable(String name, String deviceName);
 
-  JsonResult<?> deleteBin(String name);
+  JsonResult<?> deleteBin(int id);
 }

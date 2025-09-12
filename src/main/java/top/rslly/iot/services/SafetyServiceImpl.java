@@ -170,12 +170,25 @@ public class SafetyServiceImpl implements SafetyService {
   }
 
   @Override
-  public boolean controlAuthorizeOta(String token, String name) {
-    List<OtaEntity> otaEntityList = otaService.findAllByName(name);
+  public boolean controlAuthorizeOta(String token, int id) {
+    List<OtaEntity> otaEntityList = otaService.findAllById(id);
     if (otaEntityList.isEmpty())
-      throw new NullPointerException("otaName not found!");
+      throw new NullPointerException("otaId not found!");
     return this.controlAuthorizeProduct(token,
         otaEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeOta(String token, String name, String deviceName) {
+    var productDeviceEntityList = productDeviceService.findAllByName(deviceName);
+    if (productDeviceEntityList.isEmpty())
+      throw new NullPointerException("deviceName not found!");
+    int modelId = productDeviceEntityList.get(0).getModelId();
+    int productId = productModelService.findAllById(modelId).get(0).getProductId();
+    List<OtaEntity> otaEntityList = otaService.findAllByProductIdAndName(productId, name);
+    if (otaEntityList.isEmpty())
+      throw new NullPointerException("otaName not found!");
+    return this.controlAuthorizeProduct(token, productId);
   }
 
   @Override

@@ -42,7 +42,9 @@ public interface SafetyService {
 
   boolean controlAuthorizeMcpServer(String token, int mcpServerId);
 
-  boolean controlAuthorizeOta(String token, String name);
+  boolean controlAuthorizeOta(String token, int id);
+
+  boolean controlAuthorizeOta(String token, String name, String deviceName);
 
   boolean controlAuthorizeOtaPassive(String token, int id);
 

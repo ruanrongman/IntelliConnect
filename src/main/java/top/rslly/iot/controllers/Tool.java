@@ -245,15 +245,15 @@ public class Tool {
   }
 
   @RequestMapping(value = "/otaDelete", method = RequestMethod.DELETE)
-  public JsonResult<?> otaDelete(@RequestParam("name") String name,
+  public JsonResult<?> otaDelete(@RequestParam("id") int id,
       @RequestHeader("Authorization") String header) {
     try {
-      if (!safetyService.controlAuthorizeOta(header, name))
+      if (!safetyService.controlAuthorizeOta(header, id))
         return ResultTool.fail(ResultCode.NO_PERMISSION);
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return otaService.deleteBin(name);
+    return otaService.deleteBin(id);
   }
 
   @RequestMapping(value = "/otaEnable", method = RequestMethod.POST)
@@ -263,8 +263,7 @@ public class Tool {
       @Size(min = 1, max = 255, message = "deviceName 长度必须在 1 到 255 之间") String deviceName,
       @RequestHeader("Authorization") String header) {
     try {
-      if (!safetyService.controlAuthorizeDevice(header, deviceName)
-          || !safetyService.controlAuthorizeOta(header, name))
+      if (!safetyService.controlAuthorizeOta(header, name, deviceName))
         return ResultTool.fail(ResultCode.NO_PERMISSION);
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
