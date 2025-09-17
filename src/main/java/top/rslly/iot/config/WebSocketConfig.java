@@ -47,14 +47,22 @@ public class WebSocketConfig extends ServerEndpointConfig.Configurator {
     // 这个userProperties 可以通过 session.getUserProperties()获取
     final Map<String, Object> userProperties = sec.getUserProperties();
     Map<String, List<String>> headers = request.getHeaders();
-    List<String> Authorization = headers.get("Authorization");
-    List<String> header1 = headers.get("Protocol-Version");
-    List<String> header2 = headers.get("Device-Id");
-    List<String> header3 = headers.get("Client-Id");
-    userProperties.put("Authorization", Authorization.get(0));
-    userProperties.put("Protocol-Version", header1.get(0));
-    userProperties.put("Device-Id", header2.get(0));
-    userProperties.put("Client-Id", header3.get(0));
+    if (headers.containsKey("Authorization")) {
+      List<String> Authorization = headers.get("Authorization");
+      userProperties.put("Authorization", Authorization.get(0));
+    }
+    if (headers.containsKey("Protocol-Version")) {
+      List<String> header1 = headers.get("Protocol-Version");
+      userProperties.put("Protocol-Version", header1.get(0));
+    }
+    if (headers.containsKey("Device-Id")) {
+      List<String> header2 = headers.get("Device-Id");
+      userProperties.put("Device-Id", header2.get(0));
+    }
+    if (headers.containsKey("Client-Id")) {
+      List<String> header3 = headers.get("Client-Id");
+      userProperties.put("Client-Id", header3.get(0));
+    }
   }
 
   @Bean

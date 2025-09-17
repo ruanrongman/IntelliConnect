@@ -31,18 +31,18 @@ import java.nio.ByteBuffer;
 public class HeartBeatWebsocket {
   @Scheduled(initialDelay = 1000, fixedDelay = 1000 * 5)
   public void task() {
-    for (String key : Websocket.clients.keySet()) {
+    for (String key : XiaoZhiWebsocket.clients.keySet()) {
       try {
-        Websocket.clients.get(key).getBasicRemote()
+        XiaoZhiWebsocket.clients.get(key).getBasicRemote()
             .sendPing(ByteBuffer.wrap(new byte[] {0x00, 0x00, 0x00, 0x00}));
         // log.info("心跳成功{}",key);
       } catch (Exception e) {
         try {
-          Websocket.clients.get(key).close();
+          XiaoZhiWebsocket.clients.get(key).close();
         } catch (IOException ex) {
           log.error("关闭连接失败");
         }
-        Websocket.clients.remove(key);
+        XiaoZhiWebsocket.clients.remove(key);
         log.info("心跳失败{}", e.getMessage());
       }
     }

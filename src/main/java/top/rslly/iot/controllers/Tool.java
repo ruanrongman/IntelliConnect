@@ -368,4 +368,30 @@ public class Tool {
     return aiService.getAiVisionIntent(question, imageFile);
   }
 
+  @Operation(summary = "mcp接入点url获取", description = "获取mcp接入点url")
+  @RequestMapping(value = "/mcpEndpoint", method = RequestMethod.GET)
+  public JsonResult<?> getMcpPointUrl(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return aiService.getMcpPointUrl(productId);
+  }
+
+  @Operation(summary = "mcp接入点工具获取", description = "获取mcp接入点工具详情")
+  @RequestMapping(value = "/mcpEndpoint/tools", method = RequestMethod.GET)
+  public JsonResult<?> getMcpPointTools(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return aiService.getMcpPointTools(productId);
+  }
+
 }

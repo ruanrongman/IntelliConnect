@@ -30,9 +30,14 @@ import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.agent.AiService;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
+import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.MyFileUtil;
+import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
+import top.rslly.iot.utility.ai.mcp.McpWebsocket;
+import top.rslly.iot.utility.ai.mcp.McpWebsocketEndpoint;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.result.JsonResult;
@@ -56,6 +61,8 @@ public class AiServiceImpl implements AiService {
   private String audioTempUrl;
   @Value("${ai.vision-model}")
   private String visionModel;
+  @Value("${ota.xiaozhi.url}")
+  private String otaUrl;
   @Autowired
   private Router router;
   @Autowired
@@ -66,6 +73,8 @@ public class AiServiceImpl implements AiService {
   private ProductServiceImpl productService;
   @Autowired
   private SafetyServiceImpl safetyService;
+  @Autowired
+  private RedisUtil redisUtil;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
 
   @Override
@@ -134,6 +143,27 @@ public class AiServiceImpl implements AiService {
       }
     }
     return ResultTool.success(aiResponse);
+  }
+
+  @Override
+  public JsonResult<?> getMcpPointUrl(int productId) {
+    String token = JwtTokenUtil.createToken("mcp" + productId, "mcp_endpoint");
+    String url = otaUrl + "/mcp?" + "token=" + token;
+    return ResultTool.success(url);
+  }
+
+  @Override
+  public JsonResult<?> getMcpPointTools(int productId) {
+    List<Map<String, Object>> toolList = new ArrayList<>();
+    if (redisUtil.hasKey(McpWebsocket.ENDPOINT_SERVER_NAME + "mcp" + productId)) {
+      toolList = (List<Map<String, Object>>) redisUtil
+          .get(McpWebsocket.ENDPOINT_SERVER_NAME + "mcp" + productId);
+      if (toolList == null) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+    } else
+      ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    return ResultTool.success(toolList);
   }
 
   @Override

@@ -24,22 +24,21 @@ import com.alibaba.fastjson.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import springfox.documentation.spring.web.json.Json;
 import top.rslly.iot.utility.RedisUtil;
-import top.rslly.iot.utility.ai.mcp.protocol.ToolCall;
-import top.rslly.iot.utility.smartVoice.Websocket;
 
+import javax.websocket.Session;
 import java.util.List;
 import java.util.Map;
 
 @Component
 @Slf4j
 public class McpWebsocket {
-  public static final String serverName = "xiaozhi_device";
+  public static final String DEVICE_SERVER_NAME = "xiaozhi_device";
+  public static final String ENDPOINT_SERVER_NAME = "xiaozhi_tool";
   @Autowired
   private RedisUtil redisUtil;
 
-  public String combineToolDescription(String chatId) {
+  public String combineToolDescription(String serverName, String chatId) {
     List<Map<String, Object>> toolDescriptionMap =
         (List<Map<String, Object>>) redisUtil.get(serverName + chatId);
     if (toolDescriptionMap == null)
@@ -56,7 +55,7 @@ public class McpWebsocket {
     return sb.toString();
   }
 
-  public String getIntention(String chatId) {
+  public String getIntention(String serverName, String chatId) {
     List<Map<String, Object>> toolDescriptionMap =
         (List<Map<String, Object>>) redisUtil.get(serverName + chatId);
     if (toolDescriptionMap == null)
@@ -69,7 +68,8 @@ public class McpWebsocket {
     return sb.toString();
   }
 
-  public String sendToolCall(String chatId, String toolName, String jsonArguments) {
+  public String sendToolCall(String serverName, String chatId, String toolName,
+      String jsonArguments, Session session, boolean endpoint) {
     if (jsonArguments == null || jsonArguments.trim().isEmpty()) {
       throw new IllegalArgumentException("jsonArguments cannot be null or empty");
     }
@@ -77,8 +77,8 @@ public class McpWebsocket {
       Map<String, Object> params = JSON.parseObject(
           jsonArguments,
           new TypeReference<>() {});
-      String jsonStr = McpProtocolSend.callTool(toolName, params);
-      Websocket.clients.get(chatId).getBasicRemote().sendText(jsonStr);
+      String jsonStr = McpProtocolSend.callTool(toolName, params, endpoint);
+      session.getBasicRemote().sendText(jsonStr);
       for (int i = 0; i < 70; i++) {
         try {
           if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
@@ -99,7 +99,7 @@ public class McpWebsocket {
     }
   }
 
-  public boolean isRunning(String chatId) {
+  public boolean isRunning(String serverName, String chatId) {
     String key = serverName + chatId;
     return redisUtil.hasKey(key);
   }

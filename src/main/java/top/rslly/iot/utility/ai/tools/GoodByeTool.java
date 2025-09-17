@@ -22,12 +22,9 @@ package top.rslly.iot.utility.ai.tools;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.voice.Text2audio;
-import top.rslly.iot.utility.smartVoice.Websocket;
+import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.io.IOException;
 import java.util.*;
@@ -82,9 +79,9 @@ public class GoodByeTool implements BaseTool<String> {
   public String run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
     String chatId = (String) globalMessage.get("chatId");
-    if (Websocket.clients.containsKey(chatId)) {
+    if (XiaoZhiWebsocket.clients.containsKey(chatId)) {
       try {
-        var session = Websocket.clients.get(chatId);
+        var session = XiaoZhiWebsocket.clients.get(chatId);
         String message = getRandomGoodbyeMessage();
         session.getBasicRemote().sendText("""
             {

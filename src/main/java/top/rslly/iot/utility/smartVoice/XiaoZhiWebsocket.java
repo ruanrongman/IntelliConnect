@@ -19,20 +19,14 @@
  */
 package top.rslly.iot.utility.smartVoice;
 
-import cn.hutool.captcha.generator.RandomGenerator;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
-import top.rslly.iot.utility.RedisUtil;
-import top.rslly.iot.utility.ai.chain.Router;
-import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
-import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.SlieroVadListener;
 import top.rslly.iot.utility.ai.voice.Text2audio;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
@@ -42,17 +36,14 @@ import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @ServerEndpoint(value = "/xiaozhi/v1/{chatId}", configurator = WebSocketConfig.class)
 @Component
 @Slf4j
-public class Websocket {
+public class XiaoZhiWebsocket {
   public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   public static final Map<String, String> voiceContent = new ConcurrentHashMap<>();
   private static final Map<String, ByteArrayOutputStream> pcmVadBuffer = new ConcurrentHashMap<>();
@@ -71,29 +62,29 @@ public class Websocket {
 
   @Autowired
   public void setText2audio(Text2audio text2audio) {
-    if (Websocket.text2audio == null) {
-      Websocket.text2audio = text2audio;
+    if (XiaoZhiWebsocket.text2audio == null) {
+      XiaoZhiWebsocket.text2audio = text2audio;
     }
   }
 
   @Autowired
   public void setXiaoZhiUtil(XiaoZhiUtil xiaoZhiUtil) {
-    if (Websocket.xiaoZhiUtil == null) {
-      Websocket.xiaoZhiUtil = xiaoZhiUtil;
+    if (XiaoZhiWebsocket.xiaoZhiUtil == null) {
+      XiaoZhiWebsocket.xiaoZhiUtil = xiaoZhiUtil;
     }
   }
 
   @Autowired
   public void setSafetyService(SafetyServiceImpl safetyService) {
-    if (Websocket.safetyService == null) {
-      Websocket.safetyService = safetyService;
+    if (XiaoZhiWebsocket.safetyService == null) {
+      XiaoZhiWebsocket.safetyService = safetyService;
     }
   }
 
   @Autowired
   public void setProductService(ProductServiceImpl productService) {
-    if (Websocket.productService == null) {
-      Websocket.productService = productService;
+    if (XiaoZhiWebsocket.productService == null) {
+      XiaoZhiWebsocket.productService = productService;
     }
   }
 
@@ -106,6 +97,7 @@ public class Websocket {
     if (chatId == null) {
       try {
         session.getBasicRemote().sendText("chatId为null");
+        session.close();
         return;
       } catch (IOException e) {
         log.info("发送失败");
@@ -134,6 +126,7 @@ public class Websocket {
       if (!safetyService.controlAuthorizeProduct(token, productId)) {
         try {
           session.getBasicRemote().sendText("没有权限");
+          session.close();
           return;
         } catch (IOException e) {
           log.info("发送失败");
@@ -157,6 +150,7 @@ public class Websocket {
       log.info("冲突，无法连接");
       try {
         session.getBasicRemote().sendText("冲突，无法连接");
+        session.close();
       } catch (IOException e) {
         log.info("发送失败");
       }

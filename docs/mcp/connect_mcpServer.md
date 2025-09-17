@@ -6,7 +6,7 @@ MCP 是由 Anthropic 于 2024 年 11 月推出并开源的一种开放标准协�
 
 ## 如何添加MCP服务器
 * 1：使用SSE方式添加MCP服务器
->平台支持添加SSE MCP服务器，可以使用以下指令进行添加（以高德地图为例）,token获取方法参见快速开始章节：
+>平台支持添加SSE MCP服务器，可以使用以下指令进行添加（以高德地图为例）token获取方法参见快速开始章节：
 
 ```bash
 curl -X POST "http://localhost:8080/api/v2/mcpServer" 
@@ -18,9 +18,27 @@ curl -X POST "http://localhost:8080/api/v2/mcpServer"
 使用时候要替换{your productId}和{your key}
 具体key配置请参见高德地图文档：https://lbs.amap.com/api/mcp-server/summary
 
-* 2：使用小智上下文MCP
+* 2：使用Websocket端点方式添加MCP服务器（小智mcp接入点）
+>平台支持添加Websocket MCP服务器，可以使用以下指令获取MCP端点地址：
 
-若您正在使用ic平台的小智接入服务，可直接在小智上下文中注册MCP服务器，ic平台将自动发现这些服务器，无需额外配置。当前暂不支持通过小智接入点使用MCP协议，该功能正在开发中，请关注后续更新。
+```bash
+curl -X GET "http://localhost:8080/api/v2/mcpEndpoint?productId={your productId}" 
+-H "accept: */*"
+-H "Authorization: {token}"
+-H "Content-Type: application/json" 
+```
+使用时候要替换{your productId}，Websocket端点使用方式请看小智百科全书中关于MCP端点的详细介绍。https://ccnphfhqs21z.feishu.cn/wiki/F5krwD16viZoF0kKkvDcrZNYnhb
+>连接成功后，可以使用下列指令获取MCP端点获取到的工具列表：
+```bash
+curl -X GET "http://localhost:8080/api/v2/mcpEndpoint/tools?productId={your productId}"
+-H "accept: */*"
+-H "Authorization: {token}"
+-H "Content-Type: application/json"
+ ```
+
+* 3：使用小智上下文MCP
+
+若您正在使用本平台的小智接入服务，可直接在小智上下文中注册MCP服务器，本平台将自动发现这些服务器，无需额外配置。
 
 ## 如何开发自己的MCP服务器(SSE协议)
 MCP服务器的开发支持多种语言，Anthropic官方推出了多种语言的SDK，包括我们熟悉的python和java语言

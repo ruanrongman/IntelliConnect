@@ -75,6 +75,7 @@ public class SecurityConfig {
         "/api/v2/otaPassiveEnable",
         "/xiaozhi/ota/**",
         "/xiaozhi/ota/activate/**",
+        "/mcp",
         // "/api/v2/startProcess/**",
         // "/api/v2/stop/**",
         // "/api/v2/reset/**",

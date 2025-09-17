@@ -36,10 +36,10 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.tools.BaseTool;
+import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.TimeoutException;
 
 @Component
 @Slf4j
@@ -61,15 +61,19 @@ public class McpAgent implements BaseTool<String> {
 
   public String getDescription(int productId, String chatId) {
     var mcpServerEntities = mcpServerService.findAllByProductId(productId);
-    var mcpWebSocketRunning = mcpWebsocket.isRunning(chatId);
-    if (mcpServerEntities.isEmpty() && !mcpWebSocketRunning) {
+    var mcpWebSocketRunning = mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId);
+    var mcpEndpointRunning =
+        mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId);
+    if (mcpServerEntities.isEmpty() && !mcpWebSocketRunning && !mcpEndpointRunning) {
       return "工具无效，请勿调用";
     }
     StringBuilder toolDescriptions = new StringBuilder();
     for (var mcpServerEntity : mcpServerEntities) {
       toolDescriptions.append(mcpServerEntity.getDescription()).append("|");
     }
-    toolDescriptions.append(mcpWebsocket.getIntention(chatId));
+    toolDescriptions.append(mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
+    toolDescriptions
+        .append(mcpWebsocket.getIntention(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId));
     return toolDescriptions.toString();
   }
 
@@ -122,7 +126,8 @@ public class McpAgent implements BaseTool<String> {
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
     if (mcpServerService.findAllByProductId(productId).isEmpty()
-        && !mcpWebsocket.isRunning(chatId))
+        && !mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
+        && !mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId))
       return "产品下面没有任何mcp服务器，请先绑定mcp服务器";
     if (!mcpServerService.findAllByProductId(productId).isEmpty()) {
       try {
@@ -135,8 +140,13 @@ public class McpAgent implements BaseTool<String> {
     String system;
     try {
       String toolDescriptions = combineToolDescriptions(clientMap);
-      if (mcpWebsocket.isRunning(chatId)) {
-        toolDescriptions += mcpWebsocket.combineToolDescription(chatId);
+      if (mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)) {
+        toolDescriptions +=
+            mcpWebsocket.combineToolDescription(McpWebsocket.DEVICE_SERVER_NAME, chatId);
+      }
+      if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
+        toolDescriptions += mcpWebsocket.combineToolDescription(McpWebsocket.ENDPOINT_SERVER_NAME,
+            "mcp" + productId);
       }
       system = reactPrompt.getReact(toolDescriptions, question);
     } catch (Exception e) {
@@ -192,8 +202,13 @@ public class McpAgent implements BaseTool<String> {
         String toolName = parts[1];
         // 调用指定服务器的工具
         try {
-          if (serverKey.equals("xiaozhi_device")) {
-            toolResult = mcpWebsocket.sendToolCall(chatId, toolName, args);
+          if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
+            toolResult = mcpWebsocket.sendToolCall(McpWebsocket.DEVICE_SERVER_NAME, chatId,
+                toolName, args, XiaoZhiWebsocket.clients.get(chatId), false);
+          } else if (serverKey.equals(McpWebsocket.ENDPOINT_SERVER_NAME)) {
+            toolResult =
+                mcpWebsocket.sendToolCall(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId,
+                    toolName, args, McpWebsocketEndpoint.clients.get("mcp" + productId), true);
           } else {
             McpSyncClient client = clientMap.get(serverKey);
             if (client == null) {

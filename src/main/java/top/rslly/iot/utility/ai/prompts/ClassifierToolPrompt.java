@@ -85,7 +85,9 @@ public class ClassifierToolPrompt {
     }
     classifierMap.put("9", "All about role and voice");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
-    if (!mcpServerList.isEmpty() || mcpWebsocket.isRunning(String.valueOf(productId))) {
+    if (!mcpServerList.isEmpty()
+        || mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
+        || mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
       StringBuilder mcpServerString = new StringBuilder();
       if (!mcpServerList.isEmpty()) {
         for (var mcpServerEntity : mcpServerList) {
@@ -93,8 +95,12 @@ public class ClassifierToolPrompt {
           mcpServerString.append("|");
         }
       }
-      if (mcpWebsocket.isRunning(String.valueOf(productId))) {
-        mcpServerString.append(mcpWebsocket.getIntention(String.valueOf(productId)));
+      if (mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)) {
+        mcpServerString.append(mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
+      }
+      if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
+        mcpServerString.append(
+            mcpWebsocket.getIntention(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId));
       }
       classifierMap.put("10", mcpServerString.toString());
     }

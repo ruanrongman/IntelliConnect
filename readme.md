@@ -58,7 +58,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 
 # 小智 ESP-32 后端服务(xiaozhi-esp32-server)
 本项目能够为开源智能硬件项目 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)
-提供后端服务。根据 [小智通信协议](https://ccnphfhqs21z.feishu.cn/wiki/M0XiwldO9iJwHikpXD5cEx71nKh) 使用 `Java` 实现。
+提供完整的后端服务。根据 [小智通信协议](https://ccnphfhqs21z.feishu.cn/wiki/M0XiwldO9iJwHikpXD5cEx71nKh) 使用 `Java` 实现。
 适合希望本地部署的用户，不同于单纯语音交互，本项目重点在于提供更强大的物联网和智能体能力。
 ---
 
@@ -82,7 +82,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/8a403ae3d62c9eba48f78036f238fc38.jpg" width="250px"/>
+    <img src="./docs/images/a86edbd9f1bacded0421d92dcd69e556.jpg" width="250px"/>
 </div>
 
 ## 致谢

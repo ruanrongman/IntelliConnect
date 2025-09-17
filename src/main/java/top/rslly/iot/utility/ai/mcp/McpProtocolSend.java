@@ -21,6 +21,7 @@ package top.rslly.iot.utility.ai.mcp;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import org.hibernate.type.TrueFalseType;
 import top.rslly.iot.utility.ai.mcp.protocol.Initialize;
 import top.rslly.iot.utility.ai.mcp.protocol.ToolCall;
 import top.rslly.iot.utility.ai.mcp.protocol.ToolList;
@@ -29,7 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class McpProtocolSend {
-  public static String sendInitialize(String url, String token) {
+  public static String sendInitialize(String url, String token, boolean endpoint) {
     // {
     // "jsonrpc": "2.0",
     // "method": "initialize",
@@ -53,33 +54,57 @@ public class McpProtocolSend {
     Map<String, Object> initializeParams = initialize.getParams();
     Map<String, Object> initializeVision = new HashMap<>();
     Map<String, Object> capabilities = new HashMap<>();
-    initializeVision.put("url", url);
-    initializeVision.put("token", token);
-    capabilities.put("vision", initializeVision);
-    initializeParams.put("capabilities", capabilities);
+    if (endpoint) {
+      Map<String, Object> clientInfo = new HashMap<>();
+      Map<String, Object> roots = new HashMap<>();
+      initializeParams.put("protocolVersion", "2025-03-26");
+      clientInfo.put("name", "intelliConnect");
+      clientInfo.put("version", "1.8");
+      roots.put("listChanged", true);
+      capabilities.put("roots", roots);
+      initializeParams.put("capabilities", capabilities);
+      initializeParams.put("clientInfo", clientInfo);
+    } else {
+      initializeVision.put("url", url);
+      initializeVision.put("token", token);
+      capabilities.put("vision", initializeVision);
+      initializeParams.put("capabilities", capabilities);
+    }
     JSONObject responseObject = new JSONObject();
-    responseObject.put("type", "mcp");
-    responseObject.put("payload", JSON.parseObject(JSON.toJSONString(initialize)));
-    return responseObject.toString();
+    if (endpoint) {
+      return JSON.toJSONString(initialize);
+    } else {
+      responseObject.put("type", "mcp");
+      responseObject.put("payload", JSON.parseObject(JSON.toJSONString(initialize)));
+      return responseObject.toString();
+    }
   }
 
-  public static String sendToolList(String cursor) {
+  public static String sendToolList(String cursor, boolean endpoint) {
     ToolList toolList = new ToolList();
     toolList.setId(1);
     toolList.params.put("cursor", cursor);
     JSONObject responseObject = new JSONObject();
-    responseObject.put("type", "mcp");
-    responseObject.put("payload", JSON.parseObject(JSON.toJSONString(toolList)));
-    return responseObject.toString();
+    if (endpoint) {
+      return JSON.toJSONString(toolList);
+    } else {
+      responseObject.put("type", "mcp");
+      responseObject.put("payload", JSON.parseObject(JSON.toJSONString(toolList)));
+      return responseObject.toString();
+    }
   }
 
-  public static String callTool(String toolName, Map<String, Object> arguments) {
+  public static String callTool(String toolName, Map<String, Object> arguments, boolean endpoint) {
     ToolCall toolCall = new ToolCall();
     toolCall.params.put("name", toolName);
     toolCall.params.put("arguments", arguments);
     JSONObject responseObject = new JSONObject();
-    responseObject.put("type", "mcp");
-    responseObject.put("payload", JSON.parseObject(JSON.toJSONString(toolCall)));
-    return responseObject.toString();
+    if (endpoint) {
+      return JSON.toJSONString(toolCall);
+    } else {
+      responseObject.put("type", "mcp");
+      responseObject.put("payload", JSON.parseObject(JSON.toJSONString(toolCall)));
+      return responseObject.toString();
+    }
   }
 }

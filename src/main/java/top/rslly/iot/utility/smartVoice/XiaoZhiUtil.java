@@ -21,7 +21,6 @@ package top.rslly.iot.utility.smartVoice;
 
 import cn.hutool.captcha.generator.RandomGenerator;
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +29,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.mcp.McpProtocolDeal;
 import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
@@ -57,6 +57,8 @@ public class XiaoZhiUtil {
   private Router router;
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private McpProtocolDeal mcpProtocolDeal;
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
 
@@ -65,13 +67,14 @@ public class XiaoZhiUtil {
     if (helloObject.containsKey("features")) {
       mcpCanUse = helloObject.getJSONObject("features").getBoolean("mcp");
     }
-    Websocket.clients.get(chatId).getBasicRemote().sendText(
+    XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText(
         "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
     log.info("mcp...{}", mcpCanUse);
     if (mcpCanUse && !chatId.startsWith("register")) {
-      Websocket.clients.get(chatId).getBasicRemote()
-          .sendText(McpProtocolSend.sendInitialize(visionExplainUrl, token));
-      Websocket.clients.get(chatId).getBasicRemote().sendText(McpProtocolSend.sendToolList(""));
+      XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
+          .sendText(McpProtocolSend.sendInitialize(visionExplainUrl, token, false));
+      XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
+          .sendText(McpProtocolSend.sendToolList("", false));
     }
   }
 
@@ -80,57 +83,14 @@ public class XiaoZhiUtil {
       JSONObject payloadObject = mcpObject.getJSONObject("payload");
       if (payloadObject.containsKey("result")) {
         JSONObject resultObject = payloadObject.getJSONObject("result");
-        if (resultObject.containsKey("content")) {
-          if (resultObject.containsKey("isError")) {
-            if (resultObject.getBoolean("isError")) {
-              redisUtil.set(McpWebsocket.serverName + chatId + "toolResult", "call tool error");
-            } else {
-              log.info("result{}", resultObject.getString("content"));
-              redisUtil.set(McpWebsocket.serverName + chatId + "toolResult",
-                  resultObject.getString("content"));
-            }
-          }
-        }
-        if (resultObject.containsKey("tools")) {
-          if (resultObject.containsKey("error")) {
-            redisUtil.set(McpWebsocket.serverName + chatId + "toolResult", "call tool error");
-            log.error("tool调用错误:{}", resultObject.getJSONObject("error").getString("message"));
-          }
-        }
-        if (resultObject.containsKey("tools")) {
-          String tools = resultObject.getString("tools");
-          String nextCursor = resultObject.getString("nextCursor");
-          List<Map<String, Object>> toolList;
-          if (redisUtil.hasKey(McpWebsocket.serverName + chatId)) {
-            toolList = (List<Map<String, Object>>) redisUtil.get(McpWebsocket.serverName + chatId);
-            if (toolList == null) {
-              toolList = new ArrayList<>();
-            }
-          } else
-            toolList = new ArrayList<>();
-          JSONArray toolArray = JSON.parseArray(tools);
-          for (int i = 0; i < toolArray.size(); i++) {
-            Map<String, Object> tool = new HashMap<>();
-            tool.put("name", toolArray.getJSONObject(i).getString("name"));
-            tool.put("description", toolArray.getJSONObject(i).getString("description"));
-            tool.put("inputSchema", toolArray.getJSONObject(i).getJSONObject("inputSchema"));
-            toolList.add(tool);
-          }
-          redisUtil.set(McpWebsocket.serverName + chatId, toolList);
-          if (nextCursor != null && !nextCursor.equals("")) {
-            Websocket.clients.get(chatId).getBasicRemote()
-                .sendText(McpProtocolSend.sendToolList(nextCursor));
-          }
-        }
+        mcpProtocolDeal.dealMcp(resultObject, McpWebsocket.DEVICE_SERVER_NAME, chatId,
+            XiaoZhiWebsocket.clients.get(chatId), false);
       }
     }
   }
 
   public void destroyMcp(String chatId) {
-    redisUtil.del(McpWebsocket.serverName + chatId);
-    if (redisUtil.hasKey(McpWebsocket.serverName + chatId + "toolResult")) {
-      redisUtil.del(McpWebsocket.serverName + chatId + "toolResult");
-    }
+    mcpProtocolDeal.destroyMcp(McpWebsocket.DEVICE_SERVER_NAME, chatId);
   }
 
   @Async("taskExecutor")
@@ -140,7 +100,7 @@ public class XiaoZhiUtil {
       OpusDecoder decoder = new OpusDecoder(16000, 1);
       if (audioList.size() > 20) {
         if (!isManual) {
-          Websocket.clients.get(chatId).getBasicRemote().sendText("""
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
               {
                 "type": "tts",
                 "state": "start"
@@ -175,13 +135,14 @@ public class XiaoZhiUtil {
           }
         }
         if (sentences.length() > 0) {
-          if (Websocket.voiceContent.containsKey(chatId)
-              && Websocket.voiceContent.get(chatId).length() > 0) {
-            Websocket.voiceContent.put(chatId, Websocket.voiceContent.get(chatId) + sentences);
+          if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
+              && XiaoZhiWebsocket.voiceContent.get(chatId).length() > 0) {
+            XiaoZhiWebsocket.voiceContent.put(chatId,
+                XiaoZhiWebsocket.voiceContent.get(chatId) + sentences);
           } else {
-            Websocket.voiceContent.put(chatId, sentences.toString());
+            XiaoZhiWebsocket.voiceContent.put(chatId, sentences.toString());
           }
-          Websocket.clients.get(chatId).getBasicRemote()
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
               .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
           audioList.clear();
         } else {
@@ -190,34 +151,35 @@ public class XiaoZhiUtil {
           if (audioList.size() > keepFrames) {
             audioList.subList(0, audioList.size() - keepFrames).clear();
           }
-          Websocket.clients.get(chatId).getBasicRemote()
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
               .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-          Websocket.clients.get(chatId).getBasicRemote()
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
               .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
         }
       } else {
-        Websocket.clients.get(chatId).getBasicRemote()
+        XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
             .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
       }
-      if (Websocket.voiceContent.containsKey(chatId)
-          && Websocket.voiceContent.get(chatId).length() > 0) {
-        Websocket.clients.get(chatId).getBasicRemote()
+      if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
+          && XiaoZhiWebsocket.voiceContent.get(chatId).length() > 0) {
+        XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
             .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
                 + "智能助手思考中" + "\"}");
         JSONObject emotionObject = new JSONObject();
         emotionObject.put("type", "llm");
         emotionObject.put("text", "🤔");
         emotionObject.put("emotion", "thinking");
-        Websocket.clients.get(chatId).getBasicRemote()
+        XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
             .sendText(emotionObject.toJSONString());
-        log.info("listen stop,message{}", Websocket.voiceContent.get(chatId));
+        log.info("listen stop,message{}", XiaoZhiWebsocket.voiceContent.get(chatId));
         Map<String, Object> emotionMessage = new HashMap<>();
         emotionMessage.put("chatId", chatId);
-        var emotionRes = emotionToolAsync.run(Websocket.voiceContent.get(chatId), emotionMessage);
+        var emotionRes =
+            emotionToolAsync.run(XiaoZhiWebsocket.voiceContent.get(chatId), emotionMessage);
         // 异步执行router,成功后把回复发送给前端，future 返回结果
         var res = CompletableFuture
             .supplyAsync(
-                () -> router.response(Websocket.voiceContent.get(chatId), chatId,
+                () -> router.response(XiaoZhiWebsocket.voiceContent.get(chatId), chatId,
                     productId));
         // String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
         // Integer.parseInt(chatId));
@@ -225,7 +187,7 @@ public class XiaoZhiUtil {
         StringBuilder answerBuilder = new StringBuilder();
         boolean emotionFlag = false;
         if (isManual) {
-          Websocket.clients.get(chatId).getBasicRemote().sendText("""
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
               {
                 "type": "tts",
                 "state": "start"
@@ -237,15 +199,15 @@ public class XiaoZhiUtil {
             emotionObject.put("text", emotionRes.get().get("emoji"));
             emotionObject.put("emotion", emotionRes.get().get("text"));
             log.info("emotionObject{}", emotionObject);
-            Websocket.clients.get(chatId).getBasicRemote()
+            XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                 .sendText(emotionObject.toJSONString());
             emotionFlag = true;
           }
-          if (Websocket.isAbort.get(chatId)) {
-            Websocket.haveVoice.put(chatId, false);
-            Websocket.isAbort.put(chatId, false);
+          if (XiaoZhiWebsocket.isAbort.get(chatId)) {
+            XiaoZhiWebsocket.haveVoice.put(chatId, false);
+            XiaoZhiWebsocket.isAbort.put(chatId, false);
             Router.queueMap.remove(chatId);
-            Websocket.clients.get(chatId).getBasicRemote()
+            XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                 .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
             return;
           }
@@ -258,17 +220,17 @@ public class XiaoZhiUtil {
                 jsonObject.put("type", "tts");
                 jsonObject.put("state", "sentence_start");
                 jsonObject.put("text", answerBuilder.toString());
-                Websocket.clients.get(chatId).getBasicRemote()
+                XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                     .sendText(jsonObject.toJSONString());
                 text2audio.websocketAudioSync(answerBuilder.toString(),
-                    Websocket.clients.get(chatId),
+                    XiaoZhiWebsocket.clients.get(chatId),
                     chatId, productId);
                 answerBuilder.setLength(0);
               }
-              Websocket.clients.get(chatId).getBasicRemote()
+              XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                   .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-              Websocket.haveVoice.put(chatId, false);
-              Websocket.isAbort.put(chatId, false);
+              XiaoZhiWebsocket.haveVoice.put(chatId, false);
+              XiaoZhiWebsocket.isAbort.put(chatId, false);
               Router.queueMap.remove(chatId);
               return;
             } else if (element != null) {
@@ -293,10 +255,10 @@ public class XiaoZhiUtil {
                 jsonObject.put("type", "tts");
                 jsonObject.put("state", "sentence_start");
                 jsonObject.put("text", answerBuilder.toString());
-                Websocket.clients.get(chatId).getBasicRemote()
+                XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                     .sendText(jsonObject.toJSONString());
                 text2audio.websocketAudioSync(answerBuilder.toString(),
-                    Websocket.clients.get(chatId),
+                    XiaoZhiWebsocket.clients.get(chatId),
                     chatId, productId);
                 answerBuilder.setLength(0);
 
@@ -311,11 +273,11 @@ public class XiaoZhiUtil {
 
                 // 检查是否需要发送（基于长度条件）
                 if (answerBuilder.length() > 100) {
-                  Websocket.clients.get(chatId).getBasicRemote()
+                  XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                       .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
                           + answerBuilder + "\"}");
                   text2audio.websocketAudioSync(answerBuilder.toString(),
-                      Websocket.clients.get(chatId),
+                      XiaoZhiWebsocket.clients.get(chatId),
                       chatId, productId);
                   answerBuilder.setLength(0);
                 }
@@ -328,7 +290,7 @@ public class XiaoZhiUtil {
         if (!emotionFlag) {
           emotionObject.put("text", "😶");
           emotionObject.put("emotion", "neutral");
-          Websocket.clients.get(chatId).getBasicRemote()
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
               .sendText(emotionObject.toJSONString());
         }
         answer = res.get();
@@ -342,15 +304,15 @@ public class XiaoZhiUtil {
     } catch (Exception e) {
       log.error("Error in dealWithAudio: {}", e.getMessage(), e);
     } finally {
-      Websocket.haveVoice.put(chatId, false);
-      Websocket.isAbort.put(chatId, false);
-      Websocket.clients.get(chatId).getBasicRemote()
+      XiaoZhiWebsocket.haveVoice.put(chatId, false);
+      XiaoZhiWebsocket.isAbort.put(chatId, false);
+      XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
           .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
     }
   }
 
   public void dealDetect(String chatId, int productId) throws IOException {
-    Websocket.clients.get(chatId).getBasicRemote().sendText("""
+    XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
         {
           "type": "tts",
           "state": "start"
@@ -369,9 +331,9 @@ public class XiaoZhiUtil {
     String selectedGreeting = greetings.get(random.nextInt(greetings.size()));
 
     // 发送随机问候语
-    text2audio.websocketAudioSync(selectedGreeting, Websocket.clients.get(chatId), chatId,
+    text2audio.websocketAudioSync(selectedGreeting, XiaoZhiWebsocket.clients.get(chatId), chatId,
         productId);
-    Websocket.clients.get(chatId).getBasicRemote()
+    XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
   }
 
@@ -379,17 +341,18 @@ public class XiaoZhiUtil {
     RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
     String code = randomGenerator.generate();
     String registerMsg = "请登录到控制面板添加设备，输入验证码" + code;
-    redisUtil.set(code, Websocket.getDeviceId(Websocket.clients.get(chatId)), 60 * 5);
-    Websocket.clients.get(chatId).getBasicRemote()
+    redisUtil.set(code, XiaoZhiWebsocket.getDeviceId(XiaoZhiWebsocket.clients.get(chatId)), 60 * 5);
+    XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
             + registerMsg + "\"}");
-    Websocket.clients.get(chatId).getBasicRemote().sendText("""
+    XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
         {
         "type": "tts",
         "state": "start"
         }""");
-    text2audio.websocketAudioSync(registerMsg, Websocket.clients.get(chatId), chatId, productId);
-    Websocket.clients.get(chatId).getBasicRemote()
+    text2audio.websocketAudioSync(registerMsg, XiaoZhiWebsocket.clients.get(chatId), chatId,
+        productId);
+    XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
   }
 
@@ -398,7 +361,7 @@ public class XiaoZhiUtil {
     String[] sentences = answer.split("(?<=[。？！；：])");
     for (String sentence : sentences) {
       sentence = sentence.trim();
-      if (Websocket.isAbort.get(chatId)) {
+      if (XiaoZhiWebsocket.isAbort.get(chatId)) {
         return;
       }
       if (sentence.isEmpty())
@@ -408,9 +371,10 @@ public class XiaoZhiUtil {
       jsonObject.put("state", "sentence_start");
       jsonObject.put("text", sentence);
       log.info(sentence);
-      Websocket.clients.get(chatId).getBasicRemote()
+      XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
           .sendText(jsonObject.toJSONString());
-      text2audio.websocketAudioSync(sentence, Websocket.clients.get(chatId), chatId, productId);
+      text2audio.websocketAudioSync(sentence, XiaoZhiWebsocket.clients.get(chatId), chatId,
+          productId);
     }
   }
 

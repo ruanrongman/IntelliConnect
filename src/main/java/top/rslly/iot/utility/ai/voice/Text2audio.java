@@ -32,7 +32,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.SseEmitterUtil;
-import top.rslly.iot.utility.smartVoice.Websocket;
+import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 import ws.schild.jave.Encoder;
 import ws.schild.jave.MultimediaObject;
 import ws.schild.jave.encode.AudioAttributes;
@@ -251,7 +251,7 @@ public class Text2audio {
         } catch (IOException ex) {
           log.warn("Failed to send stop message: {}", ex.getMessage());
         }
-        Websocket.isAbort.put(chatId, false);
+        XiaoZhiWebsocket.isAbort.put(chatId, false);
       }
     } catch (Exception e) {
       log.error("websocketAudio error{}", e.getMessage());
@@ -313,7 +313,7 @@ public class Text2audio {
         // log.info("预缓冲帧 {}, 时间: {}ms", i, (System.nanoTime() - startTime) / 1_000_000.0);
       }
       // Continue sending remaining frames with timing control.
-      while (!Websocket.isAbort.get(chatId)) {
+      while (!XiaoZhiWebsocket.isAbort.get(chatId)) {
         byte[] opusPacket = queue.take();
         if (opusPacket.length == 0) { // End-of-stream marker.
           break;
