@@ -58,6 +58,11 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  public List<UserEntity> findAllByEmail(String email) {
+    return userRepository.findAllByEmail(email);
+  }
+
+  @Override
   public List<UserEntity> findAll() {
     return userRepository.findAll();
   }

@@ -20,12 +20,14 @@
 package top.rslly.iot.config;
 
 
+import cn.hutool.core.lang.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.UserEntity;
 import top.rslly.iot.services.UserService;
 
 import java.util.ArrayList;
@@ -48,7 +50,14 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     if (s == null || "".equals(s)) {
       throw new RuntimeException("用户不能为空");
     }
-    var user = userService.findAllByUsername(s);
+    List<UserEntity> user;
+    String userName;
+    if (Validator.isEmail(s)) {
+      user = userService.findAllByEmail(s);
+    } else {
+      user = userService.findAllByUsername(s);
+    }
+    userName = user.get(0).getUsername();
     if (user.isEmpty()) {
       throw new RuntimeException("用户不存在");
     }
@@ -66,6 +75,6 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
 
 
-    return new org.springframework.security.core.userdetails.User(s, pwd, authorities);
+    return new org.springframework.security.core.userdetails.User(userName, pwd, authorities);
   }
 }

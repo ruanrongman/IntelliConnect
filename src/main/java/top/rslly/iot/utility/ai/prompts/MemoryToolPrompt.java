@@ -29,11 +29,11 @@ import java.util.Map;
 public class MemoryToolPrompt {
   private static final String memoryToolPrompt =
       """
-          Please summarize the current memory content and the following user conversation into an inner monologue of no more than 100 words
+          Please summarize the current memory content and the following user conversation into an inner monologue of no more than 1000 words
            ## Current Memory
              {current_memory}
            ## Output Format
-           Please do not output \\n and try to limit the word count to 100 words or less
+           Please do not output \\n and try to limit the word count to 1000 words or less
            ## Current Conversation
               Below is the current conversation consisting of interleaving human and assistant history.
            """;

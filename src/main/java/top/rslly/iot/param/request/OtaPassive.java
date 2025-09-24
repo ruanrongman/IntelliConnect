@@ -35,4 +35,7 @@ public class OtaPassive {
   @NotBlank(message = "versionName 不能为空")
   @Size(min = 1, max = 255, message = "versionName 长度必须在 1 到 255 之间")
   private String versionName;
+  @NotBlank(message = "description 不能为空")
+  @Size(min = 1, max = 2048, message = "description 长度必须在 1 到 2048 之间")
+  private String description;
 }

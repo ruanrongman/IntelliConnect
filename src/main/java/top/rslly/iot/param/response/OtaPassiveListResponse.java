@@ -29,4 +29,5 @@ public class OtaPassiveListResponse {
   private String versionName;
   private String otaName;
   private String deviceName;
+  private String description;
 }

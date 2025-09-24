@@ -129,6 +129,7 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
       otaPassiveListResponse.setOtaName(otaRepository.findAllById(s.getOtaId()).get(0).getName());
       otaPassiveListResponse.setDeviceName(
           productDeviceRepository.findAllById(s.getDeviceId()).get(0).getName());
+      otaPassiveListResponse.setDescription(s.getDescription());
       otaPassiveListResponses.add(otaPassiveListResponse);
     }
     if (result.isEmpty()) {
@@ -155,6 +156,7 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
     // Map<String, String> map = new HashMap<>();
     otaPassiveEnableResponse.setFileName(otaList.get(0).getPath());
     otaPassiveEnableResponse.setVersion(otaPassiveEntityList.get(0).getVersionName());
+    otaPassiveEnableResponse.setDescription(otaPassiveEntityList.get(0).getDescription());
     try {
       otaPassiveEnableResponse
           .setMd5(DigestUtils.md5Hex(new FileInputStream(binPath + otaList.get(0).getPath())));
@@ -191,6 +193,9 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
     if (deviceProductId != otaProductId) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+    if (otaPassive.getDescription() == null || otaPassive.getDescription().isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     OtaPassiveEntity otaPassiveEntity = new OtaPassiveEntity();
     if (!otaPassiveRepository.findAllByDeviceId(productDeviceEntityList.get(0).getId()).isEmpty()) {
       otaPassiveEntity.setId(otaPassiveRepository
@@ -199,6 +204,7 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
     otaPassiveEntity.setDeviceId(productDeviceEntityList.get(0).getId());
     otaPassiveEntity.setOtaId(otaList.get(0).getId());
     otaPassiveEntity.setVersionName(otaPassive.getVersionName());
+    otaPassiveEntity.setDescription(otaPassive.getDescription());
     var result = otaPassiveRepository.save(otaPassiveEntity);
     return ResultTool.success(result);
   }

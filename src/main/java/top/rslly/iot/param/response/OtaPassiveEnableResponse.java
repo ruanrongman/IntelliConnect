@@ -26,4 +26,5 @@ public class OtaPassiveEnableResponse {
   private String fileName;
   private String version;
   private String md5;
+  private String description;
 }

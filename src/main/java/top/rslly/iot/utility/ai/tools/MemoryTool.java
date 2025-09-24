@@ -82,8 +82,8 @@ public class MemoryTool {
     messages.add(userMessage);
     // log.info("systemMessage: " + systemMessage.getContent());
     String answer = llm.commonChat(question, messages, true);
-    if (answer.length() > 254)
-      answer = answer.substring(0, 254);
+    if (answer.length() > 1000)
+      answer = answer.substring(0, 1000);
     AgentMemory agentMemory = new AgentMemory(chatId, answer);
     agentMemoryService.insertAndUpdate(agentMemory);
     // log.info("chatTool: " + messages);

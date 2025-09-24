@@ -30,6 +30,8 @@ import java.util.List;
 public interface UserService {
   List<UserEntity> findAllByUsername(String username);
 
+  List<UserEntity> findAllByEmail(String email);
+
   List<UserEntity> findAll();
 
   UserEntity insert(UserEntity userEntity);

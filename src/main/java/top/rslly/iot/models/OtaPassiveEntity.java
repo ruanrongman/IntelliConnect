@@ -29,6 +29,7 @@ public class OtaPassiveEntity {
   private int otaId;
   private int deviceId;
   private String versionName;
+  private String description;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -71,6 +72,17 @@ public class OtaPassiveEntity {
     this.versionName = versionName;
   }
 
+  @Basic
+  @Column(name = "description")
+  public String getDescription() {
+    return description;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
+  }
+
+
   @Override
   public boolean equals(Object o) {
     if (this == o)
@@ -79,11 +91,12 @@ public class OtaPassiveEntity {
       return false;
     OtaPassiveEntity that = (OtaPassiveEntity) o;
     return id == that.id && otaId == that.otaId && deviceId == that.deviceId
-        && Objects.equals(versionName, that.versionName);
+        && Objects.equals(versionName, that.versionName)
+        && Objects.equals(description, that.description);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, otaId, deviceId, versionName);
+    return Objects.hash(id, otaId, deviceId, description, versionName);
   }
 }

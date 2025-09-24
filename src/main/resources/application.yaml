@@ -140,23 +140,23 @@ ai:
   robot-name: 小创
   team-name: 创万联
   agent-epoch-limit: 5
-  chatTool-llm: silicon-Qwen2.5-7B-Instruct
+  chatTool-llm: silicon-Qwen3-Next-80B-A3B-Instruct
   chatTool-speedUp: true
   emotionTool-llm: silicon-Qwen3-30B-A3B-think-32
   memoryTool-llm: silicon-Qwen2.5-14B-Instruct
-  classifierTool-llm: silicon-Qwen2.5-32B-Instruct
+  classifierTool-llm: silicon-Qwen3-Next-80B-A3B-Instruct
   classifierTool-speedUp: true
-  controlTool-llm: silicon-Qwen2.5-32B-Instruct
+  controlTool-llm: silicon-Qwen3-Next-80B-A3B-Instruct
   musicTool-llm: silicon-Qwen2.5-7B-Instruct
   productRoleTool-llm: silicon-Qwen2.5-7B-Instruct
   weatherTool-llm: silicon-Qwen3-30B-A3B
   wxBoundProductTool-llm: silicon-Qwen2.5-7B-Instruct
   wxProductActiveTool-llm: silicon-Qwen2.5-7B-Instruct
-  scheduleTool-llm: silicon-Qwen3-30B-A3B-think-128
+  scheduleTool-llm: silicon-Qwen3-Next-80B-A3B-Instruct
   searchTool-llm: silicon-Qwen2.5-7B-Instruct
-  agent-llm: uniApi-deepSeek
+  agent-llm: silicon-Qwen3-Next-80B-A3B-Instruct
   mcp:
-    agent-llm: silicon-Qwen2.5-72B-Instruct
+    agent-llm: silicon-Qwen3-Next-80B-A3B-Instruct
     agent-epoch-limit: 5
 emq:
   api:
