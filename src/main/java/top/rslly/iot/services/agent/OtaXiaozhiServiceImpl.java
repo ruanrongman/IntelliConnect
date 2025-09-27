@@ -76,6 +76,11 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   private String otaVersion;
 
   @Override
+  public List<OtaXiaozhiEntity> findAllById(int id) {
+    return otaXiaozhiRepository.findAllById(id);
+  }
+
+  @Override
   public JsonResult<?> otaList(String token) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
@@ -268,17 +273,13 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> unbound(String deviceId, String token) {
-    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
-    String role = JwtTokenUtil.getUserRole(token_deal);
-    String username = JwtTokenUtil.getUsername(token_deal);
-    var otaXiaozhiEntityList =
-        otaXiaozhiRepository.findAllByDeviceIdAndUserNameAndRole(deviceId, username, role);
+  public JsonResult<?> unbound(int id) {
+    var otaXiaozhiEntityList = otaXiaozhiRepository.findAllById(id);
     if (otaXiaozhiEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     } else {
-      otaXiaozhiRepository.delete(otaXiaozhiEntityList.get(0));
-      return ResultTool.success();
+      var result = otaXiaozhiRepository.deleteAllById(id);
+      return ResultTool.success(result);
     }
   }
 }

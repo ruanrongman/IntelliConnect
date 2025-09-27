@@ -25,10 +25,7 @@ import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.KnowledgeChatRepository;
 import top.rslly.iot.dao.ProductRouterSetRepository;
 import top.rslly.iot.models.*;
-import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
-import top.rslly.iot.services.agent.McpServerServiceImpl;
-import top.rslly.iot.services.agent.ProductRoleServiceImpl;
-import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
+import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
@@ -70,6 +67,8 @@ public class SafetyServiceImpl implements SafetyService {
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private OtaServiceImpl otaService;
+  @Autowired
+  private OtaXiaozhiServiceImpl otaXiaozhiService;
   @Autowired
   private OtaPassiveServiceImpl otaPassiveService;
   @Autowired
@@ -176,6 +175,15 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("otaId not found!");
     return this.controlAuthorizeProduct(token,
         otaEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeOtaXiaoZhi(String token, int id) {
+    List<OtaXiaozhiEntity> otaXiaozhiEntityList = otaXiaozhiService.findAllById(id);
+    if (otaXiaozhiEntityList.isEmpty())
+      throw new NullPointerException("otaXiaozhiId not found!");
+    return this.controlAuthorizeProduct(token,
+        otaXiaozhiEntityList.get(0).getProductId());
   }
 
   @Override

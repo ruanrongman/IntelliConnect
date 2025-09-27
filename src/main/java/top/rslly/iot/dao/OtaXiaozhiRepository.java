@@ -26,6 +26,9 @@ import top.rslly.iot.models.OtaXiaozhiEntity;
 import java.util.List;
 
 public interface OtaXiaozhiRepository extends JpaRepository<OtaXiaozhiEntity, Long> {
+
+  List<OtaXiaozhiEntity> findAllById(int id);
+
   List<OtaXiaozhiEntity> findAllByProductId(int productId);
 
   List<OtaXiaozhiEntity> findAllByProductIdAndDeviceId(int productId, String deviceId);
@@ -34,4 +37,7 @@ public interface OtaXiaozhiRepository extends JpaRepository<OtaXiaozhiEntity, Lo
 
   List<OtaXiaozhiEntity> findAllByDeviceIdAndUserNameAndRole(String deviceId, String userName,
       String role);
+
+  @Transactional
+  List<OtaXiaozhiEntity> deleteAllById(int id);
 }

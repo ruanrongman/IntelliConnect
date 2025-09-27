@@ -48,7 +48,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
   @Override
   public UserDetails loadUserByUsername(String s) throws UsernameNotFoundException {
     if (s == null || "".equals(s)) {
-      throw new RuntimeException("用户不能为空");
+      throw new UsernameNotFoundException("用户不存在");
     }
     List<UserEntity> user;
     String userName;
@@ -57,10 +57,10 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     } else {
       user = userService.findAllByUsername(s);
     }
-    userName = user.get(0).getUsername();
     if (user.isEmpty()) {
-      throw new RuntimeException("用户不存在");
+      throw new UsernameNotFoundException("用户不存在");
     }
+    userName = user.get(0).getUsername();
     // System.out.println(user.get(0));
 
     List<SimpleGrantedAuthority> authorities = new ArrayList<>();

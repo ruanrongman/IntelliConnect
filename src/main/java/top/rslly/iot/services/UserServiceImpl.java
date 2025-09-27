@@ -86,23 +86,41 @@ public class UserServiceImpl implements UserService {
     if (!redisUtil.hasKey(user.getUsername() + user.getUserCode())) {
       return ResultTool.fail(ResultCode.USER_CODE_ERROR);
     }
+    String email = redisUtil.get(user.getUsername() + user.getUserCode()).toString();
+    if (!userRepository.findAllByEmail(email).isEmpty()) {
+      return ResultTool.fail(ResultCode.EMAIL_ALREADY_EXIST);
+    }
     UserEntity userEntity = new UserEntity();
     userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(user.getPassword()));
     userEntity.setUsername(user.getUsername());
-    userEntity.setEmail(redisUtil.get(user.getUsername() + user.getUserCode()).toString());
+    userEntity.setEmail(email);
     userEntity.setRole("guest");
+    redisUtil.del(user.getUsername() + user.getUserCode());
+    userRepository.save(userEntity);
+    return ResultTool.success();
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> forgotPassword(User user) {
+    if (!redisUtil.hasKey(user.getUsername() + user.getUserCode())) {
+      return ResultTool.fail(ResultCode.USER_CODE_ERROR);
+    }
+    String email = redisUtil.get(user.getUsername() + user.getUserCode()).toString();
+    List<UserEntity> users = userRepository.findAllByUsernameAndEmail(user.getUsername(), email);
+    if (users.isEmpty()) {
+      return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
+    }
+
+    UserEntity userEntity = users.get(0);
+    userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(user.getPassword()));
+    redisUtil.del(user.getUsername() + user.getUserCode());
     userRepository.save(userEntity);
     return ResultTool.success();
   }
 
   @Override
   public JsonResult<?> getUserCode(String username, String email) {
-    if (!userRepository.findAllByUsername(username).isEmpty()) {
-      return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
-    }
-    if (!userRepository.findAllByEmail(email).isEmpty()) {
-      return ResultTool.fail(ResultCode.EMAIL_ALREADY_EXIST);
-    }
     if (!Validator.isEmail(email)) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -111,7 +129,7 @@ public class UserServiceImpl implements UserService {
     RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
     map.put("code", randomGenerator.generate());
     map.put("username", username);
-    sendEmail.contextLoads(new String[] {email}, "登录验证码", "emailCode", map);
+    sendEmail.contextLoads(new String[] {email}, "平台验证码", "emailCode", map);
     redisUtil.set(username + map.get("code"), email, 60 * 5);
     return ResultTool.success();
   }

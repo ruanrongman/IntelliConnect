@@ -354,11 +354,16 @@ public class Tool {
     return otaXiaozhiService.bindDevice(otaXiaozhi, header);
   }
 
-  // this deviceId is mac address
   @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.DELETE)
-  public JsonResult<?> xiaoZhiOtaUnbind(@RequestParam("deviceId") String deviceId,
+  public JsonResult<?> xiaoZhiOtaUnbind(@RequestParam("id") int id,
       @RequestHeader("Authorization") String header) {
-    return otaXiaozhiService.unbound(deviceId, header);
+    try {
+      if (!safetyService.controlAuthorizeOtaXiaoZhi(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaXiaozhiService.unbound(id);
   }
 
   @RequestMapping(value = "/vision/explain", method = RequestMethod.POST)

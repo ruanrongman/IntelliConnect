@@ -79,6 +79,12 @@ public class Auth {
     return userService.newUser(user);
   }
 
+  @Operation(summary = "忘记密码", description = "忘记密码")
+  @RequestMapping(value = "/forgotPassword", method = RequestMethod.POST)
+  public JsonResult<?> forgotPassword(@Valid @RequestBody User user) {
+    return userService.forgotPassword(user);
+  }
+
   @Operation(summary = "获取邮箱验证码", description = "获取邮箱验证码")
   @RequestMapping(value = "/getUserCode", method = RequestMethod.POST)
   public JsonResult<?> getUserCode(@Valid @RequestBody UserCode userCode) {

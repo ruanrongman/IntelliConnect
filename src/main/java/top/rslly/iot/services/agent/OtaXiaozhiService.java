@@ -19,14 +19,19 @@
  */
 package top.rslly.iot.services.agent;
 
+import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.param.request.OtaXiaozhi;
 import top.rslly.iot.utility.result.JsonResult;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 
 public interface OtaXiaozhiService {
+
+  List<OtaXiaozhiEntity> findAllById(int id);
+
   JsonResult<?> otaList(String token);
 
   JsonResult<?> bindDevice(OtaXiaozhi otaXiaozhi, String token);
@@ -35,5 +40,5 @@ public interface OtaXiaozhiService {
 
   void otaActivate(HttpServletRequest request, HttpServletResponse response) throws IOException;
 
-  JsonResult<?> unbound(String deviceId, String token);
+  JsonResult<?> unbound(int id);
 }

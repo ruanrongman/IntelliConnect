@@ -38,5 +38,7 @@ public interface UserService {
 
   JsonResult<?> newUser(User user);
 
+  JsonResult<?> forgotPassword(User user);
+
   JsonResult<?> getUserCode(String username, String email);
 }
