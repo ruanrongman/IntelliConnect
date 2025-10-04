@@ -86,9 +86,12 @@ public class AlarmEventServiceImpl implements AlarmEventService {
       if (wxUserRepository.findAllByName(username).isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
       result = new ArrayList<>();
-      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      var wxBindProductResponseList =
+          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxBindProductResponseList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
@@ -195,30 +198,28 @@ public class AlarmEventServiceImpl implements AlarmEventService {
     }
     for (var wxProductBindEntity : wxProductBindEntityList) {
       try {
-        dealWx.sendContent(wxProductBindEntity.getOpenid(),
-            "设备：" + deviceName + "发生事件：" + productEventEntityList.get(0).getName(), microappid);
+        if (wxProductBindEntity.getAppid().equals(microappid)
+            || wxProductBindEntity.getAppid().equals(microappid2)) {
+          dealWx.sendContent(wxProductBindEntity.getOpenid(),
+              "设备：" + deviceName + "发生事件：" + productEventEntityList.get(0).getName(),
+              wxProductBindEntity.getAppid());
+        } else {
+          // String reqdata = "{\"key\":{\"value\":\"" + key + "\", \"color\":\"#0000CD\"},
+          // \"value\":{\"value\":\"" + value + "\"}}";
+          // 优化 reqbody, 不用拼接
+          JSONObject jsonObject = new JSONObject();
+          JSONObject contentObject = new JSONObject();
+          JSONObject eventObject = new JSONObject();
+          contentObject.put("value", deviceName);
+          contentObject.put("color", "#0000CD");
+          jsonObject.put("thing23", contentObject);
+          eventObject.put("value", productEventEntityList.get(0).getName());
+          jsonObject.put("thing8", eventObject);
+          dealWx.templatePost(jsonObject, templateId, wxProductBindEntity.getOpenid());
+        }
       } catch (IOException e) {
-        log.error("小程序一号发送失败{}", e.getMessage());
+        log.error("小程序发送失败{}", e.getMessage());
       }
-      try {
-        dealWx.sendContent(wxProductBindEntity.getOpenid(),
-            "设备：" + deviceName + "发生事件：" + productEventEntityList.get(0).getName(),
-            microappid2);
-      } catch (IOException e) {
-        log.error("小程序二号发送失败{}", e.getMessage());
-      }
-      // String reqdata = "{\"key\":{\"value\":\"" + key + "\", \"color\":\"#0000CD\"},
-      // \"value\":{\"value\":\"" + value + "\"}}";
-      // 优化 reqbody, 不用拼接
-      JSONObject jsonObject = new JSONObject();
-      JSONObject contentObject = new JSONObject();
-      JSONObject eventObject = new JSONObject();
-      contentObject.put("value", deviceName);
-      contentObject.put("color", "#0000CD");
-      jsonObject.put("deviceName", contentObject);
-      eventObject.put("value", productEventEntityList.get(0).getName());
-      jsonObject.put("event", eventObject);
-      dealWx.templatePost(jsonObject, templateId, wxProductBindEntity.getOpenid());
     }
 
   }

@@ -29,16 +29,18 @@ import top.rslly.iot.models.WxProductActiveEntity;
 import java.util.List;
 
 public interface WxProductActiveRepository extends JpaRepository<WxProductActiveEntity, Long> {
-  List<WxProductActiveEntity> findAllByProductIdAndOpenid(int productId, String openid);
+  List<WxProductActiveEntity> findAllByProductIdAndAppidAndOpenid(int productId, String appid,
+      String openid);
 
-  List<WxProductActiveEntity> findAllByOpenid(String openid);
+  List<WxProductActiveEntity> findAllByAppidAndOpenid(String appid, String openid);
 
   List<WxProductActiveEntity> findAllByProductId(int productId);
 
   @Modifying
   @Transactional
-  @Query("UPDATE WxProductActiveEntity e SET e.productId = :productId WHERE e.openid = :openid")
-  void updateProperty(@Param("openid") String openid, @Param("productId") int productId);
+  @Query("UPDATE WxProductActiveEntity e SET e.productId = :productId WHERE e.appid = :appid AND e.openid = :openid")
+  void updateProperty(@Param("appid") String appid, @Param("openid") String openid,
+      @Param("productId") int productId);
 
   @Transactional
   List<WxProductActiveEntity> deleteByOpenidAndProductId(String openid, int productId);

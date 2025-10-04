@@ -57,16 +57,16 @@ public class SmartRobot {
 
   @Async("taskExecutor")
   public void smartSendContent(String openid, String msg, String microappid) throws IOException {
-    if (wxUserService.findAllByOpenid(openid).isEmpty()) {
+    if (wxUserService.findAllByAppidAndOpenid(microappid, openid).isEmpty()) {
       dealWx.sendContent(openid, "该用户未注册，请先注册再使用", microappid);
       return;
     }
-    var productActiveEntities = productActiveService.findAllByOpenid(openid);
+    var productActiveEntities = productActiveService.findAllByAppidAndOpenid(microappid, openid);
     int productId = 0;
     if (!productActiveEntities.isEmpty()) {
       productId = productActiveEntities.get(0).getProductId();
     } else {
-      var wxProductBindEntities = wxProductBindService.findAllByOpenid(openid);
+      var wxProductBindEntities = wxProductBindService.findAllByAppidAndOpenid(microappid, openid);
       if (!wxProductBindEntities.isEmpty()) {
         productId = wxProductBindEntities.get(0).getProductId();
       }
@@ -82,7 +82,7 @@ public class SmartRobot {
   @Async("taskExecutor")
   public void smartImageSendContent(String openid, String imageUrl, String microappid)
       throws IOException {
-    if (wxUserService.findAllByOpenid(openid).isEmpty()) {
+    if (wxUserService.findAllByAppidAndOpenid(microappid, openid).isEmpty()) {
       dealWx.sendContent(openid, "该用户未注册，请先注册再使用", microappid);
       return;
     }

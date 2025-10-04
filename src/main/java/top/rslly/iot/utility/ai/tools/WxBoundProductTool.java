@@ -65,8 +65,11 @@ public class WxBoundProductTool implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
-    String chatId = (String) globalMessage.get("chatId");
-    if (wxUserService.findAllByOpenid(chatId).isEmpty())
+    String openid = (String) globalMessage.get("openId");
+    if (!globalMessage.containsKey("microappid"))
+      return "检测到当前不在微信客服对话环境，该功能无法使用";
+    String appid = (String) globalMessage.get("microappid");
+    if (wxUserService.findAllByAppidAndOpenid(appid, openid).isEmpty())
       return "检测到当前不在微信客服对话环境，该功能无法使用";
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
@@ -79,7 +82,7 @@ public class WxBoundProductTool implements BaseTool<String> {
     var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     // var answer = (String) obj.get("answer");
     try {
-      return process_llm_result(obj, chatId);
+      return process_llm_result(obj, appid, openid);
     } catch (Exception e) {
       // e.printStackTrace();
       log.error("LLM error: " + e.getMessage());
@@ -87,7 +90,8 @@ public class WxBoundProductTool implements BaseTool<String> {
     }
   }
 
-  private String process_llm_result(JSONObject jsonObject, String chatId) throws IcAiException {
+  private String process_llm_result(JSONObject jsonObject, String appid, String openId)
+      throws IcAiException {
     if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
       var productName = jsonObject.getString("productName");
       var productKey = jsonObject.getString("productKey");
@@ -99,12 +103,13 @@ public class WxBoundProductTool implements BaseTool<String> {
         toolResult = "对不起小主人，没有找到" + productName + "产品";
       } else {
         if (!wxProductBindService
-            .findByOpenidAndProductId(chatId, productList.get(0).getId()).isEmpty()) {
+            .findByAppidAndOpenidAndProductId(appid, openId, productList.get(0).getId())
+            .isEmpty()) {
           if (bind.equals("true")) {
             toolResult = "对不起小主人，你已经绑定过该产品了，无需重复绑定";
           } else {
             boolean result =
-                wxProductBindService.wxUnBindProduct(chatId, productName, productKey);
+                wxProductBindService.wxUnBindProduct(appid, openId, productName, productKey);
             if (result)
               toolResult = answer;
             else
@@ -112,7 +117,7 @@ public class WxBoundProductTool implements BaseTool<String> {
           }
         } else {
           boolean result =
-              wxProductBindService.wxBindProduct(chatId, productName, productKey);
+              wxProductBindService.wxBindProduct(appid, openId, productName, productKey);
           if (result)
             toolResult = answer;
           else

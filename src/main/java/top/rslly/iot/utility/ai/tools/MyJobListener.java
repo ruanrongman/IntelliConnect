@@ -56,8 +56,9 @@ public class MyJobListener implements JobListener {
         (TimeScheduleServiceImpl) SpringBeanUtils.getBean("timeScheduleServiceImpl");
     // log.info("isBefore {}",isBefore);
     if (isBefore) {
-      timeScheduleService.deleteByOpenidAndTaskName(
-          jobExecutionContext.getJobDetail().getKey().getGroup(),
+      timeScheduleService.deleteByAppidAndOpenidAndTaskName(
+          jobExecutionContext.getJobDetail().getJobDataMap().get("data2").toString(),
+          jobExecutionContext.getJobDetail().getJobDataMap().get("data1").toString(),
           jobExecutionContext.getJobDetail().getKey().getName());
       log.info("TimeSchedule db clean!!!");
     }

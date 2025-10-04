@@ -26,10 +26,11 @@ import javax.transaction.Transactional;
 import java.util.List;
 
 public interface TimeScheduleRepository extends JpaRepository<TimeScheduleEntity, Long> {
-  List<TimeScheduleEntity> findAllByOpenid(String openid);
+  List<TimeScheduleEntity> findAllByAppidAndOpenid(String appid, String openid);
 
-  List<TimeScheduleEntity> findAllByOpenidAndTaskName(String openid, String taskName);
+  List<TimeScheduleEntity> findAllByAppidAndOpenidAndTaskName(String appid, String openid,
+      String taskName);
 
   @Transactional
-  void deleteByOpenidAndTaskName(String openid, String taskName);
+  void deleteByAppidAndOpenidAndTaskName(String appid, String openid, String taskName);
 }

@@ -28,14 +28,15 @@ import javax.transaction.Transactional;
 import java.util.List;
 
 public interface WxProductBindRepository extends JpaRepository<WxProductBindEntity, Long> {
-  List<WxProductBindEntity> findAllByOpenid(String openid);
+  List<WxProductBindEntity> findAllByAppidAndOpenid(String appid, String openid);
 
-  List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
+  List<WxProductBindEntity> findByAppidAndOpenidAndProductId(String appid, String openid,
+      int productId);
 
   List<WxProductBindEntity> findAllByProductId(int productId);
 
-  @Query("SELECT new top.rslly.iot.param.response.WxBindProductResponse(e.id, e.productId) FROM WxProductBindEntity e WHERE e.openid = ?1")
-  List<WxBindProductResponse> findProductIdByOpenid(String openid);
+  @Query("SELECT new top.rslly.iot.param.response.WxBindProductResponse(e.id, e.productId) FROM WxProductBindEntity e WHERE e.appid = ?1 AND e.openid = ?2")
+  List<WxBindProductResponse> findProductIdByAppidAndOpenid(String appid, String openid);
 
 
   @Transactional
@@ -45,5 +46,6 @@ public interface WxProductBindRepository extends JpaRepository<WxProductBindEnti
   List<WxProductBindEntity> deleteAllByProductId(int productId);
 
   @Transactional
-  List<WxProductBindEntity> deleteByOpenidAndProductId(String openid, int productId);
+  List<WxProductBindEntity> deleteByAppidAndOpenidAndProductId(String appid, String openid,
+      int productId);
 }

@@ -54,7 +54,7 @@ public class WxUserServiceImpl implements WxUserService {
     String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     String openid = (String) JSON.parseObject(s).get("openid");
     // System.out.println(openid);
-    List<WxUserEntity> user = wxUserRepository.findAllByOpenid(openid);
+    List<WxUserEntity> user = wxUserRepository.findAllByAppidAndOpenid(microAppid, openid);
     if (user.isEmpty())
       return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
     return ResultTool.success(JwtTokenUtil.TOKEN_PREFIX
@@ -66,27 +66,32 @@ public class WxUserServiceImpl implements WxUserService {
   public JsonResult<?> wxRegister(WxUser wxUser) throws IOException {
     String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     String openid = (String) JSON.parseObject(s).get("openid");
-    List<WxUserEntity> user = wxUserRepository.findAllByOpenid(openid);
+    List<WxUserEntity> user = wxUserRepository.findAllByAppidAndOpenid(microAppid, openid);
     if (!user.isEmpty())
       return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
     WxUserEntity wxUserEntity = new WxUserEntity();
     wxUserEntity.setName(UUID.randomUUID().toString());
     wxUserEntity.setOpenid(openid);
+    wxUserEntity.setAppid(microAppid);
     var res = wxUserRepository.save(wxUserEntity);
     return ResultTool.success(res);
   }
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public WxUserEntity wxRegister(String openid) {
+  public WxUserEntity wxRegister(String appid, String openid) {
+    if (appid == null || appid.trim().isEmpty()) {
+      throw new IllegalArgumentException("Invalid appid");
+    }
     // 校验 openid 是否有效
     if (openid == null || openid.trim().isEmpty()) {
       throw new IllegalArgumentException("Invalid openid");
     }
-    if (wxUserRepository.findAllByOpenid(openid).isEmpty()) {
+    if (wxUserRepository.findAllByAppidAndOpenid(appid, openid).isEmpty()) {
       WxUserEntity wxUserEntity = new WxUserEntity();
       wxUserEntity.setName(UUID.randomUUID().toString());
       wxUserEntity.setOpenid(openid);
+      wxUserEntity.setAppid(appid);
       wxUserRepository.save(wxUserEntity);
       return wxUserEntity;
     }
@@ -94,8 +99,8 @@ public class WxUserServiceImpl implements WxUserService {
   }
 
   @Override
-  public List<WxUserEntity> findAllByOpenid(String openid) {
-    return wxUserRepository.findAllByOpenid(openid);
+  public List<WxUserEntity> findAllByAppidAndOpenid(String appid, String openid) {
+    return wxUserRepository.findAllByAppidAndOpenid(appid, openid);
   }
 
   @Override

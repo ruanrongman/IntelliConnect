@@ -237,9 +237,12 @@ public class SafetyServiceImpl implements SafetyService {
       if (wxUserService.findAllByName(username).isEmpty()) {
         return false;
       }
-      String openid = wxUserService.findAllByName(username).get(0).getOpenid();
+      List<WxUserEntity> wxUserEntityList = wxUserService.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
       // log.info("productId{}",productId);
-      return !wxProductBindService.findByOpenidAndProductId(openid, productId).isEmpty();
+      return !wxProductBindService.findByAppidAndOpenidAndProductId(appid, openid, productId)
+          .isEmpty();
     } else if (!role.equals("[ROLE_admin]")) {
       var userList = userService.findAllByUsername(username);
       if (userList.isEmpty())

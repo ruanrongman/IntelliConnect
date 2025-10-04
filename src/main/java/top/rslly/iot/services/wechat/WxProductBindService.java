@@ -34,13 +34,14 @@ public interface WxProductBindService {
 
   JsonResult<?> wxUnBindProduct(WxBindProduct wxBindProduct, String token);
 
-  boolean wxBindProduct(String openid, String productName, String productKey);
+  boolean wxBindProduct(String appid, String openid, String productName, String productKey);
 
-  boolean wxUnBindProduct(String openid, String productName, String productKey);
+  boolean wxUnBindProduct(String appid, String openid, String productName, String productKey);
 
-  List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId);
+  List<WxProductBindEntity> findByAppidAndOpenidAndProductId(String appid, String openid,
+      int productId);
 
-  List<WxProductBindEntity> findAllByOpenid(String openid);
+  List<WxProductBindEntity> findAllByAppidAndOpenid(String appid, String openid);
 
   JsonResult<?> getWxProductBind();
 }

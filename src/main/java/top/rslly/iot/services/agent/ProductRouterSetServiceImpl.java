@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductRouterSetEntity;
+import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.ProductRouterSet;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
@@ -77,9 +78,12 @@ public class ProductRouterSetServiceImpl implements ProductRouterSetService {
       if (wxUserRepository.findAllByName(username).isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
       result = new ArrayList<>();
-      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      var wxBindProductResponseList =
+          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxBindProductResponseList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
@@ -140,8 +144,8 @@ public class ProductRouterSetServiceImpl implements ProductRouterSetService {
     var wxProductActiveEntityList =
         wxProductActiveRepository.findAllByProductId(productRouterSet.getProductId());
     for (var s : wxProductActiveEntityList) {
-      if (redisUtil.hasKey("memory" + s.getOpenid())) {
-        redisUtil.del("memory" + s.getOpenid());
+      if (redisUtil.hasKey("memory" + s.getAppid() + s.getOpenid())) {
+        redisUtil.del("memory" + s.getAppid() + s.getOpenid());
       }
     }
     var result = productRouterSetRepository.save(productRouterSetEntity);

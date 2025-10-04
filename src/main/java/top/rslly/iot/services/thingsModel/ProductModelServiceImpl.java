@@ -26,6 +26,7 @@ import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.ProductModelEntity;
+import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.prompt.ProductModelDescription;
 import top.rslly.iot.param.request.ProductModel;
 import top.rslly.iot.utility.JwtTokenUtil;
@@ -66,9 +67,12 @@ public class ProductModelServiceImpl implements ProductModelService {
       if (wxUserRepository.findAllByName(username).isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
       result = new ArrayList<>();
-      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      var wxBindProductResponseList =
+          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxBindProductResponseList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }

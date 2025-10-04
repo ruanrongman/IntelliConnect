@@ -26,10 +26,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
-import top.rslly.iot.models.OtaEntity;
-import top.rslly.iot.models.OtaPassiveEntity;
-import top.rslly.iot.models.ProductDeviceEntity;
-import top.rslly.iot.models.ProductModelEntity;
+import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.OtaPassive;
 import top.rslly.iot.param.response.OtaPassiveEnableResponse;
 import top.rslly.iot.param.response.OtaPassiveListResponse;
@@ -83,9 +80,12 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
       if (wxUserRepository.findAllByName(username).isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
       result = new ArrayList<>();
-      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      var wxBindProductResponseList =
+          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxBindProductResponseList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }

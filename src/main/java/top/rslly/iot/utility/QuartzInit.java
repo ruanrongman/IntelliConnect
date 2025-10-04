@@ -46,7 +46,8 @@ public class QuartzInit implements CommandLineRunner {
         QuartzManager.addJob(s.getTaskName(), s.getOpenid(), s.getTaskName(), s.getTaskName(),
             RemindJob.class, s.getCron(), s.getOpenid(), s.getAppid());
       else
-        timeScheduleService.deleteByOpenidAndTaskName(s.getOpenid(), s.getTaskName());
+        timeScheduleService.deleteByAppidAndOpenidAndTaskName(s.getAppid(), s.getOpenid(),
+            s.getTaskName());
     }
 
   }

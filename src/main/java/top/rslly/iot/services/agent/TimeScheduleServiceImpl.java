@@ -33,13 +33,14 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
   private TimeScheduleRepository timeScheduleRepository;
 
   @Override
-  public List<TimeScheduleEntity> findAllByOpenid(String openid) {
-    return timeScheduleRepository.findAllByOpenid(openid);
+  public List<TimeScheduleEntity> findAllByAppidAndOpenid(String appid, String openid) {
+    return timeScheduleRepository.findAllByAppidAndOpenid(appid, openid);
   }
 
   @Override
-  public List<TimeScheduleEntity> findAllByOpenidAndTaskName(String openid, String taskName) {
-    return timeScheduleRepository.findAllByOpenidAndTaskName(openid, taskName);
+  public List<TimeScheduleEntity> findAllByAppidAndOpenidAndTaskName(String appid, String openid,
+      String taskName) {
+    return timeScheduleRepository.findAllByAppidAndOpenidAndTaskName(appid, openid, taskName);
   }
 
   @Override
@@ -53,7 +54,7 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
   }
 
   @Override
-  public void deleteByOpenidAndTaskName(String openid, String taskName) {
-    timeScheduleRepository.deleteByOpenidAndTaskName(openid, taskName);
+  public void deleteByAppidAndOpenidAndTaskName(String appid, String openid, String taskName) {
+    timeScheduleRepository.deleteByAppidAndOpenidAndTaskName(appid, openid, taskName);
   }
 }

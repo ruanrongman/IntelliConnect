@@ -26,6 +26,7 @@ import java.util.Objects;
 @Table(name = "wx_user", schema = "cwliot1.8", catalog = "")
 public class WxUserEntity {
   private int id;
+  private String appid;
   private String openid;
   private String name;
 
@@ -38,6 +39,16 @@ public class WxUserEntity {
 
   public void setId(int id) {
     this.id = id;
+  }
+
+  @Basic
+  @Column(name = "appid")
+  public String getAppid() {
+    return appid;
+  }
+
+  public void setAppid(String appid) {
+    this.appid = appid;
   }
 
   @Basic
@@ -67,11 +78,12 @@ public class WxUserEntity {
     if (o == null || getClass() != o.getClass())
       return false;
     WxUserEntity that = (WxUserEntity) o;
-    return id == that.id && Objects.equals(openid, that.openid) && Objects.equals(name, that.name);
+    return id == that.id && Objects.equals(appid, that.appid) && Objects.equals(openid, that.openid)
+        && Objects.equals(name, that.name);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, openid, name);
+    return Objects.hash(id, appid, openid, name);
   }
 }

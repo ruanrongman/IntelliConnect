@@ -51,7 +51,9 @@ public class WxProductBindServiceImpl implements WxProductBindService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> wxBindProduct(WxProductBindEntity wxProductBindEntity) {
-    if (wxUserRepository.findAllByOpenid(wxProductBindEntity.getOpenid()).isEmpty() ||
+    if (wxUserRepository
+        .findAllByAppidAndOpenid(wxProductBindEntity.getAppid(), wxProductBindEntity.getOpenid())
+        .isEmpty() ||
         productRepository.findAllById(wxProductBindEntity.getProductId()).isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     var result = wxProductBindRepository.save(wxProductBindEntity);
@@ -68,7 +70,8 @@ public class WxProductBindServiceImpl implements WxProductBindService {
     if (!role.equals("ROLE_" + "wx_user") || wxUsers.isEmpty())
       return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
     List<WxBindProductResponse> wxBindProductResponses =
-        wxProductBindRepository.findProductIdByOpenid(wxUsers.get(0).getOpenid());
+        wxProductBindRepository.findProductIdByAppidAndOpenid(wxUsers.get(0).getAppid(),
+            wxUsers.get(0).getOpenid());
     if (wxBindProductResponses.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
@@ -84,7 +87,7 @@ public class WxProductBindServiceImpl implements WxProductBindService {
     var wxUsers = wxUserRepository.findAllByName(wx_username);
     if (!role.equals("ROLE_" + "wx_user") || wxUsers.isEmpty())
       return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
-    var res = this.wxBindProduct(wxUsers.get(0).getOpenid(),
+    var res = this.wxBindProduct(wxUsers.get(0).getAppid(), wxUsers.get(0).getOpenid(),
         wxBindProduct.getProductName(), wxBindProduct.getProductKey());
     if (res)
       return ResultTool.success();
@@ -100,7 +103,7 @@ public class WxProductBindServiceImpl implements WxProductBindService {
     var wxUsers = wxUserRepository.findAllByName(wx_username);
     if (!role.equals("ROLE_" + "wx_user") || wxUsers.isEmpty())
       return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
-    var res = this.wxUnBindProduct(wxUsers.get(0).getOpenid(),
+    var res = this.wxUnBindProduct(wxUsers.get(0).getAppid(), wxUsers.get(0).getOpenid(),
         wxBindProduct.getProductName(), wxBindProduct.getProductKey());
     if (res)
       return ResultTool.success();
@@ -111,49 +114,56 @@ public class WxProductBindServiceImpl implements WxProductBindService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public boolean wxBindProduct(String openid, String productName, String productKey) {
+  public boolean wxBindProduct(String appid, String openid, String productName, String productKey) {
     if (productName == null || productKey == null)
       return false;
     var productList = productRepository.findAllByProductNameAndKeyvalue(productName, productKey);
-    if (wxUserRepository.findAllByOpenid(openid).isEmpty() || productList.isEmpty() ||
+    if (wxUserRepository.findAllByAppidAndOpenid(appid, openid).isEmpty() || productList.isEmpty()
+        ||
         productRepository.findAllById(productList.get(0).getId()).isEmpty())
       return false;
     WxProductBindEntity wxProductBindEntity = new WxProductBindEntity();
     wxProductBindEntity.setProductId(productList.get(0).getId());
     wxProductBindEntity.setOpenid(openid);
+    wxProductBindEntity.setAppid(appid);
     wxProductBindRepository.save(wxProductBindEntity);
     return true;
   }
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public boolean wxUnBindProduct(String openid, String productName, String productKey) {
+  public boolean wxUnBindProduct(String appid, String openid, String productName,
+      String productKey) {
     if (productName == null || productKey == null)
       return false;
     var productList = productRepository.findAllByProductNameAndKeyvalue(productName, productKey);
-    if (wxUserRepository.findAllByOpenid(openid).isEmpty() || productList.isEmpty() ||
+    if (wxUserRepository.findAllByAppidAndOpenid(appid, openid).isEmpty() || productList.isEmpty()
+        ||
         productRepository.findAllById(productList.get(0).getId()).isEmpty())
       return false;
-    wxProductBindRepository.deleteByOpenidAndProductId(openid, productList.get(0).getId());
+    wxProductBindRepository.deleteByAppidAndOpenidAndProductId(appid, openid,
+        productList.get(0).getId());
     // 设置成这样是为了将其归位，让用户重新选择
-    if (!wxProductActiveRepository.findAllByOpenid(openid).isEmpty()) {
-      var wxProductActiveList = wxProductActiveRepository.findAllByOpenid(openid);
+    if (!wxProductActiveRepository.findAllByAppidAndOpenid(appid, openid).isEmpty()) {
+      var wxProductActiveList = wxProductActiveRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxProductActiveList.get(0).getProductId() == productList.get(0).getId()) {
-        wxProductActiveRepository.updateProperty(openid, 0);
+        wxProductActiveRepository.updateProperty(appid, openid, 0);
       }
     }
     return true;
   }
 
   @Override
-  public List<WxProductBindEntity> findByOpenidAndProductId(String openid, int productId) {
-    return wxProductBindRepository.findByOpenidAndProductId(openid, productId);
+  public List<WxProductBindEntity> findByAppidAndOpenidAndProductId(String appid, String openid,
+      int productId) {
+    return wxProductBindRepository.findByAppidAndOpenidAndProductId(appid, openid, productId);
   }
 
   @Override
-  public List<WxProductBindEntity> findAllByOpenid(String openid) {
-    return wxProductBindRepository.findAllByOpenid(openid);
+  public List<WxProductBindEntity> findAllByAppidAndOpenid(String appid, String openid) {
+    return wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
   }
+
 
   @Override
   public JsonResult<?> getWxProductBind() {

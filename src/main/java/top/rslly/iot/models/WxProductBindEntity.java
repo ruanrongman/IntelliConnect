@@ -26,6 +26,7 @@ import java.util.Objects;
 @Table(name = "wx_product_bind", schema = "cwliot1.8", catalog = "")
 public class WxProductBindEntity {
   private int id;
+  private String appid;
   private String openid;
   private int productId;
 
@@ -38,6 +39,16 @@ public class WxProductBindEntity {
 
   public void setId(int id) {
     this.id = id;
+  }
+
+  @Basic
+  @Column(name = "appid")
+  public String getAppid() {
+    return appid;
+  }
+
+  public void setAppid(String appid) {
+    this.appid = appid;
   }
 
   @Basic
@@ -67,11 +78,12 @@ public class WxProductBindEntity {
     if (o == null || getClass() != o.getClass())
       return false;
     WxProductBindEntity that = (WxProductBindEntity) o;
-    return id == that.id && productId == that.productId && Objects.equals(openid, that.openid);
+    return id == that.id && productId == that.productId && Objects.equals(appid, that.appid)
+        && Objects.equals(openid, that.openid);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, openid, productId);
+    return Objects.hash(id, appid, openid, productId);
   }
 }

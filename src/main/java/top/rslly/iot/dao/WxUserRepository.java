@@ -25,7 +25,7 @@ import top.rslly.iot.models.WxUserEntity;
 import java.util.List;
 
 public interface WxUserRepository extends JpaRepository<WxUserEntity, Long> {
-  List<WxUserEntity> findAllByOpenid(String openid);
+  List<WxUserEntity> findAllByAppidAndOpenid(String appid, String openid);
 
   List<WxUserEntity> findAllByName(String name);
 }

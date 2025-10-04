@@ -34,8 +34,10 @@ public class WxProductActiveServiceImpl implements WxProductActiveService {
 
   @Override
   public void setUp(WxProductActiveEntity wxProductActiveEntity) {
-    if (!wxProductActiveRepository.findAllByOpenid(wxProductActiveEntity.getOpenid()).isEmpty()) {
-      wxProductActiveRepository.updateProperty(wxProductActiveEntity.getOpenid(),
+    if (!wxProductActiveRepository.findAllByAppidAndOpenid(wxProductActiveEntity.getAppid(),
+        wxProductActiveEntity.getOpenid()).isEmpty()) {
+      wxProductActiveRepository.updateProperty(wxProductActiveEntity.getAppid(),
+          wxProductActiveEntity.getOpenid(),
           wxProductActiveEntity.getProductId());
     }
 
@@ -44,12 +46,13 @@ public class WxProductActiveServiceImpl implements WxProductActiveService {
   }
 
   @Override
-  public List<WxProductActiveEntity> findAllByProductIdAndOpenid(int productId, String openid) {
-    return wxProductActiveRepository.findAllByProductIdAndOpenid(productId, openid);
+  public List<WxProductActiveEntity> findAllByProductIdAndAppidAndOpenid(int productId,
+      String appid, String openid) {
+    return wxProductActiveRepository.findAllByProductIdAndAppidAndOpenid(productId, appid, openid);
   }
 
   @Override
-  public List<WxProductActiveEntity> findAllByOpenid(String openid) {
-    return wxProductActiveRepository.findAllByOpenid(openid);
+  public List<WxProductActiveEntity> findAllByAppidAndOpenid(String appid, String openid) {
+    return wxProductActiveRepository.findAllByAppidAndOpenid(appid, openid);
   }
 }

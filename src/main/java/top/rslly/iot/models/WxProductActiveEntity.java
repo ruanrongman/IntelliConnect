@@ -27,6 +27,7 @@ import java.util.Objects;
 public class WxProductActiveEntity {
 
   private int id;
+  private String appid;
   private String openid;
   private int productId;
 
@@ -39,6 +40,16 @@ public class WxProductActiveEntity {
 
   public void setId(int id) {
     this.id = id;
+  }
+
+  @Basic
+  @Column(name = "appid")
+  public String getAppid() {
+    return appid;
+  }
+
+  public void setAppid(String appid) {
+    this.appid = appid;
   }
 
   @Basic
@@ -68,11 +79,12 @@ public class WxProductActiveEntity {
     if (o == null || getClass() != o.getClass())
       return false;
     WxProductActiveEntity that = (WxProductActiveEntity) o;
-    return id == that.id && productId == that.productId && Objects.equals(openid, that.openid);
+    return id == that.id && productId == that.productId && Objects.equals(appid, that.appid)
+        && Objects.equals(openid, that.openid);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, openid, productId);
+    return Objects.hash(id, appid, openid, productId);
   }
 }

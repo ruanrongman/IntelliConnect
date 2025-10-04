@@ -33,6 +33,7 @@ import springfox.documentation.oas.mappers.OasLicenceMapper;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.OtaXiaozhi;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.RedisUtil;
@@ -90,9 +91,12 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
       if (wxUserRepository.findAllByName(username).isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      String openid = wxUserRepository.findAllByName(username).get(0).getOpenid();
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
       result = new ArrayList<>();
-      var wxBindProductResponseList = wxProductBindRepository.findProductIdByOpenid(openid);
+      var wxBindProductResponseList =
+          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxBindProductResponseList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }

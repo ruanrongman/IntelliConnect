@@ -68,11 +68,11 @@ public class ScheduleTool implements BaseTool<String> {
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
-    String openid = (String) globalMessage.get("chatId");
+    String openid = (String) globalMessage.get("openId");
     String appid = (String) globalMessage.get("microappid");
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
-            scheduleToolPrompt.getScheduleTool(openid));
+            scheduleToolPrompt.getScheduleTool(appid, openid));
     // log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
@@ -96,6 +96,7 @@ public class ScheduleTool implements BaseTool<String> {
       throws IcAiException, ParseException {
 
     if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
+      String groupName = appid + ":" + openid;
       SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
       String repeat = jsonObject.getString("repeat");
       String taskName = jsonObject.getString("task_name");
@@ -114,21 +115,22 @@ public class ScheduleTool implements BaseTool<String> {
           cron = QuartzCronDateUtils.getCron(time);
         }
         // String uuid = UUID.randomUUID().toString();
-
-        if (timeScheduleService.findAllByOpenidAndTaskName(openid, taskName).isEmpty()) {
+        if (timeScheduleService.findAllByAppidAndOpenidAndTaskName(appid, openid, taskName)
+            .isEmpty()) {
           TimeScheduleEntity timeScheduleEntity = new TimeScheduleEntity();
           timeScheduleEntity.setOpenid(openid);
           timeScheduleEntity.setTaskName(taskName);
           timeScheduleEntity.setCron(cron);
           timeScheduleEntity.setAppid(appid);
           timeScheduleService.insert(timeScheduleEntity);
-          QuartzManager.addJob(taskName, openid, taskName, openid, RemindJob.class, cron, openid,
+          QuartzManager.addJob(taskName, groupName, taskName, groupName, RemindJob.class, cron,
+              openid,
               appid);
         } else
           throw new IcAiException("task name is duplicate");
       } else if (taskType.equals("cancel")) {
-        timeScheduleService.deleteByOpenidAndTaskName(openid, taskName);
-        QuartzManager.removeJob(taskName, openid, taskName, openid);
+        timeScheduleService.deleteByAppidAndOpenidAndTaskName(appid, openid, taskName);
+        QuartzManager.removeJob(taskName, groupName, taskName, groupName);
       }
       log.info("obj:{}", jsonObject);
       log.info("time cron{}", cron);

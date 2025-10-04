@@ -81,9 +81,15 @@ public class Router {
     globalMessage.put("queueMap", queueMap);
     Queue<String> queue = new LinkedList<>();
     queueMap.put(chatId, queue);
-    if (microappid.length > 0)
+    Object memory_cache;
+    if (microappid.length > 0) {
+      globalMessage.put("openId", chatId);
       globalMessage.put("microappid", microappid[0]);
-    var memory_cache = redisUtil.get("memory" + chatId);
+      chatId = microappid[0] + chatId;
+      queueMap.put(chatId, queue);
+      globalMessage.put("chatId", chatId);
+    }
+    memory_cache = redisUtil.get("memory" + chatId);
     if (memory_cache != null)
       try {
         memory = Cast.castList(memory_cache, ModelMessage.class);
@@ -134,7 +140,7 @@ public class Router {
             answer = "以下是微信切换产品插件结果：" + toolResult;
           }
           case "8" -> {
-            if (wxUserService.findAllByOpenid(chatId).isEmpty())
+            if (!(microappid.length > 0))
               toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
             else {
               toolResult = scheduleTool.run(args, globalMessage);

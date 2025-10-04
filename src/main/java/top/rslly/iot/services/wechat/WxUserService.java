@@ -31,9 +31,9 @@ public interface WxUserService {
 
   JsonResult<?> wxRegister(WxUser wxUser) throws IOException;
 
-  WxUserEntity wxRegister(String openid);
+  WxUserEntity wxRegister(String appid, String openid);
 
-  List<WxUserEntity> findAllByOpenid(String openid);
+  List<WxUserEntity> findAllByAppidAndOpenid(String appid, String openid);
 
   List<WxUserEntity> findAllByName(String name);
 

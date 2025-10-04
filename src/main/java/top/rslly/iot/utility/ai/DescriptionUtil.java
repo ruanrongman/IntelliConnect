@@ -93,9 +93,9 @@ public class DescriptionUtil {
     return jsonObject.toJSONString();
   }
 
-  public String getSchedule(String openid) {
+  public String getSchedule(String appid, String openid) {
     JSONObject jsonObject = new JSONObject();
-    var result = timeScheduleService.findAllByOpenid(openid);
+    var result = timeScheduleService.findAllByAppidAndOpenid(appid, openid);
     for (var s : result) {
       jsonObject.put(s.getTaskName(), s.getCron());
     }

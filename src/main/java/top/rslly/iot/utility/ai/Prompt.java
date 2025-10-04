@@ -519,14 +519,14 @@ public class Prompt {
     return voicePrompt;
   }
 
-  public String getScheduleTool(String openid) {
+  public String getScheduleTool(String appid, String openid) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
     Map<String, String> params = new HashMap<>();
     params.put("agent_name", robotName);
     params.put("team_name", teamName);
-    params.put("schedule_map", descriptionUtil.getSchedule(openid));
+    params.put("schedule_map", descriptionUtil.getSchedule(appid, openid));
     params.put("time", formattedDate);
     return StringUtils.formatString(schedulePrompt, params);
   }

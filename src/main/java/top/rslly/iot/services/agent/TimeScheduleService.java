@@ -24,13 +24,14 @@ import top.rslly.iot.models.TimeScheduleEntity;
 import java.util.List;
 
 public interface TimeScheduleService {
-  List<TimeScheduleEntity> findAllByOpenid(String openid);
+  List<TimeScheduleEntity> findAllByAppidAndOpenid(String appid, String openid);
 
-  List<TimeScheduleEntity> findAllByOpenidAndTaskName(String openid, String taskName);
+  List<TimeScheduleEntity> findAllByAppidAndOpenidAndTaskName(String appid, String openid,
+      String taskName);
 
   List<TimeScheduleEntity> findAll();
 
   void insert(TimeScheduleEntity timeScheduleEntity);
 
-  void deleteByOpenidAndTaskName(String openid, String taskName);
+  void deleteByAppidAndOpenidAndTaskName(String appid, String openid, String taskName);
 }

@@ -26,7 +26,8 @@ import java.util.List;
 public interface WxProductActiveService {
   void setUp(WxProductActiveEntity wxProductActiveEntity);
 
-  List<WxProductActiveEntity> findAllByProductIdAndOpenid(int productId, String openid);
+  List<WxProductActiveEntity> findAllByProductIdAndAppidAndOpenid(int productId, String appid,
+      String openid);
 
-  List<WxProductActiveEntity> findAllByOpenid(String openid);
+  List<WxProductActiveEntity> findAllByAppidAndOpenid(String appid, String openid);
 }
