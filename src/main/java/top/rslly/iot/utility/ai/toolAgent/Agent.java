@@ -62,7 +62,8 @@ public class Agent {
     if (queue != null) {
       queue.add("以下是智能体处理结果：");
     }
-    String system = reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question);
+    String system =
+        reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);
@@ -95,7 +96,7 @@ public class Agent {
         conversationPrompt.append(String.format("Observation: %s\n", toolResult));
         if (queue != null) {
           queue.add(res.get("thought"));
-          queue.add("成功调用工具:" + res.get("action_name") + "。");
+          queue.add("成功调用工具啦！");
         }
         log.info("Thought:{}", res.get("thought"));
         log.info("Observation:{}", toolResult);

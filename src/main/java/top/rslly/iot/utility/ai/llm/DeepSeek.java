@@ -73,7 +73,7 @@ public class DeepSeek implements LLM {
     openAiClient = OpenAiClient.builder()
         .apiKey(List.of(apiKey))
         .okHttpClient(okHttpClient)
-        .apiHost(URL)
+        .apiHost(URL + "/")
         .build();
     openAiStreamClient = OpenAiStreamClient.builder()
         .apiKey(List.of(apiKey))

@@ -239,7 +239,8 @@ public class XiaoZhiUtil {
               int punctuationIndex = -1;
               for (int i = 0; i < element.length(); i++) {
                 char c = element.charAt(i);
-                if (c == '。' || c == '？' || c == '！' || c == '；' || c == '：' || c == '.') {
+                if (c == '。' || c == '？' || c == '！' || c == '；' || c == '：' || c == '.' || c == '?'
+                    || c == '!' || c == '~') {
                   punctuationIndex = i;
                   break;
                 }

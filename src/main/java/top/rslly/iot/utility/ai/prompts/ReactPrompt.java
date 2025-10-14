@@ -20,16 +20,30 @@
 package top.rslly.iot.utility.ai.prompts;
 
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.ProductRoleEntity;
+import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Component
 public class ReactPrompt {
+  @Value("${ai.robot-name}")
+  private String robotName;
+  @Value("${ai.team-name}")
+  private String teamName;
+  @Autowired
+  private ProductRoleServiceImpl productRoleService;
   private static final String ReactSystem =
       """
+          Your role is {role}, {role_introduction},your name is {agent_name},developed by the {team_name} team.
+          The user's name is {user_name}
           As a diligent Task Agent, you goal is to effectively accomplish the provided task or question as best as you can.
 
           ## Tools
@@ -57,26 +71,17 @@ public class ReactPrompt {
           Observation: tool response
           ```
 
-          You should keep repeating the above format until you have enough information
-          to answer the question without using any more tools. At that point, you MUST respond
-          in the one of the following two formats:
+          You must keep repeating the above format until you have sufficient information.
+          Respond to the question without using any tools. Remember, you may attempt up to three times,
+          but in most cases you should complete it in a single attempt. Otherwise, you will be punished.
+          You must provide a response,using the following format:
 
           ```json
           {
           "thought": "The thought of what to do and why.",
           "action": {
               "name": "finish",
-              "args": {"content": "You answer here.(use chinese)"}
-              }
-          }
-          ```
-
-          ```json
-          {
-          "thought": "The thought of what to do and why.",
-          "action": {
-              "name": "finish",
-              "args": {"content": "Sorry, I cannot answer your query, because (Summary all the upper steps, and explain)"}
+              "args": {"content": "Answer in Chinese. If unable, explain why and summarize reasoning."}
               }
           }
           ```
@@ -84,10 +89,11 @@ public class ReactPrompt {
           ## Attention
           - Your output is JSON only and no explanation.
           - Choose only ONE tool and you can't do without using any tools in one step.
-          - thought use chinese
+          - Thought use chinese,Your thoughts can be seen by users, please try to match the role as much as possible.
           - Your final answer and middle step output language should be consistent with the language used by the user.
           - Whether the action input is JSON or str depends on the definition of the tool.
-          - Try to complete the task using as few steps as possible. After three failed attempts, please refrain from further attempts, as excessive attempts may cause equipment malfunction.
+          - Your final answer should match the role, and should be kept within 100 words as much as possible.
+          - No emojis are allowed to be output.
 
           ## User question
           {question}
@@ -96,10 +102,30 @@ public class ReactPrompt {
           Below is the current conversation consisting of interleaving human and assistant history.
           """;
 
-  public String getReact(String toolDescriptions, String question) {
+  public String getReact(String toolDescriptions, String question, int productId) {
     Map<String, String> params = new HashMap<>();
     params.put("tool_descriptions", toolDescriptions);
     params.put("question", question);
+    List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
+    String assistantName = null;
+    String userName = null;
+    String role = null;
+    String roleIntroduction = null;
+    if (!productRole.isEmpty()) {
+      assistantName = productRole.get(0).getAssistantName();
+      userName = productRole.get(0).getUserName();
+      role = productRole.get(0).getRole();
+      roleIntroduction = productRole.get(0).getRoleIntroduction();
+    }
+    if (assistantName != null)
+      params.put("agent_name", assistantName);
+    else
+      params.put("agent_name", robotName);
+    params.put("team_name", teamName);
+    params.put("user_name", Objects.requireNonNullElse(userName, "user"));
+    params.put("role", Objects.requireNonNullElse(role, "smart speaker"));
+    params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
+        "你可以回答新闻内容和用户的各种合法请求，你回答的每句话都尽量口语化、简短,总是喜欢使用表情符号"));
     return StringUtils.formatString(ReactSystem, params);
   }
 }

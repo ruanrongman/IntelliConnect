@@ -34,7 +34,7 @@ import java.util.Map;
 @Slf4j
 public class McpWebsocket {
   public static final String DEVICE_SERVER_NAME = "xiaozhi_device";
-  public static final String ENDPOINT_SERVER_NAME = "xiaozhi_tool";
+  public static final String ENDPOINT_SERVER_NAME = "xiaozhi_endpoint";
   @Autowired
   private RedisUtil redisUtil;
 
@@ -79,7 +79,7 @@ public class McpWebsocket {
           new TypeReference<>() {});
       String jsonStr = McpProtocolSend.callTool(toolName, params, endpoint);
       session.getBasicRemote().sendText(jsonStr);
-      for (int i = 0; i < 70; i++) {
+      for (int i = 0; i < 120; i++) {
         try {
           if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
             String result = redisUtil.get(serverName + chatId + "toolResult").toString();

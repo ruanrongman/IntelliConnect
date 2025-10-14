@@ -147,7 +147,7 @@ public class AiServiceImpl implements AiService {
 
   @Override
   public JsonResult<?> getMcpPointUrl(int productId) {
-    String token = JwtTokenUtil.createToken("mcp" + productId, "mcp_endpoint");
+    String token = JwtTokenUtil.createNoExpireToken("mcp" + productId, "mcp_endpoint");
     String url = otaUrl + "/mcp?" + "token=" + token;
     return ResultTool.success(url);
   }

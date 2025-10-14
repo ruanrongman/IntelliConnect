@@ -32,6 +32,7 @@ public class LLMFactory {
   private static String deepSeekApiKey;
   private static String siliconFlowApiKey;
   private static String uniApiKey;
+  private static String dashScopeApiKey;
 
   @Value("${ai.deepSeek-key}")
   public void setDeepSeekApiKey(String apiKey) {
@@ -46,6 +47,11 @@ public class LLMFactory {
   @Value("${ai.uniApi-Key}")
   public void setUniApiKey(String apiKey) {
     uniApiKey = apiKey;
+  }
+
+  @Value("${ai.dashscope-key}")
+  public void setDashScopeApiKey(String apiKey) {
+    dashScopeApiKey = apiKey;
   }
 
 
@@ -85,9 +91,19 @@ public class LLMFactory {
     } else if (llmName.equals("silicon-Qwen2.5-72B-Instruct")) {
       return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-72B-Instruct",
           siliconFlowApiKey);
+    } else if (llmName.equals("silicon-Qwen3-Coder-30B-A3B-Instruct")) {
+      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+          siliconFlowApiKey);
+    } else if (llmName.equals("silicon-Qwen3-235B-A22B-Instruct-2507")) {
+      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen3-235B-A22B-Instruct-2507",
+          siliconFlowApiKey);
     } else if (llmName.equals("silicon-Qwen3-Next-80B-A3B-Instruct")) {
       return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen3-Next-80B-A3B-Instruct",
           siliconFlowApiKey);
+    } else if (llmName.equals("dashscope-Qwen3-Next-80B-A3B-Instruct")) {
+      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
+          "qwen3-next-80b-a3b-instruct",
+          dashScopeApiKey);
     } else if (llmName.startsWith("silicon-Qwen3-30B-A3B")) {
       return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-30B-A3B", enableThinking, thinkingBudget);
     } else if (llmName.startsWith("silicon-Qwen3-235B-A22B")) {

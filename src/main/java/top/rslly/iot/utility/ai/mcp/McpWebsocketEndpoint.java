@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.utility.JwtTokenUtil;
 
+import javax.annotation.PreDestroy;
 import javax.websocket.*;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
@@ -45,6 +46,30 @@ public class McpWebsocketEndpoint {
     if (McpWebsocketEndpoint.mcpProtocolDeal == null) {
       McpWebsocketEndpoint.mcpProtocolDeal = mcpProtocolDeal;
     }
+  }
+
+  @PreDestroy
+  public void destroy() {
+    log.info("开始销毁 MCP WebSocket 资源");
+
+    if (mcpProtocolDeal != null) {
+      for (Map.Entry<String, Session> entry : new HashMap<>(clients).entrySet()) {
+        String username = entry.getKey();
+        Session session = entry.getValue();
+        if (session.isOpen()) {
+          try {
+            session.close(new CloseReason(
+                CloseReason.CloseCodes.NORMAL_CLOSURE, "Server shutdown"));
+          } catch (IOException e) {
+            log.error("关闭会话失败: {}", e.getMessage());
+          }
+        }
+        mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, username);
+      }
+    }
+
+    clients.clear();
+    log.info("MCP WebSocket 资源销毁完成");
   }
 
   @OnOpen
@@ -67,16 +92,6 @@ public class McpWebsocketEndpoint {
     if (JwtTokenUtil.checkJWT(token) == null) {
       try {
         session.getBasicRemote().sendText("token无效");
-        session.close();
-        return;
-      } catch (IOException e) {
-        log.info("发送失败");
-        return;
-      }
-    }
-    if (JwtTokenUtil.isExpiration(token)) {
-      try {
-        session.getBasicRemote().sendText("token已过期");
         session.close();
         return;
       } catch (IOException e) {

@@ -49,10 +49,28 @@ public class JwtTokenUtil {
     Map<String, Object> map = new HashMap<>();
     map.put(ROLE_CLAIMS, role);
 
-    String token = Jwts.builder().setSubject(username).setClaims(map).claim("username", username)
-        .setIssuedAt(new Date()).setExpiration(new Date(System.currentTimeMillis() + EXPIRITION))
+    String token = Jwts.builder()
+        .setSubject(username).setClaims(map)
+        .claim("username", username)
+        .setIssuedAt(new Date())
+        .setExpiration(new Date(System.currentTimeMillis() + EXPIRITION))
         .signWith(SignatureAlgorithm.HS256, APPSECRET_KEY).compact();
     return token;
+  }
+
+  /**
+   * 生成永不过期的Token
+   */
+  public static String createNoExpireToken(String username, String role) {
+    Map<String, Object> map = new HashMap<>();
+    map.put(ROLE_CLAIMS, role);
+
+    return Jwts.builder()
+        .setSubject(username).setClaims(map)
+        .claim("username", username)
+        .setIssuedAt(new Date())
+        .setExpiration(null)
+        .signWith(SignatureAlgorithm.HS256, APPSECRET_KEY).compact();
   }
 
   /**

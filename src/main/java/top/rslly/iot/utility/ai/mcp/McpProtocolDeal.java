@@ -51,6 +51,10 @@ public class McpProtocolDeal {
           redisUtil.set(serverName + chatId + "toolResult",
               resultObject.getString("content"));
         }
+      } else {
+        log.info("result{}", resultObject.getString("content"));
+        redisUtil.set(serverName + chatId + "toolResult",
+            resultObject.getString("content"));
       }
     }
     if (resultObject.containsKey("tools")) {
@@ -77,6 +81,10 @@ public class McpProtocolDeal {
         tool.put("description", toolArray.getJSONObject(i).getString("description"));
         tool.put("inputSchema", toolArray.getJSONObject(i).getJSONObject("inputSchema"));
         toolList.add(tool);
+      }
+      // 限制工具数量
+      if (toolList.size() > 50) {
+        toolList = new ArrayList<>(toolList.subList(0, 50));
       }
       redisUtil.set(serverName + chatId, toolList);
       if (nextCursor != null && !nextCursor.equals("")) {

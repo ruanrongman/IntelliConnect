@@ -148,7 +148,7 @@ public class McpAgent implements BaseTool<String> {
         toolDescriptions += mcpWebsocket.combineToolDescription(McpWebsocket.ENDPOINT_SERVER_NAME,
             "mcp" + productId);
       }
-      system = reactPrompt.getReact(toolDescriptions, question);
+      system = reactPrompt.getReact(toolDescriptions, question, productId);
     } catch (Exception e) {
       return "获取工具描述失败";
     }
@@ -182,6 +182,16 @@ public class McpAgent implements BaseTool<String> {
         String args = action.getString("args");
 
         // 格式: serverKey:toolName
+        if (!fullName.contains(":") && !fullName.equals("finish")) {
+          toolResult = "Error calling tool, must use format 'serverKey:toolName'";
+          conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
+          if (queue != null) {
+            queue.add("调用工具出现小错误");
+          }
+          log.warn("Invalid tool name format: {}", fullName); // 添加日志记录
+          iteration++;
+          continue; // 继续下一轮迭代或根据需要跳出
+        }
         String[] parts = fullName.split(":", 2);
         if (parts.length != 2 || parts[0].equalsIgnoreCase("finish")) {
           // 释放mcp客户端
@@ -227,7 +237,7 @@ public class McpAgent implements BaseTool<String> {
         conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
         if (queue != null) {
           queue.add(thought);
-          queue.add("成功调用工具:" + toolName + "。");
+          queue.add("成功调用工具啦！");
         }
         log.info("Thought: {}", thought);
         log.info("Observation ({}): {}", fullName, toolResult);

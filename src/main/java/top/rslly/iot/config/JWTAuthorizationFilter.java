@@ -95,6 +95,8 @@ public class JWTAuthorizationFilter extends BasicAuthenticationFilter {
       // 从Token中解密获取用户角色
       String role = JwtTokenUtil.getUserRole(token);
 
+      if (role.equals("mcp_endpoint"))
+        return null;
 
       // 将[ROLE_XXX,ROLE_YYY]格式的角色字符串转换为数组
       String[] roles = StringUtils.strip(role, "[]").split(", ");
