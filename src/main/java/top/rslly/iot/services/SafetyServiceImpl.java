@@ -75,6 +75,8 @@ public class SafetyServiceImpl implements SafetyService {
   private KnowledgeChatServiceImpl knowledgeChatService;
   @Autowired
   private ProductRouterSetServiceImpl productRouterSetService;
+  @Autowired
+  private OtaXiaozhiPassiveServiceImpl otaXiaozhiPassiveService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -197,6 +199,16 @@ public class SafetyServiceImpl implements SafetyService {
     if (otaEntityList.isEmpty())
       throw new NullPointerException("otaName not found!");
     return this.controlAuthorizeProduct(token, productId);
+  }
+
+  @Override
+  public boolean controlAuthorizeXiaoZhiOtaPassive(String token, int id) {
+    List<OtaXiaozhiPassiveEntity> otaXiaozhiPassiveEntityList =
+        otaXiaozhiPassiveService.findAllById(id);
+    if (otaXiaozhiPassiveEntityList.isEmpty())
+      throw new NullPointerException("otaXiaozhiPassiveId not found!");
+    return this.controlAuthorizeProduct(token,
+        otaXiaozhiPassiveEntityList.get(0).getProductId());
   }
 
   @Override

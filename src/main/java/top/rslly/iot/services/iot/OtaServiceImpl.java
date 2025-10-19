@@ -28,10 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.dao.*;
-import top.rslly.iot.models.OtaEntity;
-import top.rslly.iot.models.OtaPassiveEntity;
-import top.rslly.iot.models.ProductEntity;
-import top.rslly.iot.models.WxUserEntity;
+import top.rslly.iot.models.*;
 import top.rslly.iot.transfer.mqtt.MqttConnectionUtils;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.MyFileUtil;
@@ -70,6 +67,8 @@ public class OtaServiceImpl implements OtaService {
   private ProductModelRepository productModelRepository;
   @Resource
   private OtaPassiveRepository otaPassiveRepository;
+  @Resource
+  private OtaXiaozhiPassiveRepository otaXiaozhiPassiveRepository;
   @Value("${ota.bin.path}")
   private String binPath;
 
@@ -236,9 +235,11 @@ public class OtaServiceImpl implements OtaService {
     var otaList = otaRepository.findAllById(id);
     if (otaList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    List<OtaPassiveEntity> otaPassiveEntityList =
+    List<OtaPassiveEntity> p1 =
         otaPassiveRepository.findAllByOtaId(otaList.get(0).getId());
-    if (otaPassiveEntityList.isEmpty()) {
+    List<OtaXiaozhiPassiveEntity> p2 =
+        otaXiaozhiPassiveRepository.findAllByProductId(otaList.get(0).getProductId());
+    if (p1.isEmpty() && p2.isEmpty()) {
       try {
         MyFileUtil.deleteFile(binPath + otaList.get(0).getPath());
       } catch (IOException e) {

@@ -71,6 +71,10 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   private UserRepository userRepository;
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private OtaXiaozhiPassiveRepository otaXiaozhiPassiveRepository;
+  @Autowired
+  private OtaXiaozhiPassiveServiceImpl otaXiaozhiPassiveService;
   @Value("${ota.xiaozhi.url}")
   private String otaUrl;
   @Value("${ota.xiaozhi.version}")
@@ -169,7 +173,8 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
         throw new IllegalArgumentException(
             "Required headers missing: Activation-Version, Device-Id or Client-Id");
       }
-      String version = "1";
+      String version = activationVersion;
+      log.info("activationVersion: " + activationVersion);
       // Parse JSON body safely
       JSONObject body = JSON.parseObject(request.getInputStream(), JSONObject.class);
       log.info("body: " + body);
@@ -199,8 +204,6 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
       Map<String, Object> firmware = new HashMap<>();
       firmware.put("version", otaVersion);
       firmware.put("url", "");
-      response.put("firmware", firmware);
-
       var otaXiaozhiEntityList = otaXiaozhiRepository.findAllByDeviceId(deviceId);
       // websocket
       Map<String, Object> websocket = new HashMap<>();
@@ -210,6 +213,18 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
         websocket.put("token", token);
       } else {
         var res = otaXiaozhiRepository.findAllByDeviceId(deviceId);
+        try {
+          var otaXiaozhiPassiveEntityList =
+              otaXiaozhiPassiveRepository.findAllByProductId(res.get(0).getProductId());
+          if (!otaXiaozhiPassiveEntityList.isEmpty()) {
+            firmware.put("version", otaXiaozhiPassiveEntityList.get(0).getVersionName());
+            firmware.put("url",
+                otaXiaozhiPassiveService.otaXiaozhiPassiveEnable(res.get(0).getProductId()));
+          }
+        } catch (Exception e) {
+          log.error(e.getMessage());
+        }
+        response.put("firmware", firmware);
         websocket.put("url", otaUrl + "/xiaozhi/v1/" + res.get(0).getProductId());
         String token = JwtTokenUtil.createToken(res.get(0).getUserName(), res.get(0).getRole());
         websocket.put("token", token);
@@ -217,7 +232,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
       response.put("websocket", websocket);
 
       // activation info if not yet activated
-      if (otaXiaozhiEntityList.isEmpty() && version.equals("2")) {
+      if (otaXiaozhiEntityList.isEmpty() && (version.equals("2") || version.equals("2.0.0"))) {
         RandomGenerator randomGenerator = new RandomGenerator("0123456789", 6);
         String code = randomGenerator.generate();
         redisUtil.set(code, deviceId, 60 * 5);

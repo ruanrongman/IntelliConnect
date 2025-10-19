@@ -116,7 +116,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，免费获取智控台的前端源码，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/bb570f3da747f8c91314697b969271c0.jpg" width="250px"/>
+    <img src="./docs/images/c2cfd1c5bbbe84e9d5892823f7dc6789.jpg" width="250px"/>
 </div>
 
 ## 致谢

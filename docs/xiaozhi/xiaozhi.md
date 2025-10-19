@@ -14,8 +14,10 @@ AI小智是由虾哥研发的一款以情感交互为核心的开源AI语音对�
 ota:
   bin:
     path: D://temp-rainy//
+    url: http://127.0.0.1:8080/api/v2/micro/(固件升级URL)
   xiaozhi:
     url: ws://127.0.0.1:8080(改成你部署的域名)
+    version: 1.9.2 (改成你的版本号)
 ```
 
 3. 通过下面接口进行绑定

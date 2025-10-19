@@ -49,11 +49,12 @@ curl --location 'http://localhost:8080/api/v2/otaPassive' \
 --data '{
   "deviceName": "{deviceName}",
   "name": "{name}",
+  "description": "{description}",
   "versionName": "{versionName}"
 }'
 ```
 
-替换{deviceName}为设备名称，{your token}为token,{name}为升级包名称，{versionName}为升级包指定的版本名称。
+替换{deviceName}为设备名称，{your token}为token,{name}为升级包名称，{versionName}为升级包指定的版本名称，{description}为升级包描述。
 
 * 3.设备端通过通过网络连接，通过以下接口获取待升级的固件信息:
 
@@ -77,3 +78,21 @@ curl -X GET "http://localhost:8080/api/v2/otaPassiveEnable?deviceName={deviceNam
 ```
 * 4.设备端通过网络连接，下载升级包，并进行升级。
   【下载升级包地址】：http://localhost:8080/api/v2/micro/{fileName}
+## 小智OTA升级
+> 小智OTA升级，支持小智直接通过平台的小智OTA接口进行升级。适用于平台的小智升级场景。
+* 1.上传软件升级包到服务器，使用上述方法步骤进行上传。
+* 2.指定待升级的固件，请使用以下命令进行设置：
+
+```bash
+curl -X POST "http://localhost:8080/api/v2/xiaozhi/otaPassive" 
+-H "accept: */*" 
+-H "Content-Type: application/json" 
+--header 'Authorization: {your token}'
+-d "{\"otaId\":{otaId},\"productId\":{productId},\"versionName\":{versionName}}"
+```
+
+替换{otaId}为固件id，{productId}为产品id，{your token}为token，{versionName}为升级包指定的版本名称。
+
+* 3.设备端通过通过网络连接，通过以下接口获取待升级的固件信息:
+* http://localhost:8080/xiaozhi/ota/
+返回信息详情请见[小智ota介绍] (https://ccnphfhqs21z.feishu.cn/wiki/FjW6wZmisimNBBkov6OcmfvknVd)

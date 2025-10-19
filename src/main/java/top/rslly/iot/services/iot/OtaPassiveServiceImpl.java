@@ -119,6 +119,9 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
     } else {
       result = otaPassiveRepository.findAll();
     }
+    if (result.isEmpty()) {
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
     List<OtaPassiveListResponse> otaPassiveListResponses = new ArrayList<>();
     for (var s : result) {
       OtaPassiveListResponse otaPassiveListResponse = new OtaPassiveListResponse();
@@ -132,10 +135,7 @@ public class OtaPassiveServiceImpl implements OtaPassiveService {
       otaPassiveListResponse.setDescription(s.getDescription());
       otaPassiveListResponses.add(otaPassiveListResponse);
     }
-    if (result.isEmpty()) {
-      return ResultTool.fail(ResultCode.COMMON_FAIL);
-    } else
-      return ResultTool.success(otaPassiveListResponses);
+    return ResultTool.success(otaPassiveListResponses);
   }
 
   @Override

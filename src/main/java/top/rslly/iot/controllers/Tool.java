@@ -30,6 +30,7 @@ import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.services.agent.AiServiceImpl;
 import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
+import top.rslly.iot.services.agent.OtaXiaozhiPassiveServiceImpl;
 import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
@@ -79,6 +80,8 @@ public class Tool {
   private OtaXiaozhiServiceImpl otaXiaozhiService;
   @Autowired
   private KnowledgeChatServiceImpl knowledgeChatService;
+  @Autowired
+  private OtaXiaozhiPassiveServiceImpl otaXiaozhiPassiveService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -397,6 +400,39 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return aiService.getMcpPointTools(productId);
+  }
+
+  @Operation(summary = "ota小智升级", description = "获取ota小智升级包详情")
+  @RequestMapping(value = "/xiaozhi/otaPassive", method = RequestMethod.GET)
+  public JsonResult<?> getXiaoZhiOtaPassive(@RequestHeader("Authorization") String header) {
+    return otaXiaozhiPassiveService.otaXiaozhiPassiveList(header);
+  }
+
+  @Operation(summary = "ota小智升级", description = "选择ota小智升级包")
+  @RequestMapping(value = "/xiaozhi/otaPassive", method = RequestMethod.POST)
+  public JsonResult<?> postXiaoZhiOtaPassive(
+      @Valid @RequestBody OtaXiaozhiPassive otaXiaozhiPassive,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, otaXiaozhiPassive.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaXiaozhiPassiveService.otaXiaozhiPassivePost(otaXiaozhiPassive);
+  }
+
+  @Operation(summary = "ota小智升级", description = "删除ota小智升级包")
+  @RequestMapping(value = "/xiaozhi/otaPassive", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteXiaoZhiOtaPassive(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeXiaoZhiOtaPassive(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaXiaozhiPassiveService.otaXiaozhiPassiveDelete(id);
   }
 
 }
