@@ -28,18 +28,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.services.SafetyServiceImpl;
-import top.rslly.iot.services.agent.AiService;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
-import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
-import top.rslly.iot.utility.ai.mcp.McpWebsocketEndpoint;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
-import top.rslly.iot.utility.ai.voice.Text2audio;
+import top.rslly.iot.utility.ai.voice.AudioUtils;
+import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
+import top.rslly.iot.utility.ai.voice.TTS.TtsService;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -66,7 +65,7 @@ public class AiServiceImpl implements AiService {
   @Autowired
   private Router router;
   @Autowired
-  private Text2audio text2audio;
+  private TtsService text2audio;
   @Autowired
   private Audio2Text audio2Text;
   @Autowired
@@ -126,7 +125,7 @@ public class AiServiceImpl implements AiService {
       aiResponse.put("text", answer);
       if (tts) {
         var audio = Text2audio.synthesizeAndSaveAudio(answer).array();
-        audio = Text2audio.VoiceBitChange(audio);
+        audio = AudioUtils.VoiceBitChange(audio);
         if (!stream)
           aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
         else

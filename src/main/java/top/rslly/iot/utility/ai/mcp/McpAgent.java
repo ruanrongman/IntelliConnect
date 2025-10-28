@@ -260,6 +260,18 @@ public class McpAgent implements BaseTool<String> {
       client.close();
     }
     clientMap.clear();
+    // 超出迭代轮次，调用模型进行总结
+    String summaryPrompt = "请根据以上对话历史和最终观察结果，用中文总结回答最初的问题: " + question;
+    messages.clear();
+    messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
+    messages.add(new ModelMessage(ModelMessageRole.USER.value(), conversationPrompt.toString()));
+
+    try {
+      toolResult = LLMFactory.getLLM(llmName).commonChat(summaryPrompt, messages, false);
+    } catch (Exception e) {
+      log.error("Error generating summary after max iterations: ", e);
+      toolResult = "经过多次尝试仍未找到完整答案，请重新提问或提供更多细节。";
+    }
     if (queue != null) {
       queue.add(toolResult);
       if (!mcpIsTool)

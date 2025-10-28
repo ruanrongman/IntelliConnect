@@ -23,7 +23,8 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.utility.ai.voice.Text2audio;
+import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
+import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.io.IOException;
@@ -34,7 +35,7 @@ import java.util.*;
 @Slf4j
 public class GoodByeTool implements BaseTool<String> {
   @Autowired
-  private Text2audio text2audio;
+  private TtsServiceFactory ttsServiceFactory;
 
   private String name = "goodByeTool";
   private String description = """
@@ -91,7 +92,7 @@ public class GoodByeTool implements BaseTool<String> {
         session.getBasicRemote()
             .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
                 + message + "\"}");
-        text2audio.websocketAudioSync(message, session, chatId, productId);
+        ttsServiceFactory.websocketAudioSync(message, session, chatId, productId);
         session.close();
       } catch (IOException e) {
         e.printStackTrace();

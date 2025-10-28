@@ -34,7 +34,32 @@ public enum VoiceTimbre {
           "深邃而稳重的声音犹如醇厚佳酿，散发出成熟魅力。"), CosyLongXiaoBai("longxiaobai",
               "以轻松亲和的声调演绎闲适日常，其嗓音如邻家女孩般亲切自然。"), CosyLongShu("longshu",
                   "以专业沉稳的播报风格传递新闻资讯，其嗓音富含权威与信赖感。"), CosyLongTong("longtong",
-                      "以稚嫩的童声撒欢，像是春日里的小溪，清脆跳跃，流淌着生机勃勃的旋律。");
+                      "以稚嫩的童声撒欢，像是春日里的小溪，清脆跳跃，流淌着生机勃勃的旋律。"),
+  // 新增的 Edge TTS 音色
+  ZH_CN_XIAOXIAO_NEURAL("edge-zh-CN-XiaoxiaoNeural", "中文 (简体) - 普通话 - 女 (晓晓)"), ZH_CN_XIAOYI_NEURAL(
+      "edge-zh-CN-XiaoyiNeural",
+      "中文 (简体) - 普通话 - 女 (晓伊)"), ZH_CN_YUNJIAN_NEURAL("edge-zh-CN-YunjianNeural",
+          "中文 (简体) - 普通话 - 男 (云健)"), ZH_CN_YUNXI_NEURAL("edge-zh-CN-YunxiNeural",
+              "中文 (简体) - 普通话 - 男 (云希)"), ZH_CN_YUNXIA_NEURAL("edge-zh-CN-YunxiaNeural",
+                  "中文 (简体) - 普通话 - 男 (云夏)"), ZH_CN_YUNYANG_NEURAL("edge-zh-CN-YunyangNeural",
+                      "中文 (简体) - 普通话 - 男 (云扬)"), ZH_CN_LIAONING_XIAOBEI_NEURAL(
+                          "edge-zh-CN-liaoning-XiaobeiNeural",
+                          "中文 (简体) - 辽宁方言 - 女 (晓北)"), ZH_CN_SHAANXI_XIAONI_NEURAL(
+                              "edge-zh-CN-shaanxi-XiaoniNeural",
+                              "中文 (简体) - 陕西方言 - 女 (晓妮)"), ZH_HK_HIUGAAI_NEURAL(
+                                  "edge-zh-HK-HiuGaaiNeural",
+                                  "中文 (繁体) - 粤语 - 女 (HiuGaai)"), ZH_HK_HIUMAAN_NEURAL(
+                                      "edge-zh-HK-HiuMaanNeural",
+                                      "中文 (繁体) - 粤语 - 女 (HiuMaan)"), ZH_HK_WANLUNG_NEURAL(
+                                          "edge-zh-HK-WanLungNeural",
+                                          "中文 (繁体) - 粤语 - 男 (WanLung)"), ZH_TW_HSIAOCHEN_NEURAL(
+                                              "edge-zh-TW-HsiaoChenNeural",
+                                              "中文 (繁体) - 台湾 - 女 (晓臻)"), ZH_TW_HSIAOYU_NEURAL(
+                                                  "edge-zh-TW-HsiaoYuNeural",
+                                                  "中文 (繁体) - 台湾 - 女 (晓雨)"), ZH_TW_YUNJHE_NEURAL(
+                                                      "edge-zh-TW-YunJheNeural",
+                                                      "中文 (繁体) - 台湾 - 男 (云哲)");
+
 
   private String timbre;
   private String timbreDescription;

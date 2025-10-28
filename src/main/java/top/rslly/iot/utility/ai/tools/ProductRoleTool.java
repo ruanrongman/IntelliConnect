@@ -102,6 +102,7 @@ public class ProductRoleTool implements BaseTool<String> {
       try {
         productRole.setVoice(VoiceTimbre.valueOf(voiceTimbre).getTimbre());
       } catch (IllegalArgumentException e) {
+        e.printStackTrace();
         productRole.setVoice(VoiceTimbre.CosyVoiceLongXiaoChun.getTimbre());
       }
       if (taskType.equals("set")) {

@@ -17,7 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.voice;
+package top.rslly.iot.utility.ai.voice.TTS;
 
 import com.alibaba.dashscope.audio.tts.SpeechSynthesisResult;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat;
@@ -26,12 +26,15 @@ import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
 import com.alibaba.dashscope.common.ResultCallback;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.SseEmitterUtil;
+import top.rslly.iot.utility.ai.voice.AudioUtils;
+import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 import ws.schild.jave.Encoder;
 import ws.schild.jave.MultimediaObject;
@@ -52,19 +55,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 @Component
 @Slf4j
-public class Text2audio {
+public class Text2audio implements TtsService {
   private static final String model = "cosyvoice-v1";
   private static final String voice = "longxiaochun";
   private static SpeechSynthesisParam param;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
 
-  // Frame duration in milliseconds (matching Opus encoding)
-  private static final int FRAME_DURATION = 60;
-  // Number of frames for pre-buffering
-  private static final int PRE_BUFFER_COUNT = 3;
 
-  class ReactCallback extends ResultCallback<SpeechSynthesisResult> {
+  static class ReactCallback extends ResultCallback<SpeechSynthesisResult> {
     public CountDownLatch latch = new CountDownLatch(1);
     private final String chatId;
     private final Session session;
@@ -129,7 +128,7 @@ public class Text2audio {
         // Signal end-of-stream by adding an empty array.
         audioQueue.offer(EOS);
         // Asynchronously send the queued frames.
-        asyncSendAudioQueue(chatId, session, audioQueue);
+        AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
       }
       latch.countDown();
     }
@@ -171,55 +170,6 @@ public class Text2audio {
     return audio;
   }
 
-  public static byte[] VoiceBitChange(byte[] bytes) {
-    if (bytes == null || bytes.length == 0) {
-      throw new IllegalArgumentException("Input byte array cannot be null or empty");
-    }
-
-    File tempInputFile = null;
-    File tempOutputFile = null;
-    try {
-      // 创建临时文件
-      tempInputFile = File.createTempFile("tempInput", ".tmp");
-      tempOutputFile = File.createTempFile("tempOutput", ".mp3");
-
-      // 将二进制数组写入临时文件
-      try (FileOutputStream fos = new FileOutputStream(tempInputFile)) {
-        fos.write(bytes);
-      }
-
-      // Audio Attributes
-      AudioAttributes audio = new AudioAttributes();
-      audio.setCodec("mp3");
-      audio.setBitRate(16000);
-      audio.setChannels(1);
-      audio.setSamplingRate(16000);
-
-      // Encoding attributes
-      EncodingAttributes attrs = new EncodingAttributes();
-      attrs.setOutputFormat("mp3");
-      attrs.setAudioAttributes(audio);
-
-      // Encode
-      Encoder encoder = new Encoder();
-      encoder.encode(new MultimediaObject(tempInputFile), tempOutputFile, attrs);
-
-      // 将生成的MP3文件读回为二进制数组
-      return Files.readAllBytes(tempOutputFile.toPath());
-
-    } catch (Exception e) {
-      throw new RuntimeException("Error during encoding: " + e.getMessage(), e);
-    } finally {
-      // 安全删除临时文件
-      if (tempInputFile != null && tempInputFile.exists()) {
-        tempInputFile.delete();
-      }
-      if (tempOutputFile != null && tempOutputFile.exists()) {
-        tempOutputFile.delete();
-      }
-    }
-  }
-
   @Async("taskExecutor")
   public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, null);
@@ -227,49 +177,18 @@ public class Text2audio {
     synthesizer.call(text);
   }
 
-  @Async("taskExecutor")
-  public void websocketAudio(String text, Session session, String chatId, int productId) {
+  @Override
+  public void websocketAudioSync(String text, Session session, String chatId, String voice) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
-      try {
-        var roles = productRoleService.findAllByProductId(productId);
-        if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-          param.setVoice(roles.get(0).getVoice());
-        }
-      } catch (Exception ignored) {
-      }
-
-      SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
-      synthesizer.call(text);
-      try {
-        callback.waitForComplete();
-      } catch (InterruptedException e) {
-        log.error("waitForComplete interrupted: {}", e.getMessage());
-      } finally {
-        try {
-          session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-        } catch (IOException ex) {
-          log.warn("Failed to send stop message: {}", ex.getMessage());
-        }
-        XiaoZhiWebsocket.isAbort.put(chatId, false);
-      }
-    } catch (Exception e) {
-      log.error("websocketAudio error{}", e.getMessage());
-    }
-  }
-
-  public void websocketAudioSync(String text, Session session, String chatId, int productId) {
-    ReactCallback callback = new ReactCallback(chatId, session);
-    try {
-      try {
-        var roles = productRoleService.findAllByProductId(productId);
-        if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-          param.setVoice(roles.get(0).getVoice());
-        }
-      } catch (Exception ignored) {
-      }
-
-      SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
+      // 创建线程安全的参数副本
+      SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
+          .apiKey(param.getApiKey())
+          .model(param.getModel())
+          .format(param.getFormat())
+          .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
+          .build();
+      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
       synthesizer.call(text);
       try {
         callback.waitForComplete();
@@ -281,61 +200,5 @@ public class Text2audio {
     }
   }
 
-  private static ByteBuffer byte2Bytebuffer(byte[] byteArray) {
-
-    // 初始化一个和byte长度一样的buffer
-    ByteBuffer buffer = ByteBuffer.allocate(byteArray.length);
-    // 数组放到buffer中
-    buffer.put(byteArray);
-    // 重置 limit 和postion 值 否则 buffer 读取数据不对
-    buffer.flip();
-    return buffer;
-  }
-
-  @Async("taskExecutor")
-  public void asyncSendAudioQueue(String chatId, Session session, BlockingQueue<byte[]> queue) {
-    try {
-      final long startTime = System.nanoTime();
-      int playPosition = 0;
-
-      // Pre-buffer: collect up to PRE_BUFFER_COUNT frames.
-      List<byte[]> preBuffer = new ArrayList<>();
-      for (int i = 0; i < PRE_BUFFER_COUNT; i++) {
-        byte[] frame = queue.take();
-        if (frame.length == 0) { // EOS encountered.
-          break;
-        }
-        preBuffer.add(frame);
-      }
-      // Send pre-buffer frames immediately.
-      for (int i = 0; i < preBuffer.size(); i++) {
-        session.getBasicRemote().sendBinary(byte2Bytebuffer(preBuffer.get(i)));
-        // log.info("预缓冲帧 {}, 时间: {}ms", i, (System.nanoTime() - startTime) / 1_000_000.0);
-      }
-      // Continue sending remaining frames with timing control.
-      while (!XiaoZhiWebsocket.isAbort.get(chatId)) {
-        byte[] opusPacket = queue.take();
-        if (opusPacket.length == 0) { // End-of-stream marker.
-          break;
-        }
-        long expectedTimeNs = startTime + playPosition * 1_000_000L;
-        long currentTimeNs = System.nanoTime();
-        long delayNs = expectedTimeNs - currentTimeNs;
-        if (delayNs > 0) {
-          long delayMs = delayNs / 1_000_000L;
-          int extraNanos = (int) (delayNs % 1_000_000L);
-          Thread.sleep(delayMs, extraNanos);
-        }
-        long beforeSend = System.nanoTime();
-        session.getBasicRemote().sendBinary(byte2Bytebuffer(opusPacket));
-        double actualIntervalMs = (System.nanoTime() - beforeSend) / 1_000_000.0;
-        // log.info("发送帧，位置: {}ms, 实际间隔: {}ms", playPosition, actualIntervalMs);
-        playPosition += FRAME_DURATION;
-      }
-      queue.clear();
-    } catch (Exception e) {
-      log.error("Error in asyncSendAudioQueue: {}", e.getMessage(), e);
-    }
-  }
 }
 

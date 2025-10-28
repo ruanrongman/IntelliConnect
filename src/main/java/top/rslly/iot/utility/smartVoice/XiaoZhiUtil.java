@@ -34,7 +34,7 @@ import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
-import top.rslly.iot.utility.ai.voice.Text2audio;
+import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
 import java.io.ByteArrayOutputStream;
@@ -50,7 +50,7 @@ public class XiaoZhiUtil {
   @Autowired
   private Audio2Text audio2Text;
   @Autowired
-  private Text2audio text2audio;
+  private TtsServiceFactory ttsServiceFactory;
   @Autowired
   private EmotionToolAsync emotionToolAsync;
   @Autowired
@@ -222,7 +222,7 @@ public class XiaoZhiUtil {
                 jsonObject.put("text", answerBuilder.toString());
                 XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                     .sendText(jsonObject.toJSONString());
-                text2audio.websocketAudioSync(answerBuilder.toString(),
+                ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
                     XiaoZhiWebsocket.clients.get(chatId),
                     chatId, productId);
                 answerBuilder.setLength(0);
@@ -258,7 +258,7 @@ public class XiaoZhiUtil {
                 jsonObject.put("text", answerBuilder.toString());
                 XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                     .sendText(jsonObject.toJSONString());
-                text2audio.websocketAudioSync(answerBuilder.toString(),
+                ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
                     XiaoZhiWebsocket.clients.get(chatId),
                     chatId, productId);
                 answerBuilder.setLength(0);
@@ -277,7 +277,7 @@ public class XiaoZhiUtil {
                   XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                       .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
                           + answerBuilder + "\"}");
-                  text2audio.websocketAudioSync(answerBuilder.toString(),
+                  ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
                       XiaoZhiWebsocket.clients.get(chatId),
                       chatId, productId);
                   answerBuilder.setLength(0);
@@ -332,7 +332,8 @@ public class XiaoZhiUtil {
     String selectedGreeting = greetings.get(random.nextInt(greetings.size()));
 
     // 发送随机问候语
-    text2audio.websocketAudioSync(selectedGreeting, XiaoZhiWebsocket.clients.get(chatId), chatId,
+    ttsServiceFactory.websocketAudioSync(selectedGreeting, XiaoZhiWebsocket.clients.get(chatId),
+        chatId,
         productId);
     XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
@@ -351,7 +352,7 @@ public class XiaoZhiUtil {
         "type": "tts",
         "state": "start"
         }""");
-    text2audio.websocketAudioSync(registerMsg, XiaoZhiWebsocket.clients.get(chatId), chatId,
+    ttsServiceFactory.websocketAudioSync(registerMsg, XiaoZhiWebsocket.clients.get(chatId), chatId,
         productId);
     XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
         .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
@@ -374,7 +375,7 @@ public class XiaoZhiUtil {
       log.info(sentence);
       XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
           .sendText(jsonObject.toJSONString());
-      text2audio.websocketAudioSync(sentence, XiaoZhiWebsocket.clients.get(chatId), chatId,
+      ttsServiceFactory.websocketAudioSync(sentence, XiaoZhiWebsocket.clients.get(chatId), chatId,
           productId);
     }
   }

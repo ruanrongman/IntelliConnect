@@ -28,7 +28,8 @@ import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.voice.SlieroVadListener;
-import top.rslly.iot.utility.ai.voice.Text2audio;
+import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
+import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
 import javax.websocket.*;
@@ -50,7 +51,7 @@ public class XiaoZhiWebsocket {
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
   private static volatile SafetyServiceImpl safetyService;
-  private static volatile Text2audio text2audio;
+  private static volatile TtsServiceFactory ttsServiceFactory;
   private static volatile ProductServiceImpl productService;
   private static volatile XiaoZhiUtil xiaoZhiUtil;
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
@@ -61,9 +62,9 @@ public class XiaoZhiWebsocket {
   private boolean isRealTime = false;
 
   @Autowired
-  public void setText2audio(Text2audio text2audio) {
-    if (XiaoZhiWebsocket.text2audio == null) {
-      XiaoZhiWebsocket.text2audio = text2audio;
+  public void setTtsServiceFactory(TtsServiceFactory ttsServiceFactory) {
+    if (XiaoZhiWebsocket.ttsServiceFactory == null) {
+      XiaoZhiWebsocket.ttsServiceFactory = ttsServiceFactory;
     }
   }
 
@@ -249,7 +250,8 @@ public class XiaoZhiWebsocket {
                 "state": "start"
               }""");
           audioList.clear();
-          text2audio.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId, productId);
+          ttsServiceFactory.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId,
+              productId);
           clients.get(chatId).getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
           isAbort.put(chatId, false);
           clients.get(chatId).close();
