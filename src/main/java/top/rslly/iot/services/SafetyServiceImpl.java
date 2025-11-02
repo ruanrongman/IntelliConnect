@@ -244,7 +244,6 @@ public class SafetyServiceImpl implements SafetyService {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
     String username = JwtTokenUtil.getUsername(token_deal);
-    log.info("role {}", role);
     if (role.equals("ROLE_" + "wx_user")) {
       if (wxUserService.findAllByName(username).isEmpty()) {
         return false;

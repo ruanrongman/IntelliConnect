@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
+import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
@@ -32,6 +33,7 @@ import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -42,6 +44,8 @@ public class ClassifierToolPrompt {
   private McpWebsocket mcpWebsocket;
   @Autowired
   private ProductRouterSetServiceImpl productRouterSetService;
+  @Autowired
+  private ProductToolsBanServiceImpl productToolsBanService;
   private static final String classifierPrompt =
       """
            {router_set}
@@ -106,6 +110,12 @@ public class ClassifierToolPrompt {
     }
     if (chatId.startsWith("chatProduct")) {
       classifierMap.put("11", "Say goodbye or request to step down");
+    }
+    List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
+    if (!banTools.isEmpty()) {
+      for (var banTool : banTools) {
+        classifierMap.remove(banTool);
+      }
     }
     String classifierJson = JSON.toJSONString(classifierMap);
     var productRouterSetList = productRouterSetService.findAllByProductId(productId);

@@ -28,10 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
-import top.rslly.iot.services.agent.AiServiceImpl;
-import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
-import top.rslly.iot.services.agent.OtaXiaozhiPassiveServiceImpl;
-import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
+import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
@@ -82,6 +79,8 @@ public class Tool {
   private KnowledgeChatServiceImpl knowledgeChatService;
   @Autowired
   private OtaXiaozhiPassiveServiceImpl otaXiaozhiPassiveService;
+  @Autowired
+  private ProductToolsBanServiceImpl productToolsBanService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -433,6 +432,47 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return otaXiaozhiPassiveService.otaXiaozhiPassiveDelete(id);
+  }
+
+  // 禁止内部工具productban
+  @Operation(summary = "禁止内部工具", description = "禁止内部工具")
+  @RequestMapping(value = "/productToolsBan", method = RequestMethod.GET)
+  public JsonResult<?> getProductToolsBan(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.getProductToolsBan(productId);
+  }
+
+  @Operation(summary = "禁止内部工具", description = "禁止内部工具")
+  @RequestMapping(value = "/productToolsBan", method = RequestMethod.POST)
+  public JsonResult<?> postProductToolsBan(
+      @Valid @RequestBody ProductToolsBan productToolsBan,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productToolsBan.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.postProductToolsBan(productToolsBan);
+  }
+
+  @Operation(summary = "禁止内部工具", description = "禁止内部工具")
+  @RequestMapping(value = "/productToolsBan", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductToolsBan(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.deleteProductToolsBan(productId);
   }
 
 }

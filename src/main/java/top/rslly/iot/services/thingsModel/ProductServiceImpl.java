@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.Product;
+import top.rslly.iot.param.request.ProductToolsBan;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -62,6 +63,8 @@ public class ProductServiceImpl implements ProductService {
   private AgentMemoryRepository agentMemoryRepository;
   @Resource
   private ProductRouterSetRepository productRouterSetRepository;
+  @Resource
+  private ProductToolsBanRepository productToolsBanRepository;
 
 
   @Override
@@ -175,6 +178,8 @@ public class ProductServiceImpl implements ProductService {
         knowledgeChatRepository.findAllByProductId(id);
     List<ProductRouterSetEntity> productRouterSetEntityList =
         productRouterSetRepository.findAllByProductId(id);
+    List<ProductToolsBanEntity> productToolsBanEntityList =
+        productToolsBanRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -182,7 +187,8 @@ public class ProductServiceImpl implements ProductService {
     boolean p5 = mcpServerEntityList.isEmpty();
     boolean p6 = knowledgeChatEntityList.isEmpty();
     boolean p7 = productRouterSetEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7) {
+    boolean p8 = productToolsBanEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);

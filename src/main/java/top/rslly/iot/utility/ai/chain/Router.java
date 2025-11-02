@@ -24,6 +24,8 @@ import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.ProductToolsBanService;
+import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
@@ -68,6 +70,8 @@ public class Router {
   private MemoryTool memoryTool;
   @Autowired
   private GoodByeTool goodByeTool;
+  @Autowired
+  private ProductToolsBanServiceImpl productToolsBanService;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in wechat module need to use openid
@@ -108,9 +112,13 @@ public class Router {
     } else {
       args = "";
     }
+    List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
     if (resultMap.containsKey("value") && !args.equals("")) {
       List<String> value = Cast.castList(resultMap.get("value"), String.class);
       if (!value.isEmpty()) {
+        if (banTools.contains(value.get(0))) {
+          value.set(0, "5");
+        }
         switch (value.get(0)) {
           case "1" -> {
             toolResult = weatherTool.run(args);
