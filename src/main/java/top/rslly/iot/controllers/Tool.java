@@ -180,6 +180,21 @@ public class Tool {
     return knowledgeChatService.getKnowledgeChat(header);
   }
 
+  @Operation(summary = "知识库", description = "搜索产品的知识库")
+  @RequestMapping(value = "/knowledgeChatRecall", method = RequestMethod.POST)
+  public JsonResult<?> searchKnowledgeChat(
+      @Valid @RequestBody KnowledgeChatRecall knowledgeChatRecall,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, knowledgeChatRecall.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeChatService.searchByProductId(knowledgeChatRecall.getProductId(),
+        knowledgeChatRecall.getQuery());
+  }
+
   @Operation(summary = "知识库", description = "提交产品的知识库")
   @RequestMapping(value = "/knowledgeChat", method = RequestMethod.POST)
   public JsonResult<?> postKnowledgeChat(@RequestParam("productId") int productId,

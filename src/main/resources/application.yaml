@@ -127,6 +127,8 @@ rag:
 weather:
   key: XXX
 ai:
+  tts:
+    skip-tool-prefix: true
   chromeDrive-path: XXX
   chrome-path: XXX
   audio-tmp-path: D://temp-music//
@@ -159,6 +161,9 @@ ai:
   mcp:
     agent-llm: silicon-Qwen3-Next-80B-A3B-Instruct
     agent-epoch-limit: 5
+jwt:
+  # JWT 密钥
+  secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9
 emq:
   api:
     url: http://192.168.49.129:18083/api/v5/clients

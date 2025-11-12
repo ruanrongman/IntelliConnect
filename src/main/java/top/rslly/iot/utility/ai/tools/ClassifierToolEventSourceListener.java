@@ -72,8 +72,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
       lock.lock();
       try {
         var content = JSON.parseObject(
-            jsonBuffer.toString().replace("```json", "").replace("```JSON", "").replace("```", "")
-                .replace("json", ""))
+            jsonBuffer.toString().replace("```json", "").replace("```JSON", "").replace("```", ""))
             .getJSONObject("action");
         if (content.get("code").equals("200") || content.get("code").equals(200)) {
           var valueJson = content.getJSONArray("value");

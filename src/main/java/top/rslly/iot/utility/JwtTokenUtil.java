@@ -22,11 +22,15 @@ package top.rslly.iot.utility;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+@Component
 public class JwtTokenUtil {
   // Token请求头
   public static final String TOKEN_HEADER = "Authorization";
@@ -38,9 +42,17 @@ public class JwtTokenUtil {
   // 过期时间 1000 * 60 * 60 * 24
   public static final long EXPIRITION = 1000 * 60 * 60 * 24 * 7;
   // 应用密钥
-  public static final String APPSECRET_KEY = "XXXXXXX";
+  @Value("${jwt.secret:myDefaultSecretKeyForDevOnlyChangeInProduction}")
+  private String secretKey;
+
+  private static String APPSECRET_KEY;
   // 角色权限声明
   private static final String ROLE_CLAIMS = "role";
+
+  @PostConstruct
+  public void init() {
+    APPSECRET_KEY = this.secretKey;
+  }
 
   /**
    * 生成Token

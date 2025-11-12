@@ -24,7 +24,10 @@ import dev.langchain4j.data.document.DocumentParser;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.document.loader.FileSystemDocumentLoader;
+import dev.langchain4j.data.document.parser.TextDocumentParser;
 import dev.langchain4j.data.document.parser.apache.pdfbox.ApachePdfBoxDocumentParser;
+import dev.langchain4j.data.document.parser.apache.poi.ApachePoiDocumentParser;
+import dev.langchain4j.data.document.parser.markdown.MarkdownDocumentParser;
 import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -45,12 +48,26 @@ public class RagUtility {
   /**
    * 解析 PDF → 分段 → 存入
    */
-  public static void ingestPdfToChroma(String pdfPath, String productId, String fileName,
+  public static void ingestFileToChroma(String filePath, String productId, String fileName,
       EmbeddingModel embeddingModel,
       EmbeddingStore<TextSegment> embeddingStore) {
-    File pdfFile = new File(pdfPath);
-    DocumentParser parser = new ApachePdfBoxDocumentParser();
-    Document document = FileSystemDocumentLoader.loadDocument(pdfFile.getAbsolutePath(), parser);
+    File file = new File(filePath);
+    if (!file.exists() || !file.isFile()) {
+      throw new IllegalArgumentException("File not found: " + filePath);
+    }
+
+    String extension = getFileExtension(file.getName()).toLowerCase();
+    DocumentParser parser = switch (extension) {
+      case "pdf" -> new ApachePdfBoxDocumentParser();
+      case "txt" -> new TextDocumentParser();
+      case "md", "markdown" -> new MarkdownDocumentParser();
+      case "doc", "docx", "ppt", "pptx", "xls", "xlsx" -> new ApachePoiDocumentParser();
+      // Tika 自动处理 Office 文档
+      default -> throw new UnsupportedOperationException("Unsupported file type: " + extension);
+    };
+
+    // 根据扩展名自动选择解析器
+    Document document = FileSystemDocumentLoader.loadDocument(file.getAbsolutePath(), parser);
 
     DocumentSplitter splitter = DocumentSplitters.recursive(300, 50);
     List<TextSegment> segments = splitter.split(document);
@@ -97,5 +114,12 @@ public class RagUtility {
 
     // 执行批量删除
     store.removeAll(filter);
+  }
+
+  private static String getFileExtension(String fileName) {
+    int dotIndex = fileName.lastIndexOf('.');
+    return (dotIndex != -1 && dotIndex < fileName.length() - 1)
+        ? fileName.substring(dotIndex + 1)
+        : "";
   }
 }

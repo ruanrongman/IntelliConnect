@@ -108,6 +108,10 @@ public class LLMFactory {
       return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
           "qwen3-max",
           dashScopeApiKey);
+    } else if (llmName.equals("dashscope-qwen3-235b-a22b-instruct-2507")) {
+      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
+          "qwen3-235b-a22b-instruct-2507",
+          dashScopeApiKey);
     } else if (llmName.startsWith("silicon-Qwen3-30B-A3B")) {
       return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-30B-A3B", enableThinking, thinkingBudget);
     } else if (llmName.startsWith("silicon-Qwen3-235B-A22B")) {

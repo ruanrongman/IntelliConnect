@@ -105,8 +105,7 @@ public class Glm implements LLM {
       var response =
           invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent().toString();
       log.info("model output:{} ", response);
-      var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "")
-          .replace("json", "");
+      var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "");
       return JSON.parseObject(temp);
     } catch (Exception e) {
       log.error("model error:{} ", e.getMessage());

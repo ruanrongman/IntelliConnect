@@ -1,0 +1,71 @@
+@font-face {
+  font-family: "iconfont"; /* Project id 1987232 */
+  src: url('iconfont.woff2?t=1633681889856') format('woff2'),
+       url('iconfont.woff?t=1633681889856') format('woff'),
+       url('iconfont.ttf?t=1633681889856') format('truetype');
+}
+
+.iconfont {
+  font-family: "iconfont" !important;
+  font-size: 20px;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-yanjing::before {
+  content: "\e60b";
+}
+
+.icon-xunhuan::before {
+  content: "\e699";
+}
+
+.icon-location::before {
+  content: "\e600";
+}
+
+.icon-jietu::before {
+  content: "\e609";
+}
+
+.icon-diaojiaofangda::before {
+  content: "\e66d";
+}
+
+.icon-diaojiaosuoxiao::before {
+  content: "\e66e";
+}
+
+.icon-jujiao::before {
+  content: "\e603";
+}
+
+.icon-lamp::before {
+  content: "\e6ae";
+}
+
+.icon-icon_guangquanjian::before {
+  content: "\e61d";
+}
+
+.icon-icon_jujiaojian::before {
+  content: "\e620";
+}
+
+.icon-icon_guangquanjia::before {
+  content: "\e61f";
+}
+
+.icon-icon_jujiaojia::before {
+  content: "\e621";
+}
+
+.icon-jingtouchushihua::before {
+  content: "\e650";
+}
+
+.icon-yushua::before {
+  content: "\e655";
+}
+

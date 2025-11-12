@@ -1,0 +1,135 @@
+<template>
+  <div class="table-container">
+    <a-table 
+      :columns="columns" 
+      :data-source="dataSource" 
+      :pagination="pagination"
+      class="custom-table"
+    >
+      <template #action="{ record }">
+        <a-button 
+          type="link" 
+          danger
+          @click="handleDelete(record)"
+        >
+          <template #icon><DeleteOutlined /></template>
+          删除
+        </a-button>
+      </template>
+    </a-table>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue';
+import { message } from 'ant-design-vue'
+import { getProductRouterSet,deleteProductRouterSet} from '@/api/productRouterSet';
+import { useRouter } from 'vue-router'
+import { DeleteOutlined } from '@ant-design/icons-vue'
+
+const router = useRouter()
+
+const pagination = {
+  pageSize: 5,
+};
+
+const dataSource = ref([]);
+
+const columns = [
+  {
+    title: '产品id',
+    dataIndex: 'productId',
+    key: 'productId',
+  },
+  {
+    title: '偏好设置',
+    dataIndex: 'prompt',
+    key: 'prompt',
+  },
+  {
+    title: 'Action',
+    key: 'action',
+    slots: { customRender: 'action' },
+  },
+];
+
+let intervalId;
+
+onMounted(() => {
+  fetchProduct();
+  intervalId = setInterval(fetchProduct, 1000); // 每 60 秒钟刷新一次数据
+});
+
+onUnmounted(() => {
+  clearInterval(intervalId);
+});
+
+const fetchProduct = () => {
+  getProductRouterSet()
+    .then((res) => {
+      const { data, errorCode } = res.data;
+      if(errorCode==2001){
+        router.push('/login')
+      }
+      if(errorCode==200&& data && Array.isArray(data)){
+        dataSource.value = data.map((item, index) => ({
+          key: index,
+          id: item.id,
+          productId: item.productId,
+          prompt: item.prompt,
+        }));
+      } else {
+        // 当没有数据时，设置为空数组
+        dataSource.value = [];
+      }
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+};
+
+const handleDelete = (record) => {
+  // 实现删除功能
+  console.log('Deleting record:', record);
+  deleteProductRouterSet({id:record.id}).then((res) => {
+      const { data, errorCode } = res.data;
+      if(errorCode==200){
+        message.success("删除成功")
+      }else if(errorCode==2001){
+        router.push('/login')
+      }
+      console.log(data)
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+};
+</script>
+
+<style lang="scss" scoped>
+.table-container {
+  .custom-table {
+    :deep(.ant-table) {
+      border-radius: 8px;
+    }
+
+    :deep(.ant-table-thead > tr > th) {
+      background: #fafafa;
+      font-weight: 500;
+    }
+
+    :deep(.ant-table-tbody > tr > td) {
+      padding: 16px;
+    }
+
+    :deep(.ant-btn-link) {
+      padding: 4px 0;
+      height: auto;
+      
+      .anticon {
+        margin-right: 4px;
+      }
+    }
+  }
+}
+</style>

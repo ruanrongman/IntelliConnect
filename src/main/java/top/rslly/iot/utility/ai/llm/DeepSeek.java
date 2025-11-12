@@ -108,8 +108,7 @@ public class DeepSeek implements LLM {
       // });
       var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
       log.info("model output:{} ", response);
-      var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "")
-          .replace("json", "");
+      var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "");
       JSONObject jsonResponse = JSON.parseObject(temp);
       if (jsonResponse == null)
         throw new Exception("json parse error");

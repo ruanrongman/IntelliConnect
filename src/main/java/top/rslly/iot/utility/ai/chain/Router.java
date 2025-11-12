@@ -122,30 +122,30 @@ public class Router {
         switch (value.get(0)) {
           case "1" -> {
             toolResult = weatherTool.run(args);
-            answer = "以下是高德天气插件结果：" + toolResult;
+            answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
           }
           case "2" -> {
             toolResult = controlTool.run(args, globalMessage);
-            answer = "以下是智能控制插件结果：" + toolResult;
+            answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
           }
           case "3" -> {
             var musicMap = musicTool.run(args);
             toolResult = musicMap.get("answer");
-            answer = "以下是网易云音乐插件结果：" + toolResult + musicMap.get("url");
+            answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
           }
           case "4" -> {
 
             toolResult = agent.run(content, globalMessage);
-            answer = "以下是智能体处理结果：" + toolResult;
+            answer = ToolPrefix.AGENT.getPrefix() + toolResult;
           }
           case "5" -> answer = chatTool.run(content, globalMessage);
           case "6" -> {
             toolResult = wxBoundProductTool.run(args, globalMessage);
-            answer = "以下是微信绑定产品插件结果：" + toolResult;
+            answer = ToolPrefix.WX_BOUND_PRODUCT.getPrefix() + toolResult;
           }
           case "7" -> {
             toolResult = wxProductActiveTool.run(args, globalMessage);
-            answer = "以下是微信切换产品插件结果：" + toolResult;
+            answer = ToolPrefix.WX_PRODUCT_ACTIVE.getPrefix() + toolResult;
           }
           case "8" -> {
             if (!(microappid.length > 0))
@@ -153,19 +153,19 @@ public class Router {
             else {
               toolResult = scheduleTool.run(args, globalMessage);
             }
-            answer = "以下是定时任务插件的结果：" + toolResult;
+            answer = ToolPrefix.SCHEDULE.getPrefix() + toolResult;
           }
           case "9" -> {
             toolResult = productRoleTool.run(args, globalMessage);
-            answer = "以下是产品角色插件的结果：" + toolResult;
+            answer = ToolPrefix.PRODUCT_ROLE.getPrefix() + toolResult;
           }
           case "10" -> {
             toolResult = mcpAgent.run(args, globalMessage);
-            answer = "以下是mcp智能体的结果：" + toolResult;
+            answer = ToolPrefix.MCP_AGENT.getPrefix() + toolResult;
           }
           case "11" -> {
             toolResult = goodByeTool.run(args, globalMessage);
-            answer = "以下是byebye插件的结果：" + toolResult;
+            answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
           }
           default -> answer = chatTool.run(content, globalMessage);
         }

@@ -31,6 +31,8 @@ public interface KnowledgeChatService {
 
   String searchByProductId(String productId, String query);
 
+  JsonResult<?> searchByProductId(int productId, String query);
+
   JsonResult<?> getKnowledgeChat(String token);
 
   JsonResult<?> postKnowledgeChat(int productId, String fileName, MultipartFile multipartFile);

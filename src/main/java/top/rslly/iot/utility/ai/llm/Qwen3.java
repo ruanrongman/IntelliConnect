@@ -72,8 +72,7 @@ public class Qwen3 implements LLM {
       log.info("model output:{} ", response);
       if (response == null || response.equals(""))
         throw new Exception("model error: 模型返回结果为空");
-      var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "")
-          .replace("json", "");
+      var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "");
       JSONObject jsonResponse = JSON.parseObject(temp);
       if (jsonResponse == null)
         throw new Exception("json parse error");

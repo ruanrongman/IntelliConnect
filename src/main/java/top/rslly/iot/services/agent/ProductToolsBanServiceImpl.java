@@ -65,7 +65,7 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan) {
     // 允许值列表（不包含 "5"）
-    Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10");
+    Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge");
 
     for (var s : productToolsBan.getToolsName()) {
       if (!allowed.contains(s))

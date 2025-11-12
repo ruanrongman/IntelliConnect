@@ -33,8 +33,10 @@ import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
+import top.rslly.iot.utility.ai.tools.ToolPrefix;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 @Slf4j
@@ -50,6 +52,27 @@ public class Agent {
   @Value("${ai.agent-epoch-limit}")
   private int epochLimit = 8;
 
+  private static final List<String> COMFORT_PHRASES = Arrays.asList(
+      "嗯～",
+      "哦～",
+      "好～",
+      "行～",
+      "来啦～",
+      "稍等～",
+      "马上～",
+      "正在～",
+      "处理中～",
+      "查询中～",
+      "思考中～",
+      "嗯哼～",
+      "好的～",
+      "收到～",
+      "了解～");
+
+  private String getRandomComfortPhrase() {
+    return COMFORT_PHRASES.get(ThreadLocalRandom.current().nextInt(COMFORT_PHRASES.size()));
+  }
+
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     StringBuilder conversationPrompt = new StringBuilder();
@@ -60,7 +83,8 @@ public class Agent {
     globalMessage.put("mcpIsTool", true);
     var queue = queueMap.get(chatId);
     if (queue != null) {
-      queue.add("以下是智能体处理结果：");
+      queue.add(ToolPrefix.AGENT.getPrefix());
+      queue.add(getRandomComfortPhrase());
     }
     String system =
         reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId);
@@ -110,13 +134,28 @@ public class Agent {
       iteration += 1;
     }
     // 超出迭代轮次，调用模型进行总结
-    String summaryPrompt = "请根据以上对话历史和最终观察结果，用中文总结回答最初的问题: " + question;
+    String summaryPrompt = "请根据以上对话历史和最终观察结果，总结回答最初的问题: " + question;
     messages.clear();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), conversationPrompt.toString()));
 
     try {
       toolResult = LLMFactory.getLLM(llmName).commonChat(summaryPrompt, messages, false);
+      try {
+        var temp = toolResult.replace("```json", "").replace("```JSON", "").replace("```", "")
+            .replace("json", "");
+        JSONObject jsonResponse = JSON.parseObject(temp);
+        if (jsonResponse == null)
+          throw new Exception("json parse error");
+        try {
+          toolResult =
+              jsonResponse.getJSONObject("action").getJSONObject("args").getString("content");
+        } catch (Exception ignore) {
+          toolResult = jsonResponse.getJSONObject("action").getJSONObject("args").toString();
+        }
+      } catch (Exception e) {
+        log.error("Error during summary generation: ", e);
+      }
     } catch (Exception e) {
       log.error("Error generating summary after max iterations: ", e);
       toolResult = "经过多次尝试仍未找到完整答案，请重新提问或提供更多细节。";

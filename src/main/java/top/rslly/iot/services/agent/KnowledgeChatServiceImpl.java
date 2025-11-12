@@ -45,7 +45,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -89,6 +91,35 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
     } catch (Exception e) {
       log.error("查询知识库失败{}", e.getMessage());
       return "";
+    }
+  }
+
+  @Override
+  public JsonResult<?> searchByProductId(int productId, String query) {
+    // 1. 检查 productId 是否存在
+    var res = knowledgeChatRepository.findAllByProductId(productId);
+    if (res.isEmpty()) {
+      // 2. 如果不存在，返回空列表
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+
+    try {
+      EmbeddingSearchResult<TextSegment> searchResult = RagUtility.searchByProductId(
+          knowledgeChatEmbeddingStore, embeddingModel, query, String.valueOf(productId));
+      var result = searchResult.matches().stream()
+          .map(match -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("text", match.embedded().text());
+            item.put("score", match.score());
+            return item;
+          })
+          .collect(Collectors.toList());
+      return ResultTool.success(result);
+
+    } catch (Exception e) {
+      log.error("查询知识库失败: {}", e.getMessage(), e); // 建议将异常堆栈也打印出来
+      // 4. 异常时也返回空列表
+      return ResultTool.success(new ArrayList<>());
     }
   }
 
@@ -152,11 +183,15 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
     String realFileName = multipartFile.getOriginalFilename();
     if (realFileName == null)
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
-    String suffixName = realFileName.substring(realFileName.lastIndexOf(".")); // 后缀名
-    if (!suffixName.equals(".pdf"))
+    String suffixName = realFileName.substring(realFileName.lastIndexOf(".")).toLowerCase(); // 后缀名
+    // 允许的文件类型
+    List<String> allowedSuffixes = List.of(".pdf", ".txt", ".md", ".markdown", ".doc", ".docx",
+        ".ppt", ".pptx", ".xls", ".xlsx");
+    if (!allowedSuffixes.contains(suffixName)) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     try {
-      File tempFile = Files.createTempFile("upload-", ".pdf").toFile();
+      File tempFile = Files.createTempFile("upload-", suffixName).toFile();
       multipartFile.transferTo(tempFile);
       KnowledgeChatEntity knowledgeChatEntity = new KnowledgeChatEntity();
       knowledgeChatEntity.setFilename(fileName);
@@ -165,7 +200,7 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
       var result = knowledgeChatRepository.save(knowledgeChatEntity);
       taskExecutor.execute(() -> {
         try {
-          RagUtility.ingestPdfToChroma(tempFile.getAbsolutePath(), String.valueOf(productId),
+          RagUtility.ingestFileToChroma(tempFile.getAbsolutePath(), String.valueOf(productId),
               fileName, embeddingModel, knowledgeChatEmbeddingStore);
           knowledgeChatEntity.setStatus("success");
           knowledgeChatEntity.setId(result.getId());
@@ -175,10 +210,19 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
           knowledgeChatEntity.setStatus("error");
           knowledgeChatEntity.setId(result.getId());
           knowledgeChatRepository.save(knowledgeChatEntity);
+        } finally {
+          // 删除临时文件
+          if (tempFile.exists()) {
+            boolean deleted = tempFile.delete();
+            if (!deleted) {
+              log.warn("临时文件删除失败: {}", tempFile.getAbsolutePath());
+            }
+          }
         }
       });
       return ResultTool.success();
     } catch (IOException e) {
+      log.error("文件上传失败: {}", e.getMessage(), e);
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     }
   }

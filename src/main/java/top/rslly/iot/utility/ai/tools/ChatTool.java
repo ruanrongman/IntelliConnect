@@ -29,6 +29,7 @@ import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -56,6 +57,8 @@ public class ChatTool {
   private ProductRoleServiceImpl productRoleService;
   @Autowired
   private KnowledgeChatServiceImpl knowledgeChatService;
+  @Autowired
+  private ProductToolsBanServiceImpl productToolsBanService;
 
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -104,8 +107,11 @@ public class ChatTool {
       role = productRole.get(0).getRole();
       roleIntroduction = productRole.get(0).getRoleIntroduction();
     }
-    String information =
-        knowledgeChatService.searchByProductId(String.valueOf(productId), question);
+    String information = "";
+    var productToolsBanList = productToolsBanService.getProductToolsBanList(productId);
+    if (productToolsBanList.isEmpty() || !productToolsBanList.contains("knowledge")) {
+      information = knowledgeChatService.searchByProductId(String.valueOf(productId), question);
+    }
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,

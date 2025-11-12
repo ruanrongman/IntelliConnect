@@ -113,10 +113,10 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 
 ## 交流群
 
-欢迎加入群聊一起交流讨论有关Aiot相关的话题，免费获取智控台的前端源码，链接过期了可以issue或email提醒一下作者。
+欢迎加入群聊一起交流讨论有关Aiot相关的话题，有机会获取项目的免费部署咨询，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/ede859c2bbe032886b842748dcfdc503.jpg" width="250px"/>
+    <img src="./docs/images/728a85f486074938ba54d89a6eb6171f.jpg" width="250px"/>
 </div>
 
 ## 致谢
@@ -124,6 +124,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 * 感谢项目[Concentus: Opus for Everyone](https://github.com/lostromb/concentus)提供opus解码和编码。
 * 感谢项目[TalkX](https://github.com/big-mouth-cn/talkx)提供了opus解码和编码的参考。
 * 感谢项目[py-xiaozhi](https://github.com/huangjunsen0406/py-xiaozhi)方便项目进行小智开发调试。
+* 感谢项目[vue3-antd-manage](https://github.com/BaiFangZi/vue3-antd-manage)本项目智控台基于该项目二次开发。
 * [电波bilibili君](https://space.bilibili.com/119751)赞助项目开发。
 
 ## 授权协议

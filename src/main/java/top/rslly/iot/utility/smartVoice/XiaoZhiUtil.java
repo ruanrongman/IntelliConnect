@@ -33,6 +33,7 @@ import top.rslly.iot.utility.ai.mcp.McpProtocolDeal;
 import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
+import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.voice.Audio2Text;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
@@ -61,6 +62,8 @@ public class XiaoZhiUtil {
   private McpProtocolDeal mcpProtocolDeal;
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
+  @Value("${ai.tts.skip-tool-prefix:true}")
+  private boolean skipToolPrefix;
 
   public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     boolean mcpCanUse = false;
@@ -222,9 +225,11 @@ public class XiaoZhiUtil {
                 jsonObject.put("text", answerBuilder.toString());
                 XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                     .sendText(jsonObject.toJSONString());
-                ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
-                    XiaoZhiWebsocket.clients.get(chatId),
-                    chatId, productId);
+                if (!shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
+                  ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
+                      XiaoZhiWebsocket.clients.get(chatId),
+                      chatId, productId);
+                }
                 answerBuilder.setLength(0);
               }
               XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
@@ -240,7 +245,7 @@ public class XiaoZhiUtil {
               for (int i = 0; i < element.length(); i++) {
                 char c = element.charAt(i);
                 if (c == '。' || c == '？' || c == '！' || c == '；' || c == '：' || c == '.' || c == '?'
-                    || c == '!' || c == '~') {
+                    || c == '!' || c == '~' || c == '～') {
                   punctuationIndex = i;
                   break;
                 }
@@ -258,9 +263,11 @@ public class XiaoZhiUtil {
                 jsonObject.put("text", answerBuilder.toString());
                 XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                     .sendText(jsonObject.toJSONString());
-                ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
-                    XiaoZhiWebsocket.clients.get(chatId),
-                    chatId, productId);
+                if (!shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
+                  ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
+                      XiaoZhiWebsocket.clients.get(chatId),
+                      chatId, productId);
+                }
                 answerBuilder.setLength(0);
 
                 // 将剩余部分添加到builder中（不发送）
@@ -277,9 +284,11 @@ public class XiaoZhiUtil {
                   XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
                       .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
                           + answerBuilder + "\"}");
-                  ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
-                      XiaoZhiWebsocket.clients.get(chatId),
-                      chatId, productId);
+                  if (!shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
+                    ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
+                        XiaoZhiWebsocket.clients.get(chatId),
+                        chatId, productId);
+                  }
                   answerBuilder.setLength(0);
                 }
               }
@@ -375,9 +384,17 @@ public class XiaoZhiUtil {
       log.info(sentence);
       XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
           .sendText(jsonObject.toJSONString());
-      ttsServiceFactory.websocketAudioSync(sentence, XiaoZhiWebsocket.clients.get(chatId), chatId,
-          productId);
+      if (!shouldSkipTts(sentence, skipToolPrefix)) {
+        ttsServiceFactory.websocketAudioSync(sentence, XiaoZhiWebsocket.clients.get(chatId), chatId,
+            productId);
+      }
     }
+  }
+
+  private static boolean shouldSkipTts(String text, boolean globalSkipConfig) {
+    if (!globalSkipConfig)
+      return false;
+    return ToolPrefix.startsWithAnyPrefix(text);
   }
 
 }
