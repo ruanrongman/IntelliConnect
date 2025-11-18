@@ -42,6 +42,7 @@ public class ChatToolPrompt {
           The user's name is {user_name}
           reference information: The current time is {time} . {information}
           ## Current Memory
+            The current concept of memory and its content: {memory_map}
             {current_memory}
           ## Output Format
           Please do not output \\n and try to limit the word count to 100 words or less
@@ -50,7 +51,7 @@ public class ChatToolPrompt {
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
-      String roleIntroduction, String memory, String information) {
+      String roleIntroduction, String memory, String information, String memoryMap) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
@@ -62,6 +63,7 @@ public class ChatToolPrompt {
     params.put("team_name", teamName);
     params.put("time", formattedDate);
     params.put("current_memory", memory);
+    params.put("memory_map", memoryMap);
     params.put("information", "知识库:" + information);
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
     params.put("role", Objects.requireNonNullElse(role, "smart speaker"));

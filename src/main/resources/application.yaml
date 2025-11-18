@@ -127,6 +127,7 @@ rag:
 weather:
   key: XXX
 ai:
+  detectRandom: false
   tts:
     skip-tool-prefix: true
   chromeDrive-path: XXX
@@ -153,6 +154,7 @@ ai:
   musicTool-llm: silicon-Qwen2.5-7B-Instruct
   productRoleTool-llm: silicon-Qwen2.5-7B-Instruct
   weatherTool-llm: silicon-Qwen3-30B-A3B
+  weatherTool-speedUp: true
   wxBoundProductTool-llm: silicon-Qwen2.5-7B-Instruct
   wxProductActiveTool-llm: silicon-Qwen2.5-7B-Instruct
   scheduleTool-llm: silicon-Qwen3-Next-80B-A3B-Instruct

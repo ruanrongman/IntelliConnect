@@ -81,6 +81,8 @@ public class Tool {
   private OtaXiaozhiPassiveServiceImpl otaXiaozhiPassiveService;
   @Autowired
   private ProductToolsBanServiceImpl productToolsBanService;
+  @Autowired
+  private AgentLongMemoryServiceImpl agentLongMemoryService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -488,6 +490,40 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productToolsBanService.deleteProductToolsBan(productId);
+  }
+
+  // 长期记忆
+  @Operation(summary = "获取长期记忆", description = "获取长期记忆")
+  @RequestMapping(value = "/longMemory", method = RequestMethod.GET)
+  public JsonResult<?> getLongMemory(@RequestHeader("Authorization") String header) {
+    return agentLongMemoryService.getLongMemory(header);
+  }
+
+  @Operation(summary = "提交/修改长期记忆详情", description = "提交/修改长期记忆")
+  @RequestMapping(value = "/longMemory", method = RequestMethod.POST)
+  public JsonResult<?> postLongMemory(
+      @Valid @RequestBody AgentLongMemory agentLongMemory,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, agentLongMemory.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentLongMemoryService.postLongMemory(agentLongMemory);
+  }
+
+  @Operation(summary = "删除长期记忆", description = "删除长期记忆")
+  @RequestMapping(value = "/longMemory", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteLongMemory(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeAgentLongMemory(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentLongMemoryService.deleteLongMemory(id);
   }
 
 }

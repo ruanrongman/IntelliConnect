@@ -26,11 +26,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.ProductRoleEntity;
-import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
-import top.rslly.iot.services.agent.KnowledgeChatServiceImpl;
-import top.rslly.iot.services.agent.ProductRoleServiceImpl;
-import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
+import top.rslly.iot.services.agent.*;
 import top.rslly.iot.utility.HttpRequestUtils;
+import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -46,7 +44,7 @@ import java.util.concurrent.locks.ReentrantLock;
 @Data
 @Component
 @Slf4j
-public class ChatTool {
+public class ChatTool implements BaseTool<String> {
   @Autowired
   private ChatToolPrompt chatToolPrompt;
   @Autowired
@@ -59,6 +57,8 @@ public class ChatTool {
   private KnowledgeChatServiceImpl knowledgeChatService;
   @Autowired
   private ProductToolsBanServiceImpl productToolsBanService;
+  @Autowired
+  private DescriptionUtil descriptionUtil;
 
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -74,6 +74,11 @@ public class ChatTool {
       This tool is used to chat with people
       Args: user question(str)
       """;
+
+  @Override
+  public String run(String question) {
+    return null;
+  }
 
   public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
@@ -112,10 +117,11 @@ public class ChatTool {
     if (productToolsBanList.isEmpty() || !productToolsBanList.contains("knowledge")) {
       information = knowledgeChatService.searchByProductId(String.valueOf(productId), question);
     }
+    String memoryMap = descriptionUtil.getAgentLongMemory(productId);
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory, information));
+                currentMemory, information, memoryMap));
     log.info(llmName);
     log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
@@ -123,7 +129,7 @@ public class ChatTool {
       // messages.addAll(memory);
       systemMessage.setContent(
           chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction, currentMemory,
-              information)
+              information, memoryMap)
               + memory);
     }
     messages.add(systemMessage);

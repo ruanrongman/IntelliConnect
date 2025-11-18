@@ -77,7 +77,7 @@
             <a-textarea 
               v-model:value="editForm.roleIntroduction" 
               :rows="4"
-              :maxlength="2000"
+              :maxlength="6000"
               show-count
               placeholder="请输入角色介绍"
             />

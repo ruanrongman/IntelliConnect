@@ -17,27 +17,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.tools;
+package top.rslly.iot.services.agent;
 
-import java.util.Map;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
+import top.rslly.iot.models.AgentLongMemoryEntity;
+import top.rslly.iot.param.prompt.AgentLongMemoryDescription;
+import top.rslly.iot.param.request.AgentLongMemory;
+import top.rslly.iot.param.request.AgentLongMemoryToolParam;
+import top.rslly.iot.utility.result.JsonResult;
 
-public interface BaseTool<T> {
-  // ⭐ 默认锁/条件变量/数据Map —— 不强制所有实现类都写一遍
-  default Map<String, Lock> getLockMap() {
-    return null;
-  }
+import java.util.List;
 
-  default Map<String, Condition> getConditionMap() {
-    return null;
-  }
+public interface AgentLongMemoryService {
+  List<AgentLongMemoryEntity> findAllById(int id);
 
-  default Map<String, String> getDataMap() {
-    return null;
-  }
+  List<AgentLongMemoryEntity> findAllByProductId(int productId);
 
-  T run(String question);
+  JsonResult<?> getLongMemory(String token);
 
-  T run(String question, Map<String, Object> globalMessage);
+  List<AgentLongMemoryDescription> getDescription(int productId);
+
+  JsonResult<?> postLongMemory(AgentLongMemory agentLongMemory);
+
+  Boolean updateLongMemory(AgentLongMemoryToolParam agentLongMemoryToolParam);
+
+  JsonResult<?> deleteLongMemory(int id);
 }

@@ -57,7 +57,7 @@
       name="roleIntroduction"  
       :rules="[{ required: true, message: 'Please input your roleIntroduction!' }]"  
     >  
-      <a-textarea v-model:value="formState.roleIntroduction" :rows="4" :maxlength="2000" show-count/>  
+      <a-textarea v-model:value="formState.roleIntroduction" :rows="4" :maxlength="6000" show-count/>
     </a-form-item>  
 
     <a-form-item  

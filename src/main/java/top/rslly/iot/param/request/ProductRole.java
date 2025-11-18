@@ -37,7 +37,7 @@ public class ProductRole {
   @Size(min = 1, max = 255, message = "role 长度必须在 1 到 255 之间")
   private String role;
   @NotBlank(message = "roleIntroduction 不能为空")
-  @Size(min = 1, max = 2048, message = "roleIntroduction 长度必须在 1 到 255 之间")
+  @Size(min = 1, max = 6144, message = "roleIntroduction 长度必须在 1 到 6144 之间")
   private String roleIntroduction;
   @NotBlank(message = "voice 不能为空")
   @Size(min = 1, max = 255, message = "voice 长度必须在 1 到 255 之间")

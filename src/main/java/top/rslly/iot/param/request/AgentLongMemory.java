@@ -17,27 +17,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.tools;
+package top.rslly.iot.param.request;
 
-import java.util.Map;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
+import lombok.Data;
 
-public interface BaseTool<T> {
-  // ⭐ 默认锁/条件变量/数据Map —— 不强制所有实现类都写一遍
-  default Map<String, Lock> getLockMap() {
-    return null;
-  }
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
 
-  default Map<String, Condition> getConditionMap() {
-    return null;
-  }
-
-  default Map<String, String> getDataMap() {
-    return null;
-  }
-
-  T run(String question);
-
-  T run(String question, Map<String, Object> globalMessage);
+@Data
+public class AgentLongMemory {
+  private int productId;
+  @NotBlank(message = "memoryKey 不能为空")
+  @Size(min = 1, max = 255, message = "memoryKey 长度必须在 1 到 255 之间")
+  private String memoryKey;
+  @NotBlank(message = "description 不能为空")
+  @Size(min = 1, max = 255, message = "description 长度必须在 1 到 255 之间")
+  private String description;
+  @NotBlank(message = "memoryValue 不能为空")
+  @Size(min = 1, max = 1024, message = "memoryValue 长度必须在 1 到 1024 之间")
+  private String memoryValue;
 }

@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.services.agent;
 
-import top.rslly.iot.models.ProductModelEntity;
 import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.param.prompt.ProductRoleDescription;
 import top.rslly.iot.param.request.ProductRole;

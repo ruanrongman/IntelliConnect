@@ -22,6 +22,7 @@ package top.rslly.iot.utility.ai.tools;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -35,16 +36,28 @@ import top.rslly.iot.utility.ai.prompts.WeatherToolPrompt;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Data
 @Component
+@Slf4j
 public class WeatherTool implements BaseTool<String> {
   @Autowired
   private WeatherToolPrompt weatherToolPrompt;
   @Value("${weather.key}")
   private String AmapKey;
+  @Value("${ai.weatherTool-speedUp}")
+  private boolean speedUp;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  // 将锁和条件变量改为每个 chatId 独立
+  private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
+  private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
+  private final Map<String, String> dataMap = new ConcurrentHashMap<>();
+
   @Value("${ai.weatherTool-llm}")
   private String llmName;
   private String name = "weatherTool";
@@ -55,8 +68,20 @@ public class WeatherTool implements BaseTool<String> {
 
   @Override
   public String run(String question) {
+    return null;
+  }
+
+  @Override
+  public String run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     List<ModelMessage> messages = new ArrayList<>();
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    String chatId = (String) globalMessage.get("chatId");
+
+    // 初始化当前会话的锁和条件变量
+    lockMap.putIfAbsent(chatId, new ReentrantLock());
+    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
 
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(), weatherToolPrompt.getWeatherTool());
@@ -65,6 +90,9 @@ public class WeatherTool implements BaseTool<String> {
     messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
     try {
+      if (speedUp) {
+        queueMap.get(chatId).add("我来给你查天气啦!");
+      }
       Map<String, String> answer = process_llm_result(obj);
       ModelMessage responseSystemMessage =
           new ModelMessage(ModelMessageRole.SYSTEM.value(),
@@ -72,16 +100,34 @@ public class WeatherTool implements BaseTool<String> {
       messages.clear();
       messages.add(responseSystemMessage);
       messages.add(userMessage);
-      return llm.commonChat(question, messages, false);
+      if (speedUp) {
+        dataMap.remove(chatId); // 使用 chatId 作为 key
+        llm.streamJsonChat(question, messages, true,
+            new ChatToolEventSourceListener(queueMap, chatId, this));
+        Lock chatLock = lockMap.get(chatId);
+        Condition chatCondition = conditionMap.get(chatId);
+        chatLock.lock();
+        try {
+          while (dataMap.get(chatId) == null) {
+            chatCondition.await();
+          }
+        } catch (Exception e) {
+          log.error("ChatTool error{}", e.getMessage());
+        } finally {
+          chatLock.unlock();
+        }
+        String data = dataMap.get(chatId);
+        dataMap.remove(chatId);
+        conditionMap.remove(chatId);
+        lockMap.remove(chatId);
+        return data;
+      } else {
+        return llm.commonChat(question, messages, false);
+      }
     } catch (Exception e) {
       // e.printStackTrace();
     }
     return "查询天气失败，请检查是否输入具体城市名称。";
-  }
-
-  @Override
-  public String run(String question, Map<String, Object> globalMessage) {
-    return this.run(question);
   }
 
   private Map<String, String> process_llm_result(JSONObject llmObject)

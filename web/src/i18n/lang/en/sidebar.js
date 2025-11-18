@@ -52,6 +52,7 @@ const product ={
   productPage: 'productPage',
   productXiaoZhi:'productXiaoZhi',
   productRole:'productRole',
+  agentLongMemory:'agentLongMemory',
   productRouterSet:'productRouterSet',
   productKnowledge:'productKnowledge',
   productMcp: 'mcpServerAdd',

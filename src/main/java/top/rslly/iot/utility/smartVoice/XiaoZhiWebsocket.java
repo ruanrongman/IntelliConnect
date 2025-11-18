@@ -201,7 +201,8 @@ public class XiaoZhiWebsocket {
         String state = json.getString("state");
         switch (state) {
           case "detect" -> {
-            xiaoZhiUtil.dealDetect(chatId, productId);
+            String text = json.getString("text");
+            xiaoZhiUtil.dealDetect(chatId, productId, text);
             isAbort.put(chatId, false);
           }
           case "start" -> {

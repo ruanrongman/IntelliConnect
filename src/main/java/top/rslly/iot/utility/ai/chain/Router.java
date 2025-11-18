@@ -72,6 +72,8 @@ public class Router {
   private GoodByeTool goodByeTool;
   @Autowired
   private ProductToolsBanServiceImpl productToolsBanService;
+  @Autowired
+  private LongMemoryTool longMemoryTool;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in wechat module need to use openid
@@ -121,7 +123,7 @@ public class Router {
         }
         switch (value.get(0)) {
           case "1" -> {
-            toolResult = weatherTool.run(args);
+            toolResult = weatherTool.run(args, globalMessage);
             answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
           }
           case "2" -> {
@@ -183,6 +185,7 @@ public class Router {
     // slide memory window
     if (memory.size() > 6) {
       memoryTool.run(content, globalMessage);
+      longMemoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);

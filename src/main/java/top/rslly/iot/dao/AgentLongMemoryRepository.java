@@ -17,27 +17,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.tools;
+package top.rslly.iot.dao;
 
-import java.util.Map;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.AgentLongMemoryEntity;
 
-public interface BaseTool<T> {
-  // ⭐ 默认锁/条件变量/数据Map —— 不强制所有实现类都写一遍
-  default Map<String, Lock> getLockMap() {
-    return null;
-  }
+import java.util.List;
 
-  default Map<String, Condition> getConditionMap() {
-    return null;
-  }
+public interface AgentLongMemoryRepository extends JpaRepository<AgentLongMemoryEntity, Integer> {
+  List<AgentLongMemoryEntity> findAllById(int id);
 
-  default Map<String, String> getDataMap() {
-    return null;
-  }
+  List<AgentLongMemoryEntity> findAllByProductId(int productId);
 
-  T run(String question);
+  List<AgentLongMemoryEntity> findAllByProductIdAndMemoryKey(int productId, String memoryKey);
 
-  T run(String question, Map<String, Object> globalMessage);
+  @Transactional
+  List<AgentLongMemoryEntity> deleteAllById(int id);
 }

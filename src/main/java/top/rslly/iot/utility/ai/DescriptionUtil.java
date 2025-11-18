@@ -23,6 +23,8 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.param.prompt.AgentLongMemoryDescription;
+import top.rslly.iot.services.agent.AgentLongMemoryServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.agent.TimeScheduleServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDataServiceImpl;
@@ -47,10 +49,17 @@ public class DescriptionUtil {
   @Autowired
   private TimeScheduleServiceImpl timeScheduleService;
   @Autowired
+  private AgentLongMemoryServiceImpl agentLongMemoryService;
+  @Autowired
   private McpAgent mcpAgent;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
+    return JSON.toJSONString(result);
+  }
+
+  public String getAgentLongMemory(int productId) {
+    var result = agentLongMemoryService.getDescription(productId);
     return JSON.toJSONString(result);
   }
 

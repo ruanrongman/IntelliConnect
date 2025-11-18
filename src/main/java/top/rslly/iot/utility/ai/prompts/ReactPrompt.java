@@ -22,9 +22,11 @@ package top.rslly.iot.utility.ai.prompts;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
 import java.util.HashMap;
@@ -39,11 +41,15 @@ public class ReactPrompt {
   @Value("${ai.team-name}")
   private String teamName;
   @Autowired
+  @Lazy
+  private DescriptionUtil descriptionUtil;
+  @Autowired
   private ProductRoleServiceImpl productRoleService;
   private static final String ReactSystem =
       """
           Your role is {role}, {role_introduction},your name is {agent_name},developed by the {team_name} team.
           The user's name is {user_name}
+          The current concept of memory and its content: {memory_map}
           As a diligent Task Agent, you goal is to effectively accomplish the provided task or question as best as you can.
 
           ## Tools
@@ -104,6 +110,7 @@ public class ReactPrompt {
 
   public String getReact(String toolDescriptions, String question, int productId) {
     Map<String, String> params = new HashMap<>();
+    params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
     params.put("tool_descriptions", toolDescriptions);
     params.put("question", question);
     List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);

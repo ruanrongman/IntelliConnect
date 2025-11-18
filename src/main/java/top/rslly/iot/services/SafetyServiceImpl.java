@@ -77,6 +77,8 @@ public class SafetyServiceImpl implements SafetyService {
   private ProductRouterSetServiceImpl productRouterSetService;
   @Autowired
   private OtaXiaozhiPassiveServiceImpl otaXiaozhiPassiveService;
+  @Autowired
+  private AgentLongMemoryServiceImpl agentLongMemoryService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -237,6 +239,16 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("productRouterSetId not found!");
     return this.controlAuthorizeProduct(token,
         productRouterSetEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeAgentLongMemory(String token, int id) {
+    List<AgentLongMemoryEntity> agentLongMemoryEntityList =
+        agentLongMemoryService.findAllById(id);
+    if (agentLongMemoryEntityList.isEmpty())
+      throw new NullPointerException("agentLongMemoryId not found!");
+    return this.controlAuthorizeProduct(token,
+        agentLongMemoryEntityList.get(0).getProductId());
   }
 
   @Override

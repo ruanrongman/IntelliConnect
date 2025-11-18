@@ -65,6 +65,8 @@ public class ProductServiceImpl implements ProductService {
   private ProductRouterSetRepository productRouterSetRepository;
   @Resource
   private ProductToolsBanRepository productToolsBanRepository;
+  @Resource
+  private AgentLongMemoryRepository agentLongMemoryRepository;
 
 
   @Override
@@ -180,6 +182,8 @@ public class ProductServiceImpl implements ProductService {
         productRouterSetRepository.findAllByProductId(id);
     List<ProductToolsBanEntity> productToolsBanEntityList =
         productToolsBanRepository.findAllByProductId(id);
+    List<AgentLongMemoryEntity> agentLongMemoryEntityList =
+        agentLongMemoryRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -188,7 +192,8 @@ public class ProductServiceImpl implements ProductService {
     boolean p6 = knowledgeChatEntityList.isEmpty();
     boolean p7 = productRouterSetEntityList.isEmpty();
     boolean p8 = productToolsBanEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8) {
+    boolean p9 = agentLongMemoryEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);

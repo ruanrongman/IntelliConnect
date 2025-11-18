@@ -64,6 +64,8 @@ public class XiaoZhiUtil {
   private String visionExplainUrl;
   @Value("${ai.tts.skip-tool-prefix:true}")
   private boolean skipToolPrefix;
+  @Value("${ai.detectRandom:false}")
+  private boolean detectRandom;
 
   public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     boolean mcpCanUse = false;
@@ -97,11 +99,12 @@ public class XiaoZhiUtil {
   }
 
   @Async("taskExecutor")
-  public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual)
+  public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
+      String... detect)
       throws IOException {
     try {
       OpusDecoder decoder = new OpusDecoder(16000, 1);
-      if (audioList.size() > 20) {
+      if (audioList.size() > 20 || detect.length > 0) {
         if (!isManual) {
           XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
               {
@@ -109,33 +112,37 @@ public class XiaoZhiUtil {
                 "state": "start"
               }""");
         }
-        // 安全读取字节数据
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        for (byte[] bytes : audioList) {
-          try {
-            // log.info("len{}",bytes.length);
-            byte[] data_packet = new byte[16000];
-            int pcm_frame = decoder.decode(bytes, 0, bytes.length,
-                data_packet, 0, 960, false);
-            // log.info("data_packet{}",data_packet);
-            bos.write(data_packet, 0, pcm_frame * 2);
-          } catch (Exception e) {
-            log.error("音频转换失败{}", e.getMessage());
-          }
-        }
-        log.info("data_size{}", bos.size());
-        Path tempFile = Files.createTempFile("audio_", ".wav");
-        Files.write(tempFile, bos.toByteArray());
-        bos.close();
-        String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
-        log.info("text{}", text);
-        var jsonObject = JSON.parseObject(text);
-        var sentencesArray = jsonObject.getJSONArray("sentences");
         StringBuilder sentences = new StringBuilder("");
-        if (sentencesArray.size() > 0) {
-          for (int i = 0; i < sentencesArray.size(); i++) {
-            sentences.append(sentencesArray.getJSONObject(i).getString("text"));
+        if (detect.length == 0) {
+          // 安全读取字节数据
+          ByteArrayOutputStream bos = new ByteArrayOutputStream();
+          for (byte[] bytes : audioList) {
+            try {
+              // log.info("len{}",bytes.length);
+              byte[] data_packet = new byte[16000];
+              int pcm_frame = decoder.decode(bytes, 0, bytes.length,
+                  data_packet, 0, 960, false);
+              // log.info("data_packet{}",data_packet);
+              bos.write(data_packet, 0, pcm_frame * 2);
+            } catch (Exception e) {
+              log.error("音频转换失败{}", e.getMessage());
+            }
           }
+          log.info("data_size{}", bos.size());
+          Path tempFile = Files.createTempFile("audio_", ".wav");
+          Files.write(tempFile, bos.toByteArray());
+          bos.close();
+          String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
+          log.info("text{}", text);
+          var jsonObject = JSON.parseObject(text);
+          var sentencesArray = jsonObject.getJSONArray("sentences");
+          if (sentencesArray.size() > 0) {
+            for (int i = 0; i < sentencesArray.size(); i++) {
+              sentences.append(sentencesArray.getJSONObject(i).getString("text"));
+            }
+          }
+        } else {
+          sentences.append(detect[0]);
         }
         if (sentences.length() > 0) {
           if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
@@ -321,7 +328,11 @@ public class XiaoZhiUtil {
     }
   }
 
-  public void dealDetect(String chatId, int productId) throws IOException {
+  public void dealDetect(String chatId, int productId, String text) throws IOException {
+    if (!detectRandom) {
+      dealWithAudio(new ArrayList<>(), chatId, productId, true, text);
+      return;
+    }
     XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
         {
           "type": "tts",

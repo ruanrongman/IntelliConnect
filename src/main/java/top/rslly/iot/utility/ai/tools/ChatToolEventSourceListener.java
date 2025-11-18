@@ -36,13 +36,13 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   private final StringBuilder jsonBuffer = new StringBuilder();
   private final Map<String, Queue<String>> queueMap;
   private final String chatId;
-  private final ChatTool chatTool; // 持有ChatTool实例引用
+  private final BaseTool<?> chatTool; // 持有ChatTool实例引用
 
   public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
-      ChatTool chatTool) {
+      BaseTool<?> tool) {
     this.queueMap = queueMap;
     this.chatId = chatId;
-    this.chatTool = chatTool;
+    this.chatTool = tool;
   }
 
   @Override

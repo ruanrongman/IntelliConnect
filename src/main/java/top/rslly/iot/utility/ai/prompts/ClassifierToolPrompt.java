@@ -46,10 +46,13 @@ public class ClassifierToolPrompt {
   private ProductRouterSetServiceImpl productRouterSetService;
   @Autowired
   private ProductToolsBanServiceImpl productToolsBanService;
+  @Autowired
+  private DescriptionUtil descriptionUtil;
   private static final String classifierPrompt =
       """
            {router_set}
            {task_map}
+           The current concept of memory and its content: {memory_map}
            You now need to classify based on user input
            ## Output Format
            ```json
@@ -59,7 +62,7 @@ public class ClassifierToolPrompt {
                {
                "code": "if success output 200,If it doesn't match any task,output 400",
                "value": "one of task No., json list data like [1],If it doesn't match, please output []",
-               "args": "Combined with Current Conversation,Summarize the context,Be sure to convey the intention completely,not null"
+               "args": "Combined with Current Conversation and memory,Summarize the context,Be sure to convey the intention completely,not null"
                }
            }
            ```
@@ -126,6 +129,7 @@ public class ClassifierToolPrompt {
       params.put("router_set", "");
     }
     params.put("task_map", classifierJson);
+    params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
     return StringUtils.formatString(classifierPrompt, params);
   }
 }

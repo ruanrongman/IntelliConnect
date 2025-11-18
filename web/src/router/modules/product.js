@@ -38,6 +38,15 @@ export default [
             title: 'productRole',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           },
+        }, //agentLongMemory
+        {
+          path: '/agentLongMemory',
+          name: 'agentLongMemory',
+          component: () => import('@/views/agentLongMemory/index.vue'),
+          meta: {
+            title: 'agentLongMemory',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
         },
         {
           path: '/productRouterSet',
