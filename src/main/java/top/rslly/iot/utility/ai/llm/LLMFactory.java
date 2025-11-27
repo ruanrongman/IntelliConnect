@@ -19,8 +19,6 @@
  */
 package top.rslly.iot.utility.ai.llm;
 
-import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversation;
-import com.alibaba.dashscope.utils.Constants;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -29,10 +27,19 @@ import java.util.regex.Pattern;
 
 @Component
 public class LLMFactory {
+
   private static String deepSeekApiKey;
   private static String siliconFlowApiKey;
   private static String uniApiKey;
   private static String dashScopeApiKey;
+  private static String glmKey;
+  private static String customLLMProviderUrl;
+  private static String customKey;
+
+  @Value("${ai.glm-key}")
+  public void setGlmApiKey(String apiKey) {
+    glmKey = apiKey;
+  }
 
   @Value("${ai.deepSeek-key}")
   public void setDeepSeekApiKey(String apiKey) {
@@ -54,89 +61,97 @@ public class LLMFactory {
     dashScopeApiKey = apiKey;
   }
 
+  @Value("${ai.custom-key}")
+  public void setCustomKey(String key) {
+    customKey = key;
+  }
+
+  @Value("${ai.custom-llm-provider-url}")
+  public void setCustomLLMProviderUrl(String url) {
+    customLLMProviderUrl = url;
+  }
 
   public static LLM getLLM(String llmName) {
-    // 在 buildRequest 方法中添加以下匹配逻辑
-    boolean enableThinking = false;
-    int thinkingBudget = 128;
+    if (llmName == null || llmName.trim().isEmpty()) {
+      return new DeepSeek(deepSeekApiKey);
+    }
 
-    // 使用正则匹配 think-数字 模式
-    Pattern pattern = Pattern.compile("think-(\\d+)");
-    Matcher matcher = pattern.matcher(llmName);
+    // 1. 规范化输入：只去除前后空格，保留原始大小写
+    String trimmedLlmName = llmName.trim();
+    // 创建一个全小写的版本，仅用于不区分大小写的匹配
+    String lowerCaseLlmName = trimmedLlmName.toLowerCase();
+
+    // 2. 处理特殊的 glm 供应商 (不区分大小写)
+    if ("glm".equalsIgnoreCase(trimmedLlmName)) {
+      return new Glm(glmKey);
+    }
+
+    // 3. 解析 "think" 模式 (不区分大小写)
+    boolean enableThinking = false;
+    boolean thinkMode = false;
+    int thinkingBudget = 128; // 默认值
+    String baseLlmName = trimmedLlmName; // 初始化为原始名称
+
+    // 使用 (?i) 标志使正则表达式不区分大小写
+    Pattern thinkPattern = Pattern.compile("(?i)-think-(\\d+)");
+    Matcher matcher = thinkPattern.matcher(baseLlmName);
     if (matcher.find()) {
       enableThinking = true;
+      thinkMode = true;
       thinkingBudget = Integer.parseInt(matcher.group(1));
-    }
-    // 如果只需要包含 think 就开启（即使没有数字）
-    else if (llmName.contains("think")) {
+      // 从原始名称中移除 "-think-数字" 部分
+      baseLlmName = baseLlmName.substring(0, matcher.start());
+    } else if (lowerCaseLlmName.contains("-think-no")) {
+      thinkMode = true;
+      baseLlmName = baseLlmName.substring(0, lowerCaseLlmName.indexOf("-think-no"));
+    } else if (lowerCaseLlmName.contains("-think")) {
+      // 如果只包含 "-think"
       enableThinking = true;
+      thinkMode = true;
+      int thinkIndex = lowerCaseLlmName.indexOf("-think");
+      // 从原始名称中移除 "-think" 部分
+      baseLlmName = baseLlmName.substring(0, thinkIndex);
     }
 
-    if (llmName.equals("glm")) {
-      return new Glm();
-    } else if (llmName.equals("deepSeek")) {
-      return new DeepSeek(deepSeekApiKey);
-    } else if (llmName.equals("silicon-deepSeek-v3")) {
-      return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V3",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen2.5-7B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-7B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen2.5-14B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-14B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen2.5-32B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-32B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen2.5-72B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-72B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen3-Coder-30B-A3B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen3-Coder-30B-A3B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen3-235B-A22B-Instruct-2507")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen3-235B-A22B-Instruct-2507",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Qwen3-Next-80B-A3B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen3-Next-80B-A3B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("dashscope-Qwen3-Next-80B-A3B-Instruct")) {
-      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
-          "qwen3-next-80b-a3b-instruct",
-          dashScopeApiKey);
-    } else if (llmName.equals("dashscope-Qwen3-max")) {
-      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
-          "qwen3-max",
-          dashScopeApiKey);
-    } else if (llmName.equals("dashscope-qwen3-235b-a22b-instruct-2507")) {
-      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
-          "qwen3-235b-a22b-instruct-2507",
-          dashScopeApiKey);
-    } else if (llmName.startsWith("silicon-Qwen3-30B-A3B")) {
-      return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-30B-A3B", enableThinking, thinkingBudget);
-    } else if (llmName.startsWith("silicon-Qwen3-235B-A22B")) {
-      return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-235B-A22B", enableThinking, thinkingBudget);
-    } else if (llmName.startsWith("silicon-Qwen3-8B")) {
-      return new Qwen3(siliconFlowApiKey, "Qwen/Qwen3-8B", enableThinking, thinkingBudget);
-    } else if (llmName.startsWith("silicon-GLM-4.5-Air")) {
-      return new Qwen3(siliconFlowApiKey, "zai-org/GLM-4.5-Air", enableThinking, thinkingBudget);
-    } else if (llmName.equals("silicon-deepSeek-v2.5")) {
-      return new DeepSeek("https://api.siliconflow.cn", "deepseek-ai/DeepSeek-V2.5",
-          deepSeekApiKey);
-    } else if (llmName.equals("silicon-Qwen2.5-vl-32B-Instruct")) {
-      return new DeepSeek("https://api.siliconflow.cn", "Qwen/Qwen2.5-VL-32B-Instruct",
-          siliconFlowApiKey);
-    } else if (llmName.equals("silicon-Ling-mini-2.0")) {
-      return new DeepSeek("https://api.siliconflow.cn", "inclusionAI/Ling-mini-2.0",
-          siliconFlowApiKey);
-    } else if (llmName.equals("uniApi-Qwen2.5-32B-Instruct")) {
-      return new DeepSeek("https://hk.uniapi.io", "Qwen2.5-32B-Instruct", uniApiKey);
-    } else if (llmName.equals("uniApi-Qwen2.5-72B-Instruct")) {
-      return new DeepSeek("https://hk.uniapi.io", "Qwen2.5-72B-Instruct", uniApiKey);
-    } else if (llmName.equals("uniApi-deepSeek")) {
-      return new DeepSeek("https://hk.uniapi.io", "deepseek-chat", uniApiKey);
-    } else {
-      return new DeepSeek(deepSeekApiKey);
+    // 去除可能产生的末尾连字符和空格
+    baseLlmName = baseLlmName.trim();
+    if (baseLlmName.endsWith("-")) {
+      baseLlmName = baseLlmName.substring(0, baseLlmName.length() - 1);
     }
+
+    // 4. 根据前缀路由到不同供应商 (使用小写版本匹配，从原始版本提取)
+    if (lowerCaseLlmName.startsWith("silicon-")) {
+      String modelName = baseLlmName.substring("silicon-".length());
+      if (thinkMode) {
+        return new Qwen3(siliconFlowApiKey, modelName, enableThinking,
+            thinkingBudget, "https://api.siliconflow.cn/v1/chat/completions");
+      }
+      return new DeepSeek("https://api.siliconflow.cn", modelName, siliconFlowApiKey);
+    } else if (lowerCaseLlmName.startsWith("dashscope-")) {
+      String modelName = baseLlmName.substring("dashscope-".length());
+      if (thinkMode) {
+        return new Qwen3(dashScopeApiKey, modelName, enableThinking,
+            thinkingBudget, "https://dashscope.aliyuncs.com/v1/chat/completions");
+      }
+      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
+          dashScopeApiKey);
+    } else if (lowerCaseLlmName.startsWith("uniapi-")) {
+      String modelName = baseLlmName.substring("uniapi-".length());
+      if (thinkMode) {
+        return new Qwen3(uniApiKey, modelName, enableThinking,
+            thinkingBudget, "https://hk.uniapi.io/v1/chat/completions");
+      }
+      return new DeepSeek("https://hk.uniapi.io", modelName, uniApiKey);
+    } else if (lowerCaseLlmName.startsWith("custom-")) {
+      String modelName = baseLlmName.substring("custom-".length());
+      if (thinkMode) {
+        return new Qwen3(customKey, modelName, enableThinking,
+            thinkingBudget, customLLMProviderUrl + "/v1/chat/completions");
+      }
+      return new DeepSeek(customLLMProviderUrl, modelName, customKey);
+    }
+
+    // 6. 兜底策略：如果以上都不匹配，返回默认的 DeepSeek
+    return new DeepSeek(deepSeekApiKey);
   }
 }

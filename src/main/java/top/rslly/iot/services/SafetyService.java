@@ -57,4 +57,6 @@ public interface SafetyService {
   boolean controlAuthorizeProductRouterSet(String token, int id);
 
   boolean controlAuthorizeAgentLongMemory(String token, int id);
+
+  boolean controlAuthorizeProductVoiceDiy(String token, int id);
 }

@@ -20,6 +20,7 @@
 package top.rslly.iot.utility.wx;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.wechat.WxProductActiveServiceImpl;
@@ -54,6 +55,8 @@ public class SmartRobot {
   private RedisUtil redisUtil;
   @Autowired
   private Audio2Text audio2Text;
+  @Value("${ai.wx_smart_robot_llm}")
+  private String SmartRobotLLm;
 
   @Async("taskExecutor")
   public void smartSendContent(String openid, String msg, String microappid) throws IOException {
@@ -87,7 +90,7 @@ public class SmartRobot {
       return;
     }
     List<ModelMessage> memory;
-    String content = LLMFactory.getLLM("glm").imageToWord("图里有什么", imageUrl);
+    String content = LLMFactory.getLLM(SmartRobotLLm).imageToWord("图里有什么", imageUrl);
     var memory_cache = redisUtil.get("memory" + openid);
     if (memory_cache != null)
       try {

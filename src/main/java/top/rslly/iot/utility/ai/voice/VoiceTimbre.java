@@ -21,7 +21,6 @@ package top.rslly.iot.utility.ai.voice;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.stream.Stream;
@@ -34,7 +33,12 @@ public enum VoiceTimbre {
           "深邃而稳重的声音犹如醇厚佳酿，散发出成熟魅力。"), CosyLongXiaoBai("longxiaobai",
               "以轻松亲和的声调演绎闲适日常，其嗓音如邻家女孩般亲切自然。"), CosyLongShu("longshu",
                   "以专业沉稳的播报风格传递新闻资讯，其嗓音富含权威与信赖感。"), CosyLongTong("longtong",
-                      "以稚嫩的童声撒欢，像是春日里的小溪，清脆跳跃，流淌着生机勃勃的旋律。"),
+                      "以稚嫩的童声撒欢，像是春日里的小溪，清脆跳跃，流淌着生机勃勃的旋律。"), En_US_AnaNeural("edge-en-US-AnaNeural",
+                          "英文 - 美式 - 女 (安娜)"), Ko_KR_SunHiNeural("edge-ko-KR-SunHiNeural",
+                              "韩语 - 韩国 - 女 (孙Hi)"), Ru_RU_SvetlanaNeural(
+                                  "edge-ru-RU-SvetlanaNeural",
+                                  "俄语 - 俄语 - 女 ( Светлана)"), Ja_JP_NanamiNeural(
+                                      "edge-ja-JP-NanamiNeural", "日语 - 日本 - 女 (南ami)"),
   // 新增的 Edge TTS 音色
   ZH_CN_XIAOXIAO_NEURAL("edge-zh-CN-XiaoxiaoNeural", "中文 (简体) - 普通话 - 女 (晓晓)"), ZH_CN_XIAOYI_NEURAL(
       "edge-zh-CN-XiaoyiNeural",

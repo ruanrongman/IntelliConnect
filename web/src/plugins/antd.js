@@ -33,6 +33,7 @@ import {
   Upload,
   InputNumber,
   Space ,
+  Slider,  // 添加 Slider 组件导入
   // Input
 } from 'ant-design-vue'
 import * as AntdIcon from '@ant-design/icons-vue'
@@ -73,6 +74,7 @@ export function setupAntd(app) {
   app.use(Upload)
   app.use(InputNumber)
   app.use(Space)
+  app.use(Slider)  // 添加 Slider 组件注册
   for (let c in AntdIcon) {
     app.component(c, AntdIcon[c])
   }

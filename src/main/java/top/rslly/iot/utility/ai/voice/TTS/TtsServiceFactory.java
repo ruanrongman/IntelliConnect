@@ -23,6 +23,7 @@ package top.rslly.iot.utility.ai.voice.TTS;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
+import top.rslly.iot.services.agent.ProductVoiceDiyServiceImpl;
 
 import javax.websocket.Session;
 
@@ -34,6 +35,8 @@ public class TtsServiceFactory {
   private EdgeTTs edgeTTs;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  @Autowired
+  private ProductVoiceDiyServiceImpl productVoiceDiyService;
 
   public TtsService getTtsService(String type) {
     if (type.equals("edge")) {
@@ -44,6 +47,11 @@ public class TtsServiceFactory {
 
   public void websocketAudioSync(String text, Session session, String chatId, int productId) {
     String provider = "dashscope";
+    // 语音音调 (0.5-2.0)
+    float pitch = 1.0f;
+
+    // 语音语速 (0.5-2.0)
+    float speed = 1.0f;
     String voice = null;
     try {
       var roles = productRoleService.findAllByProductId(productId);
@@ -54,9 +62,14 @@ public class TtsServiceFactory {
           voice = voice.substring(5);
         }
       }
+      var voiceDiyEntityList = productVoiceDiyService.findAllByProductId(productId);
+      if (!voiceDiyEntityList.isEmpty()) {
+        pitch = Float.parseFloat(voiceDiyEntityList.get(0).getPitch());
+        speed = Float.parseFloat(voiceDiyEntityList.get(0).getSpeed());
+      }
     } catch (Exception ignored) {
     }
     TtsService ttsService = getTtsService(provider);
-    ttsService.websocketAudioSync(text, session, chatId, voice);
+    ttsService.websocketAudioSync(text, pitch, speed, session, chatId, voice);
   }
 }

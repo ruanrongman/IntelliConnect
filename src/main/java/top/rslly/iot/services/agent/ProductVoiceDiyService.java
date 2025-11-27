@@ -17,13 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.voice.TTS;
+package top.rslly.iot.services.agent;
 
-import javax.websocket.Session;
+import top.rslly.iot.models.ProductVoiceDiyEntity;
+import top.rslly.iot.param.request.ProductVoiceDiy;
+import top.rslly.iot.utility.result.JsonResult;
 
-public interface TtsService {
-  void websocketAudioSync(String text, Float pitch, Float speed, Session session, String chatId,
-      String voice);
+import java.util.List;
 
-  void asyncSynthesizeAndSaveAudio(String text, String chatId);
+public interface ProductVoiceDiyService {
+  List<ProductVoiceDiyEntity> findAllById(int id);
+
+  List<ProductVoiceDiyEntity> findAllByProductId(int productId);
+
+  JsonResult<?> getProductVoiceDiy(int productId);
+
+  JsonResult<?> postProductVoiceDiy(ProductVoiceDiy productVoiceDiy);
+
+  JsonResult<?> deleteProductVoiceDiy(int id);
 }

@@ -17,13 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.voice.TTS;
+package top.rslly.iot.param.request;
 
-import javax.websocket.Session;
+import lombok.Data;
 
-public interface TtsService {
-  void websocketAudioSync(String text, Float pitch, Float speed, Session session, String chatId,
-      String voice);
+import javax.validation.constraints.*;
 
-  void asyncSynthesizeAndSaveAudio(String text, String chatId);
+@Data
+public class ProductVoiceDiy {
+  private int productId;
+  @NotNull(message = "pitch 不能为空")
+  @DecimalMin(value = "0.5", message = "pitch 不能小于 0.5")
+  @DecimalMax(value = "2.0", message = "pitch 不能大于 2.0")
+  private Float pitch;
+
+  @NotNull(message = "speed 不能为空")
+  @DecimalMin(value = "0.5", message = "speed 不能小于 0.5")
+  @DecimalMax(value = "2.0", message = "speed 不能大于 2.0")
+  private Float speed;
 }

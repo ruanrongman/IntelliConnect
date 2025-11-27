@@ -88,7 +88,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，免费获取智控台的前端源码，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/f05e3fe25dd4196e9abfbe4d8d2b8ed1.jpg" width="250px"/>
+    <img src="./images/4540285aafc3cee1c3c117a5fbf2c15c.jpg" width="250px"/>
 </div>
 
 

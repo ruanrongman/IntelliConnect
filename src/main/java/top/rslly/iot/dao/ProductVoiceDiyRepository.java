@@ -17,13 +17,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.ai.voice.TTS;
+package top.rslly.iot.dao;
 
-import javax.websocket.Session;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.ProductVoiceDiyEntity;
 
-public interface TtsService {
-  void websocketAudioSync(String text, Float pitch, Float speed, Session session, String chatId,
-      String voice);
+import java.util.List;
 
-  void asyncSynthesizeAndSaveAudio(String text, String chatId);
+public interface ProductVoiceDiyRepository extends JpaRepository<ProductVoiceDiyEntity, Long> {
+  List<ProductVoiceDiyEntity> findAllById(int id);
+
+  List<ProductVoiceDiyEntity> findAllByProductId(int productId);
+
+  @Transactional
+  List<ProductVoiceDiyEntity> deleteAllById(int id);
 }

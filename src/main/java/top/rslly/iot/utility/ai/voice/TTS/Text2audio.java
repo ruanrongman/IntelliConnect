@@ -178,7 +178,8 @@ public class Text2audio implements TtsService {
   }
 
   @Override
-  public void websocketAudioSync(String text, Session session, String chatId, String voice) {
+  public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
+      String chatId, String voice) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
       // 创建线程安全的参数副本
@@ -186,6 +187,8 @@ public class Text2audio implements TtsService {
           .apiKey(param.getApiKey())
           .model(param.getModel())
           .format(param.getFormat())
+          .pitchRate(pitch)
+          .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
           .build();
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);

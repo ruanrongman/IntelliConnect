@@ -41,13 +41,21 @@ public class EdgeTTs implements TtsService {
   private static final String myVoice = "zh-CN-XiaoyiNeural";
 
   @Override
-  public void websocketAudioSync(String text, Session session, String chatId, String voice) {
+  public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
+      String chatId, String voice) {
     // Only used for WebSocket audio sending.
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
     // End-of-stream marker: an empty byte array.
     final byte[] EOS = new byte[0];
     final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
     String fullPath = null;
+    // 计算Edge TTS的rate参数 (将0.5-2.0映射到-50%到+100%)
+    // speed=0.5 -> rate=-50%, speed=1.0 -> rate=+0%, speed=2.0 -> rate=+100%
+    int ratePercent = (int) ((speed - 1.0f) * 100);
+
+    // 计算Edge TTS的pitch参数 (将0.5-2.0映射到-50Hz到+50Hz)
+    // pitch=0.5 -> -50Hz, pitch=1.0 -> 0Hz, pitch=2.0 -> +50Hz
+    int pitchHz = (int) ((pitch - 1.0f) * 50);
 
     try {
       String voiceName = myVoice;
@@ -66,6 +74,8 @@ public class EdgeTTs implements TtsService {
       String audioFilePath = ttsEngine.findHeadHook()
           .storage(outputPath)
           .isRateLimited(true)
+          .voicePitch(pitchHz + "Hz")
+          .voiceRate(ratePercent + "%")
           .overwrite(false)
           .formatMp3()
           .trans();

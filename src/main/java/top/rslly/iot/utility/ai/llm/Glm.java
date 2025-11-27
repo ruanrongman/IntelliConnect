@@ -44,7 +44,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@Component
+
 @Slf4j
 public class Glm implements LLM {
   // 请自定义自己的业务id
@@ -54,8 +54,7 @@ public class Glm implements LLM {
   private static ClientV4 client;
   private static final ObjectMapper mapper = defaultObjectMapper();
 
-  @Value("${ai.glm-key}")
-  public void setApiKey(String apiKey) {
+  public Glm(String apiKey) {
     // 填写自己的api key
     client = new ClientV4.Builder(apiKey)
         .enableTokenCache()

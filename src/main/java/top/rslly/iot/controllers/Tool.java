@@ -83,6 +83,8 @@ public class Tool {
   private ProductToolsBanServiceImpl productToolsBanService;
   @Autowired
   private AgentLongMemoryServiceImpl agentLongMemoryService;
+  @Autowired
+  private ProductVoiceDiyServiceImpl productVoiceDiyService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -524,6 +526,46 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return agentLongMemoryService.deleteLongMemory(id);
+  }
+
+  @Operation(summary = "获取产品语音定制", description = "获取产品语音定制")
+  @RequestMapping(value = "/productVoiceDiy", method = RequestMethod.GET)
+  public JsonResult<?> getProductVoiceDiy(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productVoiceDiyService.getProductVoiceDiy(productId);
+  }
+
+  @Operation(summary = "提交/修改产品语音定制", description = "提交/修改产品语音定制")
+  @RequestMapping(value = "/productVoiceDiy", method = RequestMethod.POST)
+  public JsonResult<?> postProductVoiceDiy(
+      @Valid @RequestBody ProductVoiceDiy productVoiceDiy,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productVoiceDiy.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productVoiceDiyService.postProductVoiceDiy(productVoiceDiy);
+  }
+
+  @Operation(summary = "删除产品语音定制", description = "删除产品语音定制")
+  @RequestMapping(value = "/productVoiceDiy", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductVoiceDiy(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductVoiceDiy(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productVoiceDiyService.deleteProductVoiceDiy(id);
   }
 
 }
