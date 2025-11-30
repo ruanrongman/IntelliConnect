@@ -178,6 +178,7 @@ ai:
     agent-llm: dashscope-qwen3-max
     agent-epoch-limit: 5
 jwt:
+  # JWT 密钥
   secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9
 emq:
   api:
