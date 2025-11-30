@@ -128,6 +128,16 @@ weather:
   key: XXX
 ai:
   detectRandom: false
+  asr:
+    provider: funasr # dashscope 或 funasr
+    wx_smart_robot_asr: dashscope
+  funasr:
+    host: 192.168.49.129
+    port: 10095
+    api-key: none
+    is-ssl: false
+    delete-audio: true
+    output-dir: ./funasr_output/
   tts:
     skip-tool-prefix: true
   chromeDrive-path: XXX
@@ -168,7 +178,6 @@ ai:
     agent-llm: dashscope-qwen3-max
     agent-epoch-limit: 5
 jwt:
-  # JWT 密钥
   secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9
 emq:
   api:

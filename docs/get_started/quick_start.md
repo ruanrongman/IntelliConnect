@@ -4,6 +4,7 @@
 物联网平台内核是一个轻量级的物联网平台，包含了物联网最核心的基础模块，
 包括物模型、监控、AI、MQTT、微信小程序、微信服务号等模块。该平台旨在帮助开发者快速搭建物联网应用，提高开发效率。
 物联网平台内核并不包括ui组件，只提供基础的api接口，开发者可以自由选择自己喜欢的ui框架来搭建应用。
+目前已经提供了一套示例UI界面，基于Vue3，可以直接使用。
 
 ## 什么是Agent智能体
 Agent智能体可以自我学习。智能体是一种通用问题解决器。从软件工程的角度看来， 
@@ -30,6 +31,7 @@ cd docker && docker-compose up -d
     - EMQX MQTT消息中间件(https://www.emqx.com/zh)
     - InfluxDB 时序数据库
     - Chroma 一个开源的向量数据库，用于存储和检索向量数据。(https://docs.trychroma.com/docs/overview/introduction)
+    - FunAsr 语音识别服务。(https://github.com/modelscope/FunASR)
 
 2. 验证容器状态（可选）：
 ```bash
@@ -194,10 +196,24 @@ ai:
   audio-temp-url: [项目运行的域名]
   glm-key: 
   deepSeek-key: 
-  dashscope-key: 
-  robot-name: [机器人名称]
+  dashscope-key:
+  uniApi-Key: 
+  robot-name: 小创
   team-name: 创万联
+  custom-key: XXX
+  custom-llm-provider-url: XXX
 ```
+>默认支持以上几种主流供应商，你可以自行添加其他供应商或者本地部署的LLM，只需要配置对应的供应商URL即可。
+
+* 对应的供应商及其名称规则如下：
+
+```yaml
+1. 硅基流动(https://siliconflow.cn/): silicon-模型名称(silicon-Qwen/Qwen3-Next-80B-A3B-Instruct)
+2. 阿里云百炼(https://www.aliyun.com/product/tongyi?utm_content=se_1021879167): dashscope-模型名称(dashscope-qwen3-max)
+3. uniapi(https://uniapi.ai/): uniapi-模型名称(uniapi-qwen3-max)
+4. 私有部署或其它供应商: custom-模型名称(custom-模型名称)
+```
+
 通过以上步骤即可完成基础环境的搭建与配置，建议通过健康检查接口验证各服务连接状态。如果你需要
 控制家里的电气，你可以选择安装homeAssistant与本平台集成，它将帮助你管理家庭的电器，并提供流畅的体验。
 

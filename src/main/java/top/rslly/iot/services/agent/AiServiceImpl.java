@@ -35,7 +35,7 @@ import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
-import top.rslly.iot.utility.ai.voice.Audio2Text;
+import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
 import top.rslly.iot.utility.ai.voice.TTS.TtsService;

@@ -99,12 +99,21 @@ services:
       timeout: 10s
       retries: 3
 
+  funasr:
+    image: harryliu888/funasr-online-server:latest
+    container_name: funasr-online-server
+    ports:
+      - 10095:10095
+      - 10096:10096
+    volumes:
+      - ./models:/workspace/models
 volumes:
   mysql-volume:
   redis-volume:
   influxdb-volume:
   emqx-volume:
   chromadb-volume:  # 新增 ChromaDB 数据卷
+  funasr-volume:
 
 networks:
   emqx-bridge:

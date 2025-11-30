@@ -31,9 +31,9 @@ import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.chain.Router;
-import top.rslly.iot.utility.ai.llm.Glm;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
-import top.rslly.iot.utility.ai.voice.Audio2Text;
+import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
+import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,9 +54,11 @@ public class SmartRobot {
   @Autowired
   private RedisUtil redisUtil;
   @Autowired
-  private Audio2Text audio2Text;
+  private AsrServiceFactory asrServiceFactory;
+  @Value("${ai.asr.wx_smart_robot_asr}")
+  private String smartRobotAsr;
   @Value("${ai.wx_smart_robot_llm}")
-  private String SmartRobotLLm;
+  private String smartRobotLLm;
 
   @Async("taskExecutor")
   public void smartSendContent(String openid, String msg, String microappid) throws IOException {
@@ -90,7 +92,7 @@ public class SmartRobot {
       return;
     }
     List<ModelMessage> memory;
-    String content = LLMFactory.getLLM(SmartRobotLLm).imageToWord("图里有什么", imageUrl);
+    String content = LLMFactory.getLLM(smartRobotLLm).imageToWord("图里有什么", imageUrl);
     var memory_cache = redisUtil.get("memory" + openid);
     if (memory_cache != null)
       try {
@@ -114,7 +116,7 @@ public class SmartRobot {
 
   @Async("taskExecutor")
   public void dealVoice(String openid, String url, String microappid) throws IOException {
-    String result = audio2Text.getText(url);
+    String result = asrServiceFactory.getService(smartRobotAsr).getText(url);
     smartSendContent(openid, result, microappid);
   }
 }

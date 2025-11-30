@@ -20,7 +20,6 @@
 package top.rslly.iot.utility.smartVoice;
 
 import cn.hutool.captcha.generator.RandomGenerator;
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +33,7 @@ import top.rslly.iot.utility.ai.mcp.McpProtocolSend;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
-import top.rslly.iot.utility.ai.voice.Audio2Text;
+import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
@@ -49,7 +48,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class XiaoZhiUtil {
   @Autowired
-  private Audio2Text audio2Text;
+  private AsrServiceFactory asrServiceFactory;
   @Autowired
   private TtsServiceFactory ttsServiceFactory;
   @Autowired
@@ -132,15 +131,10 @@ public class XiaoZhiUtil {
           Path tempFile = Files.createTempFile("audio_", ".wav");
           Files.write(tempFile, bos.toByteArray());
           bos.close();
+          var audio2Text = asrServiceFactory.getService();
           String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
           log.info("text{}", text);
-          var jsonObject = JSON.parseObject(text);
-          var sentencesArray = jsonObject.getJSONArray("sentences");
-          if (sentencesArray.size() > 0) {
-            for (int i = 0; i < sentencesArray.size(); i++) {
-              sentences.append(sentencesArray.getJSONObject(i).getString("text"));
-            }
-          }
+          sentences.append(text);
         } else {
           sentences.append(detect[0]);
         }
