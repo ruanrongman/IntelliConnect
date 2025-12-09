@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -40,63 +41,110 @@ public class McpProtocolDeal {
   @Autowired
   private RedisUtil redisUtil;
 
+  // 锁的前缀
+  private static final String LOCK_PREFIX = "mcp:lock:";
+  // 锁的过期时间（秒）
+  private static final long LOCK_EXPIRE_TIME = 10L;
+  // 重试次数
+  private static final int RETRY_TIMES = 3;
+  // 重试间隔（毫秒）
+  private static final long RETRY_INTERVAL = 100L;
+
   public void dealMcp(JSONObject resultObject, String serverName, String chatId, Session session,
       boolean endpoint) throws IOException {
-    if (resultObject.containsKey("content")) {
-      if (resultObject.containsKey("isError")) {
-        if (resultObject.getBoolean("isError")) {
-          redisUtil.set(serverName + chatId + "toolResult", "call tool error");
+    String lockKey = LOCK_PREFIX + serverName + ":" + chatId;
+    String requestId = UUID.randomUUID().toString();
+
+    // 尝试获取分布式锁（带重试）
+    boolean locked = redisUtil.tryLockWithRetry(lockKey, requestId, LOCK_EXPIRE_TIME,
+        RETRY_TIMES, RETRY_INTERVAL);
+
+    if (!locked) {
+      log.warn("获取分布式锁失败，serverName: {}, chatId: {}", serverName, chatId);
+      throw new IOException("无法获取分布式锁，请稍后重试");
+    }
+    try {
+      if (resultObject.containsKey("content")) {
+        if (resultObject.containsKey("isError")) {
+          if (resultObject.getBoolean("isError")) {
+            redisUtil.set(serverName + chatId + "toolResult", "call tool error");
+          } else {
+            log.info("result{}", resultObject.getString("content"));
+            redisUtil.set(serverName + chatId + "toolResult",
+                resultObject.getString("content"));
+          }
         } else {
           log.info("result{}", resultObject.getString("content"));
           redisUtil.set(serverName + chatId + "toolResult",
               resultObject.getString("content"));
         }
-      } else {
-        log.info("result{}", resultObject.getString("content"));
-        redisUtil.set(serverName + chatId + "toolResult",
-            resultObject.getString("content"));
       }
-    }
-    if (resultObject.containsKey("tools")) {
-      if (resultObject.containsKey("error")) {
-        redisUtil.set(serverName + chatId + "toolResult", "call tool error");
-        log.error("tool调用错误:{}", resultObject.getJSONObject("error").getString("message"));
-      }
-    }
-    if (resultObject.containsKey("tools")) {
-      String tools = resultObject.getString("tools");
-      String nextCursor = resultObject.getString("nextCursor");
-      List<Map<String, Object>> toolList;
-      if (redisUtil.hasKey(serverName + chatId)) {
-        toolList = (List<Map<String, Object>>) redisUtil.get(serverName + chatId);
-        if (toolList == null) {
-          toolList = new ArrayList<>();
+      if (resultObject.containsKey("tools")) {
+        if (resultObject.containsKey("error")) {
+          redisUtil.set(serverName + chatId + "toolResult", "call tool error");
+          log.error("tool调用错误:{}", resultObject.getJSONObject("error").getString("message"));
         }
-      } else
-        toolList = new ArrayList<>();
-      JSONArray toolArray = JSON.parseArray(tools);
-      for (int i = 0; i < toolArray.size(); i++) {
-        Map<String, Object> tool = new HashMap<>();
-        tool.put("name", toolArray.getJSONObject(i).getString("name"));
-        tool.put("description", toolArray.getJSONObject(i).getString("description"));
-        tool.put("inputSchema", toolArray.getJSONObject(i).getJSONObject("inputSchema"));
-        toolList.add(tool);
       }
-      // 限制工具数量
-      if (toolList.size() > 50) {
-        toolList = new ArrayList<>(toolList.subList(0, 50));
+      if (resultObject.containsKey("tools")) {
+        String tools = resultObject.getString("tools");
+        String nextCursor = resultObject.getString("nextCursor");
+        List<Map<String, Object>> toolList;
+        if (redisUtil.hasKey(serverName + chatId)) {
+          toolList = (List<Map<String, Object>>) redisUtil.get(serverName + chatId);
+          if (toolList == null) {
+            toolList = new ArrayList<>();
+          }
+        } else
+          toolList = new ArrayList<>();
+        JSONArray toolArray = JSON.parseArray(tools);
+        for (int i = 0; i < toolArray.size(); i++) {
+          Map<String, Object> tool = new HashMap<>();
+          tool.put("name", toolArray.getJSONObject(i).getString("name"));
+          tool.put("description", toolArray.getJSONObject(i).getString("description"));
+          tool.put("inputSchema", toolArray.getJSONObject(i).getJSONObject("inputSchema"));
+          toolList.add(tool);
+        }
+        // 限制工具数量
+        if (toolList.size() > 50) {
+          toolList = new ArrayList<>(toolList.subList(0, 50));
+        }
+        redisUtil.set(serverName + chatId, toolList);
+        if (nextCursor != null && !nextCursor.equals("")) {
+          session.getBasicRemote().sendText(McpProtocolSend.sendToolList(nextCursor, endpoint));
+        }
       }
-      redisUtil.set(serverName + chatId, toolList);
-      if (nextCursor != null && !nextCursor.equals("")) {
-        session.getBasicRemote().sendText(McpProtocolSend.sendToolList(nextCursor, endpoint));
+    } finally {
+      // 确保释放锁
+      boolean released = redisUtil.releaseLock(lockKey, requestId);
+      if (!released) {
+        log.error("释放分布式锁失败，serverName: {}, chatId: {}, requestId: {}",
+            serverName, chatId, requestId);
       }
     }
   }
 
   public void destroyMcp(String serverName, String chatId) {
-    redisUtil.del(serverName + chatId);
-    if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
-      redisUtil.del(serverName + chatId + "toolResult");
+    String lockKey = LOCK_PREFIX + serverName + ":" + chatId + ":destroy";
+    String requestId = UUID.randomUUID().toString();
+
+    // 尝试获取分布式锁
+    boolean locked = redisUtil.tryLock(lockKey, requestId, 5L);
+
+    if (!locked) {
+      log.warn("获取销毁锁失败，serverName: {}, chatId: {}, 将直接执行删除操作", serverName, chatId);
+    }
+
+    try {
+      // 原有的业务逻辑
+      redisUtil.del(serverName + chatId);
+      if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
+        redisUtil.del(serverName + chatId + "toolResult");
+      }
+    } finally {
+      // 只有成功获取锁才释放
+      if (locked) {
+        redisUtil.releaseLock(lockKey, requestId);
+      }
     }
   }
 }

@@ -36,13 +36,18 @@ import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
+import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
 import top.rslly.iot.utility.ai.tools.BaseTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Component
 @Slf4j
@@ -53,6 +58,8 @@ public class McpAgent implements BaseTool<String> {
 
   @Value("${ai.mcp.agent-epoch-limit:8}")
   private int epochLimit;
+  @Value("${ai.mcp.agent-speedUp:true}")
+  private boolean speedUp;
   private String name = "mcpAgent";
 
   @Autowired
@@ -61,6 +68,11 @@ public class McpAgent implements BaseTool<String> {
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private McpWebsocket mcpWebsocket;
+
+  // 添加锁和条件变量映射（与ChatTool保持一致）
+  private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
+  private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
+  private final Map<String, String> dataMap = new ConcurrentHashMap<>();
 
   private static final List<String> COMFORT_PHRASES = Arrays.asList(
       "嗯～",
@@ -135,6 +147,17 @@ public class McpAgent implements BaseTool<String> {
     }
   }
 
+  private boolean isQueueRemoved(String chatId, Map<String, Queue<String>> queueMap) {
+    if (queueMap == null) {
+      return false;
+    }
+    boolean removed = !queueMap.containsKey(chatId);
+    if (removed) {
+      log.info("检测到队列被移除，Agent 中断执行，chatId: {}", chatId);
+    }
+    return removed;
+  }
+
   @Override
   public String run(String question) {
     return null;
@@ -160,6 +183,11 @@ public class McpAgent implements BaseTool<String> {
         return "连接mcp服务器失败";
       }
     }
+
+    // 初始化当前会话的锁和条件变量
+    lockMap.putIfAbsent(chatId, new ReentrantLock());
+    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+
     // 构建 system prompt，包括所有服务器的工具描述
     String system;
     try {
@@ -192,14 +220,30 @@ public class McpAgent implements BaseTool<String> {
 
     int iteration = 0;
     while (iteration < epochLimit) {
+      if (isQueueRemoved(chatId, queueMap)) {
+        cleanupResources(clientMap, chatId);
+        return "操作已取消";
+      }
       messages.clear();
       messages
           .add(new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt.toString()));
       messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
 
-      var obj = LLMFactory.getLLM(llmName).jsonChat(question, messages, false);
-      String thought = obj.getString("thought");
-      String answer = obj.getJSONObject("action").getString("answer");
+      var obj = callLLMForThought(question, messages, queueMap, chatId);
+      if (obj == null) {
+        cleanupResources(clientMap, chatId);
+        return "小主人抱歉哦，服务器现在繁忙。";
+      }
+      String thought;
+      String answer;
+      try {
+        thought = obj.getString("thought");
+        answer = obj.getJSONObject("action").getString("answer");
+      } catch (Exception e) {
+        log.error("解析LLM响应失败: {}", e.getMessage());
+        cleanupResources(clientMap, chatId);
+        return "解析LLM响应失败";
+      }
 
       try {
         var action = obj.getJSONObject("action");
@@ -220,10 +264,7 @@ public class McpAgent implements BaseTool<String> {
         String[] parts = fullName.split(":", 2);
         if (parts.length != 2 || parts[0].equalsIgnoreCase("finish")) {
           // 释放mcp客户端
-          for (var client : clientMap.values()) {
-            client.close();
-          }
-          clientMap.clear();
+          cleanupResources(clientMap, chatId);
           // finish or invalid format
           String content = JSON.parseObject(args).getString("content");
           if (queue != null) {
@@ -261,8 +302,7 @@ public class McpAgent implements BaseTool<String> {
         conversationPrompt.append(obj.toJSONString());
         conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
         if (queue != null) {
-          queue.add(thought);
-          queue.add("成功调用工具啦！");
+          queue.add(ToolPrefix.ToolCall.getPrefix());
         }
         log.info("Thought: {}", thought);
         log.info("Observation ({}): {}", fullName, toolResult);
@@ -276,15 +316,13 @@ public class McpAgent implements BaseTool<String> {
           if (!mcpIsTool)
             queue.add("[DONE]");
         }
+        cleanupResources(clientMap, chatId);
         return answer;
       }
       iteration++;
     }
     // 释放mcp客户端
-    for (var client : clientMap.values()) {
-      client.close();
-    }
-    clientMap.clear();
+    cleanupResources(clientMap, chatId);
     // 超出迭代轮次，调用模型进行总结
     String summaryPrompt = "请根据以上对话历史和最终观察结果，总结回答最初的问题: " + question;
     messages.clear();
@@ -320,6 +358,84 @@ public class McpAgent implements BaseTool<String> {
         queue.add("[DONE]");
     }
     return toolResult;
+  }
+
+  /**
+   * 调用LLM获取thought，支持流式和非流式
+   */
+  private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
+      Map<String, Queue<String>> queueMap, String chatId) {
+    if (speedUp) {
+      // 使用流式调用，实时获取thought内容
+      dataMap.remove(chatId);
+
+      try {
+        LLMFactory.getLLM(llmName).streamJsonChat(question, messages, false,
+            new AgentEventSourceListener(queueMap, chatId, this));
+
+        Lock chatLock = lockMap.get(chatId);
+        Condition chatCondition = conditionMap.get(chatId);
+
+        chatLock.lock();
+        try {
+          // 等待流式响应完成
+          while (dataMap.get(chatId) == null) {
+            chatCondition.await();
+          }
+        } catch (InterruptedException e) {
+          log.error("等待LLM响应时被中断: {}", e.getMessage());
+          Thread.currentThread().interrupt();
+          return null;
+        } finally {
+          chatLock.unlock();
+        }
+
+        String data = dataMap.get(chatId);
+        if (data == null || data.isEmpty()) {
+          log.error("LLM返回空数据");
+          return null;
+        }
+
+        try {
+          return JSON.parseObject(data.replace("```json", "")
+              .replace("```JSON", "").replace("```", ""));
+        } catch (Exception e) {
+          log.error("解析LLM响应JSON失败: {}, data: {}", e.getMessage(), data);
+          return null;
+        }
+      } catch (Exception e) {
+        log.error("流式调用LLM失败: {}", e.getMessage());
+        return null;
+      }
+    } else {
+      // 非流式调用
+      try {
+        return LLMFactory.getLLM(llmName).jsonChat(question, messages, false);
+      } catch (Exception e) {
+        log.error("调用LLM失败: {}", e.getMessage());
+        return null;
+      }
+    }
+  }
+
+  /**
+   * 清理资源（MCP客户端、锁、条件变量等）
+   */
+  private void cleanupResources(Map<String, McpSyncClient> clientMap, String chatId) {
+    // 释放mcp客户端
+    for (var client : clientMap.values()) {
+      try {
+        client.close();
+      } catch (Exception e) {
+        log.error("关闭MCP客户端失败: {}", e.getMessage());
+      }
+    }
+    clientMap.clear();
+
+    // 清理锁和条件变量
+    dataMap.remove(chatId);
+    conditionMap.remove(chatId);
+    lockMap.remove(chatId);
   }
 
   /**

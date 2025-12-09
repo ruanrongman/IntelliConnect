@@ -77,9 +77,9 @@ public class ReactPrompt {
           Observation: tool response
           ```
 
-          You must keep repeating the above format until you have sufficient information.
-          Respond to the question without using any tools. Remember, you may attempt up to three times,
-          but in most cases you should complete it in a single attempt. Otherwise, you will be punished.
+          You can keep repeating the above format until you have sufficient information.
+          Remember, you may attempt up to three times,but in almost all cases you should complete
+          the task in a single attempt.Otherwise, you will be punished.
           You must provide a response,using the following format:
 
           ```json

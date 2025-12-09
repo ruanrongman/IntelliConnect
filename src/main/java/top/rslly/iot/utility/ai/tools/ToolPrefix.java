@@ -23,7 +23,8 @@ public enum ToolPrefix {
   WEATHER("以下是高德天气插件结果："), CONTROL("以下是智能控制插件结果："), MUSIC("以下是网易云音乐插件结果："), AGENT(
       "以下是智能体处理结果："), WX_BOUND_PRODUCT("以下是微信绑定产品插件结果："), WX_PRODUCT_ACTIVE(
           "以下是微信切换产品插件结果："), SCHEDULE("以下是定时任务插件的结果："), PRODUCT_ROLE(
-              "以下是产品角色插件的结果："), MCP_AGENT("以下是mcp智能体的结果："), GOODBYE("以下是byebye插件的结果：");
+              "以下是产品角色插件的结果："), MCP_AGENT(
+                  "以下是mcp智能体的结果："), GOODBYE("以下是byebye插件的结果："), ToolCall("%工具。");
 
   private final String prefix;
 

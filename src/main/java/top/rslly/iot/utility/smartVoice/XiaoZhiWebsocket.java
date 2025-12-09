@@ -23,6 +23,7 @@ import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.services.SafetyServiceImpl;
@@ -55,11 +56,28 @@ public class XiaoZhiWebsocket {
   private static volatile ProductServiceImpl productService;
   private static volatile XiaoZhiUtil xiaoZhiUtil;
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
+  // 在类的静态字段中添加
+  private static final Map<String, Long> sessionStartTimeMap = new ConcurrentHashMap<>();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
   private int productId;
   private boolean isManual = true;
   private boolean isRealTime = false;
+
+  // 使用静态变量存储配置
+  private static long TIMEOUT_NORMAL = 60; // 默认60秒
+  private static long TIMEOUT_REALTIME = 120000; // 默认120秒
+
+  // 通过静态setter注入配置
+  @Value("${ai.vad.timeout:60}")
+  public void setTimeoutNormal(long timeout) {
+    XiaoZhiWebsocket.TIMEOUT_NORMAL = timeout;
+  }
+
+  @Value("${ai.vad.timeoutRealtime:120}")
+  public void setTimeoutRealtime(long timeout) {
+    XiaoZhiWebsocket.TIMEOUT_REALTIME = timeout;
+  }
 
   @Autowired
   public void setTtsServiceFactory(TtsServiceFactory ttsServiceFactory) {
@@ -177,6 +195,7 @@ public class XiaoZhiWebsocket {
       haveVoice.remove(chatId);
       pcmVadBuffer.remove(chatId); // 清理缓冲区
       voiceContent.remove(chatId); // 清理语音内容
+      sessionStartTimeMap.remove(chatId); // 清理时间记录
     }
   }
 
@@ -224,6 +243,8 @@ public class XiaoZhiWebsocket {
             }
             log.info("listen start");
             voiceContent.clear();
+            // 重置会话开始时间
+            sessionStartTimeMap.put(chatId, System.currentTimeMillis());
           }
           case "stop" -> {
             xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual);
@@ -240,25 +261,30 @@ public class XiaoZhiWebsocket {
   public void onBinaryMessage(byte[] message) {
     if (!isManual) {
       try {
-        int timeOutSize = 420;
-        if (isRealTime) {
-          timeOutSize = 420 * 7;
-        }
-        if (audioList.size() > timeOutSize && !haveVoice.get(chatId)) {
-          clients.get(chatId).getBasicRemote().sendText("""
+        // 检查超时 - 基于时间而不是缓冲区大小
+        long currentTime = System.currentTimeMillis();
+        long startTime = sessionStartTimeMap.computeIfAbsent(chatId, k -> currentTime);
+
+        long timeoutThreshold = isRealTime ? TIMEOUT_REALTIME * 1000L : TIMEOUT_NORMAL * 1000L;
+        // 如果没有检测到语音且超时，则退出
+        if (!haveVoice.get(chatId) && (currentTime - startTime) > timeoutThreshold) {
+          log.info("会话超时，chatId: {}, 经过时间: {}ms", chatId, (currentTime - startTime));
+
+          // 清理所有缓冲区
+          audioList.clear();
+          pcmVadBuffer.remove(chatId);
+
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote().sendText("""
               {
                 "type": "tts",
                 "state": "start"
               }""");
-          audioList.clear();
           ttsServiceFactory.websocketAudioSync("时间过得真快，没什么事我先退下了", clients.get(chatId), chatId,
               productId);
           clients.get(chatId).getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
           isAbort.put(chatId, false);
           clients.get(chatId).close();
           return;
-          // 存在问题，导致无法播放
-          // onClose();
         }
         byte[] bytes = message.clone();
         OpusDecoder decoder = new OpusDecoder(16000, 1);
@@ -290,7 +316,7 @@ public class XiaoZhiWebsocket {
           // 处理音频片段
           var map = slieroVadListener.listen(chunk);
           if (map != null && map.containsKey("start")) {
-            log.info("map{}", map);
+            log.info("检测到语音开始: {}", map);
             haveVoice.put(chatId, true);
             if (isRealTime) {
               isAbort.put(chatId, true);
@@ -302,7 +328,7 @@ public class XiaoZhiWebsocket {
             }
           }
           if (map != null && map.containsKey("end")) {
-            log.info("map{}", map);
+            log.info("检测到语音结束: {}", map);
             if (isRealTime) {
               isAbort.put(chatId, false);
             }
@@ -319,8 +345,27 @@ public class XiaoZhiWebsocket {
           buffer.write(bufferArray, processed, bufferLength - processed);
         }
 
+        // 防御性清理：如果audioList过大（超过5分钟的数据），清理旧数据
+        // 假设每帧约20ms，5分钟 = 300秒 = 15000帧
+        int maxFrames = 15000;
+        if (audioList.size() > maxFrames) {
+          log.warn("audioList过大，chatId: {}, 当前大小: {}, 清理旧数据", chatId, audioList.size());
+          int keepFrames = Math.min(100, audioList.size()); // 保留最近100帧
+          if (audioList.size() > keepFrames) {
+            audioList.subList(0, audioList.size() - keepFrames).clear();
+          }
+        }
+
+        // 防御性清理：如果pcmVadBuffer过大，重置
+        if (buffer.size() > 1024 * 1024) { // 超过1MB
+          log.warn("pcmVadBuffer过大，chatId: {}, 当前大小: {}bytes, 重置缓冲区", chatId, buffer.size());
+          buffer.reset();
+        }
+
       } catch (Exception e) {
-        log.error("音频转换失败{}", e.getMessage());
+        log.error("音频转换失败, chatId: {}, 错误: {}", chatId, e.getMessage(), e);
+        // 异常时清理缓冲区，防止内存泄漏
+        pcmVadBuffer.remove(chatId);
       }
     }
     audioList.add(message);

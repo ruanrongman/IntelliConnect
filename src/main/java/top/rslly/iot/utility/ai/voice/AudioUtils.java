@@ -191,6 +191,12 @@ public class AudioUtils {
   public static void asyncSendAudioQueue(String chatId, Session session,
       BlockingQueue<byte[]> queue) {
     try {
+      // 首先检查会话是否有效
+      if (session == null || !session.isOpen()) {
+        log.warn("WebSocket session is null or closed for chatId: {}", chatId);
+        queue.clear();
+        return;
+      }
       final long startTime = System.nanoTime();
       int playPosition = 0;
 

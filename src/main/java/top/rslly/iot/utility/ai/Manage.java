@@ -31,6 +31,9 @@ import java.util.Map;
 public class Manage {
   public String runTool(String toolName, String question, Map<String, Object> globalMessage) {
     toolName = toolName.substring(0, 1).toLowerCase() + toolName.substring(1);
+    if (toolName.equals("agent")) {
+      return "fail to execute tool";
+    }
     var obj = SpringBeanUtils.getBean(toolName);
     if (!isInterfaceImplemented(obj.getClass(), BaseTool.class))
       throw new IllegalArgumentException("the tool not implement the interface");

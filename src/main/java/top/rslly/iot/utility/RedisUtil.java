@@ -19,15 +19,14 @@
  */
 package top.rslly.iot.utility;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,10 +35,19 @@ import java.util.concurrent.TimeUnit;
  * @author zjjlive@dist.com.cn
  */
 @Component
+@Slf4j
 public class RedisUtil {
 
   @Autowired
   private RedisTemplate<String, Object> redisTemplate;
+
+  // Lua脚本：原子性释放锁
+  private static final String UNLOCK_LUA_SCRIPT =
+      "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+          "return redis.call('del', KEYS[1]) " +
+          "else " +
+          "return 0 " +
+          "end";
 
   public RedisUtil(RedisTemplate<String, Object> redisTemplate) {
     this.redisTemplate = redisTemplate;
@@ -223,7 +231,6 @@ public class RedisUtil {
       return false;
     }
   }
-
 
 
   /**
@@ -593,6 +600,132 @@ public class RedisUtil {
       e.printStackTrace();
       return 0;
     }
+  }
+
+  // ===============================分布式锁=================================
+
+  /**
+   * 尝试获取分布式锁
+   *
+   * @param lockKey 锁的键
+   * @param requestId 请求标识（建议使用UUID）
+   * @param expireTime 锁的过期时间(秒)
+   * @return true获取成功 false获取失败
+   */
+  public boolean tryLock(String lockKey, String requestId, long expireTime) {
+    try {
+      // 使用SET NX EX命令，原子性设置键值和过期时间
+      Boolean result = redisTemplate.opsForValue()
+          .setIfAbsent(lockKey, requestId, expireTime, TimeUnit.SECONDS);
+      return result != null && result;
+    } catch (Exception e) {
+      log.error("获取分布式锁异常, lockKey: {}, requestId: {}", lockKey, requestId, e);
+      return false;
+    }
+  }
+
+  /**
+   * 尝试获取分布式锁（默认30秒过期）
+   *
+   * @param lockKey 锁的键
+   * @param requestId 请求标识
+   * @return true获取成功 false获取失败
+   */
+  public boolean tryLock(String lockKey, String requestId) {
+    return tryLock(lockKey, requestId, 30L);
+  }
+
+  /**
+   * 释放分布式锁 使用Lua脚本保证原子性：只有持有锁的线程才能释放
+   *
+   * @param lockKey 锁的键
+   * @param requestId 请求标识
+   * @return true释放成功 false释放失败
+   */
+  public boolean releaseLock(String lockKey, String requestId) {
+    try {
+      DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
+      redisScript.setScriptText(UNLOCK_LUA_SCRIPT);
+      redisScript.setResultType(Long.class);
+
+      Long result = redisTemplate.execute(
+          redisScript,
+          Collections.singletonList(lockKey),
+          requestId);
+
+      return result != null && result == 1L;
+    } catch (Exception e) {
+      log.error("释放分布式锁异常, lockKey: {}, requestId: {}", lockKey, requestId, e);
+      return false;
+    }
+  }
+
+  /**
+   * 尝试获取分布式锁（支持重试）
+   *
+   * @param lockKey 锁的键
+   * @param requestId 请求标识
+   * @param expireTime 锁的过期时间(秒)
+   * @param retryTimes 重试次数
+   * @param retryInterval 重试间隔(毫秒)
+   * @return true获取成功 false获取失败
+   */
+  public boolean tryLockWithRetry(String lockKey, String requestId, long expireTime,
+      int retryTimes, long retryInterval) {
+    try {
+      for (int i = 0; i < retryTimes; i++) {
+        if (tryLock(lockKey, requestId, expireTime)) {
+          return true;
+        }
+        // 重试前等待
+        if (i < retryTimes - 1) {
+          Thread.sleep(retryInterval);
+        }
+      }
+      log.warn("尝试获取锁失败，已重试{}次, lockKey: {}", retryTimes, lockKey);
+      return false;
+    } catch (InterruptedException e) {
+      log.error("获取分布式锁重试过程被中断, lockKey: {}", lockKey, e);
+      Thread.currentThread().interrupt();
+      return false;
+    } catch (Exception e) {
+      log.error("获取分布式锁重试异常, lockKey: {}", lockKey, e);
+      return false;
+    }
+  }
+
+  /**
+   * 检查锁是否存在
+   *
+   * @param lockKey 锁的键
+   * @return true存在 false不存在
+   */
+  public boolean isLocked(String lockKey) {
+    return hasKey(lockKey);
+  }
+
+  /**
+   * 续期分布式锁
+   *
+   * @param lockKey 锁的键
+   * @param requestId 请求标识
+   * @param expireTime 新的过期时间(秒)
+   * @return true续期成功 false续期失败
+   */
+  public boolean renewLock(String lockKey, String requestId, long expireTime) {
+    try {
+      Object value = get(lockKey);
+      if (value != null && value.equals(requestId)) {
+        return expire(lockKey, expireTime);
+      }
+      log.warn("续期失败：锁不存在或requestId不匹配, lockKey: {}", lockKey);
+      return false;
+    } catch (Exception e) {
+      log.error("续期分布式锁异常, lockKey: {}, requestId: {}", lockKey, requestId, e);
+      return false;
+    }
+
+
   }
 
 }

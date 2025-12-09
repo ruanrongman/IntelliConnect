@@ -29,6 +29,7 @@ import top.rslly.iot.utility.RedisUtil;
 import javax.websocket.Session;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -37,6 +38,12 @@ public class McpWebsocket {
   public static final String ENDPOINT_SERVER_NAME = "xiaozhi_endpoint";
   @Autowired
   private RedisUtil redisUtil;
+
+
+  // 工具调用锁的前缀
+  private static final String TOOL_CALL_LOCK_PREFIX = "mcp:tool:call:";
+  // 锁的过期时间（秒） - 比实际等待时间稍长
+  private static final long LOCK_EXPIRE_TIME = 15L;
 
   public String combineToolDescription(String serverName, String chatId) {
     List<Map<String, Object>> toolDescriptionMap =
@@ -73,6 +80,18 @@ public class McpWebsocket {
     if (jsonArguments == null || jsonArguments.trim().isEmpty()) {
       throw new IllegalArgumentException("jsonArguments cannot be null or empty");
     }
+    // 为每个工具调用创建唯一的锁key
+    String lockKey = TOOL_CALL_LOCK_PREFIX + serverName + ":" + chatId + ":" + toolName;
+    String requestId = UUID.randomUUID().toString();
+
+    // 尝试获取分布式锁
+    boolean locked = redisUtil.tryLock(lockKey, requestId, LOCK_EXPIRE_TIME);
+
+    if (!locked) {
+      log.warn("工具调用正在进行中，serverName: {}, chatId: {}, toolName: {}",
+          serverName, chatId, toolName);
+      return "tool is being called by another request, please wait";
+    }
     try {
       Map<String, Object> params = JSON.parseObject(
           jsonArguments,
@@ -96,6 +115,13 @@ public class McpWebsocket {
     } catch (Exception e) {
       e.printStackTrace();
       return "calling this tool error";
+    } finally {
+      // 确保释放锁
+      boolean released = redisUtil.releaseLock(lockKey, requestId);
+      if (!released) {
+        log.error("释放工具调用锁失败，serverName: {}, chatId: {}, toolName: {}, requestId: {}",
+            serverName, chatId, toolName, requestId);
+      }
     }
   }
 

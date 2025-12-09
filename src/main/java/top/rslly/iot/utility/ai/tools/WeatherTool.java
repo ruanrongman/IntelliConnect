@@ -78,6 +78,9 @@ public class WeatherTool implements BaseTool<String> {
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
+    boolean mcpIsTool = false;
+    if (globalMessage.containsKey("mcpIsTool"))
+      mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
 
     // 初始化当前会话的锁和条件变量
     lockMap.putIfAbsent(chatId, new ReentrantLock());
@@ -90,7 +93,7 @@ public class WeatherTool implements BaseTool<String> {
     messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
     try {
-      if (speedUp) {
+      if (speedUp && !mcpIsTool) {
         queueMap.get(chatId).add("我来给你查天气啦!");
       }
       Map<String, String> answer = process_llm_result(obj);
@@ -100,7 +103,7 @@ public class WeatherTool implements BaseTool<String> {
       messages.clear();
       messages.add(responseSystemMessage);
       messages.add(userMessage);
-      if (speedUp) {
+      if (speedUp && !mcpIsTool) {
         dataMap.remove(chatId); // 使用 chatId 作为 key
         llm.streamJsonChat(question, messages, true,
             new ChatToolEventSourceListener(queueMap, chatId, this));
