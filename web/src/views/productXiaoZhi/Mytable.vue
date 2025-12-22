@@ -22,7 +22,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { message } from 'ant-design-vue'
+import { message , Modal} from 'ant-design-vue'
 import { getXiaoZhiManager,deleteXiaoZhiManager} from '@/api/xiaoZhi';
 import { useRouter } from 'vue-router'
 import { DeleteOutlined } from '@ant-design/icons-vue'
@@ -96,19 +96,27 @@ const fetchProduct = () => {
 
 const handleDelete = (record) => {
   // 实现删除功能
-  console.log('Deleting record:', record);
-  deleteXiaoZhiManager({id:record.id}).then((res) => {
-      const { data, errorCode } = res.data;
-      if(errorCode==200){
-        message.success("解绑成功")
-      }else if(errorCode==2001){
-        router.push('/login')
-      }
-      console.log(data)
-    })
-    .catch((err) => {
-      console.log(err);
-    });
+  Modal.confirm({
+    title: '确认解绑',
+    // 使用 record.productName 来获取产品名称
+    content: `确定要解绑"${record.deviceId}"的设备吗？`,
+    okText: '确认',
+    cancelText: '取消',
+    onOk() {
+    console.log('Deleting record:', record);
+    deleteXiaoZhiManager({id:record.id}).then((res) => {
+        const { data, errorCode } = res.data;
+        if(errorCode==200){
+          message.success("解绑成功")
+        }else if(errorCode==2001){
+          router.push('/login')
+        }
+        console.log(data)
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }});
 };
 </script>
 

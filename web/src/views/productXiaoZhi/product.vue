@@ -93,10 +93,10 @@ const handleSubmit = () => {
       const { data, errorCode } = res.data;
       console.log('auth', data);
       if (errorCode != 200) {
-        message.error("创建失败!");
+        message.error("绑定失败!");
         console.log("error");
       } else {
-        message.success("创建成功!");
+        message.success("绑定成功，请立即重启设备后生效!");
         console.log(data);
         // 重置表单
         formState.code = '';

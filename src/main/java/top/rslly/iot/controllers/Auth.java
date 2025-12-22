@@ -71,6 +71,8 @@ public class Auth {
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private ProductRouterSetServiceImpl productRouterSetService;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
 
 
   @Operation(summary = "创建新用户", description = "暂不支持创建管理员用户")
@@ -452,5 +454,33 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return mcpServerService.deleteMcpServer(id);
+  }
+
+  @PreAuthorize("hasRole('ROLE_admin')")
+  @Operation(summary = "获取管理员配置列表", description = "仅获取管理员配置列表")
+  @RequestMapping(value = "/adminConfig", method = RequestMethod.GET)
+  public JsonResult<?> getAdminConfig() {
+    return adminConfigService.getAdminConfig();
+  }
+
+  @PreAuthorize("hasRole('ROLE_admin')")
+  @Operation(summary = "添加管理员配置", description = "仅添加管理员配置")
+  @RequestMapping(value = "/adminConfig", method = RequestMethod.POST)
+  public JsonResult<?> postAdminConfig(@Valid @RequestBody AdminConfig adminConfig) {
+    return adminConfigService.postAdminConfig(adminConfig);
+  }
+
+  @PreAuthorize("hasRole('ROLE_admin')")
+  @Operation(summary = "修改管理员配置", description = "仅修改管理员配置")
+  @RequestMapping(value = "/adminConfig", method = RequestMethod.PUT)
+  public JsonResult<?> putAdminConfig(@Valid @RequestBody AdminConfig adminConfig) {
+    return adminConfigService.putAdminConfig(adminConfig);
+  }
+
+  @PreAuthorize("hasRole('ROLE_admin')")
+  @Operation(summary = "删除管理员配置", description = "仅删除管理员配置")
+  @RequestMapping(value = "/adminConfig", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteAdminConfig(@RequestParam("id") int id) {
+    return adminConfigService.deleteAdminConfig(id);
   }
 }

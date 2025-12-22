@@ -182,10 +182,17 @@ public class Text2audio implements TtsService {
       String chatId, String voice) {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
+      String model = param.getModel();
+      if (voice.startsWith("cosy_v2_")) {
+        model = "cosyvoice-v2";
+        voice = voice.substring(8);
+        log.info(model);
+        log.info(voice);
+      }
       // 创建线程安全的参数副本
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
-          .model(param.getModel())
+          .model(model)
           .format(param.getFormat())
           .pitchRate(pitch)
           .speechRate(speed)

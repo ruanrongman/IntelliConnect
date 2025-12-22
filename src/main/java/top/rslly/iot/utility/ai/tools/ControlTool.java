@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
@@ -37,10 +38,16 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ControlToolPrompt;
+import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Data
 @Component
@@ -59,11 +66,17 @@ public class ControlTool implements BaseTool<String> {
 
   @Value("${ai.controlTool-llm}")
   private String llmName;
+  @Value("${ai.controlTool-llm-speed:true}")
+  private boolean speedUp;
   private String name = "controlTool";
   private String description = """
       A tool for controlling and querying electrical status
       Args: Xx operation xx electrical(str)
       """;
+  // 添加锁和条件变量映射（与ChatTool保持一致）
+  private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
+  private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
+  private final Map<String, String> dataMap = new ConcurrentHashMap<>();
 
   @Override
   public String run(String question) {
@@ -78,9 +91,21 @@ public class ControlTool implements BaseTool<String> {
       return "产品设置错误，请检查相关设置！";
     if (productModelService.findAllByProductId(productId).isEmpty())
       return "产品下面没有任何设备，请先绑定设备";
-    LLM llm = LLMFactory.getLLM(llmName);
+    String chatId = (String) globalMessage.get("chatId");
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    var queue = queueMap.get(chatId);
     List<ModelMessage> messages = new ArrayList<>();
+    boolean mcpIsTool = false;
+    if (globalMessage.containsKey("mcpIsTool"))
+      mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
 
+    // 初始化当前会话的锁和条件变量
+    lockMap.putIfAbsent(chatId, new ReentrantLock());
+    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    if (queue != null && !mcpIsTool) {
+      queue.add(ToolPrefix.ToolCall.getPrefix());
+    }
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             controlToolPrompt.getControlTool(productId));
@@ -88,7 +113,12 @@ public class ControlTool implements BaseTool<String> {
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
-    var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
+    var finalObj = callLLMForThought(question, messages, queueMap, chatId, mcpIsTool);
+    if (finalObj == null) {
+      cleanupResources(chatId);
+      return "小主人抱歉哦，服务器现在繁忙。";
+    }
+    var obj = finalObj.getJSONObject("action");
     String answer = obj.getString("answer");
     StringBuilder ragAnswer = new StringBuilder();
     JSONArray controlParameters = obj.getJSONArray("controlParameters");
@@ -100,10 +130,84 @@ public class ControlTool implements BaseTool<String> {
       }
       if (ragAnswer.length() == 0)
         ragAnswer.append("未设置控制参数");
+      if (queue != null && !mcpIsTool) {
+        queue.add("平台真实响应:" + ragAnswer);
+        queue.add("[DONE]");
+      }
+      cleanupResources(chatId);
       return answer + "平台真实响应:" + ragAnswer;
     } else {
+      cleanupResources(chatId);
       return answer;
     }
+  }
+
+  /**
+   * 调用LLM获取thought，支持流式和非流式
+   */
+  private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
+      Map<String, Queue<String>> queueMap, String chatId, Boolean mcpIsTool) {
+    if (speedUp && !mcpIsTool) {
+      // 使用流式调用，实时获取thought内容
+      dataMap.remove(chatId);
+
+      try {
+        LLMFactory.getLLM(llmName).streamJsonChat(question, messages, false,
+            new AgentEventSourceListener(queueMap, chatId, this, "answer"));
+
+        Lock chatLock = lockMap.get(chatId);
+        Condition chatCondition = conditionMap.get(chatId);
+
+        chatLock.lock();
+        try {
+          // 等待流式响应完成
+          while (dataMap.get(chatId) == null) {
+            chatCondition.await();
+          }
+        } catch (InterruptedException e) {
+          log.error("等待LLM响应时被中断: {}", e.getMessage());
+          Thread.currentThread().interrupt();
+          return null;
+        } finally {
+          chatLock.unlock();
+        }
+
+        String data = dataMap.get(chatId);
+        if (data == null || data.isEmpty()) {
+          log.error("LLM返回空数据");
+          return null;
+        }
+
+        try {
+          return JSON.parseObject(data.replace("```json", "")
+              .replace("```JSON", "").replace("```", ""));
+        } catch (Exception e) {
+          log.error("解析LLM响应JSON失败: {}, data: {}", e.getMessage(), data);
+          return null;
+        }
+      } catch (Exception e) {
+        log.error("流式调用LLM失败: {}", e.getMessage());
+        return null;
+      }
+    } else {
+      // 非流式调用
+      try {
+        return LLMFactory.getLLM(llmName).jsonChat(question, messages, false);
+      } catch (Exception e) {
+        log.error("调用LLM失败: {}", e.getMessage());
+        return null;
+      }
+    }
+  }
+
+  /**
+   * 清理资源（MCP客户端、锁、条件变量等）
+   */
+  private void cleanupResources(String chatId) {
+    // 清理锁和条件变量
+    dataMap.remove(chatId);
+    conditionMap.remove(chatId);
+    lockMap.remove(chatId);
   }
 
   private String process_llm_result(int productId, JSONObject jsonObject) {

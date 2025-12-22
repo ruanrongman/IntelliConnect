@@ -91,11 +91,11 @@ public class WeatherTool implements BaseTool<String> {
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
+    if (speedUp && !mcpIsTool) {
+      queueMap.get(chatId).add("我来给你查天气啦!");
+    }
     var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
     try {
-      if (speedUp && !mcpIsTool) {
-        queueMap.get(chatId).add("我来给你查天气啦!");
-      }
       Map<String, String> answer = process_llm_result(obj);
       ModelMessage responseSystemMessage =
           new ModelMessage(ModelMessageRole.SYSTEM.value(),

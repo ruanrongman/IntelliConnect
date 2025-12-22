@@ -30,6 +30,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.DigestUtils;
+import top.rslly.iot.models.AdminConfigEntity;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.SHA1;
 
@@ -40,6 +42,7 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
 @Component
 @Slf4j
@@ -64,6 +67,13 @@ public class DealMsg {
   private String ToUserName2;
   @Value("${wx.micro.appid2}")
   private String microappid2;
+  @Value("${wx.register.trigger-keyword:注册账户}")
+  private String defaultRegisterTriggerKeyword;
+
+  @Value("${wx.register.success-message:注册成功}")
+  private String defaultRegisterSuccessMessage;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
 
   public void WxMsg(HttpServletRequest request, HttpServletResponse response) {
     boolean isGet = request.getMethod().equalsIgnoreCase("get");
@@ -129,17 +139,17 @@ public class DealMsg {
               // DigestUtils.md5DigestAsHex(openid.getBytes(StandardCharsets.UTF_8));
               // String ans = router.response(msg);
               if (microId.equals(ToUserName)) {
-                if (msg.equals("注册账户")) {
+                if (msg.equals(getRegisterTriggerKeyword())) {
                   var res = wxUserService.wxRegister(microappid, openid);
                   if (res != null)
-                    dealWx.sendContent(openid, "注册成功", microappid);
+                    dealWx.sendContent(openid, getRegisterSuccessMessage(), microappid);
                 } else
                   smartRobot.smartSendContent(openid, msg, microappid);
               } else if (microId.equals(ToUserName2)) {
-                if (msg.equals("注册账户")) {
+                if (msg.equals(getRegisterTriggerKeyword())) {
                   var res = wxUserService.wxRegister(microappid2, openid);
                   if (res != null)
-                    dealWx.sendContent(openid, "注册成功", microappid2);
+                    dealWx.sendContent(openid, getRegisterSuccessMessage(), microappid2);
                 } else
                   smartRobot.smartSendContent(openid, msg, microappid2);
               }
@@ -187,10 +197,10 @@ public class DealMsg {
               String userid = DigestUtils.md5DigestAsHex(openid.getBytes(StandardCharsets.UTF_8));
               if (content.equals("消息推送密钥")) {
                 dealWx.sendContent(openid, userid, appid);
-              } else if (content.equals("注册账户")) {
+              } else if (content.equals(getRegisterTriggerKeyword())) {
                 var res = wxUserService.wxRegister(appid, openid);
                 if (res != null)
-                  dealWx.sendContent(openid, "注册成功", appid);
+                  dealWx.sendContent(openid, getRegisterSuccessMessage(), appid);
               } else {
                 // String ans = router.response(content);
                 smartRobot.smartSendContent(openid, content, appid);
@@ -220,6 +230,34 @@ public class DealMsg {
     } catch (Exception ex) {
       log.error("微信帐号接口配置失败！{}", ex.getMessage());
     }
+  }
+
+  // 获取注册触发关键词的方法
+  private String getRegisterTriggerKeyword() {
+    try {
+      List<AdminConfigEntity> configs = adminConfigService.findAllBySetKey("wx_trigger-keyword");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return configs.get(0).getSetValue();
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取注册触发关键词失败", e);
+    }
+    // 数据库查不到时使用配置文件默认值
+    return defaultRegisterTriggerKeyword;
+  }
+
+  // 获取注册成功消息
+  private String getRegisterSuccessMessage() {
+    try {
+      List<AdminConfigEntity> configs = adminConfigService.findAllBySetKey("wx_success-message");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return configs.get(0).getSetValue();
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取注册成功消息失败", e);
+    }
+    // 数据库查不到时使用配置文件默认值
+    return defaultRegisterSuccessMessage;
   }
 
   /**

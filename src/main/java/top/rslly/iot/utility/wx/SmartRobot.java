@@ -19,10 +19,13 @@
  */
 package top.rslly.iot.utility.wx;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.AdminConfigEntity;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.wechat.WxProductActiveServiceImpl;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
@@ -40,6 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@Slf4j
 public class SmartRobot {
   @Autowired
   private DealWx dealWx;
@@ -59,11 +63,15 @@ public class SmartRobot {
   private String smartRobotAsr;
   @Value("${ai.wx_smart_robot_llm}")
   private String smartRobotLLm;
+  @Value("${wx.unregistered-message:该用户未注册，请先注册再使用}")
+  private String defaultWxUnregisteredMessage;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
 
   @Async("taskExecutor")
   public void smartSendContent(String openid, String msg, String microappid) throws IOException {
     if (wxUserService.findAllByAppidAndOpenid(microappid, openid).isEmpty()) {
-      dealWx.sendContent(openid, "该用户未注册，请先注册再使用", microappid);
+      dealWx.sendContent(openid, getWxUnregisteredMessage(), microappid);
       return;
     }
     var productActiveEntities = productActiveService.findAllByAppidAndOpenid(microappid, openid);
@@ -74,6 +82,17 @@ public class SmartRobot {
       var wxProductBindEntities = wxProductBindService.findAllByAppidAndOpenid(microappid, openid);
       if (!wxProductBindEntities.isEmpty()) {
         productId = wxProductBindEntities.get(0).getProductId();
+      } else {
+        var wxDefaultProductEntities = adminConfigService.findAllBySetKey("wx_default_product");
+        if (!wxDefaultProductEntities.isEmpty()) {
+          try {
+            if (!wxDefaultProductEntities.get(0).getSetValue().isEmpty()) {
+              productId = Integer.parseInt(wxDefaultProductEntities.get(0).getSetValue());
+            }
+          } catch (Exception e) {
+            log.error("从数据库获取默认产品ID失败{}", e.getMessage());
+          }
+        }
       }
     }
     String content = router.response(msg, openid, productId, microappid);
@@ -118,5 +137,20 @@ public class SmartRobot {
   public void dealVoice(String openid, String url, String microappid) throws IOException {
     String result = asrServiceFactory.getService(smartRobotAsr).getText(url);
     smartSendContent(openid, result, microappid);
+  }
+
+  // 获取注册触发关键词的方法
+  private String getWxUnregisteredMessage() {
+    try {
+      List<AdminConfigEntity> configs =
+          adminConfigService.findAllBySetKey("wx_unregistered-message");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return configs.get(0).getSetValue();
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取注册触发关键词失败", e);
+    }
+    // 数据库查不到时使用配置文件默认值
+    return defaultWxUnregisteredMessage;
   }
 }

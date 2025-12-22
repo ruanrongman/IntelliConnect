@@ -43,6 +43,9 @@ public class AgentEventSourceListener extends EventSourceListener {
   private final String chatId;
   private final BaseTool<?> chatTool;
 
+  // 新增：可配置的字段名
+  private final String targetFieldName;
+
   // 错误处理常量
   private static final String ERROR_MESSAGE = "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
   private static final String DONE_SIGNAL = "[DONE]";
@@ -60,9 +63,15 @@ public class AgentEventSourceListener extends EventSourceListener {
 
   public AgentEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
       BaseTool<?> tool) {
+    this(queueMap, chatId, tool, "thought"); // 默认使用 "thought"
+  }
+
+  public AgentEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
+      BaseTool<?> tool, String targetFieldName) {
     this.queueMap = queueMap;
     this.chatId = chatId;
     this.chatTool = tool;
+    this.targetFieldName = targetFieldName; // 保存字段名
     this.parseStateMap.put(chatId, new ThoughtParseState());
   }
 
@@ -75,6 +84,7 @@ public class AgentEventSourceListener extends EventSourceListener {
   public void onEvent(EventSource eventSource, String id, String type, String data) {
     if (data == null) {
       log.warn("Received null data from OpenAI");
+      notifyUserAndCleanup("服务响应异常，请稍后重试");
       return;
     }
 
@@ -107,7 +117,6 @@ public class AgentEventSourceListener extends EventSourceListener {
       chatTool.getDataMap().put(chatId, ERROR_MESSAGE);
     } finally {
       lock.unlock();
-      // 清理解析状态
       parseStateMap.remove(chatId);
     }
   }
@@ -121,8 +130,27 @@ public class AgentEventSourceListener extends EventSourceListener {
 
       JSONObject jsonObject = JSON.parseObject(data);
 
-      if (jsonObject == null || !jsonObject.containsKey("choices")) {
+      if (jsonObject == null) {
+        log.warn("SSE数据解析失败: {}", data);
+        notifyUserAndCleanup("服务响应解析失败，请稍后重试");
+        return;
+      }
+
+      // **检查error字段**
+      if (jsonObject.containsKey("error")) {
+        JSONObject error = jsonObject.getJSONObject("error");
+        String errorCode = error.getString("code");
+        String errorMessage = error.getString("message");
+        log.error("OpenAI返回错误 - code: {}, message: {}", errorCode, errorMessage);
+
+        // String userMessage = buildUserFriendlyErrorMessage(errorCode, errorMessage);
+        notifyUserAndCleanup("抱歉，您的请求包含不适当的内容，请修改后重试");
+        return;
+      }
+
+      if (!jsonObject.containsKey("choices")) {
         log.warn("SSE数据缺少choices字段: {}", data);
+        notifyUserAndCleanup("服务响应格式异常，请稍后重试");
         return;
       }
 
@@ -157,6 +185,39 @@ public class AgentEventSourceListener extends EventSourceListener {
 
     } catch (Exception e) {
       log.error("解析SSE数据异常: {}, 原始数据: {}", e.getMessage(), data, e);
+      notifyUserAndCleanup("服务处理异常，请稍后重试");
+    }
+  }
+
+  /**
+   * 通知用户错误并清理资源
+   */
+  private void notifyUserAndCleanup(String message) {
+    Lock lock = chatTool.getLockMap().get(chatId);
+    if (lock == null) {
+      log.error("未找到chatId对应的锁: {}", chatId);
+      parseStateMap.remove(chatId);
+      return;
+    }
+
+    lock.lock();
+    try {
+      // 将错误消息放入队列，用户可以看到
+      Queue<String> queue = queueMap.get(chatId);
+      if (queue != null) {
+        queue.add(message);
+      }
+
+      // 保存错误信息并通知等待线程
+      chatTool.getDataMap().put(chatId, message);
+      chatTool.getConditionMap().get(chatId).signal();
+
+    } catch (Exception e) {
+      log.error("通知用户错误时异常: {}", e.getMessage(), e);
+    } finally {
+      lock.unlock();
+      // 清理解析状态
+      parseStateMap.remove(chatId);
     }
   }
 
@@ -195,9 +256,11 @@ public class AgentEventSourceListener extends EventSourceListener {
     thoughtBuffer.append(c);
     String buffer = thoughtBuffer.toString();
 
-    // 检测到 "thought": " 模式
-    if (buffer.contains("\"thought\"")) {
-      int thoughtIndex = buffer.indexOf("\"thought\"");
+    // 修改：使用可配置的字段名
+    String fieldPattern = "\"" + targetFieldName + "\"";
+    // 检测到 "fieldName": " 模式
+    if (buffer.contains(fieldPattern)) {
+      int thoughtIndex = buffer.indexOf(fieldPattern);
       int colonIndex = buffer.indexOf(":", thoughtIndex);
 
       if (colonIndex != -1) {
@@ -205,7 +268,7 @@ public class AgentEventSourceListener extends EventSourceListener {
         if (quoteIndex != -1) {
           state.thoughtStarted = true;
           state.inThoughtField = true;
-          log.debug("检测到thought字段开始");
+          log.debug("检测到{}字段开始", targetFieldName); // 修改日志
 
           // 处理引号后面可能已有的内容
           processRemainingContent(buffer.substring(quoteIndex + 1), queue, state);
@@ -229,7 +292,7 @@ public class AgentEventSourceListener extends EventSourceListener {
     // 检测结束引号
     if (c == '\"' && !isEscapedAtPosition(content, position)) {
       state.inThoughtField = false;
-      log.debug("thought字段结束");
+      log.debug("{}字段结束", targetFieldName);
       return;
     }
 
@@ -246,7 +309,7 @@ public class AgentEventSourceListener extends EventSourceListener {
       char rc = remaining.charAt(i);
       if (rc == '\"' && !isEscapedAtPosition(remaining, i)) {
         state.inThoughtField = false;
-        log.debug("thought字段结束");
+        log.debug("{}字段结束", targetFieldName);
         break;
       } else if (state.inThoughtField) {
         addCharToQueue(rc, queue);
@@ -286,7 +349,6 @@ public class AgentEventSourceListener extends EventSourceListener {
   @Override
   public void onClosed(EventSource eventSource) {
     log.info("OpenAI关闭sse连接...");
-    // 清理解析状态
     parseStateMap.remove(chatId);
   }
 
@@ -306,6 +368,13 @@ public class AgentEventSourceListener extends EventSourceListener {
       if (eventSource != null) {
         eventSource.cancel();
       }
+
+      // 通知用户
+      Queue<String> queue = queueMap.get(chatId);
+      if (queue != null) {
+        queue.add(ERROR_MESSAGE);
+      }
+
       chatTool.getDataMap().put(chatId, ERROR_MESSAGE);
       chatTool.getConditionMap().get(chatId).signal();
     } catch (Exception e) {

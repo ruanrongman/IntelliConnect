@@ -69,7 +69,7 @@ const product ={
   alarmEventAdd: 'alarmEventAdd'
 }
 const permission = {
-  permission: 'Permission',
+  permission: 'SystemSetting',
   btnPermission: 'BtnPermission',
   pagePermission: 'PagePermission',
 }

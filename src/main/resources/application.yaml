@@ -90,7 +90,11 @@ mqtt:
   username: hello
   password: 1234
 wx:
-  debug: true
+  debug: true # false即启动微信模块
+  unregistered-message: 该用户未注册，请先注册再使用
+  register:
+    trigger-keyword: 注册账户   # 触发注册的关键字
+    success-message: 注册成功   # 注册成功后的回复信息
   appid: XXXXXX
   appsecret: XXXXXX
   templateUrl: XXXXX
@@ -128,6 +132,10 @@ weather:
   key: XXX
 ai:
   detectRandom: false
+  showThinking: false
+  classifier:
+    include:
+      thought: true
   vad:
     timeout: 60
     timeoutRealtime: 120

@@ -20,9 +20,12 @@
 package top.rslly.iot.utility.ai.prompts;
 
 import com.alibaba.fastjson.JSON;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.AdminConfigEntity;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
@@ -37,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@Slf4j
 public class ClassifierToolPrompt {
   @Autowired
   private McpServerServiceImpl mcpServerService;
@@ -48,6 +52,10 @@ public class ClassifierToolPrompt {
   private ProductToolsBanServiceImpl productToolsBanService;
   @Autowired
   private DescriptionUtil descriptionUtil;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
+  @Value("${ai.classifier.include.thought:true}")
+  private boolean includeThought;
   private static final String classifierPrompt =
       """
            {router_set}
@@ -57,10 +65,9 @@ public class ClassifierToolPrompt {
            ## Output Format
            ```json
            {
-           "thought": "The thought of what to do and why.(use Chinese)",
+           {thought}
            "action": # the action to take, must be one of provided tools
                {
-               "code": "if success output 200,If it doesn't match any task,output 400",
                "value": "one of task No., json list data like [1],If it doesn't match, please output []",
                "args": "Combined with Current Conversation and memory,Summarize the context,Be sure to convey the intention completely,not null"
                }
@@ -130,6 +137,26 @@ public class ClassifierToolPrompt {
     }
     params.put("task_map", classifierJson);
     params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
+    // 根据配置决定是否包含 thought 字段
+    if (getIncludeThoughtConfig()) {
+      params.put("thought", "\"thought\": \"The thought of what to do and why.(use Chinese)\",");
+    } else {
+      params.put("thought", "");
+    }
     return StringUtils.formatString(classifierPrompt, params);
+  }
+
+  private boolean getIncludeThoughtConfig() {
+    try {
+      List<AdminConfigEntity> configs =
+          adminConfigService.findAllBySetKey("ai_classifier_include_thought");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return Boolean.parseBoolean(configs.get(0).getSetValue());
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取AI分类器thought配置失败", e);
+    }
+    // 数据库查不到时使用配置文件默认值
+    return includeThought;
   }
 }

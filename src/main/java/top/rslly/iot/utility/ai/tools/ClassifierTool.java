@@ -130,13 +130,10 @@ public class ClassifierTool {
 
   private Map<String, Object> process_llm_value(JSONObject jsonObject) throws IcAiException {
     Map<String, Object> resultMap = new HashMap<>();
-    if (jsonObject.get("code").equals("200") || jsonObject.get("code").equals(200)) {
-      var valueJson = jsonObject.getJSONArray("value");
-      var argsJson = jsonObject.getString("args");
-      resultMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
-      resultMap.put("args", argsJson);
-      return resultMap;
-    } else
-      throw new IcAiException("llm response error");
+    var valueJson = jsonObject.getJSONArray("value");
+    var argsJson = jsonObject.getString("args");
+    resultMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
+    resultMap.put("args", argsJson);
+    return resultMap;
   }
 }

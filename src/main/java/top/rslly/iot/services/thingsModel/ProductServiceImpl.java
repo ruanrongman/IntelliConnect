@@ -68,6 +68,8 @@ public class ProductServiceImpl implements ProductService {
   private AgentLongMemoryRepository agentLongMemoryRepository;
   @Resource
   private ProductVoiceDiyRepository productVoiceDiyRepository;
+  @Resource
+  private AdminConfigRepository adminConfigRepository;
 
 
   @Override
@@ -187,6 +189,8 @@ public class ProductServiceImpl implements ProductService {
         agentLongMemoryRepository.findAllByProductId(id);
     List<ProductVoiceDiyEntity> productVoiceDiyEntityList =
         productVoiceDiyRepository.findAllByProductId(id);
+    List<AdminConfigEntity> adminConfigEntityList =
+        adminConfigRepository.findAllBySetKey("wx_default_product");
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -210,6 +214,14 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!agentMemoryEntityList.isEmpty()) {
           agentMemoryRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
+        }
+        if (!adminConfigEntityList.isEmpty()) {
+          try {
+            if (adminConfigEntityList.get(0).getSetValue().equals(String.valueOf(id))) {
+              adminConfigRepository.deleteAllById(adminConfigEntityList.get(0).getId());
+            }
+          } catch (Exception ignore) {
+          }
         }
         return ResultTool.success(result);
       }

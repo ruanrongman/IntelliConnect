@@ -33,6 +33,7 @@ import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
+import javax.annotation.PreDestroy;
 import javax.websocket.*;
 import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
@@ -41,6 +42,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @ServerEndpoint(value = "/xiaozhi/v1/{chatId}", configurator = WebSocketConfig.class)
 @Component
@@ -55,6 +57,7 @@ public class XiaoZhiWebsocket {
   private static volatile TtsServiceFactory ttsServiceFactory;
   private static volatile ProductServiceImpl productService;
   private static volatile XiaoZhiUtil xiaoZhiUtil;
+  public static final AtomicBoolean isSystemShuttingDown = new AtomicBoolean(false);
   private final SlieroVadListener slieroVadListener = new SlieroVadListener();
   // 在类的静态字段中添加
   private static final Map<String, Long> sessionStartTimeMap = new ConcurrentHashMap<>();
@@ -113,6 +116,16 @@ public class XiaoZhiWebsocket {
    */
   @OnOpen
   public void onOpen(@PathParam("chatId") String chatId, Session session) {
+    // 系统正在关闭时，拒绝新连接
+    if (isSystemShuttingDown.get()) {
+      try {
+        session.getBasicRemote().sendText(
+            "{\"type\":\"system\",\"state\":\"shutdown\",\"message\":\"系统正在维护，暂时无法建立连接。\"}");
+        session.close();
+      } catch (IOException ignored) {
+      }
+      return;
+    }
     if (chatId == null) {
       try {
         session.getBasicRemote().sendText("chatId为null");
@@ -375,6 +388,44 @@ public class XiaoZhiWebsocket {
   public void onError(Session session, Throwable error) {
     onClose();
     log.error("Error in onError: {}", error.getMessage());
+  }
+
+  @PreDestroy
+  public void gracefulShutdown() {
+    log.info("系统正在优雅关闭，准备关闭所有 xiaozhi WebSocket 连接…");
+
+
+    // 标记系统正在关闭，后续 onOpen 会拒绝连接
+    isSystemShuttingDown.set(true);
+
+    // 先 snapshot 避免并发修改
+    List<Map.Entry<String, Session>> snapshot = new ArrayList<>(clients.entrySet());
+
+
+    for (Map.Entry<String, Session> e : snapshot) {
+      String id = e.getKey();
+      Session sess = e.getValue();
+      if (sess != null && sess.isOpen()) {
+        try {
+          sess.getBasicRemote().sendText(
+              "{\"type\":\"system\",\"state\":\"shutdown\",\"message\":\"系统正在维护，将自动断开，请稍后重新连接。\"}");
+          sess.close();
+        } catch (Exception ex) {
+          log.error("关闭 WebSocket 失败 chatId={}, error={}", id, ex.getMessage());
+        }
+      }
+    }
+
+
+    clients.clear();
+    voiceContent.clear();
+    pcmVadBuffer.clear();
+    isAbort.clear();
+    haveVoice.clear();
+    sessionStartTimeMap.clear();
+
+
+    log.info("所有 xiaozhi WebSocket 会话已优雅关闭完成。");
   }
 
   private static String getHeader(Session session) {

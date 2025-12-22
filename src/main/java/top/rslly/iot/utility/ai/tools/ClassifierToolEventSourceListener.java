@@ -74,17 +74,14 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         var content = JSON.parseObject(
             jsonBuffer.toString().replace("```json", "").replace("```JSON", "").replace("```", ""))
             .getJSONObject("action");
-        if (content.get("code").equals("200") || content.get("code").equals(200)) {
-          var valueJson = content.getJSONArray("value");
-          var argsJson = content.getString("args");
-          Map<String, Object> dataMap = new ConcurrentHashMap<>();
-          dataMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
-          dataMap.put("args", argsJson);
-          dataMap.put("answer", "yes");
-          classifierTool.getDataMap().get(chatId).putAll(dataMap);
-          // ClassifierTool.dataCondition.signal();
-        } else
-          throw new IcAiException("llm response error");
+        var valueJson = content.getJSONArray("value");
+        var argsJson = content.getString("args");
+        Map<String, Object> dataMap = new ConcurrentHashMap<>();
+        dataMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
+        dataMap.put("args", argsJson);
+        dataMap.put("answer", "yes");
+        classifierTool.getDataMap().get(chatId).putAll(dataMap);
+        // ClassifierTool.dataCondition.signal();
         classifierTool.getConditionMap().get(chatId).signal();
         log.info("数据{}", classifierTool.getDataMap().get(chatId));
       } catch (Exception e) {

@@ -50,7 +50,7 @@ const chart = {
 }
 
 const permission = {
-  permission: '权限管理',
+  permission: '系统管理',
   btnPermission: '按钮权限',
   adminPermission: '管理员页面',
   userPermission: '用户页面',

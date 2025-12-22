@@ -26,6 +26,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.AdminConfigEntity;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.mcp.McpProtocolDeal;
@@ -37,6 +39,7 @@ import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
+import javax.websocket.Session;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -59,12 +62,16 @@ public class XiaoZhiUtil {
   private RedisUtil redisUtil;
   @Autowired
   private McpProtocolDeal mcpProtocolDeal;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
   @Value("${ai.tts.skip-tool-prefix:true}")
   private boolean skipToolPrefix;
   @Value("${ai.detectRandom:false}")
   private boolean detectRandom;
+  @Value("${ai.showThinking:false}")
+  private boolean showThinking;
 
   public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     boolean mcpCanUse = false;
@@ -166,9 +173,11 @@ public class XiaoZhiUtil {
       }
       if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
           && XiaoZhiWebsocket.voiceContent.get(chatId).length() > 0) {
-        XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
-            .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                + "智能助手思考中" + "\"}");
+        if (showThinking) {
+          XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
+              .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
+                  + "智能助手思考中" + "\"}");
+        }
         JSONObject emotionObject = new JSONObject();
         emotionObject.put("type", "llm");
         emotionObject.put("text", "🤔");
@@ -207,7 +216,7 @@ public class XiaoZhiUtil {
                 .sendText(emotionObject.toJSONString());
             emotionFlag = true;
           }
-          if (XiaoZhiWebsocket.isAbort.get(chatId)) {
+          if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
             XiaoZhiWebsocket.haveVoice.put(chatId, false);
             XiaoZhiWebsocket.isAbort.put(chatId, false);
             Router.queueMap.remove(chatId);
@@ -317,13 +326,19 @@ public class XiaoZhiUtil {
     } finally {
       XiaoZhiWebsocket.haveVoice.put(chatId, false);
       XiaoZhiWebsocket.isAbort.put(chatId, false);
-      XiaoZhiWebsocket.clients.get(chatId).getBasicRemote()
-          .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+      try {
+        Session session = XiaoZhiWebsocket.clients.get(chatId);
+        if (session != null && session.isOpen()) {
+          session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+        }
+      } catch (IOException e) {
+        log.warn("Failed to send stop message to client {}: {}", chatId, e.getMessage());
+      }
     }
   }
 
   public void dealDetect(String chatId, int productId, String text) throws IOException {
-    if (!detectRandom) {
+    if (!getDetectRandomConfig()) {
       dealWithAudio(new ArrayList<>(), chatId, productId, true, text);
       return;
     }
@@ -402,4 +417,16 @@ public class XiaoZhiUtil {
     return ToolPrefix.startsWithAnyPrefix(text);
   }
 
+  private boolean getDetectRandomConfig() {
+    try {
+      List<AdminConfigEntity> configs = adminConfigService.findAllBySetKey("ai_detect_random");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return Boolean.parseBoolean(configs.get(0).getSetValue());
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取detectRandom配置失败", e);
+    }
+    // 数据库查不到时使用配置文件默认值
+    return detectRandom;
+  }
 }
