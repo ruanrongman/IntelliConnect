@@ -21,11 +21,22 @@ package top.rslly.iot.services.agent;
 
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.param.request.AgentMemory;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
 public interface AgentMemoryService {
+  List<AgentMemoryEntity> findAllById(int id);
+
+  List<AgentMemoryEntity> findAllByChatIdStartingWith(String chatId);
+
   List<AgentMemoryEntity> findAllByChatId(String chatId);
+
+  JsonResult<?> getMemory(String token);
+
+  JsonResult<?> updateMemory(AgentMemory agentMemory);
+
+  JsonResult<?> deleteMemory(int id);
 
   AgentMemoryEntity insertAndUpdate(AgentMemory agentMemory);
 }

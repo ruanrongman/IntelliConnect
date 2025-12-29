@@ -89,7 +89,7 @@ public class ProductRouterSetServiceImpl implements ProductRouterSetService {
       }
       for (var s : wxBindProductResponseList) {
         List<ProductRouterSetEntity> productRouterSetEntities =
-            productRouterSetRepository.deleteAllByProductId(s.getProductId());
+            productRouterSetRepository.findAllByProductId(s.getProductId());
         result.addAll(productRouterSetEntities);
       }
     } else if (!role.equals("[ROLE_admin]")) {

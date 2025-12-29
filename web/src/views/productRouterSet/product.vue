@@ -1,6 +1,6 @@
 <template>
   <a-button type="primary" @click="showModal">
-    新建配置
+    新建/修改配置
   </a-button>
   <a-modal :visible="visible"  
   :footer="null"

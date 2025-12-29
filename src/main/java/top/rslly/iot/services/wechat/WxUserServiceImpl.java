@@ -66,6 +66,9 @@ public class WxUserServiceImpl implements WxUserService {
   public JsonResult<?> wxRegister(WxUser wxUser) throws IOException {
     String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     String openid = (String) JSON.parseObject(s).get("openid");
+    if (openid == null) {
+      return ResultTool.fail(ResultCode.USER_CODE_ERROR);
+    }
     List<WxUserEntity> user = wxUserRepository.findAllByAppidAndOpenid(microAppid, openid);
     if (!user.isEmpty())
       return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);

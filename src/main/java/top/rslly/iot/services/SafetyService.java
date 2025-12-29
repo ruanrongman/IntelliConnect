@@ -59,4 +59,8 @@ public interface SafetyService {
   boolean controlAuthorizeAgentLongMemory(String token, int id);
 
   boolean controlAuthorizeProductVoiceDiy(String token, int id);
+
+  boolean controlAuthorizeAgentMemory(String token, int id);
+
+  boolean controlAuthorizeAgentMemory(String token, String chatId);
 }

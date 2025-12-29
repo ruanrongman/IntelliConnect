@@ -178,7 +178,7 @@ public class ProductServiceImpl implements ProductService {
     List<McpServerEntity> mcpServerEntityList = mcpServerRepository.findAllByProductId(id);
     List<ProductRoleEntity> productRoleEntityList = productRoleRepository.findAllByProductId(id);
     List<AgentMemoryEntity> agentMemoryEntityList =
-        agentMemoryRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
+        agentMemoryRepository.findAllByChatIdStartingWith("chatProduct" + id);
     List<KnowledgeChatEntity> knowledgeChatEntityList =
         knowledgeChatRepository.findAllByProductId(id);
     List<ProductRouterSetEntity> productRouterSetEntityList =

@@ -28,12 +28,17 @@ import java.util.List;
 
 public interface AgentMemoryRepository extends JpaRepository<AgentMemoryEntity, Long> {
   // 以chatId开头的记录
+  List<AgentMemoryEntity> findAllById(int id);
+
   List<AgentMemoryEntity> findAllByChatIdStartingWith(String chatId);
 
   List<AgentMemoryEntity> findAllByChatId(String chatId);
 
   @Transactional
   List<AgentMemoryEntity> deleteAllByChatId(String chatId);
+
+  @Transactional
+  List<AgentMemoryEntity> deleteAllById(int id);
 
   // 以chatId开头的记录
   @Modifying

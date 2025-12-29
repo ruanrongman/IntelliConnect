@@ -49,6 +49,15 @@ export default [
           },
         },
         {
+          path: '/agentMemory',
+          name: 'agentMemory',
+          component: () => import('@/views/productAgentMemory/index.vue'),
+          meta: {
+            title: 'agentMemory',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productRouterSet',
           name: 'productRouterSet',
           component: () => import('@/views/productRouterSet/index.vue'),

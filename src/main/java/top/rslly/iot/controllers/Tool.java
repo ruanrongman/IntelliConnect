@@ -85,6 +85,8 @@ public class Tool {
   private AgentLongMemoryServiceImpl agentLongMemoryService;
   @Autowired
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
+  @Autowired
+  private AgentMemoryServiceImpl agentMemoryService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -568,4 +570,36 @@ public class Tool {
     return productVoiceDiyService.deleteProductVoiceDiy(id);
   }
 
+  @Operation(summary = "获取聊天记忆", description = "获取聊天记忆")
+  @RequestMapping(value = "/memory", method = RequestMethod.GET)
+  public JsonResult<?> getMemory(@RequestHeader("Authorization") String header) {
+    return agentMemoryService.getMemory(header);
+  }
+
+  @Operation(summary = "修改聊天记忆", description = "修改聊天记忆")
+  @RequestMapping(value = "/memory", method = RequestMethod.PUT)
+  public JsonResult<?> updateMemory(
+      @Valid @RequestBody AgentMemory agentMemory,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeAgentMemory(header, agentMemory.getChatId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentMemoryService.updateMemory(agentMemory);
+  }
+
+  @Operation(summary = "删除聊天记忆", description = "删除聊天记忆")
+  @RequestMapping(value = "/memory", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteMemory(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeAgentMemory(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentMemoryService.deleteMemory(id);
+  }
 }

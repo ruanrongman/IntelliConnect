@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.KnowledgeChatRepository;
 import top.rslly.iot.dao.ProductRouterSetRepository;
+import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
@@ -81,6 +82,8 @@ public class SafetyServiceImpl implements SafetyService {
   private AgentLongMemoryServiceImpl agentLongMemoryService;
   @Autowired
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
+  @Autowired
+  private AgentMemoryServiceImpl agentMemoryService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -261,6 +264,59 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("productVoiceDiyId not found!");
     return this.controlAuthorizeProduct(token,
         productVoiceDiyEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeAgentMemory(String token, int id) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    List<AgentMemoryEntity> agentMemoryEntityList = agentMemoryService.findAllById(id);
+    if (agentMemoryEntityList.isEmpty())
+      throw new NullPointerException("agentMemoryId not found!");
+    String memoryChatId = agentMemoryEntityList.get(0).getChatId();
+    if (role.equals("ROLE_" + "wx_user")) {
+      if (wxUserService.findAllByName(username).isEmpty()) {
+        return false;
+      }
+      List<WxUserEntity> wxUserEntityList = wxUserService.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
+      if (memoryChatId.equals(appid + openid)) {
+        return true;
+      }
+      List<WxProductBindEntity> wxProductBindEntityList =
+          wxProductBindService.findAllByAppidAndOpenid(appid, openid);
+      for (WxProductBindEntity bind : wxProductBindEntityList) {
+        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())) {
+          return true;
+        }
+      }
+      return false;
+    } else if (!role.equals("[ROLE_admin]")) {
+      var userList = userService.findAllByUsername(username);
+      if (userList.isEmpty())
+        return false;
+      int userId = userList.get(0).getId();
+      List<UserProductBindEntity> userProductBindEntityList =
+          userProductBindService.findAllByUserId(userId);
+      for (UserProductBindEntity bind : userProductBindEntityList) {
+        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())) {
+          return true;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
+  @Override
+  public boolean controlAuthorizeAgentMemory(String token, String chatId) {
+    List<AgentMemoryEntity> agentMemoryEntityList = agentMemoryService.findAllByChatId(chatId);
+    if (agentMemoryEntityList.isEmpty())
+      throw new NullPointerException("chatId not found!");
+    return this.controlAuthorizeAgentMemory(token,
+        agentMemoryEntityList.get(0).getId());
   }
 
   @Override

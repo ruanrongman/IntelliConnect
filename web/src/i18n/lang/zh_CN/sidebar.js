@@ -59,6 +59,7 @@ const product ={
   productPage: '产品页面',
   productXiaoZhi:'小智绑定',
   productRole:'角色设置',
+  agentMemory:'记忆体设置',
   agentLongMemory:'长期记忆设置',
   productRouterSet:'语义路由配置',
   productKnowledge:'知识库配置',
