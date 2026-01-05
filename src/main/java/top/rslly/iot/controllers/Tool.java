@@ -607,20 +607,20 @@ public class Tool {
   }
 
   @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")
-  @RequestMapping(value="/addKgNode", method = RequestMethod.POST)
+  @RequestMapping(value = "/addKgNode", method = RequestMethod.POST)
   public JsonResult<?> addKgNode(@Valid @RequestBody KnowledgeGraphicNode node,
-                               @RequestHeader("Authorization") String header){
-      try {
-          if(!safetyService.controlAuthorizeProduct(header, node.productUid))
-              return ResultTool.fail(ResultCode.NO_PERMISSION);
-      }catch(NullPointerException e){
-          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-      }
-      return knowledgeGraphicService.addNode(node);
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, node.productUid))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.addNode(node);
   }
 
   @Operation(summary = "获取知识图谱节点", description = "通过节点名称获取节点")
-  public JsonResult<?> getKgNode(@RequestParam("id") int id, @RequestParam("name") String name){
-      return knowledgeGraphicService.getNode(name);
+  public JsonResult<?> getKgNode(@RequestParam("id") int id, @RequestParam("name") String name) {
+    return knowledgeGraphicService.getNode(name);
   }
 }

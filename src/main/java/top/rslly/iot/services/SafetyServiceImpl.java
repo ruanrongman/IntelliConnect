@@ -242,11 +242,12 @@ public class SafetyServiceImpl implements SafetyService {
 
   @Override
   public boolean controlAuthorizeKnowledgeGraphicNode(String token, int id) {
-      List<KnowledgeGraphicNodeEntity> knowledgeGraphicNodeEntities = knowledgeGraphicService.getNodesById(id);
-      if (knowledgeGraphicNodeEntities.isEmpty())
-          throw new NullPointerException("knowledgeGraphicNodeId not found!");
-      return this.controlAuthorizeProduct(token,
-              knowledgeGraphicNodeEntities.get(0).getProductUid());
+    List<KnowledgeGraphicNodeEntity> knowledgeGraphicNodeEntities =
+        knowledgeGraphicService.getNodesById(id);
+    if (knowledgeGraphicNodeEntities.isEmpty())
+      throw new NullPointerException("knowledgeGraphicNodeId not found!");
+    return this.controlAuthorizeProduct(token,
+        knowledgeGraphicNodeEntities.get(0).getProductUid());
   }
 
   @Override

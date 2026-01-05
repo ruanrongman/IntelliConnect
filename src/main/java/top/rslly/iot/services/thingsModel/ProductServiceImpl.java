@@ -198,7 +198,7 @@ public class ProductServiceImpl implements ProductService {
     List<AdminConfigEntity> adminConfigEntityList =
         adminConfigRepository.findAllBySetKey("wx_default_product");
     List<KnowledgeGraphicNodeEntity> knowledgeGraphicNodeList =
-            knowledgeGraphicNodeRepository.findAllByProductUid(id);
+        knowledgeGraphicNodeRepository.findAllByProductUid(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -232,13 +232,13 @@ public class ProductServiceImpl implements ProductService {
           } catch (Exception ignore) {
           }
         }
-        if(!knowledgeGraphicNodeList.isEmpty()){
-            for(KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList){
-                long kId = knowledgeGraphicNodeEntity.getId();
-                knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
-                knowledgeGraphicAttributeRepository.deleteByBelong(kId);
-            }
-            knowledgeGraphicNodeRepository.deleteAllByProductUid(id);
+        if (!knowledgeGraphicNodeList.isEmpty()) {
+          for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
+            long kId = knowledgeGraphicNodeEntity.getId();
+            knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
+            knowledgeGraphicAttributeRepository.deleteByBelong(kId);
+          }
+          knowledgeGraphicNodeRepository.deleteAllByProductUid(id);
         }
         return ResultTool.success(result);
       }
