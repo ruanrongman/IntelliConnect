@@ -13,7 +13,7 @@ spring:
     show-sql: false
     hibernate:
       #更新或者创建数据库表结构(第一次启动请设置为update)
-      ddl-auto: none
+      ddl-auto: update
   influx:
     user: cwl
     # 你的数据库url
@@ -23,11 +23,11 @@ spring:
     dataBaseName: data
     retention: autogen     #保存策略
   datasource:
-    username: cwliot1.8
-    url: jdbc:mysql://192.168.49.129:3306/cwliot1.8?useUnicode=true&characterEncoding=UTF-8&useSSL=false
+    username: root
+    url: jdbc:mysql://localhost:3306/cwliot?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.jdbc.Driver
     # 输入你自己的mysql密码,该密码为随机生成
-    password: "DMKRjBbHCiPAyAdn"
+    password: "123456"
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       # 下面为连接池的补充设置，应用到上面所有数据源中
@@ -159,7 +159,7 @@ ai:
   vision-model: silicon-Qwen/Qwen3-VL-8B-Instruct
   glm-key: XXX
   deepSeek-key: XXX
-  siliconFlow-Key: XXX
+  siliconFlow-Key: sk-mlhwxtyjteqdcmncdjpgnjopmjsetrpqayyrhllyksaorngh
   uniApi-Key: XXX
   dashscope-key: XXX
   robot-name: 小创

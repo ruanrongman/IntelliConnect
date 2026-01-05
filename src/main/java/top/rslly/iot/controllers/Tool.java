@@ -33,6 +33,7 @@ import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
 import top.rslly.iot.services.storage.DataServiceImpl;
 import top.rslly.iot.services.storage.EventStorageServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
@@ -87,6 +88,8 @@ public class Tool {
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
+  @Autowired
+  private KnowledgeGraphicService knowledgeGraphicService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -601,5 +604,23 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return agentMemoryService.deleteMemory(id);
+  }
+
+  @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")
+  @RequestMapping(value="/addKgNode", method = RequestMethod.POST)
+  public JsonResult<?> addKgNode(@Valid @RequestBody KnowledgeGraphicNode node,
+                               @RequestHeader("Authorization") String header){
+      try {
+          if(!safetyService.controlAuthorizeProduct(header, node.productUid))
+              return ResultTool.fail(ResultCode.NO_PERMISSION);
+      }catch(NullPointerException e){
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return knowledgeGraphicService.addNode(node);
+  }
+
+  @Operation(summary = "获取知识图谱节点", description = "通过节点名称获取节点")
+  public JsonResult<?> getKgNode(@RequestParam("id") int id, @RequestParam("name") String name){
+      return knowledgeGraphicService.getNode(name);
   }
 }
