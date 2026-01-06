@@ -28,6 +28,7 @@ import top.rslly.iot.dao.KnowledgeGraphicRelationRepository;
 import top.rslly.iot.models.KnowledgeGraphicAttributeEntity;
 import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
 import top.rslly.iot.models.KnowledgeGraphicRelationEntity;
+import top.rslly.iot.param.request.KnowledgeGraphicAttribute;
 import top.rslly.iot.param.request.KnowledgeGraphicNode;
 import top.rslly.iot.services.knowledgeGraphic.dbo.KnowledgeGraphic;
 import top.rslly.iot.utility.result.JsonResult;
@@ -36,6 +37,7 @@ import top.rslly.iot.utility.result.ResultTool;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Stack;
 
 @Service
@@ -72,7 +74,8 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         List<KnowledgeGraphicRelationEntity> relationList =
             knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
         for (KnowledgeGraphicRelationEntity relation : relationList) {
-          KnowledgeGraphicNodeEntity to = knowledgeGraphicNodeRepository.getById(relation.getTo());
+          KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
+          // Null is not on consideration, cause relation must with from and to
           nextNodeList.add(to);
           knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
         }
@@ -135,6 +138,11 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  public KnowledgeGraphicNodeEntity getNodeById(long id) {
+      return knowledgeGraphicNodeRepository.findById(id).orElse(null);
+  }
+
+  @Override
   public List<KnowledgeGraphicNodeEntity> getNodesById(long id) {
     return knowledgeGraphicNodeRepository.findAllById(id);
   }
@@ -177,4 +185,223 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     }
     return ResultTool.success();
   }
+
+    @Override
+    public JsonResult<?> addAttributes(KnowledgeGraphicNode node) {
+      KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
+      if (nodeDb == null) {
+          return ResultTool.fail();
+      }
+      return this.addAttributes(node.attributes, nodeDb.getId());
+    }
+
+    @Override
+    public JsonResult<?> addAttribute(KnowledgeGraphicAttribute attribute) {
+      return this.addAttribute(attribute.name, attribute.belong);
+    }
+
+    @Override
+    public JsonResult<?> deleteNode(String name) {
+      KnowledgeGraphicNodeEntity node = knowledgeGraphicNodeRepository.findByName(name);
+      if (node == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      knowledgeGraphicNodeRepository.delete(node);
+      // Relation must with from and to, whatever witch of them was deleted, the relation must be deleted.
+      knowledgeGraphicRelationRepository.deleteAllByFrom(node.getId());
+      knowledgeGraphicRelationRepository.deleteAllByTo(node.getId());
+      knowledgeGraphicAttributeRepository.deleteByBelong(node.getId());
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteNode(long id) {
+      KnowledgeGraphicNodeEntity node = knowledgeGraphicNodeRepository.findById(id).orElse(null);
+      if (node == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      knowledgeGraphicNodeRepository.deleteById(id);
+      knowledgeGraphicRelationRepository.deleteAllByFrom(id);
+      knowledgeGraphicRelationRepository.deleteAllByTo(id);
+      knowledgeGraphicAttributeRepository.deleteByBelong(id);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteNode(int productUid) {
+      List<KnowledgeGraphicNodeEntity> nodes =  knowledgeGraphicNodeRepository.findAllByProductUid(productUid);
+      if(nodes.isEmpty()){
+          return  ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      for(KnowledgeGraphicNodeEntity node: nodes){
+          if(!this.deleteNode(node.getId()).getSuccess()){
+              return ResultTool.fail();
+          }
+      }
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateNode(KnowledgeGraphicNodeEntity node) {
+      knowledgeGraphicNodeRepository.save(node);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateNode(String name, String des, long id) {
+      KnowledgeGraphicNodeEntity node = this.getNodeById(id);
+      if (node == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+        return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateNode(KnowledgeGraphicNode node) {
+      KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
+      if (nodeDb == null) {
+          return  ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      nodeDb.setDes(node.getDes());
+      knowledgeGraphicNodeRepository.save(nodeDb);
+      if(!node.attributes.isEmpty()) {
+          this.addAttributes(node.attributes, nodeDb.getId());
+      }
+        return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> addRelation(KnowledgeGraphicRelationEntity relation) {
+      knowledgeGraphicRelationRepository.save(relation);
+        return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> addRelation(String des, long from, long to) {
+      if(this.getNodeById(from) == null || this.getNodeById(to) == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      KnowledgeGraphicRelationEntity relation = knowledgeGraphicRelationRepository.getByFromAndTo(from, to);
+      if (relation == null) {
+          relation = new KnowledgeGraphicRelationEntity();
+          relation.setFrom(from);
+          relation.setTo(to);
+      }
+      relation.setDes(des);
+      knowledgeGraphicRelationRepository.save(relation);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> addRelation(String des, String fromName, String toName) {
+      KnowledgeGraphicNodeEntity fromNode = knowledgeGraphicNodeRepository.findByName(fromName);
+      KnowledgeGraphicNodeEntity toNode = knowledgeGraphicNodeRepository.findByName(toName);
+      if(fromNode == null || toNode == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return this.addRelation(des, fromNode.getId(), toNode.getId());
+    }
+
+    @Override
+    public JsonResult<?> deleteRelation(KnowledgeGraphicRelationEntity relation) {
+      knowledgeGraphicRelationRepository.delete(relation);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteRelation(long id) {
+      knowledgeGraphicRelationRepository.deleteById(id);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteRelationsByTo(long to) {
+      knowledgeGraphicRelationRepository.deleteAllByTo(to);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteRelationsByFrom(long from) {
+      knowledgeGraphicRelationRepository.deleteAllByFrom(from);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateRelation(KnowledgeGraphicRelationEntity relation) {
+      knowledgeGraphicRelationRepository.save(relation);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateRelation(String des, long id) {
+      KnowledgeGraphicRelationEntity relation = knowledgeGraphicRelationRepository.findById(id).orElse(null);
+      if (relation == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      relation.setDes(des);
+      knowledgeGraphicRelationRepository.save(relation);
+      return ResultTool.success();
+    }
+
+    @Override
+    @Deprecated
+    public JsonResult<?> deleteAttribute(String name) {
+      // Don't use this method unless you can make sure there is only attribute named what you want to delete.
+        knowledgeGraphicAttributeRepository.deleteAllByName(name);
+        return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteAttribute(long id) {
+      knowledgeGraphicAttributeRepository.deleteById(id);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteAttribute(String name, long belong) {
+        KnowledgeGraphicNodeEntity node = knowledgeGraphicNodeRepository.findById(belong).orElse(null);
+        if(node == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+        }
+        knowledgeGraphicAttributeRepository.deleteByBelongAndName(belong, name);
+        return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteAttribute(KnowledgeGraphicAttribute attribute) {
+      KnowledgeGraphicAttributeEntity attributeDb = knowledgeGraphicAttributeRepository.getByNameAndBelong(attribute.getName(), attribute.getBelong());
+      if(attributeDb == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      knowledgeGraphicAttributeRepository.delete(attributeDb);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> deleteAttributesByBelong(long belong) {
+      knowledgeGraphicAttributeRepository.deleteByBelong(belong);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateAttribute(String name, long id) {
+      KnowledgeGraphicAttributeEntity attribute = knowledgeGraphicAttributeRepository.findById(id).orElse(null);
+      if (attribute == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      attribute.setName(name);
+      knowledgeGraphicAttributeRepository.save(attribute);
+      return ResultTool.success();
+    }
+
+    @Override
+    public JsonResult<?> updateAttribute(String oldName, String newName, long belong) {
+      KnowledgeGraphicAttributeEntity attribute = knowledgeGraphicAttributeRepository.getByNameAndBelong(oldName, belong);
+      if (attribute == null) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      attribute.setName(newName);
+      knowledgeGraphicAttributeRepository.save(attribute);
+      return ResultTool.success();
+    }
 }

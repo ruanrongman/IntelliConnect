@@ -19,11 +19,16 @@
  */
 package top.rslly.iot.param.request;
 
+import lombok.Data;
+
+import javax.validation.constraints.NotBlank;
 import java.util.List;
 
+@Data
 public class KnowledgeGraphicNode {
-  public int userId;
+  @NotBlank(message = "产品ID不能为空")
   public int productUid;
+  @NotBlank(message = "节点名称不能为空")
   public String name;
   public String des;
   public List<String> attributes;

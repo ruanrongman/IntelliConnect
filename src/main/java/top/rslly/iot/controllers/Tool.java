@@ -607,7 +607,7 @@ public class Tool {
   }
 
   @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")
-  @RequestMapping(value = "/addKgNode", method = RequestMethod.POST)
+  @RequestMapping(value = "/kg/addNode", method = RequestMethod.POST)
   public JsonResult<?> addKgNode(@Valid @RequestBody KnowledgeGraphicNode node,
       @RequestHeader("Authorization") String header) {
     try {
@@ -620,7 +620,41 @@ public class Tool {
   }
 
   @Operation(summary = "获取知识图谱节点", description = "通过节点名称获取节点")
-  public JsonResult<?> getKgNode(@RequestParam("id") int id, @RequestParam("name") String name) {
+  @RequestMapping(value = "/kg/getNode", method = RequestMethod.GET)
+  public JsonResult<?> getKgNode(@RequestParam("name") String name, @RequestParam("productUid") int productUid,
+     @RequestHeader("Authorization") String header) {
+      try{
+          if(!safetyService.controlAuthorizeProduct(header, productUid))
+              return ResultTool.fail(ResultCode.NO_PERMISSION);
+      }catch(NullPointerException e){
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
     return knowledgeGraphicService.getNode(name);
+  }
+
+  @Operation(summary = "新增属性", description = "为节点新增属性")
+  @RequestMapping(value = "/kg/addAttr", method = RequestMethod.POST)
+  public JsonResult<?> addAttribute(@Valid @RequestBody KnowledgeGraphicAttribute attribute,
+        @RequestHeader("Authorization") String header){
+      try{
+          if(!safetyService.controlAuthorizeProduct(header, attribute.productUid))
+              return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e){
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return knowledgeGraphicService.addAttribute(attribute);
+  }
+
+  @Operation(summary = "删除属性", description = "删除节点的属性")
+  @RequestMapping(value = "/kg/deleteAttr", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteAttribute(@Valid @RequestBody KnowledgeGraphicAttribute attribute,
+   @RequestHeader("Authorization") String header){
+      try{
+          if(!safetyService.controlAuthorizeProduct(header, attribute.productUid))
+              return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e){
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return knowledgeGraphicService.deleteAttribute(attribute);
   }
 }

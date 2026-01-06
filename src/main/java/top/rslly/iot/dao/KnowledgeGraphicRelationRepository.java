@@ -30,5 +30,9 @@ public interface KnowledgeGraphicRelationRepository
 
   public List<KnowledgeGraphicRelationEntity> getAllByTo(long toId);
 
+  public KnowledgeGraphicRelationEntity getByFromAndTo(long fromId, long toId);
+
   void deleteAllByFrom(long fromId);
+
+  void deleteAllByTo(long to);
 }
