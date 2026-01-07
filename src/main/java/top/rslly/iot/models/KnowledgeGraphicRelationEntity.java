@@ -31,10 +31,10 @@ public class KnowledgeGraphicRelationEntity {
   @Column(name = "id")
   private long id;
 
-  @Column(name = "from")
+  @Column(name = "r_from")
   private long from;
 
-  @Column(name = "to")
+  @Column(name = "r_to")
   private long to;
 
   @Column(name = "des")

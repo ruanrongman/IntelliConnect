@@ -17,17 +17,17 @@ spring:
   influx:
     user: cwl
     # 你的数据库url
-    url: http://192.168.49.129:8086
+    url: http://localhost:8086
     password: 1234
     mapper-location: top.rslly.iot.dao
     dataBaseName: data
     retention: autogen     #保存策略
   datasource:
     username: root
-    url: jdbc:mysql://localhost:3306/cwliot?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/cwliot1.8?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.jdbc.Driver
     # 输入你自己的mysql密码,该密码为随机生成
-    password: "123456"
+    password: "XzHvhX4CDaN696oQAXdmlcsrqgWbkxRl"
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       # 下面为连接池的补充设置，应用到上面所有数据源中
@@ -60,7 +60,7 @@ spring:
         login-username: admin
         login-password: 123456
   redis:
-    host: 192.168.49.129
+    host: localhost
     password: 1234
     port: 6379
     timeout: 1000
