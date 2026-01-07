@@ -36,7 +36,7 @@ public interface KnowledgeGraphicAttributeRepository
 
   void deleteAllByName(String name);
 
-  KnowledgeGraphicAttributeEntity getByNameAndBelong(String name,long belongId);
+  KnowledgeGraphicAttributeEntity getByNameAndBelong(String name, long belongId);
 
   void deleteByBelongAndName(long belong, String name);
 }

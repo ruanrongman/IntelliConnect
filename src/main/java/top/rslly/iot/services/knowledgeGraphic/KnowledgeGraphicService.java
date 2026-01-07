@@ -24,6 +24,7 @@ import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
 import top.rslly.iot.models.KnowledgeGraphicRelationEntity;
 import top.rslly.iot.param.request.KnowledgeGraphicAttribute;
 import top.rslly.iot.param.request.KnowledgeGraphicNode;
+import top.rslly.iot.param.request.KnowledgeGraphicRelation;
 import top.rslly.iot.services.knowledgeGraphic.dbo.KnowledgeGraphic;
 import top.rslly.iot.utility.result.JsonResult;
 
@@ -33,21 +34,27 @@ public interface KnowledgeGraphicService {
 
   JsonResult<?> getKnowledgeGraphic(KnowledgeGraphicNodeEntity rootNode, int maxDepth);
 
+  JsonResult<?> getKnowledgeGraphicByNodeId(long id, int maxDepth);
+
   JsonResult<?> addNode(KnowledgeGraphicNodeEntity node);
 
   JsonResult<?> addNode(KnowledgeGraphicNode node);
 
-  JsonResult<?> addNode(String name, String des, int id);
+  JsonResult<?> addNode(String name, String des, int productUid);
 
-  JsonResult<?> getNode(String name);
+  JsonResult<?> getNode(String name, int productUid);
+
+  JsonResult<?> getNodes(int productUid);
 
   KnowledgeGraphicNodeEntity getNodeById(long id);
 
   JsonResult<?> deleteNode(String name);
 
+  JsonResult<?> deleteNode(String name, int productUid);
+
   JsonResult<?> deleteNode(long id);
 
-  JsonResult<?> deleteNode(int productUid);
+  JsonResult<?> deleteNodes(int productUid);
 
   JsonResult<?> updateNode(KnowledgeGraphicNodeEntity node);
 
@@ -60,6 +67,8 @@ public interface KnowledgeGraphicService {
   JsonResult<?> addRelation(KnowledgeGraphicRelationEntity relation);
 
   JsonResult<?> addRelation(String des, long from, long to);
+
+  JsonResult<?> addRelation(KnowledgeGraphicRelation relation);
 
   JsonResult<?> addRelation(String des, String fromName, String toName);
 
@@ -74,6 +83,8 @@ public interface KnowledgeGraphicService {
   JsonResult<?> updateRelation(KnowledgeGraphicRelationEntity relation);
 
   JsonResult<?> updateRelation(String des, long id);
+
+  JsonResult<?> updateRelation(KnowledgeGraphicRelation relation);
 
   JsonResult<?> getNodeRelations(String name);
 
@@ -100,4 +111,6 @@ public interface KnowledgeGraphicService {
   JsonResult<?> updateAttribute(String name, long id);
 
   JsonResult<?> updateAttribute(String oldName, String newName, long belong);
+
+  JsonResult<?> getAttributes(long belong);
 }

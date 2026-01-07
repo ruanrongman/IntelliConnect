@@ -26,9 +26,11 @@ import java.util.List;
 
 public interface KnowledgeGraphicNodeRepository
     extends JpaRepository<KnowledgeGraphicNodeEntity, Long> {
-  public List<KnowledgeGraphicNodeEntity> findAllById(long id);
+  List<KnowledgeGraphicNodeEntity> findAllById(long id);
 
-  public KnowledgeGraphicNodeEntity findByName(String name);
+  KnowledgeGraphicNodeEntity findByName(String name);
+
+  KnowledgeGraphicNodeEntity findByNameAndProductUid(String name, int productUid);
 
   List<KnowledgeGraphicNodeEntity> findAllByProductUid(int id);
 

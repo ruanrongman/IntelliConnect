@@ -21,6 +21,7 @@ package top.rslly.iot.param.request;
 
 import lombok.Data;
 
+import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import java.util.List;
 
@@ -28,6 +29,8 @@ import java.util.List;
 public class KnowledgeGraphicNode {
   @NotBlank(message = "产品ID不能为空")
   public int productUid;
+  // When updating node, id should not be empty!
+  public long id;
   @NotBlank(message = "节点名称不能为空")
   public String name;
   public String des;
