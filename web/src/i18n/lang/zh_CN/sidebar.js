@@ -74,7 +74,9 @@ const product ={
   productOta: '配置空中升级',
   productOtaPassiveXiaoZhi: '配置小智空中升级',
   productOtaPassive: '配置被动空中升级包',
-  alarmEventAdd: '配置事件告警'
+  alarmEventAdd: '配置事件告警',
+  llmProviderInformation: '模型服务商配置',
+  productLlmModel: '产品LLM模型配置'
 }
 const deviceData = {
   deviceDataPage: '设备数据',

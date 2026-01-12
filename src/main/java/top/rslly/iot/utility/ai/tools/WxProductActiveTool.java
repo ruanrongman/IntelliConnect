@@ -21,15 +21,19 @@ package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.WxProductActiveEntity;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.services.wechat.WxProductActiveServiceImpl;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -42,6 +46,7 @@ import java.util.Map;
 
 @Data
 @Component
+@Slf4j
 public class WxProductActiveTool implements BaseTool<String> {
   @Autowired
   private WxProductActiveToolPrompt wxProductActiveToolPrompt;
@@ -53,6 +58,8 @@ public class WxProductActiveTool implements BaseTool<String> {
   private WxProductActiveServiceImpl wxProductActiveService;
   @Autowired
   private WxUserServiceImpl wxUserService;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.wxProductActiveTool-llm}")
   private String llmName;
   private String name = "wxProductActiveTool";
@@ -67,6 +74,7 @@ public class WxProductActiveTool implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
+    int productId = (int) globalMessage.get("productId");
     String chatId = (String) globalMessage.get("chatId");
     String openid = (String) globalMessage.get("openId");
     if (!globalMessage.containsKey("microappid"))
@@ -74,7 +82,7 @@ public class WxProductActiveTool implements BaseTool<String> {
     String appid = (String) globalMessage.get("microappid");
     if (wxUserService.findAllByAppidAndOpenid(appid, openid).isEmpty())
       return "检测到当前不在微信客服对话环境，该功能无法使用";
-    LLM llm = LLMFactory.getLLM(llmName);
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "7");
     List<ModelMessage> messages = new ArrayList<>();
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),

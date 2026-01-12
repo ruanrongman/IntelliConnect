@@ -29,6 +29,7 @@ import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.*;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.DescriptionUtil;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -59,6 +60,8 @@ public class ChatTool implements BaseTool<String> {
   private ProductToolsBanServiceImpl productToolsBanService;
   @Autowired
   private DescriptionUtil descriptionUtil;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
 
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -81,8 +84,8 @@ public class ChatTool implements BaseTool<String> {
   }
 
   public String run(String question, Map<String, Object> globalMessage) {
-    LLM llm = LLMFactory.getLLM(llmName);
     int productId = (int) globalMessage.get("productId");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "5");
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");

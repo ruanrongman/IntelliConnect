@@ -29,8 +29,11 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.param.request.AgentLongMemoryToolParam;
 import top.rslly.iot.services.agent.AgentLongMemoryServiceImpl;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -51,6 +54,8 @@ public class LongMemoryTool {
   private ProductServiceImpl productService;
   @Autowired
   private AgentLongMemoryServiceImpl agentLongMemoryService;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.longMemoryTool-llm}")
   private String llmName;
   private String name = "longMemoryTool";
@@ -66,7 +71,7 @@ public class LongMemoryTool {
     if (productService.findAllById(productId).isEmpty()
         || agentLongMemoryService.findAllByProductId(productId).isEmpty())
       return;
-    LLM llm = LLMFactory.getLLM(llmName);
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "longMemory");
     List<ModelMessage> messages = new ArrayList<>();
     // 使用 Optional 进行类型安全的转换
     List<ModelMessage> memory =

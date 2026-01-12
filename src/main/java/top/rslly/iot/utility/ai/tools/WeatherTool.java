@@ -26,8 +26,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -53,6 +56,8 @@ public class WeatherTool implements BaseTool<String> {
   private boolean speedUp;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
@@ -73,7 +78,8 @@ public class WeatherTool implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
-    LLM llm = LLMFactory.getLLM(llmName);
+    int productId = (int) globalMessage.get("productId");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "1");
     List<ModelMessage> messages = new ArrayList<>();
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");

@@ -25,8 +25,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -47,6 +50,8 @@ public class ClassifierTool {
   private ClassifierToolPrompt classifierToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
   private final Map<String, Map<String, Object>> dataMap = new ConcurrentHashMap<>();
@@ -61,15 +66,15 @@ public class ClassifierTool {
       """;
 
   public Map<String, Object> run(String question, Map<String, Object> globalMessage) {
-    LLM llm = LLMFactory.getLLM(llmName);
+    int productId = (int) globalMessage.get("productId");
+    String chatId = (String) globalMessage.get("chatId");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "classifier");
     List<ModelMessage> messages = new ArrayList<>();
     Map<String, Object> resultMap = new HashMap<>();
     // 使用 Optional 进行类型安全的转换
     List<ModelMessage> memory =
         Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
             .orElse(Collections.emptyList());
-    int productId = (int) globalMessage.get("productId");
-    String chatId = (String) globalMessage.get("chatId");
     // 初始化当前会话的同步资源
     lockMap.putIfAbsent(chatId, new ReentrantLock());
     conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());

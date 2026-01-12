@@ -195,6 +195,9 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProductFunction(int id) {
+    if (productFunctionRepository.findAllById(id).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     List<ProductFunctionEntity> result = productFunctionRepository.deleteById(id);
     if (result.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);

@@ -79,6 +79,8 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   private String otaUrl;
   @Value("${ota.xiaozhi.version}")
   private String otaVersion;
+  @Value("${ota.xiaozhi.control-url}")
+  private String controlUrl;
 
   @Override
   public List<OtaXiaozhiEntity> findAllById(int id) {
@@ -237,7 +239,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
         String code = randomGenerator.generate();
         redisUtil.set(code, deviceId, 60 * 5);
         Map<String, Object> activation = new HashMap<>();
-        activation.put("message", "control.rslly.top\n" + code);
+        activation.put("message", controlUrl + "\n" + code);
         activation.put("code", code);
         activation.put("challenge", deviceId);
         activation.put("timeout_ms", 30000);

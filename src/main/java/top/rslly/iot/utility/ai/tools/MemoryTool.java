@@ -28,6 +28,9 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -44,6 +47,8 @@ public class MemoryTool {
   private MemoryToolPrompt memoryToolPrompt;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.memoryTool-llm}")
   private String llmName;
   private String name = "memoryTool";
@@ -54,7 +59,8 @@ public class MemoryTool {
 
   @Async("taskExecutor")
   public void run(String question, Map<String, Object> globalMessage) {
-    LLM llm = LLMFactory.getLLM(llmName);
+    int productId = (int) globalMessage.get("productId");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "memory");
     List<ModelMessage> messages = new ArrayList<>();
     String chatId = (String) globalMessage.get("chatId");
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);

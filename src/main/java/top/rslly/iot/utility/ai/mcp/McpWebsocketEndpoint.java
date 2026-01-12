@@ -160,7 +160,7 @@ public class McpWebsocketEndpoint {
    */
   @OnMessage
   public void onMessage(String message) {
-    log.info("message {}", message);
+    // log.info("message {}", message);
     try {
       var payloadObject = JSON.parseObject(message);
       if (!payloadObject.containsKey("jsonrpc")) {

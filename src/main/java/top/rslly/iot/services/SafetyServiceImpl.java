@@ -84,6 +84,10 @@ public class SafetyServiceImpl implements SafetyService {
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
+  @Autowired
+  private LlmProviderInformationServiceImpl llmProviderInformationService;
+  @Autowired
+  private ProductLlmModelServiceImpl productLlmModelService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -317,6 +321,33 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("chatId not found!");
     return this.controlAuthorizeAgentMemory(token,
         agentMemoryEntityList.get(0).getId());
+  }
+
+  @Override
+  public boolean controlAuthorizeLlmProviderInformation(String token, int id) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    if (role.equals("[ROLE_admin]"))
+      return true;
+    else {
+      List<LlmProviderInformationEntity> llmProviderInformationEntityList =
+          llmProviderInformationService.findAllById(id);
+      if (llmProviderInformationEntityList.isEmpty()) {
+        throw new NullPointerException("llmProviderInformationId not found!");
+      } else {
+        return username.equals(llmProviderInformationEntityList.get(0).getUserName());
+      }
+    }
+  }
+
+  @Override
+  public boolean controlAuthorizeProductLlmModel(String token, int id) {
+    List<ProductLlmModelEntity> productLlmModelEntityList = productLlmModelService.findAllById(id);
+    if (productLlmModelEntityList.isEmpty())
+      throw new NullPointerException("productLlmModelId not found!");
+    return this.controlAuthorizeProduct(token,
+        productLlmModelEntityList.get(0).getProductId());
   }
 
   @Override

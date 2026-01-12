@@ -67,7 +67,9 @@ const product ={
   productOta: 'productOta',
   productOtaPassiveXiaoZhi: 'productOtaPassiveXiaoZhi',
   productOtaPassive: 'productOtaPassive',
-  alarmEventAdd: 'alarmEventAdd'
+  alarmEventAdd: 'alarmEventAdd',
+  llmProviderInformation: 'Model Provider',
+  productLlmModel: 'LLM Model'
 }
 const permission = {
   permission: 'SystemSetting',

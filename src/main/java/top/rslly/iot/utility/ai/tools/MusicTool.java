@@ -22,11 +22,15 @@ package top.rslly.iot.utility.ai.tools;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -38,11 +42,14 @@ import java.util.*;
 
 @Data
 @Component
+@Slf4j
 public class MusicTool implements BaseTool<Map<String, String>> {
   @Autowired
   private MusicToolPrompt musicToolPrompt;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.musicTool-llm}")
   private String llmName;
   private String name = "musicTool";
@@ -53,7 +60,16 @@ public class MusicTool implements BaseTool<Map<String, String>> {
 
   @Override
   public Map<String, String> run(String question) {
-    LLM llm = LLMFactory.getLLM(llmName);
+    // For backward compatibility, create a minimal globalMessage with default productId
+    Map<String, Object> globalMessage = new HashMap<>();
+    globalMessage.put("productId", 0); // Default productId
+    return this.run(question, globalMessage);
+  }
+
+  @Override
+  public Map<String, String> run(String question, Map<String, Object> globalMessage) {
+    int productId = (int) globalMessage.get("productId");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "3");
     List<ModelMessage> messages = new ArrayList<>();
     Map<String, String> responseMap = new HashMap<>();
 
@@ -74,11 +90,6 @@ public class MusicTool implements BaseTool<Map<String, String>> {
       // e.printStackTrace();
       return responseMap;
     }
-  }
-
-  @Override
-  public Map<String, String> run(String question, Map<String, Object> globalMessage) {
-    return this.run(question);
   }
 
   private String process_llm_result(JSONObject llmObject) throws IOException, IcAiException {

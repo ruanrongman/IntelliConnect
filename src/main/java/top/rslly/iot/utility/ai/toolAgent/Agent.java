@@ -27,12 +27,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.utility.ai.DescriptionUtil;
-import top.rslly.iot.utility.ai.ModelMessage;
-import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
+import top.rslly.iot.utility.ai.*;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
-import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.tools.BaseTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
@@ -50,6 +49,10 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Agent implements BaseTool<String> {
   @Autowired
   private Manage manage;
+  @Autowired
+  private ProductLlmModelServiceImpl productLlmModelService;
+  @Autowired
+  private LlmProviderInformationServiceImpl llmProviderInformationService;
   @Value("${ai.agent-llm}")
   private String llmName;
   @Value("${ai.agent-speedUp:true}")
@@ -58,6 +61,8 @@ public class Agent implements BaseTool<String> {
   private ReactPrompt reactPrompt;
   @Autowired
   private DescriptionUtil descriptionUtil;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.agent-epoch-limit}")
   private int epochLimit = 8;
 
@@ -137,7 +142,7 @@ public class Agent implements BaseTool<String> {
       ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
       messages.add(systemMessage);
       messages.add(userMessage);
-      var obj = callLLMForThought(question, messages, queueMap, chatId);
+      var obj = callLLMForThought(question, messages, queueMap, chatId, productId);
       if (obj == null) {
         cleanupResources(chatId);
         return "小主人抱歉哦，服务器现在繁忙。";
@@ -220,13 +225,14 @@ public class Agent implements BaseTool<String> {
    * 调用LLM获取thought，支持流式和非流式
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId) {
+      Map<String, Queue<String>> queueMap, String chatId, int productId) {
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4");
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
       dataMap.remove(chatId);
 
       try {
-        LLMFactory.getLLM(llmName).streamJsonChat(question, messages, false,
+        llm.streamJsonChat(question, messages, false,
             new AgentEventSourceListener(queueMap, chatId, this));
 
         Lock chatLock = lockMap.get(chatId);
@@ -266,7 +272,7 @@ public class Agent implements BaseTool<String> {
     } else {
       // 非流式调用
       try {
-        return LLMFactory.getLLM(llmName).jsonChat(question, messages, false);
+        return llm.jsonChat(question, messages, false);
       } catch (Exception e) {
         log.error("调用LLM失败: {}", e.getMessage());
         return null;

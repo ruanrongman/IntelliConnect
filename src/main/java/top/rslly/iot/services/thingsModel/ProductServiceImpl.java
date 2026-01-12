@@ -70,6 +70,8 @@ public class ProductServiceImpl implements ProductService {
   private ProductVoiceDiyRepository productVoiceDiyRepository;
   @Resource
   private AdminConfigRepository adminConfigRepository;
+  @Resource
+  private ProductLlmModelRepository productLlmModelRepository;
 
 
   @Override
@@ -191,6 +193,8 @@ public class ProductServiceImpl implements ProductService {
         productVoiceDiyRepository.findAllByProductId(id);
     List<AdminConfigEntity> adminConfigEntityList =
         adminConfigRepository.findAllBySetKey("wx_default_product");
+    List<ProductLlmModelEntity> productLlmModelEntityList =
+        productLlmModelRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -201,7 +205,8 @@ public class ProductServiceImpl implements ProductService {
     boolean p8 = productToolsBanEntityList.isEmpty();
     boolean p9 = agentLongMemoryEntityList.isEmpty();
     boolean p10 = productVoiceDiyEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10) {
+    boolean p11 = productLlmModelEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -214,6 +219,9 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!agentMemoryEntityList.isEmpty()) {
           agentMemoryRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
+        }
+        if (!productLlmModelEntityList.isEmpty()) {
+          productLlmModelRepository.deleteAllByProductId(id);
         }
         if (!adminConfigEntityList.isEmpty()) {
           try {

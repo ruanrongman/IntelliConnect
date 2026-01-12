@@ -154,4 +154,11 @@ public class LLMFactory {
     // 6. 兜底策略：如果以上都不匹配，返回默认的 DeepSeek
     return new DeepSeek(deepSeekApiKey);
   }
+
+  public static LLM getLLM(String llmName, String baseUrl, String apiKey) {
+    if (llmName == null || llmName.trim().isEmpty()) {
+      return null;
+    }
+    return new DeepSeek(baseUrl, llmName, apiKey);
+  }
 }
