@@ -23,16 +23,18 @@ import lombok.Data;
 
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
 import java.util.List;
 
 @Data
 public class KnowledgeGraphicNode {
-  @NotBlank(message = "产品ID不能为空")
   public int productUid;
   // When updating node, id should not be empty!
   public long id;
   @NotBlank(message = "节点名称不能为空")
+  @Size(min = 1, max = 20)
   public String name;
+  @Size(min = 1, max = 255)
   public String des;
   public List<String> attributes;
 }

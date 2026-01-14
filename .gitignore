@@ -33,3 +33,5 @@ build/
 .vscode/
 ### lck ###
 .lck
+
+/docker/models

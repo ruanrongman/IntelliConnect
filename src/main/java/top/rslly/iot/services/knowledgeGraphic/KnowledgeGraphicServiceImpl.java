@@ -22,6 +22,7 @@ package top.rslly.iot.services.knowledgeGraphic;
 import org.nutz.json.Json;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.KnowledgeGraphicAttributeRepository;
 import top.rslly.iot.dao.KnowledgeGraphicNodeRepository;
 import top.rslly.iot.dao.KnowledgeGraphicRelationRepository;
@@ -107,12 +108,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNodeEntity node) {
     knowledgeGraphicNodeRepository.save(node);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNode node) {
     KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
     if (nodeDb == null) {
@@ -129,6 +132,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(String name, String des, int productUid) {
     KnowledgeGraphicNodeEntity node = new KnowledgeGraphicNodeEntity();
     node.setName(name);
@@ -184,6 +188,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addAttribute(String name, long belong) {
     KnowledgeGraphicAttributeEntity attribute = knowledgeGraphicAttributeRepository.getByName(name);
     if (attribute != null) {
@@ -197,6 +202,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addAttributes(List<String> attributes, long belong) {
     for (String attribute : attributes) {
       this.addAttribute(attribute, belong);
@@ -205,6 +211,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addAttributes(KnowledgeGraphicNode node) {
     KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
     if (nodeDb == null) {
@@ -214,12 +221,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addAttribute(KnowledgeGraphicAttribute attribute) {
     return this.addAttribute(attribute.name, attribute.belong);
   }
 
   @Override
   @Deprecated
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteNode(String name) {
     // Don't use this method unless you can make sure there is only node named what you want to
     // delete.
@@ -237,6 +246,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteNode(String name, int productUid) {
     KnowledgeGraphicNodeEntity node =
         knowledgeGraphicNodeRepository.findByNameAndProductUid(name, productUid);
@@ -248,6 +258,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteNode(long id) {
     KnowledgeGraphicNodeEntity node = knowledgeGraphicNodeRepository.findById(id).orElse(null);
     if (node == null) {
@@ -261,6 +272,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteNodes(int productUid) {
     List<KnowledgeGraphicNodeEntity> nodes =
         knowledgeGraphicNodeRepository.findAllByProductUid(productUid);
@@ -276,12 +288,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateNode(KnowledgeGraphicNodeEntity node) {
     knowledgeGraphicNodeRepository.save(node);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateNode(String name, String des, long id) {
     KnowledgeGraphicNodeEntity node = this.getNodeById(id);
     if (node == null) {
@@ -291,6 +305,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateNode(KnowledgeGraphicNode node) {
     // When updating node, you must supply node id!
     if (node.getId() <= 0)
@@ -308,12 +323,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addRelation(KnowledgeGraphicRelationEntity relation) {
     knowledgeGraphicRelationRepository.save(relation);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addRelation(String des, long from, long to) {
     if (this.getNodeById(from) == null || this.getNodeById(to) == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -331,11 +348,13 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addRelation(KnowledgeGraphicRelation relation) {
     return this.addRelation(relation.getDes(), relation.getFrom(), relation.getTo());
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addRelation(String des, String fromName, String toName) {
     KnowledgeGraphicNodeEntity fromNode = knowledgeGraphicNodeRepository.findByName(fromName);
     KnowledgeGraphicNodeEntity toNode = knowledgeGraphicNodeRepository.findByName(toName);
@@ -346,36 +365,42 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteRelation(KnowledgeGraphicRelationEntity relation) {
     knowledgeGraphicRelationRepository.delete(relation);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteRelation(long id) {
     knowledgeGraphicRelationRepository.deleteById(id);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteRelationsByTo(long to) {
     knowledgeGraphicRelationRepository.deleteAllByTo(to);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteRelationsByFrom(long from) {
     knowledgeGraphicRelationRepository.deleteAllByFrom(from);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateRelation(KnowledgeGraphicRelationEntity relation) {
     knowledgeGraphicRelationRepository.save(relation);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateRelation(String des, long id) {
     KnowledgeGraphicRelationEntity relation =
         knowledgeGraphicRelationRepository.findById(id).orElse(null);
@@ -388,12 +413,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateRelation(KnowledgeGraphicRelation relation) {
     return this.updateRelation(relation.des, relation.id);
   }
 
   @Override
   @Deprecated
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAttribute(String name) {
     // Don't use this method unless you can make sure there is only attribute named what you want to
     // delete.
@@ -402,12 +429,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAttribute(long id) {
     knowledgeGraphicAttributeRepository.deleteById(id);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAttribute(String name, long belong) {
     KnowledgeGraphicNodeEntity node = knowledgeGraphicNodeRepository.findById(belong).orElse(null);
     if (node == null) {
@@ -418,6 +447,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAttribute(KnowledgeGraphicAttribute attribute) {
     KnowledgeGraphicAttributeEntity attributeDb = knowledgeGraphicAttributeRepository
         .getByNameAndBelong(attribute.getName(), attribute.getBelong());
@@ -429,12 +459,14 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAttributesByBelong(long belong) {
     knowledgeGraphicAttributeRepository.deleteByBelong(belong);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateAttribute(String name, long id) {
     KnowledgeGraphicAttributeEntity attribute =
         knowledgeGraphicAttributeRepository.findById(id).orElse(null);
@@ -447,6 +479,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateAttribute(String oldName, String newName, long belong) {
     KnowledgeGraphicAttributeEntity attribute =
         knowledgeGraphicAttributeRepository.getByNameAndBelong(oldName, belong);
