@@ -14,14 +14,26 @@ const getters = {
   },
 }
 const mutations = {
-  GENERATE_ROUTES(state, auth) {
+  async GENERATE_ROUTES(state, auth) {
     const layout = constantRoutes.find((item) => item.path === '/')
     const authRoutes = traversalRoutes(asyncRoutes, auth)
     layout.children = [...authRoutes]
     state.menuList = authRoutes
     state.auth = auth
     //router.addRoute(constantRoutes)
-    constantRoutes.forEach((r) => router.addRoute(r))
+    function constantRoutesCheck(routes){
+      let result = [];
+      routes.forEach(r=>{
+        const { name, children } = r;
+        if(router.hasRoute(name)) router.removeRoute(name);
+        if(children && children.length){
+          r.children = constantRoutesCheck(children);
+        }
+      })
+      return result;
+    }
+    const _constantRoutes = constantRoutesCheck(constantRoutes);
+    _constantRoutes.forEach((r) => router.addRoute(r))
   },
   SET_AUTH(state, auth) {
     state.auth = auth
@@ -46,7 +58,10 @@ function traversalRoutes(routes, auth) {
   const result = []
   routes.forEach((r) => {
     let { meta, children, name } = r
-    if(router.hasRoute(name)) return;
+    // console.log(`Router Name: ${name}`);
+    if(router.hasRoute(name)){
+      router.removeRoute(name);
+    }
     jwtDecode(auth)
     meta.auth.includes(jwtDecode(auth).role)
     if (meta.auth.includes(jwtDecode(auth).role)) {
