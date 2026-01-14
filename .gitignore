@@ -35,3 +35,4 @@ build/
 .lck
 
 /docker/models
+/web/package-lock.json
