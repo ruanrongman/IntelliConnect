@@ -29,3 +29,12 @@ export const getProductNodes = (params) => request({
         'Authorization': token
     }
 })
+
+export const getNodeInfo = (params) => request({
+    url: "/api/v2/kg/node",
+    method: "get",
+    params,
+    headers: {
+        'Authorization': token
+    }
+})

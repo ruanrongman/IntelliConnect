@@ -14,6 +14,9 @@ spring:
     hibernate:
       #更新或者创建数据库表结构(第一次启动请设置为update)
       ddl-auto: update
+    properties:
+      hibernate:
+        dialect: top.rslly.iot.config.MySQLUTF8Dialect
   influx:
     user: cwl
     # 你的数据库url

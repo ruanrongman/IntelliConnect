@@ -1,7 +1,8 @@
 <script setup>
 import { reactive, ref, onMounted, onUnmounted} from "vue";
 import { useRouter } from "vue-router";
-import { Select, Button, Modal, Form, message, Input } from "ant-design-vue";
+import { Select, Button, Modal, Form, message, Input, Drawer } from "ant-design-vue";
+import NodeInfo from "@/views/login/nodeInfo.vue";
 
 import * as echarts from 'echarts/core';
 import { TooltipComponent, LegendComponent } from 'echarts/components';
@@ -23,19 +24,66 @@ echarts.use([
 ]);
 
 const echart = ref(null);
+const baseOption = {
+  tooltip: {},
+  legend: [
+    {
+      data: ["Nodes"]
+    }
+  ],
+  series: [
+    {
+      name: 'Knowledge Graphic',
+      type: 'graph',
+      layout: 'force',
+      force: {
+        // 节点之间的斥力，值越大节点越分散，可以设置一个较大的值以避免重叠
+        repulsion: 30,
+        // 节点之间的边长，力导向图会根据边长调整节点间的距离
+        edgeLength: 30,
+        // 是否防止节点重叠
+        avoidOverlap: true
+      },
+      data: [],
+      links: [],
+      categories: [{name: "Nodes"}],
+      roam: true,
+      label: {
+        show: true,
+        position: 'right',
+        formatter: '{b}'
+      },
+      labelLayout: {
+        hideOverlap: true
+      },
+      scaleLimit: {
+        min: 0.4,
+        max: 2
+      },
+      lineStyle: {
+        color: 'source',
+        curveness: 0.3
+      }
+    }
+  ]
+};
 
 const isAddingNode = ref(false);
 const newNodeForm = reactive({
-  productUid: -1,
+  productId: -1,
   name: "",
   des: "",
   attributes: []
 })
 
+const cavWidth = ref(300);
+const cavHeight = ref(100);
 const cavDom = ref(null);
 const resizeObserver = ref(null);
 const nodes = ref(null);
 const datasource = ref({});
+const selectedNode = ref(null);
+const showNodeInfo = ref(true);
 
 const products = ref([]);
 const productLoading = ref(true);
@@ -69,7 +117,7 @@ function fetchProducts(){
 }
 
 function handleStartAddNewNode(){
-  newNodeForm.productUid = currentProductId.value;
+  newNodeForm.productId = currentProductId.value;
   isAddingNode.value = true;
 }
 
@@ -82,49 +130,26 @@ function handleStopAddNewNode(){
 
 function handleAddNewNode(){
   addKnowledgeGraphicNode(newNodeForm).then(()=>{
-    message.open("添加成功！");
-    handleStopAddNewNode();
+    message.info("添加成功！");
+    getCurrentProductNodes();
   });
+  handleStopAddNewNode();
+}
+
+function handleNodeClick(params){
+  selectedNode.value = params.name;
+  console.log(selectedNode.value);
+  showNodeInfo.value = true;
 }
 
 function getCurrentProductNodes(){
   if(echart){
     echart.value.showLoading();
   }
-  let option = {
-    tooltip: {},
-    legend: [
-      {
-        data: []
-      }
-    ],
-    series: [
-      {
-        name: 'Knowledge Graphic',
-        type: 'graph',
-        layout: 'none',
-        data: [],
-        roam: true,
-        label: {
-          show: true,
-          position: 'right',
-          formatter: '{b}'
-        },
-        labelLayout: {
-          hideOverlap: true
-        },
-        scaleLimit: {
-          min: 0.4,
-          max: 2
-        },
-        lineStyle: {
-          color: 'source',
-          curveness: 0.3
-        }
-      }
-    ]
-  };
-  getProductNodes({productUid: currentProductId.value}).then(res=>{
+  // If some node info is displaying, close it
+  showNodeInfo.value = false;
+  let option = {...baseOption};
+  getProductNodes({productId: currentProductId.value}).then(res=>{
     const { data, errorCode } = res.data;
     if(errorCode === 20001){
       router.push("/login");
@@ -135,13 +160,17 @@ function getCurrentProductNodes(){
         echart.value.hideLoading();
       }
       nodes.value = data;
-      option.series[0].data = data.map(item=>{
+      option.series[0].data = data.map((item, index)=>{
         return {
           id: item.id,
+          category: 0,
           name: item.name,
-          symbolSize: 10
+          symbolSize: 40,
+          x: index * 100 % cavWidth.value,
+          y: index * 100 % 50,
+          value: 10
         }
-      })
+      });
       if(echart) echart.value.setOption(option);
     }
   });
@@ -154,6 +183,8 @@ function initializeCanvas(){
     const H = cavDom.value.offsetParent.offsetHeight;
     cavDom.value.width = W;
     cavDom.value.height = H;
+    cavWidth.value = W;
+    cavHeight.value = H;
 
     resizeObserver.value = new ResizeObserver((entries)=>{
       for(const entry of entries){
@@ -161,11 +192,34 @@ function initializeCanvas(){
         const newH = entry.target.offsetHeight;
         cavDom.value.width = newW;
         cavDom.value.height = newH;
+        cavWidth.value = newW;
+        cavHeight.value = newH;
+
+        if(nodes.value){
+          let option = {...baseOption};
+          option.series.data = nodes.value.map((item, index)=>{
+            return {
+              id: item.id,
+              category: 0,
+              name: item.name,
+              symbolSize: 40,
+              x: index * 100 % cavWidth.value,
+              y: index * 100 % 50,
+              value: 10
+            }
+          });
+          if(echart) echart.value.setOption(option);
+        }
       }
     });
     resizeObserver.value.observe(cavDom.value.offsetParent);
 
     echart.value = echarts.init(cavDom.value);
+    echart.value.on('click', function(params) {
+      if (params.dataType === 'node') {
+        handleNodeClick(params);
+      }
+    });
   }
 }
 
@@ -178,6 +232,7 @@ onUnmounted(()=>{
   resizeObserver.value.disconnect();
 })
 
+const open = ref(true);
 </script>
 
 <template>
@@ -228,6 +283,14 @@ onUnmounted(()=>{
       </Form.Item>
     </Form>
   </Modal>
+  <Drawer
+      title="节点详情"
+      :mask="false"
+      v-model:visible="showNodeInfo"
+      :width="parseInt(cavWidth / 3)"
+  >
+    <NodeInfo :node-name="selectedNode" :product-id="currentProductId"></NodeInfo>
+  </Drawer>
 </div>
 </template>
 
