@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.models;
 
-import lombok.Data;
 import org.hibernate.annotations.Comment;
 
 import javax.persistence.*;
@@ -40,9 +39,9 @@ public class KnowledgeGraphicNodeEntity {
   @Comment("Description of this node")
   private String des;
 
-  @Column(name = "product_uid")
+  @Column(name = "product_id")
   @Comment("Which user this node belongs to")
-  private int productUid;
+  private int productId;
 
   public long getId() {
     return id;
@@ -68,11 +67,11 @@ public class KnowledgeGraphicNodeEntity {
     this.des = des;
   }
 
-  public int getProductUid() {
-    return productUid;
+  public int getProductId() {
+    return productId;
   }
 
-  public void setProductUid(int productUid) {
-    this.productUid = productUid;
+  public void setProductId(int productUid) {
+    this.productId = productUid;
   }
 }

@@ -33,6 +33,6 @@ public class KnowledgeGraphicRelation {
   public long from;
   @NotBlank(message = "关系目标不能为空！")
   public long to;
-  public int productUid;
+  public int productId;
   public int id;
 }

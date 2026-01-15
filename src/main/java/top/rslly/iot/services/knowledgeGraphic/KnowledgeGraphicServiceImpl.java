@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.services.knowledgeGraphic;
 
-import org.nutz.json.Json;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +38,6 @@ import top.rslly.iot.utility.result.ResultTool;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Stack;
 
 @Service
@@ -65,7 +63,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
     Stack<KnowledgeGraphicNodeEntity> nodeStack = new Stack<>();
     List<KnowledgeGraphicNodeEntity> nodeList =
-        knowledgeGraphicNodeRepository.findAllByProductUid(rootNode.getProductUid());
+        knowledgeGraphicNodeRepository.findAllByProductId(rootNode.getProductId());
     for (KnowledgeGraphicNodeEntity node : nodeList) {
       nodeStack.push(node);
       knowledgeGraphic.addNode(node.getName());
@@ -123,7 +121,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
       nodeDb.setName(node.name);
     }
     nodeDb.setDes(node.des);
-    nodeDb.setProductUid(node.productUid);
+    nodeDb.setProductId(node.productId);
     nodeDb = knowledgeGraphicNodeRepository.save(nodeDb);
     if (!node.attributes.isEmpty()) {
       this.addAttributes(node.attributes, nodeDb.getId());
@@ -137,7 +135,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     KnowledgeGraphicNodeEntity node = new KnowledgeGraphicNodeEntity();
     node.setName(name);
     node.setDes(des);
-    node.setProductUid(productUid);
+    node.setProductId(productUid);
     knowledgeGraphicNodeRepository.save(node);
     return ResultTool.success();
   }
@@ -145,7 +143,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Override
   public JsonResult<?> getNode(String name, int productUid) {
     KnowledgeGraphicNodeEntity node =
-        knowledgeGraphicNodeRepository.findByNameAndProductUid(name, productUid);
+        knowledgeGraphicNodeRepository.findByNameAndProductId(name, productUid);
     if (node == null) {
       return ResultTool.fail();
     }
@@ -155,7 +153,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Override
   public JsonResult<?> getNodes(int productUid) {
     List<KnowledgeGraphicNodeEntity> nodeList =
-        knowledgeGraphicNodeRepository.findAllByProductUid(productUid);
+        knowledgeGraphicNodeRepository.findAllByProductId(productUid);
     return ResultTool.success(nodeList);
   }
 
@@ -249,7 +247,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteNode(String name, int productUid) {
     KnowledgeGraphicNodeEntity node =
-        knowledgeGraphicNodeRepository.findByNameAndProductUid(name, productUid);
+        knowledgeGraphicNodeRepository.findByNameAndProductId(name, productUid);
     if (node == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -275,7 +273,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteNodes(int productUid) {
     List<KnowledgeGraphicNodeEntity> nodes =
-        knowledgeGraphicNodeRepository.findAllByProductUid(productUid);
+        knowledgeGraphicNodeRepository.findAllByProductId(productUid);
     if (nodes.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }

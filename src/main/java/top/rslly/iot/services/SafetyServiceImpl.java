@@ -22,10 +22,6 @@ package top.rslly.iot.services;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import top.rslly.iot.dao.KnowledgeChatRepository;
-import top.rslly.iot.dao.KnowledgeGraphicNodeRepository;
-import top.rslly.iot.dao.ProductRouterSetRepository;
-import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
@@ -247,7 +243,7 @@ public class SafetyServiceImpl implements SafetyService {
     if (knowledgeGraphicNodeEntities.isEmpty())
       throw new NullPointerException("knowledgeGraphicNodeId not found!");
     return this.controlAuthorizeProduct(token,
-        knowledgeGraphicNodeEntities.get(0).getProductUid());
+        knowledgeGraphicNodeEntities.get(0).getProductId());
   }
 
   @Override

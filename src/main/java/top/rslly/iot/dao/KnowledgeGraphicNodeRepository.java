@@ -30,9 +30,9 @@ public interface KnowledgeGraphicNodeRepository
 
   KnowledgeGraphicNodeEntity findByName(String name);
 
-  KnowledgeGraphicNodeEntity findByNameAndProductUid(String name, int productUid);
+  KnowledgeGraphicNodeEntity findByNameAndProductId(String name, int productId);
 
-  List<KnowledgeGraphicNodeEntity> findAllByProductUid(int id);
+  List<KnowledgeGraphicNodeEntity> findAllByProductId(int id);
 
-  void deleteAllByProductUid(int id);
+  void deleteAllByProductId(int id);
 }

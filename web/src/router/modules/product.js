@@ -14,7 +14,7 @@ export default [
       children: [
         {
           path: '/product',
-          name: 'Product',
+          name: 'SubProduct',
           component: () => import('@/views/product/index.vue'),
           meta: {
             title: 'productAdd',
@@ -174,7 +174,15 @@ export default [
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           },
         },
-        
+        {
+          path: '/knowledgeGraphic',
+          name: 'knowledgeGraphic',
+          component: () => import("@/views/knowledgeGraphic/index.vue"),
+          meta: {
+            title: 'knowledgeGraphic',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          }
+        }
       ],
     },
   ]

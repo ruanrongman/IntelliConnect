@@ -29,6 +29,6 @@ public class KnowledgeGraphicAttribute {
   public String name;
   @NotBlank(message = "属性所属节点不能为空！")
   public long belong;
-  public int productUid;
+  public int productId;
   public long id;
 }

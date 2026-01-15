@@ -198,7 +198,7 @@ public class ProductServiceImpl implements ProductService {
     List<AdminConfigEntity> adminConfigEntityList =
         adminConfigRepository.findAllBySetKey("wx_default_product");
     List<KnowledgeGraphicNodeEntity> knowledgeGraphicNodeList =
-        knowledgeGraphicNodeRepository.findAllByProductUid(id);
+        knowledgeGraphicNodeRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -238,7 +238,7 @@ public class ProductServiceImpl implements ProductService {
             knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
             knowledgeGraphicAttributeRepository.deleteByBelong(kId);
           }
-          knowledgeGraphicNodeRepository.deleteAllByProductUid(id);
+          knowledgeGraphicNodeRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }

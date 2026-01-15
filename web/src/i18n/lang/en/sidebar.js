@@ -67,7 +67,8 @@ const product ={
   productOta: 'productOta',
   productOtaPassiveXiaoZhi: 'productOtaPassiveXiaoZhi',
   productOtaPassive: 'productOtaPassive',
-  alarmEventAdd: 'alarmEventAdd'
+  alarmEventAdd: 'alarmEventAdd',
+  knowledgeGraphic: "knowledgeGraphic"
 }
 const permission = {
   permission: 'SystemSetting',
