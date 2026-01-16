@@ -29,9 +29,7 @@ public class KnowledgeGraphicRelation {
   @NotBlank(message = "关系描述不能为空！")
   @Size(min = 1, max = 255)
   public String des;
-  @NotBlank(message = "关系源不能为空！")
   public long from;
-  @NotBlank(message = "关系目标不能为空！")
   public long to;
   public int productId;
   public int id;

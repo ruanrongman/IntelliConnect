@@ -105,7 +105,32 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     return this.getKnowledgeGraphic(node, maxDepth);
   }
 
-  @Override
+    @Override
+    public JsonResult<?> getKnowledgeGraphicByProductId(int productId) {
+        List<KnowledgeGraphicNodeEntity> nodes = knowledgeGraphicNodeRepository.findAllByProductId(productId);
+        if(nodes.isEmpty()) return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+        KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
+        for (KnowledgeGraphicNodeEntity node : nodes) {
+            knowledgeGraphic.addNode(node.getName(), node.getDes());
+            List<KnowledgeGraphicRelationEntity> outR = knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
+            List<KnowledgeGraphicRelationEntity> inR = knowledgeGraphicRelationRepository.getAllByTo(node.getId());
+            for (KnowledgeGraphicRelationEntity relation : outR) {
+                KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
+                knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
+            }
+            for (KnowledgeGraphicRelationEntity relation : inR) {
+                KnowledgeGraphicNodeEntity from =  this.getNodeById(relation.getFrom());
+                knowledgeGraphic.addRelation(from.getName(), relation.getDes(), from.getName());
+            }
+            List<KnowledgeGraphicAttributeEntity> attributes = knowledgeGraphicAttributeRepository.getAllByBelong(node.getId());
+            for (KnowledgeGraphicAttributeEntity attribute : attributes) {
+                knowledgeGraphic.addAttribute(node.getName(), attribute.getName());
+            }
+        }
+        return ResultTool.success(knowledgeGraphic);
+    }
+
+    @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNodeEntity node) {
     knowledgeGraphicNodeRepository.save(node);

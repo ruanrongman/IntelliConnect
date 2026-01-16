@@ -2,35 +2,18 @@
 import { reactive, ref, onMounted, onUnmounted} from "vue";
 import { useRouter } from "vue-router";
 import { Select, Button, Modal, Form, message, Input, Drawer } from "ant-design-vue";
-import NodeInfo from "@/views/login/nodeInfo.vue";
+import NodeInfo from "@/views/knowledgeGraphic/nodeInfo.vue";
 
-import * as echarts from 'echarts/core';
-import { TooltipComponent, LegendComponent } from 'echarts/components';
-import { GraphChart } from 'echarts/charts';
-import { LabelLayout } from 'echarts/features';
-import { CanvasRenderer } from 'echarts/renderers';
+import * as echarts from 'echarts';
 
 import { queryKnowledgeGraphic, getProductNodes, addKnowledgeGraphicNode } from "@/api/knowledgeGraphic";
 import { getProduct } from "@/api/product";
 
 const router = useRouter();
 
-echarts.use([
-  TooltipComponent,
-  LegendComponent,
-  GraphChart,
-  CanvasRenderer,
-  LabelLayout
-]);
-
 const echart = ref(null);
 const baseOption = {
   tooltip: {},
-  legend: [
-    {
-      data: ["Nodes"]
-    }
-  ],
   series: [
     {
       name: 'Knowledge Graphic',
@@ -48,6 +31,12 @@ const baseOption = {
       links: [],
       categories: [{name: "Nodes"}],
       roam: true,
+      roamTrigger: 'global',
+      scaleLimit: {
+        max: 8,
+        min: 0.1
+      },
+      draggable: true,
       label: {
         show: true,
         position: 'right',
@@ -56,16 +45,23 @@ const baseOption = {
       labelLayout: {
         hideOverlap: true
       },
-      scaleLimit: {
-        min: 0.4,
-        max: 2
-      },
       lineStyle: {
         color: 'source',
         curveness: 0.3
       }
     }
-  ]
+  ],
+  thumbnail: {
+    width: '200',
+    height: '150',
+    right: '5',
+    bottom: '5',
+    windowStyle: {
+      color: 'rgba(140, 212, 250, 0.5)',
+      borderColor: 'rgba(30, 64, 175, 0.7)',
+      opacity: 1
+    }
+  }
 };
 
 const isAddingNode = ref(false);
@@ -81,9 +77,9 @@ const cavHeight = ref(100);
 const cavDom = ref(null);
 const resizeObserver = ref(null);
 const nodes = ref(null);
-const datasource = ref({});
 const selectedNode = ref(null);
-const showNodeInfo = ref(true);
+const showNodeInfo = ref(false);
+const graphic = ref(null);
 
 const products = ref([]);
 const productLoading = ref(true);
@@ -107,7 +103,7 @@ function fetchProducts(){
       productLoading.value = false;
       currentProductId.value = data.length > 0 ? data[0].id : null;
       if(currentProductId.value !== null){
-        getCurrentProductNodes();
+        getCurrentKnowledgeGraphic();
       }
     } else {
       products.value = [];
@@ -131,21 +127,18 @@ function handleStopAddNewNode(){
 function handleAddNewNode(){
   addKnowledgeGraphicNode(newNodeForm).then(()=>{
     message.info("添加成功！");
-    getCurrentProductNodes();
+    getCurrentKnowledgeGraphic();
   });
   handleStopAddNewNode();
 }
 
 function handleNodeClick(params){
   selectedNode.value = params.name;
-  console.log(selectedNode.value);
   showNodeInfo.value = true;
 }
 
 function getCurrentProductNodes(){
-  if(echart){
-    echart.value.showLoading();
-  }
+  if(echart) echart.value.showLoading();
   // If some node info is displaying, close it
   showNodeInfo.value = false;
   let option = {...baseOption};
@@ -156,9 +149,7 @@ function getCurrentProductNodes(){
       return;
     }
     if(errorCode === 200 && data && Array.isArray(data)){
-      if(echart){
-        echart.value.hideLoading();
-      }
+      if(echart) echart.value.hideLoading();
       nodes.value = data;
       option.series[0].data = data.map((item, index)=>{
         return {
@@ -174,6 +165,41 @@ function getCurrentProductNodes(){
       if(echart) echart.value.setOption(option);
     }
   });
+}
+
+function getCurrentKnowledgeGraphic(){
+  if(echart) echart.value.showLoading();
+  showNodeInfo.value = false;
+  let option = {...baseOption};
+  queryKnowledgeGraphic({productId: currentProductId.value}).then(res=>{
+    const { data, errorCode } = res.data;
+    if(errorCode === 20001) {
+      router.push("/login");
+      return;
+    }
+    if(errorCode === 200){
+      if(echart) echart.value.hideLoading();
+      graphic.value = data;
+      option.series[0].data = data.nodes.map((item, index)=>{
+        return {
+          id: index,
+          name: item.name,
+          category: 0,
+          symbolSize: 30 + 10 * item.attributes.length,
+          x: index * 100 % cavWidth.value,
+          y: index * 100 % 50,
+          value: 10 + item.attributes.length
+        }
+      });
+      option.series[0].links = data.relations.map(item=>{
+        return {
+          source: item.from,
+          target: item.to
+        }
+      });
+      if(echart) echart.value.setOption(option);
+    }
+  })
 }
 
 function initializeCanvas(){
@@ -195,25 +221,33 @@ function initializeCanvas(){
         cavWidth.value = newW;
         cavHeight.value = newH;
 
-        if(nodes.value){
+        if(graphic.value){
           let option = {...baseOption};
-          option.series.data = nodes.value.map((item, index)=>{
+          option.series[0].data = graphic.value.nodes.map((item, index)=>{
             return {
-              id: item.id,
-              category: 0,
+              id: index,
               name: item.name,
-              symbolSize: 40,
+              category: 0,
+              symbolSize: 30 + 10 * item.attributes.length,
               x: index * 100 % cavWidth.value,
               y: index * 100 % 50,
-              value: 10
+              value: 10 + item.attributes.length
             }
           });
-          if(echart) echart.value.setOption(option);
+          if(echart){
+            echart.value.dispose();
+            echart.value = echarts.init(cavDom.value);
+            echart.value.setOption(option);
+            echart.value.on('click', function(params) {
+              if (params.dataType === 'node') {
+                handleNodeClick(params);
+              }
+            });
+          }
         }
       }
     });
     resizeObserver.value.observe(cavDom.value.offsetParent);
-
     echart.value = echarts.init(cavDom.value);
     echart.value.on('click', function(params) {
       if (params.dataType === 'node') {
@@ -231,8 +265,6 @@ onMounted(()=>{
 onUnmounted(()=>{
   resizeObserver.value.disconnect();
 })
-
-const open = ref(true);
 </script>
 
 <template>
@@ -245,12 +277,12 @@ const open = ref(true);
                 :value="currentProductId"
                 :options="products"
                 :loading="productLoading"
-                v-on:change="getCurrentProductNodes"
+                v-on:change="getCurrentKnowledgeGraphic"
         >
         </Select>
       </div>
       <div class="option-item">
-        <Button type="primary" :disabled="currentProductId === null" @click="handleStartAddNewNode">添加节点</Button>
+        <Button :type="'primary'" :disabled="currentProductId === null" @click="handleStartAddNewNode">添加节点</Button>
       </div>
     </div>
     <div class="kg-body">
@@ -258,7 +290,7 @@ const open = ref(true);
     </div>
   </div>
   <Modal
-      :visible="isAddingNode"
+      :open="isAddingNode"
       title="添加节点"
       @cancel="handleStopAddNewNode"
       @ok="handleAddNewNode"
@@ -271,25 +303,32 @@ const open = ref(true);
       <Form.Item
           label="节点名称"
           name="name"
-          :rules="[{required: true, message: '请输入节点名称（不超过10字）！'}]"
+          :rules="[{required: true, message: '请输入节点名称'}]"
       >
-        <Input v-model:value="newNodeForm.name" />
+        <Input :maxlength="10" v-model:value="newNodeForm.name" placeholder="节点名称，不超过10字" />
       </Form.Item>
       <Form.Item
           label="节点描述"
           name="des"
+          :rules="[{required: true, message: '请输入节点描述'}]"
       >
-        <Input v-model:value="newNodeForm.des" />
+        <Input.TextArea :maxlength="255" v-model:value="newNodeForm.des"  placeholder="节点描述，不超过255字"/>
       </Form.Item>
     </Form>
   </Modal>
   <Drawer
       title="节点详情"
       :mask="false"
-      v-model:visible="showNodeInfo"
+      :open="showNodeInfo"
       :width="parseInt(cavWidth / 3)"
+      @close="()=>{showNodeInfo = false;}"
   >
-    <NodeInfo :node-name="selectedNode" :product-id="currentProductId"></NodeInfo>
+    <NodeInfo
+        :node-name="selectedNode"
+        :product-id="currentProductId"
+        v-on:updateNode="getCurrentKnowledgeGraphic"
+        v-on:deleteNode="getCurrentKnowledgeGraphic"
+    />
   </Drawer>
 </div>
 </template>

@@ -27,7 +27,6 @@ import javax.validation.constraints.NotBlank;
 public class KnowledgeGraphicAttribute {
   @NotBlank(message = "属性名称不能为空！")
   public String name;
-  @NotBlank(message = "属性所属节点不能为空！")
   public long belong;
   public int productId;
   public long id;

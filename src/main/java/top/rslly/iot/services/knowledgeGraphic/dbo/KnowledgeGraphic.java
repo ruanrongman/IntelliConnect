@@ -43,6 +43,15 @@ public class KnowledgeGraphic {
     }
   }
 
+  public void addNode(String name, String des){
+      Node node = this.getNode(name);
+      if(node == null){
+          node = new Node(name);
+          node.des = des;
+          this.nodes.add(node);
+      }
+  }
+
   public Node getNode(String name) {
     for (Node node : nodes) {
       if (node.name.equals(name))
@@ -75,6 +84,8 @@ public class KnowledgeGraphic {
     }
 
     public String name;
+
+    public String des;
 
     public Set<String> attributes;
 

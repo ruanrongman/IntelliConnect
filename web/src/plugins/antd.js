@@ -37,7 +37,7 @@ import {
   // Input
 } from 'ant-design-vue'
 import * as AntdIcon from '@ant-design/icons-vue'
-import 'ant-design-vue/dist/antd.css'
+import 'ant-design-vue/dist/reset.css'
 export function setupAntd(app) {
   app.use(Button)
   app.use(Table)

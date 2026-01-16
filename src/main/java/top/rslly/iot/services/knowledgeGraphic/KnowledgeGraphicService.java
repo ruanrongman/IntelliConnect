@@ -36,6 +36,8 @@ public interface KnowledgeGraphicService {
 
   JsonResult<?> getKnowledgeGraphicByNodeId(long id, int maxDepth);
 
+  JsonResult<?> getKnowledgeGraphicByProductId(int productId);
+
   JsonResult<?> addNode(KnowledgeGraphicNodeEntity node);
 
   JsonResult<?> addNode(KnowledgeGraphicNode node);

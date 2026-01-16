@@ -604,11 +604,9 @@ public class Tool {
     return agentMemoryService.deleteMemory(id);
   }
 
-  @Operation(summary = "获取知识图谱", description = "通过某一节点的ID获取其知识图谱，并指定最大递归深度（不超过20）")
+  @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")
   @RequestMapping(value = "/kg/graphic", method = RequestMethod.GET)
-  public JsonResult<?> getKnowledgeGraphic(@RequestParam("id") long id,
-      @RequestParam("maxDepth") int maxDepth,
-      @RequestParam("productId") int productId,
+  public JsonResult<?> getKnowledgeGraphic(@RequestParam("productId") int productId,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, productId))
@@ -616,7 +614,7 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return knowledgeGraphicService.getKnowledgeGraphicByNodeId(id, maxDepth);
+    return knowledgeGraphicService.getKnowledgeGraphicByProductId(productId);
   }
 
   @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")
