@@ -19,16 +19,14 @@
  */
 package top.rslly.iot.models;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import javax.persistence.*;
 
 @Entity
 @Table(name = "knowledge_graphic_relation", schema = "cwliot1.8")
 public class KnowledgeGraphicRelationEntity {
   @Id
   @Column(name = "id")
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private long id;
 
   @Column(name = "r_from")

@@ -74,3 +74,12 @@ export const addNodeAttribute = (data) => request({
         'Authorization': token
     }
 })
+
+export const deleteNodeAttribute = (data) => request({
+    url: "/api/v2/kg/attr",
+    method: "delete",
+    data,
+    headers: {
+        'Authorization': token
+    }
+})

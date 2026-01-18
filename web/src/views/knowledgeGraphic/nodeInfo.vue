@@ -1,6 +1,6 @@
 <script setup>
 import {onMounted, reactive, ref, watch, defineEmits} from "vue";
-import {getNodeInfo, getNodeAttributes, addNodeAttribute, deleteKnowledgeGraphicNode, updateKnowledgeGraphicNode} from "@/api/knowledgeGraphic";
+import {getNodeInfo, getNodeAttributes, addNodeAttribute, deleteKnowledgeGraphicNode, updateKnowledgeGraphicNode, deleteNodeAttribute} from "@/api/knowledgeGraphic";
 import {useRouter} from "vue-router";
 import {message, Form, Input, Button, Tag, Popconfirm} from "ant-design-vue";
 import * as Icons from "@ant-design/icons-vue";
@@ -31,7 +31,7 @@ function initNodeInfo(nodeName, productId){
     productId: productId
   }).then(res=>{
     const { data, errorCode } = res.data;
-    if(errorCode === 20001) router.push("/login");
+    if(errorCode === 2001) router.push("/login");
     nodeInfo.value = data;
     Object.assign(updateNodeInfo, data);
     getNodeAttributes({
@@ -46,7 +46,7 @@ function initNodeInfo(nodeName, productId){
 
 function handleEnableUpdate(){
   enableUpdate.value = true;
-  updateNodeInfo.value = {...nodeInfo.value};
+  Object.assign(updateNodeInfo, nodeInfo.value);
 }
 
 function handleStartAddAttribute(){
@@ -71,15 +71,17 @@ function handleSubmitAttribute(){
   }
   addNodeAttribute(attributeForm).then(res=>{
     const { errorCode } = res.data;
-    if(errorCode === 20001) router.push("/login");
+    if(errorCode === 2001) router.push("/login");
     if(errorCode === 200) {
       message.success("添加成功！");
       getNodeAttributes({
         productId: props.productId,
-        nodeId: data.id
+        nodeId: nodeInfo.value.id
       }).then(res => {
-        const {data} = res.data;
+        const { data } = res.data;
         nodeAttributes.value = data;
+        isAddingAttribute.value = false;
+        newAttribute.value = "";
       });
     }
   })
@@ -90,9 +92,12 @@ function handleApplyUpdate(){
   enableUpdate.value = false;
   isAddingAttribute.value = false;
 //   Re-get node and emit event to notify parent that node has been updated
-  updateKnowledgeGraphicNode({...nodeInfo.value}).then(res=>{
+  updateKnowledgeGraphicNode({
+    ...updateNodeInfo,
+    attributes: []
+  }).then(res=>{
     const { errorCode } = res.data;
-    if(errorCode === 20001) router.push("/login");
+    if(errorCode === 2001) router.push("/login");
     if(errorCode === 200) {
       message.success("更新成功");
       emit("updateNode");
@@ -123,6 +128,30 @@ function handleCancelUpdate(){
   formRef.value.clearValidate();
 }
 
+function handleDeleteNodeAttribute(name){
+  deleteNodeAttribute({
+    name: name,
+    belong: nodeInfo.value.id,
+    productId: props.productId
+  }).then(res=>{
+    const { errorCode } = res.data;
+    if(errorCode === 2001){
+      router.push("/login");
+      return;
+    }
+    if(errorCode === 200){
+      message.success("删除成功");
+      getNodeAttributes({
+        productId: props.productId,
+        nodeId: nodeInfo.value.id
+      }).then(res => {
+        const { data } = res.data;
+        nodeAttributes.value = data;
+      });
+    }
+  })
+}
+
 watch(() => props.nodeName, ()=>{
   initNodeInfo(props.nodeName, props.productId);
 })
@@ -135,6 +164,7 @@ onMounted(()=>{
   // First initialized
   initNodeInfo(props.nodeName, props.productId);
 })
+
 </script>
 
 <template>
@@ -165,16 +195,20 @@ onMounted(()=>{
             label="属性"
             name="attributes"
         >
-          <Tag v-if="enableUpdate && !isAddingAttribute" style="cursor: pointer;" color="#87d068" @click="handleStartAddAttribute">
-            <Icons.PlusCircleFilled />添加属性
+          <Tag v-if="enableUpdate && !isAddingAttribute" style="cursor: pointer;margin-bottom: 5px" color="#87d068" @click="handleStartAddAttribute">
+            <Icons.PlusCircleFilled style="margin-bottom: 0; margin-right: 2px" />添加属性
           </Tag>
           <div class="attribute-add-form" v-if="isAddingAttribute">
             <Input v-model:value="newAttribute" :maxlength="10" placeholder="不超过10字"/>
             <Button :type="'primary'" @click="handleCancelAddAttribute">取消</Button>
             <Button :type="'primary'" @click="handleSubmitAttribute">提交</Button>
           </div>
-          <Tag v-if="!enableUpdate && nodeAttributes.length === 0">该节点无属性</Tag>
-          <Tag color="#108ee9" v-for="(item, index) in nodeAttributes" :key="index">{{item.name}}</Tag>
+          <div class="tags">
+            <Tag v-if="!enableUpdate && nodeAttributes.length === 0">该节点无属性</Tag>
+            <Tag color="#108ee9" v-for="(item, index) in nodeAttributes" :key="index">
+              <Icons.CloseCircleFilled style="margin-right:2px" @click="()=>{handleDeleteNodeAttribute(item.name)}" />{{item.name}}
+            </Tag>
+          </div>
         </Form.Item>
       </Form>
     </div>
@@ -227,6 +261,15 @@ onMounted(()=>{
 
 .attribute-add-form *:first-child{
   margin-bottom: 10px;
+}
+
+.tags *{
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.tags span span{
+  margin-bottom: 0;
 }
 
 .info-footer{

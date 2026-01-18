@@ -76,7 +76,6 @@ const cavWidth = ref(300);
 const cavHeight = ref(100);
 const cavDom = ref(null);
 const resizeObserver = ref(null);
-const nodes = ref(null);
 const selectedNode = ref(null);
 const showNodeInfo = ref(false);
 const graphic = ref(null);
@@ -85,10 +84,14 @@ const products = ref([]);
 const productLoading = ref(true);
 const currentProductId= ref(null);
 
+// Variables for handling relation
+const isConnection = ref(false);
+const relationTemp = ref([]);
+
 function fetchProducts(){
   getProduct().then(res=>{
     const { data, errorCode } = res.data;
-    if(errorCode === 20001){
+    if(errorCode === 2001){
       router.push("/login");
       return;
     }
@@ -132,74 +135,91 @@ function handleAddNewNode(){
   handleStopAddNewNode();
 }
 
-function handleNodeClick(params){
-  selectedNode.value = params.name;
-  showNodeInfo.value = true;
+function handleStartConnecting(e){
+  if(e.key !== 'c') return;
+  console.log("Start connecting");
+  e.preventDefault();
+  isConnection.value = true;
+  relationTemp.value = [];
 }
 
-function getCurrentProductNodes(){
-  if(echart) echart.value.showLoading();
-  // If some node info is displaying, close it
-  showNodeInfo.value = false;
+function handleCancelConnecting(e){
+  if(e.key !== 'c') return;
+  if(relationTemp.value.length < 2){
+    isConnection.value = false;
+    relationTemp.value = [];
+  }
+}
+
+function handleConnected(){
+// Add temp link on graphic and config des to post
+}
+
+function updateGraphicData(){
+  if(!graphic.value) return;
   let option = {...baseOption};
-  getProductNodes({productId: currentProductId.value}).then(res=>{
-    const { data, errorCode } = res.data;
-    if(errorCode === 20001){
-      router.push("/login");
-      return;
-    }
-    if(errorCode === 200 && data && Array.isArray(data)){
-      if(echart) echart.value.hideLoading();
-      nodes.value = data;
-      option.series[0].data = data.map((item, index)=>{
-        return {
-          id: item.id,
-          category: 0,
-          name: item.name,
-          symbolSize: 40,
-          x: index * 100 % cavWidth.value,
-          y: index * 100 % 50,
-          value: 10
-        }
-      });
-      if(echart) echart.value.setOption(option);
+  option.series[0].data = graphic.value.nodes.map((item, index)=>{
+    return {
+      id: index,
+      name: item.name,
+      category: 0,
+      symbolSize: 30 + 10 * item.attributes.length,
+      x: index * 100 % cavWidth.value,
+      y: index * 100 % 50,
+      value: 30 + item.attributes.length
     }
   });
+  option.series[0].links = graphic.value.relations.map(item=>{
+    return {
+      source: item.from,
+      target: item.to
+    }
+  });
+  refreshChartHandler(option)
 }
 
 function getCurrentKnowledgeGraphic(){
   if(echart) echart.value.showLoading();
   showNodeInfo.value = false;
-  let option = {...baseOption};
   queryKnowledgeGraphic({productId: currentProductId.value}).then(res=>{
     const { data, errorCode } = res.data;
-    if(errorCode === 20001) {
+    if(errorCode === 2001) {
       router.push("/login");
       return;
     }
     if(errorCode === 200){
       if(echart) echart.value.hideLoading();
       graphic.value = data;
-      option.series[0].data = data.nodes.map((item, index)=>{
-        return {
-          id: index,
-          name: item.name,
-          category: 0,
-          symbolSize: 30 + 10 * item.attributes.length,
-          x: index * 100 % cavWidth.value,
-          y: index * 100 % 50,
-          value: 10 + item.attributes.length
-        }
-      });
-      option.series[0].links = data.relations.map(item=>{
-        return {
-          source: item.from,
-          target: item.to
-        }
-      });
-      if(echart) echart.value.setOption(option);
+      updateGraphicData();
     }
   })
+}
+
+function handleNodeClick(params){
+  if(isConnection.value){
+    if(relationTemp.value.length === 0){
+      relationTemp.value.push(params.name);
+    }else if(relationTemp.value.length === 1){
+      relationTemp.value.push(params.name);
+      handleConnected();
+    }
+    return;
+  }
+  selectedNode.value = params.name;
+  showNodeInfo.value = true;
+}
+
+function refreshChartHandler(option){
+  if(echart.value){
+    echart.value.dispose();
+  }
+  echart.value = echarts.init(cavDom.value);
+  echart.value.setOption(option);
+  echart.value.on('click', function(params) {
+    if (params.dataType === 'node') {
+      handleNodeClick(params);
+    }
+  });
 }
 
 function initializeCanvas(){
@@ -221,39 +241,12 @@ function initializeCanvas(){
         cavWidth.value = newW;
         cavHeight.value = newH;
 
-        if(graphic.value){
-          let option = {...baseOption};
-          option.series[0].data = graphic.value.nodes.map((item, index)=>{
-            return {
-              id: index,
-              name: item.name,
-              category: 0,
-              symbolSize: 30 + 10 * item.attributes.length,
-              x: index * 100 % cavWidth.value,
-              y: index * 100 % 50,
-              value: 10 + item.attributes.length
-            }
-          });
-          if(echart){
-            echart.value.dispose();
-            echart.value = echarts.init(cavDom.value);
-            echart.value.setOption(option);
-            echart.value.on('click', function(params) {
-              if (params.dataType === 'node') {
-                handleNodeClick(params);
-              }
-            });
-          }
-        }
+        updateGraphicData();
+        // refreshChartHandler(option);
       }
     });
     resizeObserver.value.observe(cavDom.value.offsetParent);
-    echart.value = echarts.init(cavDom.value);
-    echart.value.on('click', function(params) {
-      if (params.dataType === 'node') {
-        handleNodeClick(params);
-      }
-    });
+    refreshChartHandler(baseOption);
   }
 }
 
@@ -268,7 +261,7 @@ onUnmounted(()=>{
 </script>
 
 <template>
-<div class="wrapper">
+<div class="wrapper" tabindex="1" :onKeydown="handleStartConnecting" v-on:keyup="handleCancelConnecting">
   <div class="kg-main">
     <div class="kg-header">
       <div class="option-item">

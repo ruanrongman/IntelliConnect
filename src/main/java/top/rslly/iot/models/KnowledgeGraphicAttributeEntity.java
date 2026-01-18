@@ -29,6 +29,7 @@ import javax.persistence.*;
 public class KnowledgeGraphicAttributeEntity {
   @Id
   @Column(name = "id")
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private long id;
 
   @Column(name = "name")

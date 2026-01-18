@@ -113,14 +113,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         for (KnowledgeGraphicNodeEntity node : nodes) {
             knowledgeGraphic.addNode(node.getName(), node.getDes());
             List<KnowledgeGraphicRelationEntity> outR = knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
-            List<KnowledgeGraphicRelationEntity> inR = knowledgeGraphicRelationRepository.getAllByTo(node.getId());
             for (KnowledgeGraphicRelationEntity relation : outR) {
                 KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
                 knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
-            }
-            for (KnowledgeGraphicRelationEntity relation : inR) {
-                KnowledgeGraphicNodeEntity from =  this.getNodeById(relation.getFrom());
-                knowledgeGraphic.addRelation(from.getName(), relation.getDes(), from.getName());
             }
             List<KnowledgeGraphicAttributeEntity> attributes = knowledgeGraphicAttributeRepository.getAllByBelong(node.getId());
             for (KnowledgeGraphicAttributeEntity attribute : attributes) {
@@ -213,7 +208,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addAttribute(String name, long belong) {
-    KnowledgeGraphicAttributeEntity attribute = knowledgeGraphicAttributeRepository.getByName(name);
+    KnowledgeGraphicAttributeEntity attribute = knowledgeGraphicAttributeRepository.getByNameAndBelong(name, belong);
     if (attribute != null) {
       return ResultTool.success();
     }
@@ -337,6 +332,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     if (nodeDb == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+    nodeDb.setName(node.getName());
     nodeDb.setDes(node.getDes());
     knowledgeGraphicNodeRepository.save(nodeDb);
     if (!node.attributes.isEmpty()) {
