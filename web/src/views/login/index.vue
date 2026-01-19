@@ -15,7 +15,7 @@
 
         <a-form :model="loginForm" @finish="handleSubmit" class="login-form-content">
           <a-form-item name="username" :rules="[{ required: true, message: '请输入用户名' }]">
-            <a-input v-model:value="loginForm.username" size="large" placeholder="用户名">
+            <a-input v-model:value="loginForm.username" size="large" placeholder="用户名" autocomplete="off">
               <template #prefix>
                 <UserOutlined class="site-form-item-icon" />
               </template>
@@ -23,7 +23,7 @@
           </a-form-item>
 
           <a-form-item name="password" :rules="[{ required: true, message: '请输入密码' }]">
-            <a-input-password v-model:value="loginForm.password" size="large" placeholder="密码">
+            <a-input-password v-model:value="loginForm.password" size="large" placeholder="密码" autocomplete="off">
               <template #prefix>
                 <LockOutlined class="site-form-item-icon" />
               </template>

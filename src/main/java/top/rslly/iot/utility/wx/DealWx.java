@@ -44,9 +44,11 @@ public class DealWx {
   private String appid;
   @Value("${wx.templateUrl}")
   private String projectUrl;
+  @Value("${wx.base-url}")
+  private String baseUrl;
 
   public String getAccessToken(String appid, String appSecret) throws IOException {
-    String url = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid="
+    String url = baseUrl + "/cgi-bin/token?grant_type=client_credential&appid="
         + appid + "&secret=" + appSecret;
     Response s = httpRequestUtils.httpGet(url);
     return Objects.requireNonNull(s.body()).string();
@@ -54,7 +56,7 @@ public class DealWx {
 
   public String getOpenid(String code, String microappid, String microappsecret)
       throws IOException {
-    String url = "https://api.weixin.qq.com/sns/jscode2session?appid=" + microappid + "&secret="
+    String url = baseUrl + "/sns/jscode2session?appid=" + microappid + "&secret="
         + microappsecret + "&js_code=" + code + "&grant_type=authorization_code";
     return Objects.requireNonNull(httpRequestUtils.httpGet(url).body()).string();
   }
@@ -62,7 +64,7 @@ public class DealWx {
   public void templatePost(JSONObject reqdata, String templateid, String openid) {
     String accessToken = (String) redisUtil.get(appid);
     String url =
-        "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=" + accessToken;
+        baseUrl + "/cgi-bin/message/template/send?access_token=" + accessToken;
     // String reqBody = "{\"touser\":\"" + openid + "\", \"template_id\":\"" + templateid + "\",
     // \"url\":\"" + fxurl + "\", \"data\": " + reqdata + "}";
     // 优化reqbody, 不用拼接
@@ -81,7 +83,7 @@ public class DealWx {
 
   public void sendContent(String openid, String content, String microappid) throws IOException {
     String token = (String) redisUtil.get(microappid);
-    String url = "https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=" + token;
+    String url = baseUrl + "/cgi-bin/message/custom/send?access_token=" + token;
     // String jsonstr = "{\n" + " \"touser\":\"" + openid + "\",\n" + " \"msgtype\":\"text\",\n"
     // + " \"text\":\n" + " {\n" + " \"content\":\"" + content + "\"\n" + " }\n" + "}";
     JSONObject jsonObject = new JSONObject();
@@ -96,7 +98,7 @@ public class DealWx {
   public String getMedia(String mediaId, String microappid) throws IOException {
     log.info(mediaId);
     String token = (String) redisUtil.get(microappid);
-    String url = "https://api.weixin.qq.com/cgi-bin/media/get?access_token=" + token + "&media_id="
+    String url = baseUrl + "/cgi-bin/media/get?access_token=" + token + "&media_id="
         + mediaId;
     log.info(url);
     return url;

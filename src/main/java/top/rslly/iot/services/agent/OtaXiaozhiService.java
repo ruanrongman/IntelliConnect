@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.services.agent;
 
+import com.alibaba.fastjson.JSON;
+import org.springframework.data.repository.query.Param;
 import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.param.request.OtaXiaozhi;
 import top.rslly.iot.utility.result.JsonResult;
@@ -32,9 +34,17 @@ public interface OtaXiaozhiService {
 
   List<OtaXiaozhiEntity> findAllById(int id);
 
+  List<OtaXiaozhiEntity> findAllByDeviceId(String deviceId);
+
+  void updateStatus(String deviceId, String setStatus);
+
+  void cleanStatus();
+
   JsonResult<?> otaList(String token);
 
   JsonResult<?> bindDevice(OtaXiaozhi otaXiaozhi, String token);
+
+  JsonResult<?> otaUpdate(int id, String nickName);
 
   String otaEnable(HttpServletRequest request);
 

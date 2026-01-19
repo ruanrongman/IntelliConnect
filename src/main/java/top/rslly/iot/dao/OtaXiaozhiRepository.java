@@ -20,6 +20,9 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.OtaXiaozhiEntity;
 
@@ -37,6 +40,26 @@ public interface OtaXiaozhiRepository extends JpaRepository<OtaXiaozhiEntity, Lo
 
   List<OtaXiaozhiEntity> findAllByDeviceIdAndUserNameAndRole(String deviceId, String userName,
       String role);
+
+  @Modifying
+  @Transactional
+  @Query("UPDATE OtaXiaozhiEntity e SET e.status = :setStatus WHERE e.deviceId = :deviceId")
+  void updateStatus(@Param("deviceId") String deviceId, @Param("setStatus") String setStatus);
+
+  @Modifying
+  @Transactional
+  @Query("UPDATE OtaXiaozhiEntity e SET e.boardType = :boardType WHERE e.deviceId = :deviceId")
+  void updateBoardType(@Param("deviceId") String deviceId, @Param("boardType") String boardType);
+
+  @Modifying
+  @Transactional
+  @Query("UPDATE OtaXiaozhiEntity e SET e.boardName = :boardName WHERE e.deviceId = :deviceId")
+  void updateBoardName(@Param("deviceId") String deviceId, @Param("boardName") String boardName);
+
+  @Modifying
+  @Transactional
+  @Query("UPDATE OtaXiaozhiEntity e SET e.status = 'disconnected'")
+  void cleanStatus();
 
   @Transactional
   List<OtaXiaozhiEntity> deleteAllById(int id);

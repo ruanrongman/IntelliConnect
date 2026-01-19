@@ -21,6 +21,7 @@ package top.rslly.iot.utility;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -41,6 +42,12 @@ public class SendEmail {
   private JavaMailSender javaMailSender;
   @Autowired(required = false)
   private TemplateEngine templateEngine;
+  // 注入邮箱配置
+  @Value("${spring.mail.username}")
+  private String fromEmail;
+
+  @Value("${spring.mail.nickname:创万联}") // 默认值为"创万联"
+  private String fromName;
 
 
   // status表示类型是否正常
@@ -67,7 +74,7 @@ public class SendEmail {
 
 
     try {
-      helper.setFrom("ruanzhen1234@126.com", "创万联");
+      helper.setFrom(fromEmail, fromName);
       helper.setTo(to);
       // helper.setBcc("密送人");
       helper.setSubject(subject);

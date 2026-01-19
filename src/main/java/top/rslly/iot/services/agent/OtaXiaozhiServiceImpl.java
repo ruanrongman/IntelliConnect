@@ -88,6 +88,21 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
   }
 
   @Override
+  public List<OtaXiaozhiEntity> findAllByDeviceId(String deviceId) {
+    return otaXiaozhiRepository.findAllByDeviceId(deviceId);
+  }
+
+  @Override
+  public void updateStatus(String deviceId, String setStatus) {
+    otaXiaozhiRepository.updateStatus(deviceId, setStatus);
+  }
+
+  @Override
+  public void cleanStatus() {
+    otaXiaozhiRepository.cleanStatus();
+  }
+
+  @Override
   public JsonResult<?> otaList(String token) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
@@ -156,10 +171,24 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     }
     otaXiaozhiEntity.setDeviceId(mac);
+    otaXiaozhiEntity.setNickName(otaXiaozhi.getNickName());
     otaXiaozhiEntity.setProductId(otaXiaozhi.getProductId());
     otaXiaozhiEntity.setUserName(username);
+    otaXiaozhiEntity.setBoardType("未知");
+    otaXiaozhiEntity.setBoardName("未知");
+    otaXiaozhiEntity.setStatus("disconnected");
     otaXiaozhiEntity.setRole(role);
     var result = otaXiaozhiRepository.save(otaXiaozhiEntity);
+    return ResultTool.success(result);
+  }
+
+  @Override
+  public JsonResult<?> otaUpdate(int id, String nickName) {
+    List<OtaXiaozhiEntity> otaXiaozhiEntityList = otaXiaozhiRepository.findAllById(id);
+    if (!otaXiaozhiEntityList.isEmpty()) {
+      otaXiaozhiEntityList.get(0).setNickName(nickName);
+    }
+    var result = otaXiaozhiRepository.save(otaXiaozhiEntityList.get(0));
     return ResultTool.success(result);
   }
 
@@ -178,12 +207,43 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
       String version = activationVersion;
       log.info("activationVersion: " + activationVersion);
       // Parse JSON body safely
+      // {
+      // "application": {
+      // "version": "1.0.1",
+      // "elf_sha256": "c8a8ecb6d6fbcda682494d9675cd1ead240ecf38bdde75282a42365a0e396033"
+      // },
+      // "board": {
+      // "type": "kevin-box",
+      // "name": "kevin-box-2",
+      // "revision": "ML307R-DL-MBRH0S00",
+      // "carrier": "CHINA MOBILE",
+      // "csq": "22",
+      // "imei": "****",
+      // "iccid": "****"
+      // }
+      // }
       JSONObject body = JSON.parseObject(request.getInputStream(), JSONObject.class);
       log.info("body: " + body);
       if (body == null || !body.containsKey("application")) {
         throw new IllegalArgumentException("Missing 'application' object in request body");
       }
+      if (!body.containsKey("board")) {
+        throw new IllegalArgumentException("Missing 'board' object in request body");
+      }
       JSONObject app = body.getJSONObject("application");
+      JSONObject board = body.getJSONObject("board");
+      if (board == null) {
+        throw new IllegalArgumentException("Missing 'board' object in request body");
+      } else {
+        String boardType = board.getString("type");
+        String boardName = board.getString("name");
+        if (boardType != null) {
+          otaXiaozhiRepository.updateBoardType(deviceId, boardType);
+        }
+        if (boardName != null) {
+          otaXiaozhiRepository.updateBoardName(deviceId, boardName);
+        }
+      }
       String appVersion = app.getString("version");
       if (appVersion == null) {
         throw new IllegalArgumentException("Missing 'version' in application object");

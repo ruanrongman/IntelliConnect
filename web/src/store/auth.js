@@ -19,9 +19,9 @@ const mutations = {
     const authRoutes = traversalRoutes(asyncRoutes, auth)
     layout.children = [...authRoutes]
     state.menuList = authRoutes
-    console.log(auth)
+    // console.log(auth)
     state.auth = auth
-    console.log(constantRoutes)
+    // console.log(constantRoutes)
     //router.addRoute(constantRoutes)
     constantRoutes.forEach((r) => router.addRoute(r))
   },

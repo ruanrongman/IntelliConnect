@@ -99,6 +99,7 @@ wx:
   appsecret: XXXXXX
   templateUrl: XXXXX
   alarmTemplateId: XXXXXX
+  base-url: https://api.weixin.qq.com
   micro:
     appid: XXXXXX
     appsecret: XXXXXX

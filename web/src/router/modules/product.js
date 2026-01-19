@@ -14,7 +14,7 @@ export default [
       children: [
         {
           path: '/product',
-          name: 'Product',
+          name: 'subProduct',
           component: () => import('@/views/product/index.vue'),
           meta: {
             title: 'productAdd',

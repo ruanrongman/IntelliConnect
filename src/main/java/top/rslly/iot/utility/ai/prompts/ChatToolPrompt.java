@@ -45,7 +45,7 @@ public class ChatToolPrompt {
             The current concept of memory and its content: {memory_map}
             {current_memory}
           ## Output Format
-          Please do not output \\n and try to limit the word count to 100 words or less
+          Please do not output \\n and emoji and try to limit the word count to 100 words or less
           ## Current Conversation
              Below is the current conversation consisting of interleaving human and assistant history.
           """;
@@ -64,7 +64,11 @@ public class ChatToolPrompt {
     params.put("time", formattedDate);
     params.put("current_memory", memory);
     params.put("memory_map", memoryMap);
-    params.put("information", "知识库:" + information);
+    if (!information.isBlank()) {
+      params.put("information", "知识库:" + information);
+    } else {
+      params.put("information", "");
+    }
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
     params.put("role", Objects.requireNonNullElse(role, "smart speaker"));
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,

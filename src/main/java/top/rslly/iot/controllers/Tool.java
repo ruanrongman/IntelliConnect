@@ -393,6 +393,21 @@ public class Tool {
     return otaXiaozhiService.unbound(id);
   }
 
+  @Operation(summary = "ota小智设备更新", description = "更新ota小智设备信息")
+  @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.PUT)
+  public JsonResult<?> xiaoZhiOtaUpdate(@RequestParam("id") int id,
+      @RequestParam("nickName") @NotBlank(message = "nickName 不能为空")
+      @Size(min = 1, max = 255, message = "nickName 长度必须在 1 到 255 之间") String nickName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeOtaXiaoZhi(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaXiaozhiService.otaUpdate(id, nickName);
+  }
+
   @RequestMapping(value = "/vision/explain", method = RequestMethod.POST)
   public String aiVision(@RequestParam("question") @NotBlank(message = "question 不能为空")
   @Size(min = 1, max = 2048, message = "question 长度必须在 1 到 2048 之间") String question,
