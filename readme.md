@@ -108,8 +108,8 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 * Rymcu https://github.com/rymcu [为数百万人服务的开源嵌入式知识学习交流平台]
 
 ## 智控台和小智ota地址(仅用于测试，不保证稳定，请勿用于生产环境)
-* [智控台] (https://control.rslly.top)
-* [小智ota地址] (https://api.rslly.top/xiaozhi/ota/)
+* [智控台] (https://control-ic.atdak.com)
+* [小智ota地址] (https://api-ic.atdak.com/xiaozhi/ota/)
 
 ## 交流群
 
