@@ -3,6 +3,7 @@ import { reactive, ref, onMounted, onUnmounted} from "vue";
 import { useRouter } from "vue-router";
 import { Select, Button, Modal, Form, message, Input, Drawer } from "ant-design-vue";
 import NodeInfo from "@/views/knowledgeGraphic/nodeInfo.vue";
+import RelationConfig from "@/views/knowledgeGraphic/relationConfig.vue";
 
 import * as echarts from 'echarts';
 
@@ -21,7 +22,7 @@ const baseOption = {
       layout: 'force',
       force: {
         // 节点之间的斥力，值越大节点越分散，可以设置一个较大的值以避免重叠
-        repulsion: 30,
+        repulsion: 20,
         // 节点之间的边长，力导向图会根据边长调整节点间的距离
         edgeLength: 30,
         // 是否防止节点重叠
@@ -48,6 +49,12 @@ const baseOption = {
       lineStyle: {
         color: 'source',
         curveness: 0.3
+      },
+      emphasis: {
+        focus: 'adjacency',
+        lineStyle: {
+          width: 10
+        }
       }
     }
   ],
@@ -63,6 +70,7 @@ const baseOption = {
     }
   }
 };
+const crtOption = ref({});
 
 const isAddingNode = ref(false);
 const newNodeForm = reactive({
@@ -87,6 +95,8 @@ const currentProductId= ref(null);
 // Variables for handling relation
 const isConnection = ref(false);
 const relationTemp = ref([]);
+const relationConfigToggle = ref(false);
+const createRelationFlag = ref(false);
 
 function fetchProducts(){
   getProduct().then(res=>{
@@ -137,10 +147,11 @@ function handleAddNewNode(){
 
 function handleStartConnecting(e){
   if(e.key !== 'c') return;
-  console.log("Start connecting");
   e.preventDefault();
-  isConnection.value = true;
-  relationTemp.value = [];
+  if(!isConnection.value){
+    isConnection.value = true;
+    relationTemp.value = [];
+  }
 }
 
 function handleCancelConnecting(e){
@@ -151,8 +162,48 @@ function handleCancelConnecting(e){
   }
 }
 
+function handleRelationConfig(){
+  relationConfigToggle.value = true;
+  if(showNodeInfo.value) showNodeInfo.value = false
+}
+
+function handleCancelConfigRelation(e){
+  if(e.message) message.error(e.message);
+  relationTemp.value = [];
+  relationConfigToggle.value = false;
+  if(createRelationFlag.value){
+    // Filter temp link
+    const option = {...crtOption.value};
+    option.series[0].links = option.series[0].links.filter(item=>{
+      return item.lineStyle === undefined || item.lineStyle.type !== 'dashed';
+    });
+    refreshChartHandler(option);
+  }
+}
+
+function handleSubmitConfigRelation(){
+  relationTemp.value = [];
+  relationConfigToggle.value = false;
+  getCurrentKnowledgeGraphic();
+}
+
 function handleConnected(){
 // Add temp link on graphic and config des to post
+  let newOption = {...crtOption.value};
+  const nodes = crtOption.value.series[0].data;
+  newOption.series[0].links.push({
+    source: nodes[nodes.findIndex(item=>item.name===relationTemp.value[0])].id,
+    target: nodes[nodes.findIndex(item=>item.name===relationTemp.value[1])].id,
+    lineStyle: {
+      type: "dashed",
+      width: 5
+    }
+  });
+  refreshChartHandler(newOption);
+//   Open relation config drawer
+  // Notify component now config for adding
+  createRelationFlag.value = true;
+  handleRelationConfig();
 }
 
 function updateGraphicData(){
@@ -164,8 +215,8 @@ function updateGraphicData(){
       name: item.name,
       category: 0,
       symbolSize: 30 + 10 * item.attributes.length,
-      x: index * 100 % cavWidth.value,
-      y: index * 100 % 50,
+      x: index * 50 % cavWidth.value,
+      y: parseInt(index / 50) * 50,
       value: 30 + item.attributes.length
     }
   });
@@ -199,7 +250,7 @@ function handleNodeClick(params){
   if(isConnection.value){
     if(relationTemp.value.length === 0){
       relationTemp.value.push(params.name);
-    }else if(relationTemp.value.length === 1){
+    }else if(relationTemp.value.length === 1 && relationTemp.value[0] !== params.name){
       relationTemp.value.push(params.name);
       handleConnected();
     }
@@ -213,6 +264,7 @@ function refreshChartHandler(option){
   if(echart.value){
     echart.value.dispose();
   }
+  crtOption.value = option;
   echart.value = echarts.init(cavDom.value);
   echart.value.setOption(option);
   echart.value.on('click', function(params) {
@@ -250,18 +302,30 @@ function initializeCanvas(){
   }
 }
 
+function registerGlobalEvent(){
+  window.addEventListener('keydown', handleStartConnecting);
+  window.addEventListener('keyup', handleCancelConnecting);
+}
+
+function removeGlobalEvent(){
+  window.removeEventListener('keydown', handleStartConnecting);
+  window.removeEventListener('keyup', handleCancelConnecting);
+}
+
 onMounted(()=>{
   fetchProducts();
   initializeCanvas();
+  registerGlobalEvent();
 })
 
 onUnmounted(()=>{
   resizeObserver.value.disconnect();
+  removeGlobalEvent();
 })
 </script>
 
 <template>
-<div class="wrapper" tabindex="1" :onKeydown="handleStartConnecting" v-on:keyup="handleCancelConnecting">
+<div class="wrapper">
   <div class="kg-main">
     <div class="kg-header">
       <div class="option-item">
@@ -288,7 +352,6 @@ onUnmounted(()=>{
       @cancel="handleStopAddNewNode"
       @ok="handleAddNewNode"
   >
-<!--  For add node  -->
     <Form :model="newNodeForm"
           :label-col="{ span: 6 }"
           :wrapper-col="{ span: 16 }"
@@ -314,6 +377,7 @@ onUnmounted(()=>{
       :mask="false"
       :open="showNodeInfo"
       :width="parseInt(cavWidth / 3)"
+      :get-container="false"
       @close="()=>{showNodeInfo = false;}"
   >
     <NodeInfo
@@ -321,6 +385,23 @@ onUnmounted(()=>{
         :product-id="currentProductId"
         v-on:updateNode="getCurrentKnowledgeGraphic"
         v-on:deleteNode="getCurrentKnowledgeGraphic"
+    />
+  </Drawer>
+  <Drawer
+      title="关系配置"
+      :mask="false"
+      :open="relationConfigToggle"
+      :width="parseInt(cavWidth / 3)"
+      :get-container="false"
+      @close="handleCancelConfigRelation"
+  >
+    <RelationConfig
+        :from="relationTemp[0]"
+        :to="relationTemp[1]"
+        :productId="currentProductId"
+        :createFlag="createRelationFlag"
+        v-on:cancel="handleCancelConfigRelation"
+        v-on:submit="handleSubmitConfigRelation"
     />
   </Drawer>
 </div>

@@ -48,6 +48,15 @@ export const getProductNodes = (params) => request({
     }
 })
 
+export const getNodeByName = (params) => request({
+    url: "/api/v2/kg/node",
+    method: "get",
+    params,
+    headers: {
+        'Authorization': token
+    }
+})
+
 export const getNodeInfo = (params) => request({
     url: "/api/v2/kg/node",
     method: "get",
@@ -79,6 +88,42 @@ export const deleteNodeAttribute = (data) => request({
     url: "/api/v2/kg/attr",
     method: "delete",
     data,
+    headers: {
+        'Authorization': token
+    }
+})
+
+export const addRelation = (data) => request({
+    url: "/api/v2/kg/relation",
+    method: "post",
+    data,
+    headers: {
+        'Authorization': token
+    }
+})
+
+export const deleteRelation = (data) => request({
+    url: "/api/v2/kg/relation",
+    method: "delete",
+    data,
+    headers: {
+        'Authorization': token
+    }
+})
+
+export const updateRelation = (data) => request({
+    url: "/api/v2/kg/relation",
+    method: "put",
+    data,
+    headers: {
+        'Authorization': token
+    }
+})
+
+export const getRelationByNodes = (params) => request({
+    url: "/api/v2/kg/relationByNodes",
+    method: "get",
+    params,
     headers: {
         'Authorization': token
     }

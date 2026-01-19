@@ -105,27 +105,31 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     return this.getKnowledgeGraphic(node, maxDepth);
   }
 
-    @Override
-    public JsonResult<?> getKnowledgeGraphicByProductId(int productId) {
-        List<KnowledgeGraphicNodeEntity> nodes = knowledgeGraphicNodeRepository.findAllByProductId(productId);
-        if(nodes.isEmpty()) return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-        KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
-        for (KnowledgeGraphicNodeEntity node : nodes) {
-            knowledgeGraphic.addNode(node.getName(), node.getDes());
-            List<KnowledgeGraphicRelationEntity> outR = knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
-            for (KnowledgeGraphicRelationEntity relation : outR) {
-                KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
-                knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
-            }
-            List<KnowledgeGraphicAttributeEntity> attributes = knowledgeGraphicAttributeRepository.getAllByBelong(node.getId());
-            for (KnowledgeGraphicAttributeEntity attribute : attributes) {
-                knowledgeGraphic.addAttribute(node.getName(), attribute.getName());
-            }
-        }
-        return ResultTool.success(knowledgeGraphic);
+  @Override
+  public JsonResult<?> getKnowledgeGraphicByProductId(int productId) {
+    List<KnowledgeGraphicNodeEntity> nodes =
+        knowledgeGraphicNodeRepository.findAllByProductId(productId);
+    if (nodes.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
+    for (KnowledgeGraphicNodeEntity node : nodes) {
+      knowledgeGraphic.addNode(node.getName(), node.getDes());
+      List<KnowledgeGraphicRelationEntity> outR =
+          knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
+      for (KnowledgeGraphicRelationEntity relation : outR) {
+        KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
+        knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
+      }
+      List<KnowledgeGraphicAttributeEntity> attributes =
+          knowledgeGraphicAttributeRepository.getAllByBelong(node.getId());
+      for (KnowledgeGraphicAttributeEntity attribute : attributes) {
+        knowledgeGraphic.addAttribute(node.getName(), attribute.getName());
+      }
     }
+    return ResultTool.success(knowledgeGraphic);
+  }
 
-    @Override
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNodeEntity node) {
     knowledgeGraphicNodeRepository.save(node);
@@ -208,7 +212,8 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addAttribute(String name, long belong) {
-    KnowledgeGraphicAttributeEntity attribute = knowledgeGraphicAttributeRepository.getByNameAndBelong(name, belong);
+    KnowledgeGraphicAttributeEntity attribute =
+        knowledgeGraphicAttributeRepository.getByNameAndBelong(name, belong);
     if (attribute != null) {
       return ResultTool.success();
     }
@@ -412,6 +417,17 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
+  public JsonResult<?> deleteRelationByFromAndTo(long from, long to) {
+    KnowledgeGraphicRelationEntity relation =
+        knowledgeGraphicRelationRepository.getByFromAndTo(from, to);
+    if (relation == null) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    knowledgeGraphicRelationRepository.delete(relation);
+    return ResultTool.success();
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateRelation(KnowledgeGraphicRelationEntity relation) {
     knowledgeGraphicRelationRepository.save(relation);
@@ -435,6 +451,16 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateRelation(KnowledgeGraphicRelation relation) {
     return this.updateRelation(relation.des, relation.id);
+  }
+
+  @Override
+  public JsonResult<?> getRelationByNodes(long from, long to) {
+    KnowledgeGraphicRelationEntity relation =
+        knowledgeGraphicRelationRepository.getByFromAndTo(from, to);
+    if (relation == null) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return ResultTool.success(relation);
   }
 
   @Override

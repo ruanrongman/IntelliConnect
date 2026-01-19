@@ -765,7 +765,7 @@ public class Tool {
   }
 
   @Operation(summary = "删除关系", description = "通过关系ID删除节点关系")
-  @RequestMapping(value = "/kg/relation", method = RequestMethod.DELETE)
+  @RequestMapping(value = "/kg/relationById", method = RequestMethod.DELETE)
   public JsonResult<?> deleteRelation(@RequestBody KnowledgeGraphicRelation relation,
       @RequestHeader("Authorization") String header) {
     try {
@@ -775,6 +775,19 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return knowledgeGraphicService.deleteRelation(relation.id);
+  }
+
+  @Operation(summary = "删除关系", description = "通过关系两端的节点删除关系")
+  @RequestMapping(value = "/kg/relation", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteRelationByNodes(@RequestBody KnowledgeGraphicRelation relation,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, relation.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteRelationByFromAndTo(relation.from, relation.to);
   }
 
   @Operation(summary = "更新关系描述", description = "通过关系ID更新节点关系描述")
@@ -802,5 +815,20 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return knowledgeGraphicService.getNodeRelations(nodeId);
+  }
+
+  @Operation(summary = "获取关系", description = "通过关系两端的节点获取关系")
+  @RequestMapping(value = "/kg/relationByNodes", method = RequestMethod.GET)
+  public JsonResult<?> getRelationByNodes(@RequestParam("from") long from,
+      @RequestParam("to") long to,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getRelationByNodes(from, to);
   }
 }

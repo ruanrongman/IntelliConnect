@@ -82,6 +82,8 @@ public interface KnowledgeGraphicService {
 
   JsonResult<?> deleteRelationsByTo(long to);
 
+  JsonResult<?> deleteRelationByFromAndTo(long from, long to);
+
   JsonResult<?> updateRelation(KnowledgeGraphicRelationEntity relation);
 
   JsonResult<?> updateRelation(String des, long id);
@@ -91,6 +93,8 @@ public interface KnowledgeGraphicService {
   JsonResult<?> getNodeRelations(String name);
 
   JsonResult<?> getNodeRelations(long id);
+
+  JsonResult<?> getRelationByNodes(long from, long to);
 
   JsonResult<?> addAttribute(String name, long belong);
 
