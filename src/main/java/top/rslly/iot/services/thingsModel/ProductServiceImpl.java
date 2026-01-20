@@ -214,8 +214,15 @@ public class ProductServiceImpl implements ProductService {
     boolean p9 = agentLongMemoryEntityList.isEmpty();
     boolean p10 = productVoiceDiyEntityList.isEmpty();
     boolean p11 = productLlmModelEntityList.isEmpty();
-    boolean p12 = knowledgeGraphicNodeList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11 && p12) {
+    if (!knowledgeGraphicNodeList.isEmpty()) {
+      for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
+        long kId = knowledgeGraphicNodeEntity.getId();
+        knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
+        knowledgeGraphicAttributeRepository.deleteByBelong(kId);
+      }
+      knowledgeGraphicNodeRepository.deleteAllByProductId(id);
+    }
+    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -239,14 +246,6 @@ public class ProductServiceImpl implements ProductService {
             }
           } catch (Exception ignore) {
           }
-        }
-        if (!knowledgeGraphicNodeList.isEmpty()) {
-          for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
-            long kId = knowledgeGraphicNodeEntity.getId();
-            knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
-            knowledgeGraphicAttributeRepository.deleteByBelong(kId);
-          }
-          knowledgeGraphicNodeRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }

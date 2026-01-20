@@ -109,9 +109,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   public JsonResult<?> getKnowledgeGraphicByProductId(int productId) {
     List<KnowledgeGraphicNodeEntity> nodes =
         knowledgeGraphicNodeRepository.findAllByProductId(productId);
-    if (nodes.isEmpty())
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
+    if (nodes.isEmpty())
+      return ResultTool.success(knowledgeGraphic);
     for (KnowledgeGraphicNodeEntity node : nodes) {
       knowledgeGraphic.addNode(node.getName(), node.getDes());
       List<KnowledgeGraphicRelationEntity> outR =

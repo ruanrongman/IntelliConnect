@@ -143,7 +143,7 @@ function handleStopAddNewNode(){
 
 function handleAddNewNode(){
   addKnowledgeGraphicNode(newNodeForm).then(()=>{
-    message.info("添加成功！");
+    message.success("添加成功！");
     getCurrentKnowledgeGraphic();
   });
   handleStopAddNewNode();
@@ -243,7 +243,8 @@ function handleConnected(){
 function updateGraphicData(){
   if(!graphic.value) return;
   let option = {...baseOption};
-  const TYPES = classifyNodes(graphic.value.nodes, graphic.value.relations);
+  const classifiedTypes = graphic.value.nodes.filter(node => node.category !== undefined && node.category !== null).length;
+  const TYPES = classifyNodes(graphic.value.nodes, graphic.value.relations) + classifiedTypes;
   const categories = [];
   for(let i = 0; i < TYPES; i++){
     categories.push(`type${i}`);
@@ -299,8 +300,8 @@ function handleNodeClick(params){
     option.series[0].data = option.series[0].data.map(item=>{
       if(item.name !== params.name) return item;
       item.itemStyle = {
-        borderWidth: 2,
-        borderColor: "#000"
+        borderWidth: 5,
+        borderColor: "#ffb2b2"
       }
       return item;
     });
@@ -655,6 +656,7 @@ onUnmounted(()=>{
   width: 100%;
   height: fit-content;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-start;
   align-items: center;
   padding-bottom: 20px;

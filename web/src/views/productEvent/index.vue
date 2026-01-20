@@ -3,17 +3,17 @@
     <HeaderCard :device="homeData"/>
     <div class="model-content">
     <div class="model-bar">
-      <newModel></newModel>
+      <NewModel></NewModel>
     </div>
-    <Mytable></Mytable>
+    <MyTable></MyTable>
     </div>
   </div>
 </template>
 
 <script setup>
 import HeaderCard from './HeaderCard.vue'
-import newModel from './add_event.vue'
-import Mytable from './Mytable.vue';
+import NewModel from './addEvent.vue'
+import MyTable from './MyTable.vue';
 import { getConnectedNum } from '@/api/connectedNum'
 import { reactive, onUnmounted } from 'vue'
 let homeData = reactive({
@@ -29,9 +29,9 @@ let intervalId = setInterval(  //设置定时器，1s更新一次
 		//setOption(option)
     getConnectedNum().then((res) => {
           const { data ,errorCode} = res.data
-          if(errorCode==2001){
+          if(errorCode===2001){
            router.push('/login')
-          }else if(errorCode==200){
+          }else if(errorCode===200){
             const {num,connectedNum,disconnectedNum} = data.data
             homeData.num = num
             homeData.connected = connectedNum
