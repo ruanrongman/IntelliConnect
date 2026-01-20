@@ -35,6 +35,15 @@
         allowClear
       />
     </a-form-item>
+
+    <a-form-item
+      label="设备昵称"
+      name="nickName"
+      :rules="[{ required: true, message: 'Please input your nickName!' }]"
+    >
+      <a-input v-model:value="formState.nickName" placeholder="请输入设备昵称" />
+    </a-form-item>
+
     <a-form-item :wrapper-col="{ offset: 8, span: 16 }">
       <a-button type="primary" html-type="submit">Submit</a-button>
     </a-form-item>
@@ -84,7 +93,8 @@ const fetchProduct = () => {
 
 const formState = reactive({
   code: "",
-  productId: "" // 改为字符串，与下拉选择保持一致
+  productId: "", // 改为字符串,与下拉选择保持一致
+  nickName: ""
 });
 
 const handleSubmit = () => {
@@ -101,6 +111,7 @@ const handleSubmit = () => {
         // 重置表单
         formState.code = '';
         formState.productId = '';
+        formState.nickName = '';
       }
     })
     .catch((err) => {

@@ -22,6 +22,7 @@ package top.rslly.iot.utility;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.properties.EmqProperty;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 
 @Component
+@Slf4j
 public class EmqTransfer {
   @Autowired
   private EmqProperty emqProperty;
@@ -72,6 +74,10 @@ public class EmqTransfer {
     String msg = Objects.requireNonNull(emqResponse.body()).string();
     Map<String, String> connectMap = new HashMap<>();
     JSONArray deviceArray = JSON.parseObject(msg).getJSONArray("data");
+    if (deviceArray == null) {
+      log.error("设备列表为空");
+      return connectMap;
+    }
     for (int i = 0; i < deviceArray.size(); i++) {
       JSONObject jo = deviceArray.getJSONObject(i);
       String clientid = jo.getString("clientid");

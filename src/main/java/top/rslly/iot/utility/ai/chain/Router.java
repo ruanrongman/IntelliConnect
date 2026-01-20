@@ -131,7 +131,7 @@ public class Router {
             answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
           }
           case "3" -> {
-            var musicMap = musicTool.run(args);
+            var musicMap = musicTool.run(args, globalMessage);
             toolResult = musicMap.get("answer");
             answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
           }

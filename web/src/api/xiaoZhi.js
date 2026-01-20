@@ -19,6 +19,15 @@ export const getXiaoZhiManager = (data) =>
       },
       data
     })
+  export const putXiaoZhiManager = (params) =>
+        request({
+            url: '/api/v2/xiaozhi/otaManage',
+            method: 'put',
+            headers: {
+                'Authorization': token
+            },
+            params
+        })
     export const deleteXiaoZhiManager = (params) =>
       request({
         url: '/api/v2/xiaozhi/otaManage',

@@ -183,7 +183,7 @@ public class Text2audio implements TtsService {
     ReactCallback callback = new ReactCallback(chatId, session);
     try {
       String model = param.getModel();
-      if (voice.startsWith("cosy_v2_")) {
+      if (voice != null && voice.startsWith("cosy_v2_")) {
         model = "cosyvoice-v2";
         voice = voice.substring(8);
         log.info(model);

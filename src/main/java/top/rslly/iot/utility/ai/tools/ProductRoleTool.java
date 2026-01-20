@@ -26,9 +26,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.param.request.ProductRole;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -50,6 +53,8 @@ public class ProductRoleTool implements BaseTool<String> {
   private ProductRolePrompt productRolePrompt;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.productRoleTool-llm}")
   private String llmName;
   private String name = "productRoleTool";
@@ -69,7 +74,7 @@ public class ProductRoleTool implements BaseTool<String> {
 
     if (productService.findAllById(productId).isEmpty())
       return "产品设置错误，请检查相关设置！";
-    LLM llm = LLMFactory.getLLM(llmName);
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "9");
     List<ModelMessage> messages = new ArrayList<>();
 
     ModelMessage systemMessage =

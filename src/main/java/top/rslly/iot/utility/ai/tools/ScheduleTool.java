@@ -27,10 +27,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.TimeScheduleEntity;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.agent.TimeScheduleServiceImpl;
 import top.rslly.iot.utility.QuartzCronDateUtils;
 import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -49,6 +52,8 @@ import java.util.Map;
 public class ScheduleTool implements BaseTool<String> {
   @Autowired
   private ScheduleToolPrompt scheduleToolPrompt;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
   @Value("${ai.scheduleTool-llm}")
   private String llmName;
   private String name = "scheduleTool";
@@ -66,7 +71,8 @@ public class ScheduleTool implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
-    LLM llm = LLMFactory.getLLM(llmName);
+    int productId = (int) globalMessage.get("productId");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "8");
     List<ModelMessage> messages = new ArrayList<>();
     String openid = (String) globalMessage.get("openId");
     String appid = (String) globalMessage.get("microappid");

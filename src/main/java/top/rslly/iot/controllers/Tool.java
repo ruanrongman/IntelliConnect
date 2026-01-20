@@ -87,6 +87,10 @@ public class Tool {
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
+  private LlmProviderInformationServiceImpl llmProviderInformationService;
+  @Autowired
+  private ProductLlmModelServiceImpl productLlmModelService;
+  @Autowired
   private KnowledgeGraphicService knowledgeGraphicService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
@@ -390,6 +394,21 @@ public class Tool {
     return otaXiaozhiService.unbound(id);
   }
 
+  @Operation(summary = "ota小智设备更新", description = "更新ota小智设备信息")
+  @RequestMapping(value = "/xiaozhi/otaManage", method = RequestMethod.PUT)
+  public JsonResult<?> xiaoZhiOtaUpdate(@RequestParam("id") int id,
+      @RequestParam("nickName") @NotBlank(message = "nickName 不能为空")
+      @Size(min = 1, max = 255, message = "nickName 长度必须在 1 到 255 之间") String nickName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeOtaXiaoZhi(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return otaXiaozhiService.otaUpdate(id, nickName);
+  }
+
   @RequestMapping(value = "/vision/explain", method = RequestMethod.POST)
   public String aiVision(@RequestParam("question") @NotBlank(message = "question 不能为空")
   @Size(min = 1, max = 2048, message = "question 长度必须在 1 到 2048 之间") String question,
@@ -602,6 +621,69 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return agentMemoryService.deleteMemory(id);
+  }
+
+  @Operation(summary = "获取LLM提供商信息", description = "获取LLM提供商信息，管理员可查看所有，普通用户只能查看自己的")
+  @RequestMapping(value = "/llmProviderInformation", method = RequestMethod.GET)
+  public JsonResult<?> getLlmProviderInformation(@RequestHeader("Authorization") String header) {
+    return llmProviderInformationService.getLLmProviderInformation(header);
+  }
+
+  @Operation(summary = "创建或更新LLM提供商信息", description = "创建或更新LLM提供商信息")
+  @RequestMapping(value = "/llmProviderInformation", method = RequestMethod.POST)
+  public JsonResult<?> postLlmProviderInformation(
+      @Valid @RequestBody LlmProviderInformation llmProviderInformation,
+      @RequestHeader("Authorization") String header) {
+    return llmProviderInformationService.postLLmProviderInformation(header, llmProviderInformation);
+  }
+
+  @Operation(summary = "删除LLM提供商信息", description = "根据ID删除LLM提供商信息")
+  @RequestMapping(value = "/llmProviderInformation", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteLlmProviderInformation(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeLlmProviderInformation(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return llmProviderInformationService.deleteLLmProviderInformation(id);
+  }
+
+  @Operation(summary = "获取产品LLM模型配置", description = "获取产品LLM模型配置")
+  @RequestMapping(value = "/productLlmModel", method = RequestMethod.GET)
+  public JsonResult<?> getProductLlmModel(@RequestHeader("Authorization") String header) {
+    return productLlmModelService.getProductLlmModel(header);
+  }
+
+  @Operation(summary = "创建或更新产品LLM模型配置", description = "创建或更新产品LLM模型配置")
+  @RequestMapping(value = "/productLlmModel", method = RequestMethod.POST)
+  public JsonResult<?> postProductLlmModel(
+      @Valid @RequestBody ProductLlmModel productLlmModel,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productLlmModel.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (!safetyService.controlAuthorizeLlmProviderInformation(header,
+          productLlmModel.getProviderId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productLlmModelService.postProductLlmModel(productLlmModel);
+  }
+
+  @Operation(summary = "删除产品LLM模型配置", description = "根据ID删除产品LLM模型配置")
+  @RequestMapping(value = "/productLlmModel", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductLlmModel(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductLlmModel(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productLlmModelService.deleteProductLlmModel(id);
   }
 
   @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")

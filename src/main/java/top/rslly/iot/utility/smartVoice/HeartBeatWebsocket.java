@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import javax.websocket.Session;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -33,8 +34,14 @@ public class HeartBeatWebsocket {
   public void task() {
     for (String key : XiaoZhiWebsocket.clients.keySet()) {
       try {
-        XiaoZhiWebsocket.clients.get(key).getBasicRemote()
-            .sendPing(ByteBuffer.wrap(new byte[] {0x00, 0x00, 0x00, 0x00}));
+        Session session = XiaoZhiWebsocket.clients.get(key);
+        if (session != null && session.isOpen()) {
+          session.getBasicRemote()
+              .sendPing(ByteBuffer.wrap(new byte[] {0x00, 0x00, 0x00, 0x00}));
+        } else {
+          // 如果会话不存在或已关闭，直接移除
+          XiaoZhiWebsocket.clients.remove(key);
+        }
         // log.info("心跳成功{}",key);
       } catch (Exception e) {
         try {

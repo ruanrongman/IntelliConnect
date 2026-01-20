@@ -78,7 +78,7 @@ public class McpWebsocketEndpoint {
     String token = session.getRequestParameterMap().get("token") != null
         ? session.getRequestParameterMap().get("token").get(0)
         : null;
-    log.info("token {}", token);
+    // log.info("token {}", token);
     if (token == null) {
       try {
         session.getBasicRemote().sendText("token为null");
@@ -160,7 +160,7 @@ public class McpWebsocketEndpoint {
    */
   @OnMessage
   public void onMessage(String message) {
-    log.info("message {}", message);
+    // log.info("message {}", message);
     try {
       var payloadObject = JSON.parseObject(message);
       if (!payloadObject.containsKey("jsonrpc")) {

@@ -27,7 +27,11 @@ import java.util.Objects;
 public class OtaXiaozhiEntity {
   private int id;
   private String deviceId;
+  private String nickName;
   private int productId;
+  private String boardType;
+  private String boardName;
+  private String status;
   private String userName;
   private String role;
 
@@ -53,6 +57,16 @@ public class OtaXiaozhiEntity {
   }
 
   @Basic
+  @Column(name = "nick_name")
+  public String getNickName() {
+    return nickName;
+  }
+
+  public void setNickName(String nickName) {
+    this.nickName = nickName;
+  }
+
+  @Basic
   @Column(name = "product_id")
   public int getProductId() {
     return productId;
@@ -60,6 +74,36 @@ public class OtaXiaozhiEntity {
 
   public void setProductId(int productId) {
     this.productId = productId;
+  }
+
+  @Basic
+  @Column(name = "board_type")
+  public String getBoardType() {
+    return boardType;
+  }
+
+  public void setBoardType(String boardType) {
+    this.boardType = boardType;
+  }
+
+  @Basic
+  @Column(name = "board_name")
+  public String getBoardName() {
+    return boardName;
+  }
+
+  public void setBoardName(String boardName) {
+    this.boardName = boardName;
+  }
+
+  @Basic
+  @Column(name = "status")
+  public String getStatus() {
+    return status;
+  }
+
+  public void setStatus(String status) {
+    this.status = status;
   }
 
   @Basic
@@ -90,11 +134,14 @@ public class OtaXiaozhiEntity {
       return false;
     OtaXiaozhiEntity that = (OtaXiaozhiEntity) o;
     return id == that.id && productId == that.productId && Objects.equals(deviceId, that.deviceId)
+        && Objects.equals(nickName, that.nickName) && Objects.equals(boardType, that.boardType)
+        && Objects.equals(boardName, that.boardName) && Objects.equals(status, that.status)
         && Objects.equals(userName, that.userName) && Objects.equals(role, that.role);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, deviceId, productId, userName, role);
+    return Objects.hash(id, deviceId, nickName, productId, boardType, boardName, status, userName,
+        role);
   }
 }

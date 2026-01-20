@@ -31,9 +31,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
@@ -68,6 +72,8 @@ public class McpAgent implements BaseTool<String> {
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private McpWebsocket mcpWebsocket;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -229,7 +235,7 @@ public class McpAgent implements BaseTool<String> {
           .add(new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt.toString()));
       messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
 
-      var obj = callLLMForThought(question, messages, queueMap, chatId);
+      var obj = callLLMForThought(question, messages, queueMap, chatId, productId);
       if (obj == null) {
         cleanupResources(clientMap, chatId);
         return "小主人抱歉哦，服务器现在繁忙。";
@@ -329,8 +335,9 @@ public class McpAgent implements BaseTool<String> {
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), conversationPrompt.toString()));
 
+    LLM summaryLlm = llmDiyUtility.getDiyLlm(productId, llmName, "10");
     try {
-      toolResult = LLMFactory.getLLM(llmName).commonChat(summaryPrompt, messages, false);
+      toolResult = summaryLlm.commonChat(summaryPrompt, messages, false);
       try {
         var temp = toolResult.replace("```json", "").replace("```JSON", "").replace("```", "");
         JSONObject jsonResponse = JSON.parseObject(temp);
@@ -364,13 +371,14 @@ public class McpAgent implements BaseTool<String> {
    * 调用LLM获取thought，支持流式和非流式
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId) {
+      Map<String, Queue<String>> queueMap, String chatId, int productId) {
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "10");
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
       dataMap.remove(chatId);
 
       try {
-        LLMFactory.getLLM(llmName).streamJsonChat(question, messages, false,
+        llm.streamJsonChat(question, messages, false,
             new AgentEventSourceListener(queueMap, chatId, this));
 
         Lock chatLock = lockMap.get(chatId);
@@ -410,7 +418,7 @@ public class McpAgent implements BaseTool<String> {
     } else {
       // 非流式调用
       try {
-        return LLMFactory.getLLM(llmName).jsonChat(question, messages, false);
+        return llm.jsonChat(question, messages, false);
       } catch (Exception e) {
         log.error("调用LLM失败: {}", e.getMessage());
         return null;

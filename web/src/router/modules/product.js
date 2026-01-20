@@ -14,7 +14,7 @@ export default [
       children: [
         {
           path: '/product',
-          name: 'SubProduct',
+          name: 'subProduct',
           component: () => import('@/views/product/index.vue'),
           meta: {
             title: 'productAdd',
@@ -174,6 +174,25 @@ export default [
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           },
         },
+        {
+          path: '/llmProviderInformation',
+          name: 'llmProviderInformation',
+          component: () => import('@/views/llmProviderInformation/index.vue'),
+          meta: {
+            title: 'llmProviderInformation',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
+          path: '/productLlmModel',
+          name: 'productLlmModel',
+          component: () => import('@/views/productLlmModel/index.vue'),
+          meta: {
+            title: 'productLlmModel',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+
         {
           path: '/knowledgeGraphic',
           name: 'knowledgeGraphic',

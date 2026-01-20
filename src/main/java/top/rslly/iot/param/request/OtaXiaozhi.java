@@ -29,5 +29,8 @@ public class OtaXiaozhi {
   @NotBlank(message = "code 不能为空")
   @Size(min = 1, max = 255, message = "code 长度必须在 1 到 255 之间")
   private String code;
+  @NotBlank(message = "nickName 不能为空")
+  @Size(min = 1, max = 255, message = "code 长度必须在 1 到 255 之间")
+  private String nickName;
   private int productId;
 }

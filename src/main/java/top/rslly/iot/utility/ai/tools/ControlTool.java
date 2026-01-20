@@ -28,11 +28,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.param.request.ControlParam;
+import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
+import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductModelServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -63,6 +66,8 @@ public class ControlTool implements BaseTool<String> {
   private ProductServiceImpl productService;
   @Autowired
   private HardWareServiceImpl hardWareService;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
 
   @Value("${ai.controlTool-llm}")
   private String llmName;
@@ -113,7 +118,7 @@ public class ControlTool implements BaseTool<String> {
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
-    var finalObj = callLLMForThought(question, messages, queueMap, chatId, mcpIsTool);
+    var finalObj = callLLMForThought(question, messages, queueMap, chatId, mcpIsTool, productId);
     if (finalObj == null) {
       cleanupResources(chatId);
       return "小主人抱歉哦，服务器现在繁忙。";
@@ -146,13 +151,14 @@ public class ControlTool implements BaseTool<String> {
    * 调用LLM获取thought，支持流式和非流式
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId, Boolean mcpIsTool) {
+      Map<String, Queue<String>> queueMap, String chatId, Boolean mcpIsTool, int productId) {
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "2");
     if (speedUp && !mcpIsTool) {
       // 使用流式调用，实时获取thought内容
       dataMap.remove(chatId);
 
       try {
-        LLMFactory.getLLM(llmName).streamJsonChat(question, messages, false,
+        llm.streamJsonChat(question, messages, false,
             new AgentEventSourceListener(queueMap, chatId, this, "answer"));
 
         Lock chatLock = lockMap.get(chatId);
@@ -192,7 +198,7 @@ public class ControlTool implements BaseTool<String> {
     } else {
       // 非流式调用
       try {
-        return LLMFactory.getLLM(llmName).jsonChat(question, messages, false);
+        return llm.jsonChat(question, messages, false);
       } catch (Exception e) {
         log.error("调用LLM失败: {}", e.getMessage());
         return null;
