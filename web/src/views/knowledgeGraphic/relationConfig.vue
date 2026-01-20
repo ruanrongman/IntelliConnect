@@ -82,7 +82,7 @@ function initData(){
         productId: props.productId,
         nodeFrom: props.nodeFrom,
         nodeTo: props.nodeTo,
-        des: ""
+        des: `${props.nodeFrom}->${props.nodeTo}`
       });
       return;
     }

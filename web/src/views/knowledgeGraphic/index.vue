@@ -25,8 +25,6 @@ const baseOption = {
       force: {
         // 节点之间的斥力，值越大节点越分散，可以设置一个较大的值以避免重叠
         repulsion: 30,
-        // 节点之间的边长，力导向图会根据边长调整节点间的距离
-        edgeLength: 50,
         // 是否防止节点重叠
         avoidOverlap: true
       },
@@ -171,7 +169,7 @@ function handleCancelConnecting(e){
       if(item.itemStyle !== undefined) item.itemStyle = undefined;
       return item;
     });
-    refreshChartHandler(option);
+    chart.value.setOption(option);
     isConnection.value = false;
     relationTemp.value = [];
   }
@@ -186,7 +184,7 @@ function handleConnectingToggle(checked, e){
       if(item.itemStyle !== undefined) item.itemStyle = undefined;
       return item;
     });
-    refreshChartHandler(option);
+    chart.value.setOption(option);
   }
 }
 
@@ -209,7 +207,7 @@ function handleCancelConfigRelation(e){
       if(item.itemStyle !== undefined) item.itemStyle = undefined;
       return item;
     });
-    refreshChartHandler(option);
+    chart.value.setOption(option);
   }
 }
 
@@ -235,7 +233,7 @@ function handleConnected(){
       formatter: `${relationTemp.value[0]}->${relationTemp.value[1]}`
     }
   });
-  refreshChartHandler(newOption);
+  chart.value.setOption(newOption);
 //   Open relation config drawer
   // Notify component now config for adding
   createRelationFlag.value = true;
@@ -265,6 +263,7 @@ function updateGraphicData(){
     return {
       source: item.from,
       target: item.to,
+      value: item.name.length
       // label: {
       //   show: true,
       //   formatter: item.name
@@ -585,7 +584,9 @@ onUnmounted(()=>{
           name="name"
           :rules="[{required: true, message: '请输入节点名称'}]"
       >
-        <Input :maxlength="10" v-model:value="newNodeForm.name" placeholder="节点名称，不超过10字" />
+        <Tooltip title="如果节点名称重复会更新节点描述">
+          <Input :maxlength="10" v-model:value="newNodeForm.name" placeholder="节点名称，不超过10字" />
+        </Tooltip>
       </Form.Item>
       <Form.Item
           label="节点描述"
