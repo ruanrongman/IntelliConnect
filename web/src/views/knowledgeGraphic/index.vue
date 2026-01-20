@@ -151,7 +151,7 @@ function handleAddNewNode(){
 
 function handleStartConnecting(e){
   if(e.key !== 'c') return;
-  if(isAddingNode.value) return;
+  if(isAddingNode.value || relationConfigToggle.value) return;
   e.preventDefault();
   // Caution about this! Use relationConfigToggle to debounce!
   if(!isConnection.value && !relationConfigToggle.value){
@@ -329,6 +329,7 @@ function handleNodeClick(params){
 }
 
 function handleEdgeClick(params){
+  if(isConnection.value) return;
   const {data} = params;
   relationTemp.value = [data.source, data.target];
   showNodeInfo.value = false;
