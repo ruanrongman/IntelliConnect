@@ -23,7 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.models.OtaEntity;
 import top.rslly.iot.utility.result.JsonResult;
 
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.List;

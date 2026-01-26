@@ -26,7 +26,7 @@ import ws.schild.jave.MultimediaObject;
 import ws.schild.jave.encode.AudioAttributes;
 import ws.schild.jave.encode.EncodingAttributes;
 
-import javax.websocket.Session;
+import jakarta.websocket.Session;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;

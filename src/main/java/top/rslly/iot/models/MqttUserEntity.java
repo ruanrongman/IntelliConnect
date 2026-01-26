@@ -19,7 +19,7 @@
  */
 package top.rslly.iot.models;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.sql.Timestamp;
 import java.util.Objects;
 

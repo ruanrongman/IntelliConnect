@@ -28,7 +28,7 @@ import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.utility.EmqTransfer;
 import top.rslly.iot.utility.exhook.*;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.util.Arrays;
 

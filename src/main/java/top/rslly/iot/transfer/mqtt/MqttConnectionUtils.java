@@ -78,7 +78,7 @@ public class MqttConnectionUtils {
       client.setTimeToWait(10000);
       client.connect(connectOptions);
     } catch (MqttException e) {
-      e.printStackTrace();
+      log.error(e.getMessage());
     }
     // MqttTopic topic = client.getTopic(TOPIC);
     // setWill方法，如果项目中需要知道客户端是否掉线可以调用该方法。设置最终端口的通知消息

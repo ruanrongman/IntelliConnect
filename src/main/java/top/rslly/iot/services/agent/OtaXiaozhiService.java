@@ -25,8 +25,8 @@ import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.param.request.OtaXiaozhi;
 import top.rslly.iot.utility.result.JsonResult;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 

@@ -42,10 +42,11 @@ public class QuartzInit implements CommandLineRunner {
     QuartzManager.init();
     for (var s : timeScheduleEntities) {
       // CronChecker.isCronExpired(cronExpression)
-      if (!QuartzCronDateUtils.isCronExpired(s.getCron()))
-        QuartzManager.addJob(s.getTaskName(), s.getOpenid(), s.getTaskName(), s.getTaskName(),
+      if (!QuartzCronDateUtils.isCronExpired(s.getCron())) {
+        String groupName = s.getAppid() + ":" + s.getOpenid();
+        QuartzManager.addJob(s.getTaskName(), groupName, s.getTaskName(), groupName,
             RemindJob.class, s.getCron(), s.getOpenid(), s.getAppid());
-      else
+      } else
         timeScheduleService.deleteByAppidAndOpenidAndTaskName(s.getAppid(), s.getOpenid(),
             s.getTaskName());
     }

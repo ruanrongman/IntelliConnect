@@ -5,7 +5,7 @@
 > 本项目正在快速开发中，文档正不断更新，欢迎提issue或email提醒作者。
 
 ## 概述
-* 本项目基于springboot2.7开发，使用spring security作为安全框架
+* 本项目基于springboot3.5.7开发，使用spring security作为安全框架
 * 配备物模型和完善的监控模块
 * 支持多种大模型(Qwen3系列，GLM系列和deepSeek等先进模型)和先进的Agent智能体技术提供出色的AI智能，可以快速搭建智能物联网应用(首个基于Agent智能体设计的物联网平台)
 * 支持知识库技术，可以针对专有领域构建知识库使得智能体更贴心
@@ -21,7 +21,7 @@
 mysql,redis,emqx和influxdb环境。
 * 安装mysql和redis数据库，高性能运行推荐安装时序数据库influxdb
 * 安装EMQX集群,并配置好exhook，本项目使用exhook作为mqtt消息的处理器
-* 安装java17环境
+* 安装java21环境
 * 修改配置文件application.yaml(设置ddl-auto为update模式)
 * java -jar IntelliConnect-1.8-SNAPSHOT.jar
 
@@ -88,7 +88,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，免费获取智控台的前端源码，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/dfc426997c8cd18234d87b08954a42d8.jpg" width="250px"/>
+    <img src="./images/22be3b5744c743906fed3138151deb32.jpg" width="250px"/>
 </div>
 
 

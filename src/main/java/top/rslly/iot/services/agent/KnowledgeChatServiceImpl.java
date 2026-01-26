@@ -27,6 +27,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +41,7 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -69,7 +70,7 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
   private EmbeddingStore<TextSegment> knowledgeChatEmbeddingStore;
   @Autowired
   @Qualifier("taskExecutor")
-  private ThreadPoolTaskExecutor taskExecutor;
+  private TaskExecutor taskExecutor;
 
   @Override
   public List<KnowledgeChatEntity> findAllById(int id) {

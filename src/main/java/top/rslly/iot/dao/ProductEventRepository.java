@@ -23,7 +23,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import top.rslly.iot.models.ProductEventEntity;
 import top.rslly.iot.models.ProductModelEntity;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.util.List;
 
 public interface ProductEventRepository extends JpaRepository<ProductEventEntity, Long> {

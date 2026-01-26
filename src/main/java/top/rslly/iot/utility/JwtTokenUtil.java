@@ -21,11 +21,12 @@ package top.rslly.iot.utility;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
+import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -45,13 +46,13 @@ public class JwtTokenUtil {
   @Value("${jwt.secret:myDefaultSecretKeyForDevOnlyChangeInProduction}")
   private String secretKey;
 
-  private static String APPSECRET_KEY;
+  private static SecretKey APPSECRET_KEY;
   // 角色权限声明
   private static final String ROLE_CLAIMS = "role";
 
   @PostConstruct
   public void init() {
-    APPSECRET_KEY = this.secretKey;
+    APPSECRET_KEY = Keys.hmacShaKeyFor(this.secretKey.getBytes());
   }
 
   /**
@@ -62,11 +63,13 @@ public class JwtTokenUtil {
     map.put(ROLE_CLAIMS, role);
 
     String token = Jwts.builder()
-        .setSubject(username).setClaims(map)
+        .subject(username)
+        .claims(map)
         .claim("username", username)
-        .setIssuedAt(new Date())
-        .setExpiration(new Date(System.currentTimeMillis() + EXPIRITION))
-        .signWith(SignatureAlgorithm.HS256, APPSECRET_KEY).compact();
+        .issuedAt(new Date())
+        .expiration(new Date(System.currentTimeMillis() + EXPIRITION))
+        .signWith(APPSECRET_KEY)
+        .compact();
     return token;
   }
 
@@ -78,11 +81,12 @@ public class JwtTokenUtil {
     map.put(ROLE_CLAIMS, role);
 
     return Jwts.builder()
-        .setSubject(username).setClaims(map)
+        .subject(username)
+        .claims(map)
         .claim("username", username)
-        .setIssuedAt(new Date())
-        .setExpiration(null)
-        .signWith(SignatureAlgorithm.HS256, APPSECRET_KEY).compact();
+        .issuedAt(new Date())
+        .signWith(APPSECRET_KEY)
+        .compact();
   }
 
   /**
@@ -90,8 +94,11 @@ public class JwtTokenUtil {
    */
   public static Claims checkJWT(String token) {
     try {
-      final Claims claims =
-          Jwts.parser().setSigningKey(APPSECRET_KEY).parseClaimsJws(token).getBody();
+      final Claims claims = Jwts.parser()
+          .verifyWith(APPSECRET_KEY)
+          .build()
+          .parseSignedClaims(token)
+          .getPayload();
       return claims;
     } catch (Exception e) {
       e.printStackTrace();
@@ -103,7 +110,11 @@ public class JwtTokenUtil {
    * 从Token中获取username
    */
   public static String getUsername(String token) {
-    Claims claims = Jwts.parser().setSigningKey(APPSECRET_KEY).parseClaimsJws(token).getBody();
+    Claims claims = Jwts.parser()
+        .verifyWith(APPSECRET_KEY)
+        .build()
+        .parseSignedClaims(token)
+        .getPayload();
     return claims.get("username").toString();
   }
 
@@ -111,7 +122,11 @@ public class JwtTokenUtil {
    * 从Token中获取用户角色
    */
   public static String getUserRole(String token) {
-    Claims claims = Jwts.parser().setSigningKey(APPSECRET_KEY).parseClaimsJws(token).getBody();
+    Claims claims = Jwts.parser()
+        .verifyWith(APPSECRET_KEY)
+        .build()
+        .parseSignedClaims(token)
+        .getPayload();
     return claims.get("role").toString();
   }
 
@@ -119,7 +134,11 @@ public class JwtTokenUtil {
    * 校验Token是否过期
    */
   public static boolean isExpiration(String token) {
-    Claims claims = Jwts.parser().setSigningKey(APPSECRET_KEY).parseClaimsJws(token).getBody();
+    Claims claims = Jwts.parser()
+        .verifyWith(APPSECRET_KEY)
+        .build()
+        .parseSignedClaims(token)
+        .getPayload();
     return claims.getExpiration().before(new Date());
   }
 }
