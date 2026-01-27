@@ -19,6 +19,10 @@
  */
 package top.rslly.iot.services.knowledgeGraphic;
 
+import com.alibaba.fastjson.JSON;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,6 +98,17 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
       maxDepth--;
     }
     return ResultTool.success(knowledgeGraphic);
+  }
+
+  @Override
+  public String getKnowledgeGraphicJSON(int productId) {
+    JsonResult<?> graphic = this.getKnowledgeGraphicByProductId(productId);
+    if (null == graphic || !graphic.getSuccess())
+      return "";
+    KnowledgeGraphic knowledgeGraphic = (KnowledgeGraphic) graphic.getData();
+    if (knowledgeGraphic == null)
+      return "";
+    return JSON.toJSONString(knowledgeGraphic);
   }
 
   @Override

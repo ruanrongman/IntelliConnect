@@ -34,6 +34,8 @@ public interface KnowledgeGraphicService {
 
   JsonResult<?> getKnowledgeGraphic(KnowledgeGraphicNodeEntity rootNode, int maxDepth);
 
+  String getKnowledgeGraphicJSON(int productId);
+
   JsonResult<?> getKnowledgeGraphicByNodeId(long id, int maxDepth);
 
   JsonResult<?> getKnowledgeGraphicByProductId(int productId);
