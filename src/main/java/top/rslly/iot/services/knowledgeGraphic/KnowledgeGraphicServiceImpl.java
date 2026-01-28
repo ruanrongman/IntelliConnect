@@ -71,57 +71,64 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Autowired
   private EmbeddingStore<TextSegment> embeddingStore;
 
-  public void embeddingNode(int productId, long nodeId, String nodeDes){
-      // Replace this with virtual thread in feature version.
-      Thread thread = new Thread(()->{
-         Embedding embedding = embeddingModel.embed(nodeDes).content();
-         Map<String, String> metaDataMap = new HashMap<>();
-         metaDataMap.put("kgNodeId", String.valueOf(nodeId));
-         metaDataMap.put("kgProductId", String.valueOf(productId));
-         Metadata metaData = Metadata.from(metaDataMap);
-         TextSegment segment = TextSegment.from(nodeDes, metaData);
-         embeddingStore.add(embedding, segment);
-      });
-      thread.start();
+  public void embeddingNode(int productId, long nodeId, String nodeDes) {
+    // Replace this with virtual thread in feature version.
+    Thread thread = new Thread(() -> {
+      Embedding embedding = embeddingModel.embed(nodeDes).content();
+      Map<String, String> metaDataMap = new HashMap<>();
+      metaDataMap.put("kgNodeId", String.valueOf(nodeId));
+      metaDataMap.put("kgProductId", String.valueOf(productId));
+      Metadata metaData = Metadata.from(metaDataMap);
+      TextSegment segment = TextSegment.from(nodeDes, metaData);
+      embeddingStore.add(embedding, segment);
+    });
+    thread.start();
   }
 
-  public String queryKnowledgeGraphic(String query, int productId){
-      Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
-      Embedding queryEmbedding = embeddingModel.embed(query).content();
-      var searchResult = EmbeddingSearchRequest.builder()
-              .queryEmbedding(queryEmbedding)
-              .filter(filterByProductId)
-              .minScore(0.6)
-              .maxResults(1)
-              .build();
-      EmbeddingSearchResult<TextSegment> embeddingSearchResult = embeddingStore.search(searchResult);
-      List<TextSegment> matchSegment = embeddingSearchResult.matches().stream()
-              .map(EmbeddingMatch::embedded)
-              .toList();
-      if(matchSegment.isEmpty()){
-          return JSON.toJSONString(new KnowledgeGraphic());
-      }
-      TextSegment match = matchSegment.get(0);
-      try {
-          Metadata metadata = match.metadata();
-          long nodeId = metadata.getLong("kgNodeId");
-          KnowledgeGraphicNodeEntity node = knowledgeGraphicNodeRepository.findById(nodeId).orElse(null);
-          return JSON.toJSONString(this.getKnowledgeGraphic(node, 6).getData());
-      }catch(Exception e){
-          return JSON.toJSONString(new KnowledgeGraphic());
-      }
+  public String queryKnowledgeGraphic(String query, int productId) {
+    Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
+    Embedding queryEmbedding = embeddingModel.embed(query).content();
+    var searchResult = EmbeddingSearchRequest.builder()
+        .queryEmbedding(queryEmbedding)
+        .filter(filterByProductId)
+        .minScore(0.6)
+        .maxResults(1)
+        .build();
+    EmbeddingSearchResult<TextSegment> embeddingSearchResult = embeddingStore.search(searchResult);
+    List<TextSegment> matchSegment = embeddingSearchResult.matches().stream()
+        .map(EmbeddingMatch::embedded)
+        .toList();
+    if (matchSegment.isEmpty()) {
+      return JSON.toJSONString(new KnowledgeGraphic());
+    }
+    TextSegment match = matchSegment.get(0);
+    try {
+      Metadata metadata = match.metadata();
+      long nodeId = metadata.getLong("kgNodeId");
+      KnowledgeGraphicNodeEntity node =
+          knowledgeGraphicNodeRepository.findById(nodeId).orElse(null);
+      return JSON.toJSONString(this.getKnowledgeGraphic(node, 6).getData());
+    } catch (Exception e) {
+      return JSON.toJSONString(new KnowledgeGraphic());
+    }
   }
 
-  public void deleteKnowledgeGraphicNodeEmbedding(long nodeId){
-      Filter filter = metadataKey("kgNodeId").isEqualTo(String.valueOf(nodeId));
-      embeddingStore.removeAll(filter);
+  public void deleteKnowledgeGraphicNodeEmbedding(long nodeId) {
+    Filter filter = metadataKey("kgNodeId").isEqualTo(String.valueOf(nodeId));
+    embeddingStore.removeAll(filter);
   }
 
-  public void updateKnowledgeGraphicNodeEmbedding(KnowledgeGraphicNodeEntity node){
-      Filter filterNodeId = metadataKey("kgNodeId").isEqualTo(String.valueOf(node.getId()));
-      Filter filterProductId =  metadataKey("kgProductId").isEqualTo(String.valueOf(node.getProductId())).and(filterNodeId);
-      embeddingStore.removeAll(filterProductId);
-      this.embeddingNode(node.getProductId(), node.getId(), node.getDes());
+  public void deleteKnowledgeGraphicNodesEmbedding(int productId) {
+    Filter filter = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
+    embeddingStore.removeAll(filter);
+  }
+
+  public void updateKnowledgeGraphicNodeEmbedding(KnowledgeGraphicNodeEntity node) {
+    Filter filterNodeId = metadataKey("kgNodeId").isEqualTo(String.valueOf(node.getId()));
+    Filter filterProductId =
+        metadataKey("kgProductId").isEqualTo(String.valueOf(node.getProductId())).and(filterNodeId);
+    embeddingStore.removeAll(filterProductId);
+    this.embeddingNode(node.getProductId(), node.getId(), node.getDes());
   }
 
   @Override
@@ -216,7 +223,8 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNodeEntity node) {
-    knowledgeGraphicNodeRepository.save(node);
+    KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.save(node);
+    this.updateKnowledgeGraphicNodeEmbedding(nodeDb);
     return ResultTool.success();
   }
 
@@ -231,6 +239,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     nodeDb.setDes(node.des);
     nodeDb.setProductId(node.productId);
     nodeDb = knowledgeGraphicNodeRepository.save(nodeDb);
+    this.updateKnowledgeGraphicNodeEmbedding(nodeDb);
     if (!node.attributes.isEmpty()) {
       this.addAttributes(node.attributes, nodeDb.getId());
     }
@@ -239,19 +248,20 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> addNode(String name, String des, int productUid) {
+  public JsonResult<?> addNode(String name, String des, int productId) {
     KnowledgeGraphicNodeEntity node = new KnowledgeGraphicNodeEntity();
     node.setName(name);
     node.setDes(des);
-    node.setProductId(productUid);
-    knowledgeGraphicNodeRepository.save(node);
+    node.setProductId(productId);
+    node = knowledgeGraphicNodeRepository.save(node);
+    this.updateKnowledgeGraphicNodeEmbedding(node);
     return ResultTool.success();
   }
 
   @Override
-  public JsonResult<?> getNode(String name, int productUid) {
+  public JsonResult<?> getNode(String name, int productId) {
     KnowledgeGraphicNodeEntity node =
-        knowledgeGraphicNodeRepository.findByNameAndProductId(name, productUid);
+        knowledgeGraphicNodeRepository.findByNameAndProductId(name, productId);
     if (node == null) {
       return ResultTool.fail();
     }
@@ -259,9 +269,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Override
-  public JsonResult<?> getNodes(int productUid) {
+  public JsonResult<?> getNodes(int productId) {
     List<KnowledgeGraphicNodeEntity> nodeList =
-        knowledgeGraphicNodeRepository.findAllByProductId(productUid);
+        knowledgeGraphicNodeRepository.findAllByProductId(productId);
     return ResultTool.success(nodeList);
   }
 
@@ -349,18 +359,20 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     knowledgeGraphicRelationRepository.deleteAllByFrom(node.getId());
     knowledgeGraphicRelationRepository.deleteAllByTo(node.getId());
     knowledgeGraphicAttributeRepository.deleteByBelong(node.getId());
+    this.deleteKnowledgeGraphicNodeEmbedding(node.getId());
     return ResultTool.success();
   }
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> deleteNode(String name, int productUid) {
+  public JsonResult<?> deleteNode(String name, int productId) {
     KnowledgeGraphicNodeEntity node =
-        knowledgeGraphicNodeRepository.findByNameAndProductId(name, productUid);
+        knowledgeGraphicNodeRepository.findByNameAndProductId(name, productId);
     if (node == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     knowledgeGraphicNodeRepository.delete(node);
+    this.deleteKnowledgeGraphicNodeEmbedding(node.getId());
     return ResultTool.success();
   }
 
@@ -375,14 +387,15 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     knowledgeGraphicRelationRepository.deleteAllByFrom(id);
     knowledgeGraphicRelationRepository.deleteAllByTo(id);
     knowledgeGraphicAttributeRepository.deleteByBelong(id);
+    this.deleteKnowledgeGraphicNodeEmbedding(id);
     return ResultTool.success();
   }
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> deleteNodes(int productUid) {
+  public JsonResult<?> deleteNodes(int productId) {
     List<KnowledgeGraphicNodeEntity> nodes =
-        knowledgeGraphicNodeRepository.findAllByProductId(productUid);
+        knowledgeGraphicNodeRepository.findAllByProductId(productId);
     if (nodes.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -391,13 +404,15 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         return ResultTool.fail();
       }
     }
+    this.deleteKnowledgeGraphicNodeEmbedding(productId);
     return ResultTool.success();
   }
 
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateNode(KnowledgeGraphicNodeEntity node) {
-    knowledgeGraphicNodeRepository.save(node);
+    node = knowledgeGraphicNodeRepository.save(node);
+    this.updateKnowledgeGraphicNodeEmbedding(node);
     return ResultTool.success();
   }
 
@@ -410,7 +425,8 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     }
     node.setName(name);
     node.setDes(des);
-    knowledgeGraphicNodeRepository.save(node);
+    node = knowledgeGraphicNodeRepository.save(node);
+    this.updateKnowledgeGraphicNodeEmbedding(node);
     return ResultTool.success();
   }
 
@@ -430,6 +446,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     if (!node.attributes.isEmpty()) {
       this.addAttributes(node.attributes, nodeDb.getId());
     }
+    this.updateKnowledgeGraphicNodeEmbedding(nodeDb);
     return ResultTool.success();
   }
 
