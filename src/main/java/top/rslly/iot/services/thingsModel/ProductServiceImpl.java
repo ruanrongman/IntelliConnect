@@ -169,6 +169,10 @@ public class ProductServiceImpl implements ProductService {
         userProductBindEntity.setProductId(productEntity1.getId());
         userProductBindRepository.save(userProductBindEntity);
       }
+      ProductToolsBanEntity entity = new ProductToolsBanEntity();
+      entity.setProductId(productEntity1.getId());
+      entity.setToolsName("knowledgeGraphic");
+      productToolsBanRepository.save(entity);
       return ResultTool.success(productEntity1);
     }
   }

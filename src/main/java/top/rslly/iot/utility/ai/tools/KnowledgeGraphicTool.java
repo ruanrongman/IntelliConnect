@@ -19,9 +19,46 @@
  */
 package top.rslly.iot.utility.ai.tools;
 
-import java.util.Map;
+import com.alibaba.fastjson.JSONObject;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
+import top.rslly.iot.param.request.KnowledgeGraphicNode;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
+import top.rslly.iot.services.knowledgeGraphic.dbo.KnowledgeGraphic;
+import top.rslly.iot.services.thingsModel.ProductService;
+import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.LlmDiyUtility;
+import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.prompts.KnowledgeGraphicPrompt;
 
+import java.util.*;
+
+@Component
+@Data
+@Slf4j
 public class KnowledgeGraphicTool implements BaseTool<String> {
+  @Autowired
+  private ProductService productService;
+  @Autowired
+  private KnowledgeGraphicService knowledgeGraphicService;
+  @Autowired
+  private LlmDiyUtility llmDiyUtility;
+  @Autowired
+  private KnowledgeGraphicPrompt knowledgeGraphicPrompt;
+  @Value("${ai.knowledge_graphic_llm}")
+  private String llmName;
+  private String name = "knowledgeGraphicTool";
+  private String description = """
+      This tool is working for knowledge graphic generation to help LLM
+      handle relations between entities.
+      """;
+
   @Override
   public String run(String question) {
     return null;
@@ -29,6 +66,42 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
-    return "";
+    int productId = (int) globalMessage.get("productId");
+    if (productService.findAllById(productId).isEmpty())
+      return "";
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "knowledgeGraphic");
+    List<ModelMessage> messages = new ArrayList<>();
+    ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(),
+        knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId));
+    // ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
+    // "Start generate knowledge graphic.");
+    List<ModelMessage> memory =
+        Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
+            .orElse(Collections.emptyList());
+    messages.add(systemMessage);
+    messages.addAll(memory);
+    // messages.add(userMessage);
+    var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
+    try {
+      process_llm_result(obj, productId);
+    } catch (Exception e) {
+      log.error("Knowledge Graphic extract error:\n{}", e.getMessage());
+    }
+    return null;
+  }
+
+  private void process_llm_result(JSONObject jsonObject, int productId) throws IcAiException {
+    KnowledgeGraphic graphic = jsonObject.toJavaObject(KnowledgeGraphic.class);
+    for (KnowledgeGraphic.Node node : graphic.nodes) {
+      KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
+          .addNode(node.name, node.des, productId).getData();
+      knowledgeGraphicService.addAttributes(node.attributes.stream().toList(), nodeDb.getId());
+    }
+    for (KnowledgeGraphic.Relation relation : graphic.relations) {
+      var result = knowledgeGraphicService.addRelation(relation.name, relation.from, relation.to);
+      if (!result.getSuccess()) {
+        throw new IcAiException("Update relation failed");
+      }
+    }
   }
 }

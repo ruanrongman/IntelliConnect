@@ -65,7 +65,7 @@ public class KnowledgeGraphicPrompt {
             - Each relation struct would be like this:
                 ```
                 {
-                    "des": "Relation description",
+                    "name": "Relation description",
                     "from": "Source node name",
                     "to": "Target node name"
                 }

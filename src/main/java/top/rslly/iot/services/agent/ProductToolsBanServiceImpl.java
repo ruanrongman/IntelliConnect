@@ -65,7 +65,8 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan) {
     // 允许值列表（不包含 "5"）
-    Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge");
+    Set<String> allowed =
+        Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge", "knowledgeGraphic");
 
     for (var s : productToolsBan.getToolsName()) {
       if (!allowed.contains(s))
@@ -83,6 +84,40 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
     }
     var result = productToolsBanRepository.saveAll(productToolsBanEntityList);
     return ResultTool.success(result);
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> addProductToolBan(String toolName, int productId) {
+    Set<String> allowed =
+        Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge", "knowledgeGraphic");
+    if (!allowed.contains(toolName))
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<ProductToolsBanEntity> productToolsBanEntityList =
+        productToolsBanRepository.findAllByProductId(productId);
+    for (var s : productToolsBanEntityList) {
+      if (s.getToolsName().equals(toolName))
+        return ResultTool.success();
+    }
+    ProductToolsBanEntity entity = new ProductToolsBanEntity();
+    entity.setProductId(productId);
+    entity.setToolsName(toolName);
+    productToolsBanRepository.save(entity);
+    return ResultTool.success();
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> deleteProductToolBan(String toolName, int productId) {
+    List<ProductToolsBanEntity> productToolsBanEntityList =
+        productToolsBanRepository.findAllByProductId(productId);
+    for (var s : productToolsBanEntityList) {
+      if (s.getToolsName().equals(toolName)) {
+        productToolsBanRepository.delete(s);
+        return ResultTool.success();
+      }
+    }
+    return ResultTool.success();
   }
 
   @Override

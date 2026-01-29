@@ -128,3 +128,27 @@ export const getRelationByNodes = (params) => request({
         'Authorization': token
     }
 })
+
+export const enableKnowledgeGraphic = (params) => request({
+    url: "/api/v2/productToolsBanSingle",
+    method: "delete",
+    params: {
+        "toolName": "knowledgeGraphic",
+        ...params
+    },
+    headers: {
+        'Authorization': token
+    }
+})
+
+export const disabledKnowledgeGraphic = (params) => request({
+    url: "/api/v2/productToolsBanSingle",
+    method: "post",
+    params: {
+        "toolName": "knowledgeGraphic",
+        ...params
+    },
+    headers: {
+        'Authorization': token
+    }
+})

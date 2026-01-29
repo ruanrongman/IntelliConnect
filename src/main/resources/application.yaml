@@ -67,7 +67,7 @@ spring:
         login-password: 123456
   data:
     redis:
-      host: 192.168.49.129
+      host: localhost
       password: 1234
       port: 6379
       timeout: 1000
@@ -195,6 +195,7 @@ ai:
   agent-speedUp: true
   longMemoryTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   wx_smart_robot_llm: glm
+  knowledge_graphic_llm: silicon-Qwen/Qwen3-14B
   mcp:
     agent-llm: dashscope-qwen3-max
     agent-speedUp: true

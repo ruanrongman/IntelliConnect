@@ -504,7 +504,7 @@ public class Tool {
     return productToolsBanService.postProductToolsBan(productToolsBan);
   }
 
-  @Operation(summary = "禁止内部工具", description = "禁止内部工具")
+  @Operation(summary = "解禁全部工具", description = "解禁全部工具")
   @RequestMapping(value = "/productToolsBan", method = RequestMethod.DELETE)
   public JsonResult<?> deleteProductToolsBan(@RequestParam("productId") int productId,
       @RequestHeader("Authorization") String header) {
@@ -515,6 +515,34 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productToolsBanService.deleteProductToolsBan(productId);
+  }
+
+  @Operation(summary = "禁止单个工具", description = "禁止单个工具")
+  @RequestMapping(value = "/productToolsBanSingle", method = RequestMethod.POST)
+  public JsonResult<?> postProductToolsBanSingle(@RequestParam("productId") int productId,
+      @RequestParam("toolName") @Valid @NotNull @Size(min = 1, max = 255) String toolName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.addProductToolBan(toolName, productId);
+  }
+
+  @Operation(summary = "解禁单个工具", description = "解禁单个工具")
+  @RequestMapping(value = "/productToolsBanSingle", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductToolsBanSingle(@RequestParam("productId") int productId,
+      @RequestParam("toolName") @Valid @NotNull @Size(min = 1, max = 255) String toolName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.deleteProductToolBan(toolName, productId);
   }
 
   // 长期记忆

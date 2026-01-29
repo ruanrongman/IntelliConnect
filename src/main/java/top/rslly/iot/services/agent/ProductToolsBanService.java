@@ -33,5 +33,9 @@ public interface ProductToolsBanService {
 
   JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan);
 
+  JsonResult<?> addProductToolBan(String toolName, int productId);
+
+  JsonResult<?> deleteProductToolBan(String toolName, int productId);
+
   JsonResult<?> deleteProductToolsBan(int productId);
 }
