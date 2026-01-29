@@ -134,7 +134,7 @@ public class WeatherTool implements BaseTool<String> {
         return llm.commonChat(question, messages, false);
       }
     } catch (Exception e) {
-      // e.printStackTrace();
+      e.printStackTrace();
     }
     return "查询天气失败，请检查是否输入具体城市名称。";
   }

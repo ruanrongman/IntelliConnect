@@ -24,7 +24,7 @@ import top.rslly.iot.dao.WxProductActiveRepository;
 import top.rslly.iot.models.WxProductActiveEntity;
 import top.rslly.iot.services.wechat.WxProductActiveService;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.List;
 
 @Service

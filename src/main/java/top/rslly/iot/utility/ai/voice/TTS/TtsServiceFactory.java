@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.agent.ProductVoiceDiyServiceImpl;
 
-import javax.websocket.Session;
+import jakarta.websocket.Session;
 
 @Component
 public class TtsServiceFactory {

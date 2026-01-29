@@ -24,7 +24,7 @@ import top.rslly.iot.dao.TimeScheduleRepository;
 import top.rslly.iot.models.TimeScheduleEntity;
 import top.rslly.iot.services.agent.TimeScheduleService;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.List;
 
 @Service

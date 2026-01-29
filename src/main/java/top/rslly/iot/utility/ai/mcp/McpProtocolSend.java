@@ -21,7 +21,6 @@ package top.rslly.iot.utility.ai.mcp;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import org.hibernate.type.TrueFalseType;
 import top.rslly.iot.utility.ai.mcp.protocol.Initialize;
 import top.rslly.iot.utility.ai.mcp.protocol.ToolCall;
 import top.rslly.iot.utility.ai.mcp.protocol.ToolList;

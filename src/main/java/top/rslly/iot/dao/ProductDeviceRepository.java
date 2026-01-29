@@ -26,7 +26,7 @@ import org.springframework.data.repository.query.Param;
 import top.rslly.iot.models.ProductDeviceEntity;
 import top.rslly.iot.models.ProductModelEntity;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.util.List;
 
 public interface ProductDeviceRepository extends JpaRepository<ProductDeviceEntity, Long> {

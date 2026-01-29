@@ -19,21 +19,23 @@
  */
 package top.rslly.iot.config;
 
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
@@ -41,14 +43,16 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+@Configuration
 @EnableWebSecurity
-@EnableGlobalMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity(prePostEnabled = true) // 替换 @EnableGlobalMethodSecurity
 public class SecurityConfig {
 
   @Autowired
   @Qualifier("userDetailsServiceImpl")
   @Lazy // solve cycle problem
   private UserDetailsService userDetailsService;
+
   @Autowired
   private MyAccessDeniedHandlerimplements myAccessDeniedHandlerimplements;
 
@@ -56,20 +60,27 @@ public class SecurityConfig {
   public AuthenticationManager authenticationManager() {
     DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider();
     daoAuthenticationProvider.setUserDetailsService(userDetailsService);
+    daoAuthenticationProvider.setPasswordEncoder(passwordEncoder());
     ProviderManager pm = new ProviderManager(daoAuthenticationProvider);
     return pm;
   }
 
-
   @Bean
-  public WebSecurityCustomizer webSecurityCustomizer() throws Exception {
+  public WebSecurityCustomizer webSecurityCustomizer() {
     // 所需要用到的静态资源，允许访问
-    return (web) -> web.ignoring().antMatchers("/swagger-ui.html", "/swagger-ui/*",
-        "/swagger-resources/**", "/v2/api-docs", "/v3/api-docs", "/webjars/**", "/ruan/**",
+    return (web) -> web.ignoring().requestMatchers(
+        "/xiaozhi/v1/**",
+        "/swagger-ui.html",
+        "/swagger-ui/**",
+        "/swagger-resources/**",
+        "/v2/api-docs",
+        "/v3/api-docs",
+        "/webjars/**",
+        "/ruan/**",
         "/api/v2/micro/**",
         "/api/v2/newUser",
         "/api/v2/forgotPassword",
-        "/api/v2//getUserCode",
+        "/api/v2/getUserCode",
         "/api/v2/ai/tmp_voice/**",
         "/wxLogin",
         "/wxRegister",
@@ -77,11 +88,7 @@ public class SecurityConfig {
         "/xiaozhi/ota/**",
         "/xiaozhi/ota/activate/**",
         "/mcp",
-        // "/api/v2/startProcess/**",
-        // "/api/v2/stop/**",
-        // "/api/v2/reset/**",
         "/api/v2/machineStatus/**");
-    // "/sse/**");
   }
 
   /**
@@ -89,30 +96,34 @@ public class SecurityConfig {
    */
   @Bean
   protected SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    // 跨域共享
-    http.cors().and()
+    http
+        // 跨域共享
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
         // 跨域伪造请求限制无效
-        .csrf().disable()
-
-        .authorizeRequests()
-
-
-        .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
-        .antMatchers("/wxLogin", "/wxmsg/**", "/wxRegister").permitAll().anyRequest()
-        .authenticated().and()
+        .csrf(AbstractHttpConfigurer::disable)
+        // 授权请求配置
+        .authorizeHttpRequests(authz -> authz
+            .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
+            // 添加 WebSocket 路径
+            .requestMatchers("/xiaozhi/v1/**").permitAll()
+            .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**",
+                "/webjars/**")
+            .permitAll()
+            .requestMatchers("/wxLogin", "/wxmsg/**", "/wxRegister").permitAll()
+            .anyRequest().authenticated())
         // 添加JWT登录拦截器
         .addFilter(new JWTAuthenticationFilter(authenticationManager()))
         // 添加JWT鉴权拦截器
-        .addFilter(new JWTAuthorizationFilter(authenticationManager())).sessionManagement()
-        // 设置Session的创建策略为：Spring Security永不创建HttpSession 不使用HttpSession来获取SecurityContext
-        .sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
+        .addFilter(new JWTAuthorizationFilter(authenticationManager()))
+        // Session管理
+        .sessionManagement(
+            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         // 异常处理
-        .exceptionHandling()
-        // 匿名用户访问无权限资源时的异常
-        .accessDeniedHandler(myAccessDeniedHandlerimplements)
-        .authenticationEntryPoint(new JWTAuthenticationEntryPoint());
-    return http.build();
+        .exceptionHandling(exceptions -> exceptions
+            .accessDeniedHandler(myAccessDeniedHandlerimplements)
+            .authenticationEntryPoint(new JWTAuthenticationEntryPoint()));
 
+    return http.build();
   }
 
   /**
@@ -123,13 +134,22 @@ public class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource() {
     final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    CorsConfiguration configuration = new CorsConfiguration();
+
+    // 更详细的CORS配置
+    configuration.setAllowCredentials(true);
+    configuration.addAllowedOriginPattern("*"); // 使用 addAllowedOriginPattern 替代
+                                                // applyPermitDefaultValues
+    configuration.addAllowedHeader("*");
+    configuration.addAllowedMethod("*");
+
     // 注册跨域配置
-    source.registerCorsConfiguration("/**", new CorsConfiguration().applyPermitDefaultValues());
+    source.registerCorsConfiguration("/**", configuration);
     return source;
   }
 
   @Bean
   public PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder();
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();
   }
 }

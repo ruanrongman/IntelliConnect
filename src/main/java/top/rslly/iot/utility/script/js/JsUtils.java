@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.param.request.ControlParam;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.util.List;
 
 @Component

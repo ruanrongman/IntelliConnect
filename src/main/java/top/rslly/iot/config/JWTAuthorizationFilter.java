@@ -27,21 +27,71 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.util.AntPathMatcher;
 import top.rslly.iot.utility.JwtTokenUtil;
 
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * 登录成功后 走此类进行鉴权操作
  */
 public class JWTAuthorizationFilter extends BasicAuthenticationFilter {
+
+  private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+
+  // 白名单路径模式（与 SecurityConfig 保持一致）
+  private static final List<String> WHITELIST_PATTERNS = Arrays.asList(
+      "/xiaozhi/v1/**",
+      "/xiaozhi/ota/**",
+      "/swagger-ui/**",
+      "/swagger-ui.html",
+      "/v3/api-docs/**",
+      "/v2/api-docs/**",
+      "/swagger-resources/**",
+      "/webjars/**",
+      "/ruan/**",
+      "/api/v2/micro/**",
+      "/api/v2/newUser",
+      "/api/v2/forgotPassword",
+      "/api/v2/getUserCode",
+      "/api/v2/ai/tmp_voice/**",
+      "/wxLogin",
+      "/wxRegister",
+      "/wxmsg/**",
+      "/api/v2/otaPassiveEnable",
+      "/mcp",
+      "/api/v2/machineStatus/**");
+
+  /**
+   * 检查请求路径是否在白名单中
+   */
+  private boolean isWhitelisted(String requestURI) {
+    // 去除末尾的 /
+    final String normalizedUri =
+        (requestURI.endsWith("/") && requestURI.length() > 1)
+            ? requestURI.substring(0, requestURI.length() - 1)
+            : requestURI;
+    return WHITELIST_PATTERNS.stream()
+        .anyMatch(pattern -> {
+          // 如果模式以 /** 结尾,也匹配父路径
+          if (pattern.endsWith("/**")) {
+            String parentPath = pattern.substring(0, pattern.length() - 3);
+            if (normalizedUri.equals(parentPath)) {
+              return true;
+            }
+          }
+          return PATH_MATCHER.match(pattern, normalizedUri);
+        });
+  }
 
   public JWTAuthorizationFilter(AuthenticationManager authenticationManager) {
     super(authenticationManager);
@@ -54,6 +104,14 @@ public class JWTAuthorizationFilter extends BasicAuthenticationFilter {
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
       FilterChain chain) throws IOException, ServletException {
+    String requestURI = request.getRequestURI();
+    // 跳过白名单路径，不进行 JWT 验证
+    // 使用 AntPathMatcher 匹配白名单
+    if (isWhitelisted(requestURI)) {
+      chain.doFilter(request, response);
+      return;
+    }
+
     String tokenHeader = request.getHeader(JwtTokenUtil.TOKEN_HEADER);
     String WsToken = request.getHeader("Sec-WebSocket-Protocol");
     // System.out.println(WsToken);

@@ -52,7 +52,7 @@ import top.rslly.iot.utility.script.ControlScriptFactory;
 import top.rslly.iot.utility.script.js.JsScriptInfo;
 import top.rslly.iot.utility.script.js.NashornJsInvokeService;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.util.*;

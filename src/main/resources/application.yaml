@@ -1,4 +1,10 @@
+server:
+  tomcat:
+    tcp-nodelay: true
 spring:
+  threads:
+    virtual:
+      enabled: true
   banner:
     charset: UTF-8
     location: classpath:banner.txt
@@ -6,9 +12,6 @@ spring:
     multipart:
       max-file-size: 200MB
       max-request-size: 200MB
-  mvc:
-    pathmatch:
-      matching-strategy: ant_path_matcher
   jpa:
     show-sql: false
     hibernate:
@@ -62,11 +65,12 @@ spring:
         reset-enable: false
         login-username: admin
         login-password: 123456
-  redis:
-    host: localhost
-    password: 1234
-    port: 6379
-    timeout: 1000
+  data:
+    redis:
+      host: 192.168.49.129
+      password: 1234
+      port: 6379
+      timeout: 1000
   mail:
     host: smtp.126.com
     port: 465
@@ -197,7 +201,7 @@ ai:
     agent-epoch-limit: 5
 jwt:
   # JWT 密钥
-  secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9
+  secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9JWTTokenGenerationThatIsAtLeast32CharactersLong
 emq:
   api:
     url: http://192.168.49.129:18083/api/v5/clients
