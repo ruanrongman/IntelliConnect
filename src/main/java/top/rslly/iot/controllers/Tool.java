@@ -490,6 +490,20 @@ public class Tool {
     return productToolsBanService.getProductToolsBan(productId);
   }
 
+  @Operation(summary = "查询工具是否被禁止", description = "查询当前产品的某个工具是否被禁止")
+  @RequestMapping(value = "/productToolsBan/{toolsName}", method = RequestMethod.GET)
+  public JsonResult<?> getProductToolsBanByName(@PathVariable String toolsName,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.getProductToolsBanByNameAndProductId(toolsName, productId);
+  }
+
   @Operation(summary = "禁止内部工具", description = "禁止内部工具")
   @RequestMapping(value = "/productToolsBan", method = RequestMethod.POST)
   public JsonResult<?> postProductToolsBan(

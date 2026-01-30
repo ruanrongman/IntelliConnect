@@ -62,6 +62,13 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   }
 
   @Override
+  public JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId) {
+    ProductToolsBanEntity entity =
+        productToolsBanRepository.findTopByToolsNameAndProductId(toolsName, productId);
+    return ResultTool.success(entity);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan) {
     // 允许值列表（不包含 "5"）

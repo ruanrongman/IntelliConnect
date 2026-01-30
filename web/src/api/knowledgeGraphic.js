@@ -152,3 +152,12 @@ export const disabledKnowledgeGraphic = (params) => request({
         'Authorization': token
     }
 })
+
+export const getKnowledgeGraphicState = (params) => request({
+    url: '/api/v2/productToolsBan/knowledgeGraphic',
+    method: 'get',
+    params,
+    headers: {
+      'Authorization': token
+    },
+  })

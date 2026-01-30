@@ -100,7 +100,8 @@ const toolsOptions = ref([
   { value: '10', label: 'MCP代理工具' },
   { value: 'classifier', label: '分类器工具' },
   { value: 'longMemory', label: '长期记忆工具' },
-  { value: 'memory', label: '记忆工具' }
+  { value: 'memory', label: '记忆工具' },
+  { value: 'knowledgeGraphic', label: '知识图谱' },
 ]);
 
 const formState = reactive({

@@ -19,7 +19,7 @@
  */
 package top.rslly.iot.models;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "knowledge_graphic_relation", schema = "cwliot1.8")
