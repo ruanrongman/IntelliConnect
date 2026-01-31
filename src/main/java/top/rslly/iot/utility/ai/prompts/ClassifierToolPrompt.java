@@ -28,6 +28,7 @@ import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
+import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
@@ -52,6 +53,8 @@ public class ClassifierToolPrompt {
   private ProductToolsBanServiceImpl productToolsBanService;
   @Autowired
   private DescriptionUtil descriptionUtil;
+  @Autowired
+  private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
   @Value("${ai.classifier.include.thought:true}")
@@ -99,13 +102,20 @@ public class ClassifierToolPrompt {
     }
     classifierMap.put("9", "All about role and voice");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
-    if (!mcpServerList.isEmpty()
+    var productSkillsEntities = productSkillsService.findAllByProductId(productId);
+    if (!productSkillsEntities.isEmpty() || !mcpServerList.isEmpty()
         || mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
         || mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
       StringBuilder mcpServerString = new StringBuilder();
       if (!mcpServerList.isEmpty()) {
         for (var mcpServerEntity : mcpServerList) {
           mcpServerString.append(mcpServerEntity.getDescription());
+          mcpServerString.append("|");
+        }
+      }
+      if (!productSkillsEntities.isEmpty()) {
+        for (var productSkillsEntity : productSkillsEntities) {
+          mcpServerString.append(productSkillsEntity.getName());
           mcpServerString.append("|");
         }
       }

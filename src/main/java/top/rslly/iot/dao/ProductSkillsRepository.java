@@ -17,23 +17,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.script;
+package top.rslly.iot.dao;
 
-public class ControlScriptFactory {
-  // public static final String Time_SLEEP_FUNCTION_NAME = "timeSleepFunc";
-  public static final String Control_NODE_FUNCTION_NAME = "controlNodeFunc";
-  private static final String JS_WRAPPER_PREFIX_TEMPLATE = """
-      function %s() {
-      return %s();
-      function %s() {""";
-  private static final String JS_WRAPPER_SUFFIX = "\n}" +
-      "\n}";
+import jakarta.transaction.Transactional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.ProductSkillsEntity;
 
-  public static String generateControlNodeScript(String functionName, String scriptBody,
-      String... argNames) {
+import java.util.List;
 
-    String jsWrapperPrefix = String.format(JS_WRAPPER_PREFIX_TEMPLATE, functionName,
-        Control_NODE_FUNCTION_NAME, Control_NODE_FUNCTION_NAME);
-    return jsWrapperPrefix + scriptBody + JS_WRAPPER_SUFFIX;
-  }
+public interface ProductSkillsRepository extends JpaRepository<ProductSkillsEntity, Long> {
+  List<ProductSkillsEntity> findAllById(int id);
+
+  List<ProductSkillsEntity> findAllByProductId(int productId);
+
+  List<ProductSkillsEntity> findAllByProductIdAndName(int productId, String name);
+
+  @Transactional
+  List<ProductSkillsEntity> deleteAllById(int id);
 }

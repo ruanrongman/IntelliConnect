@@ -72,6 +72,8 @@ public class ProductServiceImpl implements ProductService {
   private AdminConfigRepository adminConfigRepository;
   @Resource
   private ProductLlmModelRepository productLlmModelRepository;
+  @Resource
+  private ProductSkillsRepository productSkillsRepository;
 
 
   @Override
@@ -150,6 +152,7 @@ public class ProductServiceImpl implements ProductService {
         if (userList.isEmpty()) {
           return ResultTool.fail(ResultCode.COMMON_FAIL);
         }
+        wxProductBindEntity.setAppid(userList.get(0).getAppid());
         wxProductBindEntity.setOpenid(userList.get(0).getOpenid());
         wxProductBindEntity.setProductId(productEntity1.getId());
         wxProductBindRepository.save(wxProductBindEntity);
@@ -195,6 +198,8 @@ public class ProductServiceImpl implements ProductService {
         adminConfigRepository.findAllBySetKey("wx_default_product");
     List<ProductLlmModelEntity> productLlmModelEntityList =
         productLlmModelRepository.findAllByProductId(id);
+    List<ProductSkillsEntity> productSkillsEntityList =
+        productSkillsRepository.findAllByProductId(id);
     boolean p1 = productModelEntityList.isEmpty();
     boolean p2 = wxProductBindEntityList.isEmpty();
     boolean p3 = otaEntityList.isEmpty();
@@ -206,7 +211,8 @@ public class ProductServiceImpl implements ProductService {
     boolean p9 = agentLongMemoryEntityList.isEmpty();
     boolean p10 = productVoiceDiyEntityList.isEmpty();
     boolean p11 = productLlmModelEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11) {
+    boolean p12 = productSkillsEntityList.isEmpty();
+    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11 && p12) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
