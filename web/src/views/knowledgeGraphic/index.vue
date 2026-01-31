@@ -320,6 +320,11 @@ function updateGraphicData() {
   refreshChartHandler(option)
 }
 
+function handleProductIdChange(value){
+  currentProductId.value = value
+  getCurrentKnowledgeGraphic()
+}
+
 function getCurrentKnowledgeGraphic() {
   if (!currentProductId.value) return
   if (chart.value) chart.value.showLoading()
@@ -609,7 +614,7 @@ onUnmounted(() => {
             :value="currentProductId"
             :options="products"
             :loading="productLoading"
-            @change="getCurrentKnowledgeGraphic"
+            @change="handleProductIdChange"
           >
           </Select>
         </div>

@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.*;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
@@ -62,6 +63,8 @@ public class ChatTool implements BaseTool<String> {
   private DescriptionUtil descriptionUtil;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
+  @Autowired
+  private KnowledgeGraphicServiceImpl knowledgeGraphicService;
 
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -121,10 +124,11 @@ public class ChatTool implements BaseTool<String> {
       information = knowledgeChatService.searchByProductId(String.valueOf(productId), question);
     }
     String memoryMap = descriptionUtil.getAgentLongMemory(productId);
+    String knowledgeGraphic = knowledgeGraphicService.queryKnowledgeGraphic(question, productId);
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory, information, memoryMap));
+                currentMemory, information, memoryMap, knowledgeGraphic));
     log.info(llmName);
     log.info("systemMessage: " + systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
@@ -132,7 +136,7 @@ public class ChatTool implements BaseTool<String> {
       // messages.addAll(memory);
       systemMessage.setContent(
           chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction, currentMemory,
-              information, memoryMap)
+              information, memoryMap, knowledgeGraphic)
               + memory);
     }
     messages.add(systemMessage);

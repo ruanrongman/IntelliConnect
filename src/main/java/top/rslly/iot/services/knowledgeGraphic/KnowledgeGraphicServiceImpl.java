@@ -97,7 +97,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         .map(EmbeddingMatch::embedded)
         .toList();
     if (matchSegment.isEmpty()) {
-      return JSON.toJSONString(new KnowledgeGraphic());
+      return null;
     }
     TextSegment match = matchSegment.get(0);
     try {
@@ -107,7 +107,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
           knowledgeGraphicNodeRepository.findById(nodeId).orElse(null);
       return JSON.toJSONString(this.getKnowledgeGraphic(node, 6).getData());
     } catch (Exception e) {
-      return JSON.toJSONString(new KnowledgeGraphic());
+      return null;
     }
   }
 

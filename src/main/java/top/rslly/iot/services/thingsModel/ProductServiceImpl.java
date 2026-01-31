@@ -212,27 +212,23 @@ public class ProductServiceImpl implements ProductService {
         productLlmModelRepository.findAllByProductId(id);
     List<ProductSkillsEntity> productSkillsEntityList =
         productSkillsRepository.findAllByProductId(id);
-    boolean p1 = productModelEntityList.isEmpty();
-    boolean p2 = wxProductBindEntityList.isEmpty();
-    boolean p3 = otaEntityList.isEmpty();
-    boolean p4 = otaXiaozhiEntityList.isEmpty();
-    boolean p5 = mcpServerEntityList.isEmpty();
-    boolean p6 = knowledgeChatEntityList.isEmpty();
-    boolean p7 = productRouterSetEntityList.isEmpty();
-    boolean p8 = productToolsBanEntityList.isEmpty();
-    boolean p9 = agentLongMemoryEntityList.isEmpty();
-    boolean p10 = productVoiceDiyEntityList.isEmpty();
-    boolean p11 = productLlmModelEntityList.isEmpty();
-    if (!knowledgeGraphicNodeList.isEmpty()) {
-      for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
-        long kId = knowledgeGraphicNodeEntity.getId();
-        knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
-        knowledgeGraphicAttributeRepository.deleteByBelong(kId);
-      }
-      knowledgeGraphicNodeRepository.deleteAllByProductId(id);
-    }
-    boolean p12 = productSkillsEntityList.isEmpty();
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11 && p12) {
+    productToolsBanEntityList.removeIf(productToolsBanEntity -> {
+      productToolsBanRepository.delete(productToolsBanEntity);
+      return true;
+    });
+    boolean condition = true;
+    condition &= productModelEntityList.isEmpty();
+    condition &= wxProductBindEntityList.isEmpty();
+    condition &= otaEntityList.isEmpty();
+    condition &= otaXiaozhiEntityList.isEmpty();
+    condition &= mcpServerEntityList.isEmpty();
+    condition &= knowledgeChatEntityList.isEmpty();
+    condition &= productRouterSetEntityList.isEmpty();
+    condition &= agentLongMemoryEntityList.isEmpty();
+    condition &= productVoiceDiyEntityList.isEmpty();
+    condition &= productLlmModelEntityList.isEmpty();
+    condition &= productSkillsEntityList.isEmpty();
+    if (condition) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -256,6 +252,18 @@ public class ProductServiceImpl implements ProductService {
             }
           } catch (Exception ignore) {
           }
+        }
+        if (!knowledgeGraphicNodeList.isEmpty()) {
+          for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
+            long kId = knowledgeGraphicNodeEntity.getId();
+            knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
+            knowledgeGraphicRelationRepository.deleteAllByTo(kId);
+            knowledgeGraphicAttributeRepository.deleteByBelong(kId);
+          }
+          knowledgeGraphicNodeRepository.deleteAllByProductId(id);
+        }
+        if(!productToolsBanEntityList.isEmpty()){
+          productToolsBanRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }

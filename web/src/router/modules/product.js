@@ -200,8 +200,7 @@ export default [
             title: 'productLlmModel',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           },
-        }
-
+        },
         {
           path: '/knowledgeGraphic',
           name: 'knowledgeGraphic',

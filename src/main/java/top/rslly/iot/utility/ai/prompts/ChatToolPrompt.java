@@ -44,6 +44,7 @@ public class ChatToolPrompt {
           ## Current Memory
             The current concept of memory and its content: {memory_map}
             {current_memory}
+          {knowledgeGraphicInject}
           ## Output Format
           Please do not output \\n and emoji and try to limit the word count to 100 words or less
           ## Current Conversation
@@ -51,7 +52,7 @@ public class ChatToolPrompt {
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
-      String roleIntroduction, String memory, String information, String memoryMap) {
+      String roleIntroduction, String memory, String information, String memoryMap, String knowledgeGraphicInject) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
@@ -64,6 +65,11 @@ public class ChatToolPrompt {
     params.put("time", formattedDate);
     params.put("current_memory", memory);
     params.put("memory_map", memoryMap);
+    if(knowledgeGraphicInject != null){
+      params.put("knowledgeGraphicInject", "## Knowledge Graphic \n" + knowledgeGraphicInject);
+    }else{
+      params.put("knowledgeGraphicInject", "");
+    }
     if (!information.isBlank()) {
       params.put("information", "知识库:" + information);
     } else {

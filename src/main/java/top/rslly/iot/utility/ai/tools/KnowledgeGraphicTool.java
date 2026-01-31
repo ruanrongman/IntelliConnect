@@ -70,17 +70,17 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
     if (productService.findAllById(productId).isEmpty())
       return "";
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "knowledgeGraphic");
+    List<ModelMessage> memory =
+            Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
+                    .orElse(Collections.emptyList());
     List<ModelMessage> messages = new ArrayList<>();
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(),
-        knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId));
-    // ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
-    // "Start generate knowledge graphic.");
-    List<ModelMessage> memory =
-        Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
-            .orElse(Collections.emptyList());
+        knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId) + memory);
+    log.info("Knowledge Graphic INFO: {}", systemMessage);
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
+     "Start generate knowledge graphic.");
     messages.add(systemMessage);
-    messages.addAll(memory);
-    // messages.add(userMessage);
+    messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     try {
       process_llm_result(obj, productId);
@@ -90,7 +90,7 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
     return null;
   }
 
-  private void process_llm_result(JSONObject jsonObject, int productId) throws IcAiException {
+  private void process_llm_result(JSONObject jsonObject, int productId) {
     KnowledgeGraphic graphic = jsonObject.toJavaObject(KnowledgeGraphic.class);
     for (KnowledgeGraphic.Node node : graphic.nodes) {
       KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
@@ -98,10 +98,7 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
       knowledgeGraphicService.addAttributes(node.attributes.stream().toList(), nodeDb.getId());
     }
     for (KnowledgeGraphic.Relation relation : graphic.relations) {
-      var result = knowledgeGraphicService.addRelation(relation.name, relation.from, relation.to);
-      if (!result.getSuccess()) {
-        throw new IcAiException("Update relation failed");
-      }
+      knowledgeGraphicService.addRelation(relation.name, relation.from, relation.to);
     }
   }
 }

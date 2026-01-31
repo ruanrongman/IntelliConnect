@@ -16,7 +16,7 @@ spring:
     show-sql: false
     hibernate:
       #更新或者创建数据库表结构(第一次启动请设置为update)
-      ddl-auto: update
+      ddl-auto: none
     properties:
       hibernate:
         connection:
@@ -170,7 +170,7 @@ ai:
   vision-model: silicon-Qwen/Qwen3-VL-8B-Instruct
   glm-key: XXX
   deepSeek-key: XXX
-  siliconFlow-Key: sk-mlhwxtyjteqdcmncdjpgnjopmjsetrpqayyrhllyksaorngh
+  siliconFlow-Key: sk-dmsxtfzmrgqvqiypyvoeftzpsfbhnxrzqipjhndvfmdhhelu
   uniApi-Key: XXX
   dashscope-key: XXX
   robot-name: 小创
@@ -178,11 +178,11 @@ ai:
   custom-key: XXX
   custom-llm-provider-url: XXX
   agent-epoch-limit: 5
-  chatTool-llm: dashscope-qwen3-235b-a22b-instruct-2507
+  chatTool-llm: silicon-Qwen/Qwen3-32B
   chatTool-speedUp: true
   emotionTool-llm: silicon-Qwen/Qwen3-30B-A3B-think-no
   memoryTool-llm: silicon-Qwen/Qwen2.5-32B-Instruct
-  classifierTool-llm: dashscope-qwen3-next-80b-a3b-instruct
+  classifierTool-llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   classifierTool-speedUp: true
   controlTool-llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   musicTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
@@ -197,7 +197,7 @@ ai:
   agent-speedUp: true
   longMemoryTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   wx_smart_robot_llm: glm
-  knowledge_graphic_llm: silicon-Qwen/Qwen3-14B
+  knowledge_graphic_llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   mcp:
     agent-llm: dashscope-qwen3-max
     agent-speedUp: true
