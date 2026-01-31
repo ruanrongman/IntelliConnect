@@ -277,6 +277,10 @@ public class XiaoZhiUtil {
         }
         while ((res != null && !res.isDone()) || Router.queueMap.containsKey(chatId)
             && Router.queueMap.get(chatId).size() > 0) {
+          if (!Router.queueMap.containsKey(chatId)) {
+            log.warn("queueMap已被释放，停止处理: chatId={}", chatId);
+            break;
+          }
           if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
             try {
               Map<String, String> emotionResult = emotionRes.get();

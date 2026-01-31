@@ -22,6 +22,7 @@ package top.rslly.iot.controllers;
 import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -93,6 +94,8 @@ public class Tool {
   private ProductLlmModelServiceImpl productLlmModelService;
   @Autowired
   private KnowledgeGraphicService knowledgeGraphicService;
+  @Autowired
+  private ProductSkillsServiceImpl productSkillsService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -727,6 +730,41 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productLlmModelService.deleteProductLlmModel(id);
+  }
+
+  @Operation(summary = "获取产品技能", description = "获取产品技能列表")
+  @RequestMapping(value = "/productSkills", method = RequestMethod.GET)
+  public JsonResult<?> getProductSkill(@RequestHeader("Authorization") String header) {
+    return productSkillsService.getProductSkill(header);
+  }
+
+  @Operation(summary = "添加产品技能", description = "上传产品技能文件")
+  @RequestMapping(value = "/productSkills", method = RequestMethod.POST,
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public JsonResult<?> addProductSkill(
+      @RequestParam("productId") @Min(value = 1, message = "productId 必须大于 0") int productId,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productSkillsService.addProductSkill(productId, multipartFile);
+  }
+
+  @Operation(summary = "删除产品技能", description = "根据ID删除产品技能")
+  @RequestMapping(value = "/productSkills", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductSkill(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductSkills(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productSkillsService.deleteProductSkill(id);
   }
 
   @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")

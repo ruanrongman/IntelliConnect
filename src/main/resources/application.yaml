@@ -125,8 +125,9 @@ js:
     monitor_thread_pool_size: 4
     max_cpu_time: 300000
     max_black_list_duration_sec: 60
-    maxInvokeRequestsTimeout: 5
-    js_thread_pool_size: 50
+    max_requests_timeout: 10
+    js_thread_pool_size: 16
+    max_prepare_Statement: 100
 ota:
   bin:
     path: D://temp-rainy//

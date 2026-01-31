@@ -72,6 +72,8 @@ public class NashornJsInvokeService extends AbstractJsInvokeService implements S
 
   @Value("${js.local.js_thread_pool_size:50}")
   private int jsExecutorThreadPoolSize;
+  @Value("${js.local.max_prepare_Statement:100}")
+  private int maxPrepareStatement;
 
   @PostConstruct
   @Override
@@ -85,10 +87,10 @@ public class NashornJsInvokeService extends AbstractJsInvokeService implements S
       sandbox.setExecutor(monitorExecutorService);
       sandbox.setMaxCPUTime(maxCpuTime);
       sandbox.allowNoBraces(false);
-      sandbox.allow(JsUtils.class);
+      // sandbox.allow(JsUtils.class);
       sandbox.allow(java.util.ArrayList.class);
       sandbox.allowLoadFunctions(true);
-      sandbox.setMaxPreparedStatements(30);
+      sandbox.setMaxPreparedStatements(maxPrepareStatement);
     } else {
       ScriptEngineManager factory = new ScriptEngineManager();
       engine = factory.getEngineByName("nashorn");

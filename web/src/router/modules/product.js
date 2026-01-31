@@ -85,6 +85,15 @@ export default [
           },
         },
         {
+          path: '/productSkills',
+          name: 'productSkills',
+          component: () => import('@/views/productSkills/index.vue'),
+          meta: {
+            title: 'productSkills',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productModel',
           name: 'productModel',
           component: () => import('@/views/productModel/index.vue'),
@@ -191,7 +200,7 @@ export default [
             title: 'productLlmModel',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           },
-        },
+        }
 
         {
           path: '/knowledgeGraphic',

@@ -17,23 +17,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.utility.script;
+package top.rslly.iot.param.request;
 
-public class ControlScriptFactory {
-  // public static final String Time_SLEEP_FUNCTION_NAME = "timeSleepFunc";
-  public static final String Control_NODE_FUNCTION_NAME = "controlNodeFunc";
-  private static final String JS_WRAPPER_PREFIX_TEMPLATE = """
-      function %s() {
-      return %s();
-      function %s() {""";
-  private static final String JS_WRAPPER_SUFFIX = "\n}" +
-      "\n}";
+import jakarta.persistence.Column;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
 
-  public static String generateControlNodeScript(String functionName, String scriptBody,
-      String... argNames) {
-
-    String jsWrapperPrefix = String.format(JS_WRAPPER_PREFIX_TEMPLATE, functionName,
-        Control_NODE_FUNCTION_NAME, Control_NODE_FUNCTION_NAME);
-    return jsWrapperPrefix + scriptBody + JS_WRAPPER_SUFFIX;
-  }
+@Data
+public class ProductSkills {
+  @NotNull
+  private Integer productId;
 }

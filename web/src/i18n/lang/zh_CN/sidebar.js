@@ -77,7 +77,8 @@ const product ={
   alarmEventAdd: '配置事件告警',
   knowledgeGraphic: '知识图谱',
   llmProviderInformation: '模型服务商配置',
-  productLlmModel: '产品LLM模型配置'
+  productLlmModel: '产品LLM模型配置',
+  productSkills: '产品技能配置'
 }
 const deviceData = {
   deviceDataPage: '设备数据',

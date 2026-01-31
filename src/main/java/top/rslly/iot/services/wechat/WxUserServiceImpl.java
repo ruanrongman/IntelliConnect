@@ -20,6 +20,7 @@
 package top.rslly.iot.services.wechat;
 
 import com.alibaba.fastjson.JSON;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class WxUserServiceImpl implements WxUserService {
   @Resource
@@ -65,6 +67,7 @@ public class WxUserServiceImpl implements WxUserService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> wxRegister(WxUser wxUser) throws IOException {
     String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
+    log.info(s);
     String openid = (String) JSON.parseObject(s).get("openid");
     if (openid == null) {
       return ResultTool.fail(ResultCode.USER_CODE_ERROR);
