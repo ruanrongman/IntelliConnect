@@ -189,9 +189,9 @@ public class Router {
       memoryTool.run(content, globalMessage);
       longMemoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
-    }
-    if (!banTools.contains("knowledgeGraphic")) {
-      knowledgeGraphicTool.run(content, globalMessage);
+      if (!banTools.contains("knowledgeGraphic")) {
+        knowledgeGraphicTool.run(content, globalMessage);
+      }
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);
     return answer;

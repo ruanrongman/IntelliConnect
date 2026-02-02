@@ -130,7 +130,7 @@ public class ChatTool implements BaseTool<String> {
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
                 currentMemory, information, memoryMap, knowledgeGraphic));
     log.info(llmName);
-    log.info("systemMessage: " + systemMessage.getContent());
+    log.info("systemMessage: {}", systemMessage.getContent());
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     if (!memory.isEmpty()) {
       // messages.addAll(memory);

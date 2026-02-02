@@ -52,7 +52,8 @@ public class ChatToolPrompt {
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
-      String roleIntroduction, String memory, String information, String memoryMap, String knowledgeGraphicInject) {
+      String roleIntroduction, String memory, String information, String memoryMap,
+      String knowledgeGraphicInject) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
@@ -65,9 +66,9 @@ public class ChatToolPrompt {
     params.put("time", formattedDate);
     params.put("current_memory", memory);
     params.put("memory_map", memoryMap);
-    if(knowledgeGraphicInject != null){
+    if (knowledgeGraphicInject != null) {
       params.put("knowledgeGraphicInject", "## Knowledge Graphic \n" + knowledgeGraphicInject);
-    }else{
+    } else {
       params.put("knowledgeGraphicInject", "");
     }
     if (!information.isBlank()) {

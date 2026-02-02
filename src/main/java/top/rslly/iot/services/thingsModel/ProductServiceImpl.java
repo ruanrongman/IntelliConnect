@@ -262,7 +262,7 @@ public class ProductServiceImpl implements ProductService {
           }
           knowledgeGraphicNodeRepository.deleteAllByProductId(id);
         }
-        if(!productToolsBanEntityList.isEmpty()){
+        if (!productToolsBanEntityList.isEmpty()) {
           productToolsBanRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);

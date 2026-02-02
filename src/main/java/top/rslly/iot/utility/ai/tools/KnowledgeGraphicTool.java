@@ -71,13 +71,13 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
       return "";
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "knowledgeGraphic");
     List<ModelMessage> memory =
-            Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
-                    .orElse(Collections.emptyList());
+        Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
+            .orElse(Collections.emptyList());
     List<ModelMessage> messages = new ArrayList<>();
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(),
         knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId) + memory);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
-     "Start generate knowledge graphic.");
+        "Start generate knowledge graphic.");
     messages.add(systemMessage);
     messages.add(userMessage);
     var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
@@ -92,8 +92,9 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
   private void process_llm_result(JSONObject jsonObject, int productId) {
     KnowledgeGraphic graphic = jsonObject.toJavaObject(KnowledgeGraphic.class);
     for (KnowledgeGraphic.Node node : graphic.nodes) {
-      if(node.nodeAction.equals("Delete")){
-        KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService.getNode(node.name, productId).getData();
+      if (node.nodeAction.equals("Delete")) {
+        KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
+            .getNode(node.name, productId).getData();
         knowledgeGraphicService.deleteNode(nodeDb.getId());
         continue;
       }
@@ -102,9 +103,11 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
       knowledgeGraphicService.addAttributes(node.attributes.stream().toList(), nodeDb.getId());
     }
     for (KnowledgeGraphic.Relation relation : graphic.relations) {
-      if(relation.relationAction.equals("Delete")){
-        KnowledgeGraphicNodeEntity nodeFrom = (KnowledgeGraphicNodeEntity) knowledgeGraphicService.getNode(relation.from, productId).getData();
-        KnowledgeGraphicNodeEntity nodeTo = (KnowledgeGraphicNodeEntity) knowledgeGraphicService.getNode(relation.to, productId).getData();
+      if (relation.relationAction.equals("Delete")) {
+        KnowledgeGraphicNodeEntity nodeFrom = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
+            .getNode(relation.from, productId).getData();
+        KnowledgeGraphicNodeEntity nodeTo = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
+            .getNode(relation.to, productId).getData();
         knowledgeGraphicService.deleteRelationByFromAndTo(nodeFrom.getId(), nodeTo.getId());
         continue;
       }
