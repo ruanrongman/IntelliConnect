@@ -11,6 +11,7 @@ import {
   Drawer,
   Switch,
   Tooltip,
+  Slider,
 } from 'ant-design-vue'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import NodeInfo from '@/views/knowledgeGraphic/nodeInfo.vue'
@@ -90,6 +91,7 @@ const baseOption = {
     },
   },
 }
+const repulsion = ref(30)
 const crtOption = ref({})
 
 const isAddingNode = ref(false)
@@ -194,7 +196,7 @@ function handleAddNewNode() {
 }
 
 function handleStartConnecting(e) {
-  if (e.key !== 'c') return
+  if (e.key !== 'c' || showNodeInfo.value) return
   if (isAddingNode.value || relationConfigToggle.value) return
   e.preventDefault()
   // Caution about this! Use relationConfigToggle to debounce!
@@ -205,7 +207,7 @@ function handleStartConnecting(e) {
 }
 
 function handleCancelConnecting(e) {
-  if (e.key !== 'c') return
+  if (e.key !== 'c' || showNodeInfo.value) return
   if (isAddingNode.value) return
   if (relationTemp.value.length < 2) {
     const option = { ...crtOption.value }
@@ -221,7 +223,6 @@ function handleCancelConnecting(e) {
 
 function handleConnectingToggle(checked, e) {
   isConnection.value = checked
-  relationTemp.value = []
   if (relationTemp.value.length !== 0) {
     const option = { ...crtOption.value }
     option.series[0].data = option.series[0].data.map((item) => {
@@ -230,6 +231,7 @@ function handleConnectingToggle(checked, e) {
     })
     chart.value.setOption(option)
   }
+  relationTemp.value = []
 }
 
 function handleRelationConfig() {
@@ -320,9 +322,17 @@ function updateGraphicData() {
   refreshChartHandler(option)
 }
 
-function handleProductIdChange(value){
+function handleProductIdChange(value) {
   currentProductId.value = value
+  getCurrentKnowledgeGraphicState()
   getCurrentKnowledgeGraphic()
+}
+
+function handleRepulsionChange(value) {
+  repulsion.value = value
+  const option = { ...crtOption.value }
+  option.series[0].force.repulsion = value
+  chart.value.setOption(option)
 }
 
 function getCurrentKnowledgeGraphic() {
@@ -656,6 +666,16 @@ onUnmounted(() => {
             >手动刷新数据</Button
           >
         </div>
+        <div v-if="currentProductId !== null" class="option-item repulsion">
+          <label for="repulsion">节点斥力大小（边长）</label>
+          <Slider
+            id="repulsion"
+            :max="255"
+            width="200"
+            :value="repulsion"
+            @change="handleRepulsionChange"
+          />
+        </div>
       </div>
       <div class="kg-body">
         <canvas id="kg-cav" ref="cavDom">Your browser didn't support canvas.</canvas>
@@ -708,8 +728,8 @@ onUnmounted(() => {
       <NodeInfo
         :node-name="selectedNode"
         :product-id="currentProductId"
-        @updateNode="getCurrentKnowledgeGraphic"
-        @deleteNode="getCurrentKnowledgeGraphic"
+        @update-node="getCurrentKnowledgeGraphic"
+        @delete-node="getCurrentKnowledgeGraphic"
       />
     </Drawer>
     <Drawer
@@ -771,6 +791,14 @@ onUnmounted(() => {
   align-items: center;
   padding: 2px;
   margin-right: 20px;
+}
+
+.option-item.repulsion {
+  width: fit-content;
+}
+
+#repulsion {
+  width: 200px;
 }
 
 .option-label {

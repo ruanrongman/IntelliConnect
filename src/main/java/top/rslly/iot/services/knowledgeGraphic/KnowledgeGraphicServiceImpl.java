@@ -252,14 +252,19 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   public JsonResult<?> addNode(String name, String des, int productId) {
     KnowledgeGraphicNodeEntity node =
         knowledgeGraphicNodeRepository.findByNameAndProductId(name, productId);
+    String historyDes;
     if (node == null) {
       node = new KnowledgeGraphicNodeEntity();
       node.setName(name);
+    }else{
+      historyDes = node.getDes();
+      if(!historyDes.equals(des)){
+        this.updateKnowledgeGraphicNodeEmbedding(node);
+      }
     }
     node.setDes(des);
     node.setProductId(productId);
     node = knowledgeGraphicNodeRepository.save(node);
-    this.updateKnowledgeGraphicNodeEmbedding(node);
     return ResultTool.success(node);
   }
 
@@ -488,9 +493,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> addRelation(String des, String fromName, String toName) {
-    KnowledgeGraphicNodeEntity fromNode = knowledgeGraphicNodeRepository.findByName(fromName);
-    KnowledgeGraphicNodeEntity toNode = knowledgeGraphicNodeRepository.findByName(toName);
+  public JsonResult<?> addRelation(String des, String fromName, String toName, int productId) {
+    KnowledgeGraphicNodeEntity fromNode = knowledgeGraphicNodeRepository.findByNameAndProductId(fromName, productId);
+    KnowledgeGraphicNodeEntity toNode = knowledgeGraphicNodeRepository.findByNameAndProductId(toName, productId);
     if (fromNode == null || toNode == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }

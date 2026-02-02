@@ -74,6 +74,7 @@ export default defineConfig(({ command, mode }) => {
     },
     server: {
       //本地服务
+      host: '0.0.0.0',
       port: 3001, //端口号
       open: true, //启动时是否自动打开
       proxy: {

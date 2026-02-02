@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.services.knowledgeGraphic.dbo;
 
+import com.alibaba.fastjson.annotation.JSONField;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import top.rslly.iot.models.KnowledgeGraphicAttributeEntity;
@@ -93,6 +94,9 @@ public class KnowledgeGraphic {
 
     public Set<String> attributes;
 
+    @JSONField(serialize = false)
+    public String nodeAction;
+
     @Override
     public boolean equals(Object o) {
       if (this == o)
@@ -118,6 +122,9 @@ public class KnowledgeGraphic {
     public String from;
 
     public String to;
+
+    @JSONField(serialize = false)
+    public String relationAction;
 
     @Override
     public int hashCode() {

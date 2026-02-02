@@ -16,7 +16,7 @@ spring:
     show-sql: false
     hibernate:
       #更新或者创建数据库表结构(第一次启动请设置为update)
-      ddl-auto: none
+      ddl-auto: update
     properties:
       hibernate:
         connection:
@@ -31,7 +31,7 @@ spring:
     retention: autogen     #保存策略
   datasource:
     username: root
-    url: jdbc:mysql://localhost:3306/cwliot1.8?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/cwliot1.8?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.jdbc.Driver
     # 输入你自己的mysql密码,该密码为随机生成
     password: "XzHvhX4CDaN696oQAXdmlcsrqgWbkxRl"
@@ -193,13 +193,13 @@ ai:
   wxProductActiveTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   scheduleTool-llm: silicon-Qwen/Qwen3-30B-A3B-think-128
   searchTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
-  agent-llm: dashscope-qwen3-235b-a22b-instruct-2507
+  agent-llm: silicon-Qwen/Qwen3-235B-A22B-Instruct-2507
   agent-speedUp: true
   longMemoryTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   wx_smart_robot_llm: glm
   knowledge_graphic_llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   mcp:
-    agent-llm: dashscope-qwen3-max
+    agent-llm: silicon-Qwen/Qwen3-235B-A22B-Instruct-2507
     agent-speedUp: true
     agent-epoch-limit: 5
 jwt:

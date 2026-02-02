@@ -76,7 +76,6 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
     List<ModelMessage> messages = new ArrayList<>();
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(),
         knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId) + memory);
-    log.info("Knowledge Graphic INFO: {}", systemMessage);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
      "Start generate knowledge graphic.");
     messages.add(systemMessage);
@@ -93,12 +92,23 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
   private void process_llm_result(JSONObject jsonObject, int productId) {
     KnowledgeGraphic graphic = jsonObject.toJavaObject(KnowledgeGraphic.class);
     for (KnowledgeGraphic.Node node : graphic.nodes) {
+      if(node.nodeAction.equals("Delete")){
+        KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService.getNode(node.name, productId).getData();
+        knowledgeGraphicService.deleteNode(nodeDb.getId());
+        continue;
+      }
       KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
           .addNode(node.name, node.des, productId).getData();
       knowledgeGraphicService.addAttributes(node.attributes.stream().toList(), nodeDb.getId());
     }
     for (KnowledgeGraphic.Relation relation : graphic.relations) {
-      knowledgeGraphicService.addRelation(relation.name, relation.from, relation.to);
+      if(relation.relationAction.equals("Delete")){
+        KnowledgeGraphicNodeEntity nodeFrom = (KnowledgeGraphicNodeEntity) knowledgeGraphicService.getNode(relation.from, productId).getData();
+        KnowledgeGraphicNodeEntity nodeTo = (KnowledgeGraphicNodeEntity) knowledgeGraphicService.getNode(relation.to, productId).getData();
+        knowledgeGraphicService.deleteRelationByFromAndTo(nodeFrom.getId(), nodeTo.getId());
+        continue;
+      }
+      knowledgeGraphicService.addRelation(relation.name, relation.from, relation.to, productId);
     }
   }
 }

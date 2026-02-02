@@ -58,7 +58,8 @@ public class KnowledgeGraphicPrompt {
                 {
                     "name": "Entity name",
                     "des": "Description of the entity",
-                    "attributes":[]
+                    "attributes":[],
+                    "nodeAction": "`New`, `Delete` or `Update`"
                 }
                 ```
             - Each attribute should less than 10 words.
@@ -67,7 +68,8 @@ public class KnowledgeGraphicPrompt {
                 {
                     "name": "Relation description",
                     "from": "Source node name",
-                    "to": "Target node name"
+                    "to": "Target node name",
+                    "relationAction": "`New`, `Delete` or `Update`"
                 }
                 ```
             - If relation mentions a new entity(whatever source or target), please add it to the nodes list.

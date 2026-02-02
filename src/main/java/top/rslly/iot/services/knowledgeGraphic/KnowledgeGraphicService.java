@@ -74,7 +74,7 @@ public interface KnowledgeGraphicService {
 
   JsonResult<?> addRelation(KnowledgeGraphicRelation relation);
 
-  JsonResult<?> addRelation(String des, String fromName, String toName);
+  JsonResult<?> addRelation(String des, String fromName, String toName, int productId);
 
   JsonResult<?> deleteRelation(KnowledgeGraphicRelationEntity relation);
 
