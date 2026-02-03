@@ -629,9 +629,7 @@ onUnmounted(() => {
           </Select>
         </div>
         <div v-if="currentProductId !== null" class="option-item">
-          <label class="option-label" for="connect-toggle">
-            {{ !knowledgeGraphicEnable ? '开启知识图谱自动生成' : '关闭知识图谱自动生成' }}
-          </label>
+          <label class="option-label" for="connect-toggle"> 知识图谱自动生成开关 </label>
           <Switch
             id="connect-toggle"
             :checked="knowledgeGraphicEnable"
@@ -649,7 +647,7 @@ onUnmounted(() => {
         <div v-if="currentProductId !== null" class="option-item">
           <label class="option-label" for="connect-toggle">
             <Tooltip title="按住C键可开启，松开自动关闭"><QuestionCircleOutlined /></Tooltip>
-            {{ !isConnection ? '开启手动连接模式' : '关闭手动连接模式' }}
+            手动连接模式开关
           </label>
           <Switch
             id="connect-toggle"
