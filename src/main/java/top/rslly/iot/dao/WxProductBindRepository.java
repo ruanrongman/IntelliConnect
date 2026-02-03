@@ -24,7 +24,7 @@ import org.springframework.data.jpa.repository.Query;
 import top.rslly.iot.models.WxProductBindEntity;
 import top.rslly.iot.param.response.WxBindProductResponse;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.util.List;
 
 public interface WxProductBindRepository extends JpaRepository<WxProductBindEntity, Long> {

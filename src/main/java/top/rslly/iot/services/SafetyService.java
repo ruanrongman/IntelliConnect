@@ -69,4 +69,6 @@ public interface SafetyService {
   boolean controlAuthorizeLlmProviderInformation(String token, int id);
 
   boolean controlAuthorizeProductLlmModel(String token, int id);
+
+  boolean controlAuthorizeProductSkills(String token, int productSkillsId);
 }

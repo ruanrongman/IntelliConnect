@@ -24,17 +24,6 @@ public class ControlScriptFactory {
   public static final String Control_NODE_FUNCTION_NAME = "controlNodeFunc";
   private static final String JS_WRAPPER_PREFIX_TEMPLATE = """
       function %s() {
-      function timeSleep(second){
-          var jsControl = Java.type('top.rslly.iot.utility.script.js.JsUtils');
-          jsControl.timeSleep(second);
-      }
-      function control(name,mode,functionName,status,qos, key, value) {
-          var jsControl = Java.type('top.rslly.iot.utility.script.js.JsUtils');
-          var flag = jsControl.control(name,mode,functionName,status,qos,key,value);
-          if (!flag) {
-              throw new Error('严重错误,无法找到该模拟量!!!');
-          }
-      }
       return %s();
       function %s() {""";
   private static final String JS_WRAPPER_SUFFIX = "\n}" +

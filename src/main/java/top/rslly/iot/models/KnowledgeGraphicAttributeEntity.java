@@ -22,7 +22,7 @@ package top.rslly.iot.models;
 import lombok.Data;
 import org.hibernate.annotations.Comment;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")

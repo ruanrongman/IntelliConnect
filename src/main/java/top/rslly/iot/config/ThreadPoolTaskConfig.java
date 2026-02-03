@@ -19,10 +19,14 @@
  */
 package top.rslly.iot.config;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.support.TaskExecutorAdapter;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
@@ -52,7 +56,17 @@ public class ThreadPoolTaskConfig {
   /** 线程池名前缀 */
   private static final String threadNamePrefix = "Async-Service-";
 
-  @Bean("taskExecutor") // bean的名称，默认为首字母小写的方法名
+  @Bean("taskExecutor")
+  public TaskExecutor taskExecutorVirtualThreads() {
+    // 创建虚拟线程工厂，可以自定义线程名称
+    ThreadFactory factory = Thread.ofVirtual()
+        .name("virtual-async-", 0)
+        .factory();
+
+    return new TaskExecutorAdapter(Executors.newThreadPerTaskExecutor(factory));
+  }
+
+  @Bean("platformTaskExecutor") // bean的名称，默认为首字母小写的方法名
   public ThreadPoolTaskExecutor taskExecutor() {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
     executor.setCorePoolSize(corePoolSize);

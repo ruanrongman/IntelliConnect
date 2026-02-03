@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 
-import javax.websocket.Session;
+import jakarta.websocket.Session;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;

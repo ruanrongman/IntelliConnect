@@ -92,6 +92,12 @@ const handleLoginOut = () => {
     display: flex;
   }
 
+  .ant-breadcrumb a,
+  .ant-breadcrumb-separator,
+  .ant-breadcrumb-link {
+    color: #f0f0f0;
+  }
+
   .header-right {
     margin: 0 20px;
     display: flex;
@@ -101,6 +107,7 @@ const handleLoginOut = () => {
     .header-right-item {
       margin: 0 6px;
       cursor: pointer;
+      color: white;
 
       &:hover {
         color: #1890ff;
@@ -109,6 +116,7 @@ const handleLoginOut = () => {
 
     .anticon {
       font-size: 20px;
+      color: white;
     }
   }
 }
@@ -119,6 +127,7 @@ const handleLoginOut = () => {
   padding: 0 24px;
   cursor: pointer;
   transition: color 0.3s;
+  color: white;
 }
 
 .trigger:hover {

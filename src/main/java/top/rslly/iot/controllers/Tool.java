@@ -22,6 +22,7 @@ package top.rslly.iot.controllers;
 import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,11 +44,12 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.servlet.http.HttpServletResponse;
-import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.io.IOException;
 
 @RestController
@@ -92,6 +94,8 @@ public class Tool {
   private ProductLlmModelServiceImpl productLlmModelService;
   @Autowired
   private KnowledgeGraphicService knowledgeGraphicService;
+  @Autowired
+  private ProductSkillsServiceImpl productSkillsService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -489,6 +493,20 @@ public class Tool {
     return productToolsBanService.getProductToolsBan(productId);
   }
 
+  @Operation(summary = "查询工具是否被禁止", description = "查询当前产品的某个工具是否被禁止")
+  @RequestMapping(value = "/productToolsBan/{toolsName}", method = RequestMethod.GET)
+  public JsonResult<?> getProductToolsBanByName(@PathVariable String toolsName,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.getProductToolsBanByNameAndProductId(toolsName, productId);
+  }
+
   @Operation(summary = "禁止内部工具", description = "禁止内部工具")
   @RequestMapping(value = "/productToolsBan", method = RequestMethod.POST)
   public JsonResult<?> postProductToolsBan(
@@ -503,7 +521,7 @@ public class Tool {
     return productToolsBanService.postProductToolsBan(productToolsBan);
   }
 
-  @Operation(summary = "禁止内部工具", description = "禁止内部工具")
+  @Operation(summary = "解禁全部工具", description = "解禁全部工具")
   @RequestMapping(value = "/productToolsBan", method = RequestMethod.DELETE)
   public JsonResult<?> deleteProductToolsBan(@RequestParam("productId") int productId,
       @RequestHeader("Authorization") String header) {
@@ -514,6 +532,34 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productToolsBanService.deleteProductToolsBan(productId);
+  }
+
+  @Operation(summary = "禁止单个工具", description = "禁止单个工具")
+  @RequestMapping(value = "/productToolsBanSingle", method = RequestMethod.POST)
+  public JsonResult<?> postProductToolsBanSingle(@RequestParam("productId") int productId,
+      @RequestParam("toolName") @Valid @NotNull @Size(min = 1, max = 255) String toolName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.addProductToolBan(toolName, productId);
+  }
+
+  @Operation(summary = "解禁单个工具", description = "解禁单个工具")
+  @RequestMapping(value = "/productToolsBanSingle", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductToolsBanSingle(@RequestParam("productId") int productId,
+      @RequestParam("toolName") @Valid @NotNull @Size(min = 1, max = 255) String toolName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.deleteProductToolBan(toolName, productId);
   }
 
   // 长期记忆
@@ -684,6 +730,41 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productLlmModelService.deleteProductLlmModel(id);
+  }
+
+  @Operation(summary = "获取产品技能", description = "获取产品技能列表")
+  @RequestMapping(value = "/productSkills", method = RequestMethod.GET)
+  public JsonResult<?> getProductSkill(@RequestHeader("Authorization") String header) {
+    return productSkillsService.getProductSkill(header);
+  }
+
+  @Operation(summary = "添加产品技能", description = "上传产品技能文件")
+  @RequestMapping(value = "/productSkills", method = RequestMethod.POST,
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public JsonResult<?> addProductSkill(
+      @RequestParam("productId") @Min(value = 1, message = "productId 必须大于 0") int productId,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productSkillsService.addProductSkill(productId, multipartFile);
+  }
+
+  @Operation(summary = "删除产品技能", description = "根据ID删除产品技能")
+  @RequestMapping(value = "/productSkills", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductSkill(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductSkills(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productSkillsService.deleteProductSkill(id);
   }
 
   @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")

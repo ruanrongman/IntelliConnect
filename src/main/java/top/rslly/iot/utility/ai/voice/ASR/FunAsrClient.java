@@ -30,9 +30,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import javax.net.ssl.SSLContext;
-import javax.websocket.*;
+import jakarta.websocket.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;

@@ -23,7 +23,7 @@ import org.influxdb.annotation.Measurement;
 import top.rslly.iot.utility.influxdb.ano.Tag;
 import top.rslly.iot.utility.influxdb.ano.TimeColumn;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.util.Objects;
 
 @Entity

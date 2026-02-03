@@ -39,13 +39,14 @@ import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
-import javax.websocket.Session;
+import jakarta.websocket.Session;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 
 @Component
 @Slf4j
@@ -256,7 +257,8 @@ public class XiaoZhiUtil {
           res = CompletableFuture
               .supplyAsync(
                   () -> router.response(XiaoZhiWebsocket.voiceContent.get(chatId), chatId,
-                      productId));
+                      productId),
+                  Executors.newVirtualThreadPerTaskExecutor());
         }
         // String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
         // Integer.parseInt(chatId));
@@ -275,6 +277,10 @@ public class XiaoZhiUtil {
         }
         while ((res != null && !res.isDone()) || Router.queueMap.containsKey(chatId)
             && Router.queueMap.get(chatId).size() > 0) {
+          if (!Router.queueMap.containsKey(chatId)) {
+            log.warn("queueMap已被释放，停止处理: chatId={}", chatId);
+            break;
+          }
           if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
             try {
               Map<String, String> emotionResult = emotionRes.get();

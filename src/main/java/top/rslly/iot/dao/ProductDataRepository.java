@@ -24,7 +24,7 @@ import org.springframework.stereotype.Repository;
 import top.rslly.iot.models.ProductDataEntity;
 import top.rslly.iot.models.ProductModelEntity;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.util.List;
 
 @Repository

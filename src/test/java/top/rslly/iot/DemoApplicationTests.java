@@ -52,7 +52,7 @@ import top.rslly.iot.utility.script.ControlScriptFactory;
 import top.rslly.iot.utility.script.js.JsScriptInfo;
 import top.rslly.iot.utility.script.js.NashornJsInvokeService;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.util.*;
@@ -221,9 +221,9 @@ class DemoApplicationTests {
     // System.out.println(body);
     var jsCode = ControlScriptFactory.generateControlNodeScript("controlFunc",
         """
-            var res=control("light1","attribute","","",1,["switch1"],["on"]);
-            return res;
+            while(true) {}
             """);
+    log.info(jsCode);
     JsScriptInfo jsScriptInfo = new JsScriptInfo("controlFunc");
     var uuid = UUID.randomUUID();
     // var scriptId=nashornJsInvokeService.doEval(uuid,jsScriptInfo,"function control() { return
@@ -236,12 +236,14 @@ class DemoApplicationTests {
     } catch (InterruptedException | ExecutionException e) {
       e.printStackTrace();
     }
-    var result = nashornJsInvokeService.doInvokeFunction(uuid, jsScriptInfo, new Object[] {});
-    try {
-      var a = result.get();
-      System.out.println(a);
-    } catch (InterruptedException | ExecutionException e) {
-      e.printStackTrace();
+    if (scriptId.isDone()) {
+      var result = nashornJsInvokeService.doInvokeFunction(uuid, jsScriptInfo, new Object[] {});
+      try {
+        var a = result.get();
+        System.out.println(a);
+      } catch (InterruptedException | ExecutionException e) {
+        e.printStackTrace();
+      }
     }
     // nashornJsInvokeService.runJssync("control");
   }

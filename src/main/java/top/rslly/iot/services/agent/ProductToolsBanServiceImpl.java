@@ -28,7 +28,7 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -62,10 +62,18 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   }
 
   @Override
+  public JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId) {
+    ProductToolsBanEntity entity =
+        productToolsBanRepository.findTopByToolsNameAndProductId(toolsName, productId);
+    return ResultTool.success(entity);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan) {
     // 允许值列表（不包含 "5"）
-    Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge");
+    Set<String> allowed =
+        Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge", "knowledgeGraphic");
 
     for (var s : productToolsBan.getToolsName()) {
       if (!allowed.contains(s))
@@ -83,6 +91,40 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
     }
     var result = productToolsBanRepository.saveAll(productToolsBanEntityList);
     return ResultTool.success(result);
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> addProductToolBan(String toolName, int productId) {
+    Set<String> allowed =
+        Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge", "knowledgeGraphic");
+    if (!allowed.contains(toolName))
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<ProductToolsBanEntity> productToolsBanEntityList =
+        productToolsBanRepository.findAllByProductId(productId);
+    for (var s : productToolsBanEntityList) {
+      if (s.getToolsName().equals(toolName))
+        return ResultTool.success();
+    }
+    ProductToolsBanEntity entity = new ProductToolsBanEntity();
+    entity.setProductId(productId);
+    entity.setToolsName(toolName);
+    productToolsBanRepository.save(entity);
+    return ResultTool.success();
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> deleteProductToolBan(String toolName, int productId) {
+    List<ProductToolsBanEntity> productToolsBanEntityList =
+        productToolsBanRepository.findAllByProductId(productId);
+    for (var s : productToolsBanEntityList) {
+      if (s.getToolsName().equals(toolName)) {
+        productToolsBanRepository.delete(s);
+        return ResultTool.success();
+      }
+    }
+    return ResultTool.success();
   }
 
   @Override

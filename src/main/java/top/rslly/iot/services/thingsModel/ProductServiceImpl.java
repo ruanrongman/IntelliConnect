@@ -30,7 +30,7 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,6 +78,8 @@ public class ProductServiceImpl implements ProductService {
   private KnowledgeGraphicAttributeRepository knowledgeGraphicAttributeRepository;
   @Resource
   private ProductLlmModelRepository productLlmModelRepository;
+  @Resource
+  private ProductSkillsRepository productSkillsRepository;
 
 
   @Override
@@ -156,6 +158,7 @@ public class ProductServiceImpl implements ProductService {
         if (userList.isEmpty()) {
           return ResultTool.fail(ResultCode.COMMON_FAIL);
         }
+        wxProductBindEntity.setAppid(userList.get(0).getAppid());
         wxProductBindEntity.setOpenid(userList.get(0).getOpenid());
         wxProductBindEntity.setProductId(productEntity1.getId());
         wxProductBindRepository.save(wxProductBindEntity);
@@ -169,6 +172,10 @@ public class ProductServiceImpl implements ProductService {
         userProductBindEntity.setProductId(productEntity1.getId());
         userProductBindRepository.save(userProductBindEntity);
       }
+      ProductToolsBanEntity entity = new ProductToolsBanEntity();
+      entity.setProductId(productEntity1.getId());
+      entity.setToolsName("knowledgeGraphic");
+      productToolsBanRepository.save(entity);
       return ResultTool.success(productEntity1);
     }
   }
@@ -203,26 +210,25 @@ public class ProductServiceImpl implements ProductService {
         knowledgeGraphicNodeRepository.findAllByProductId(id);
     List<ProductLlmModelEntity> productLlmModelEntityList =
         productLlmModelRepository.findAllByProductId(id);
-    boolean p1 = productModelEntityList.isEmpty();
-    boolean p2 = wxProductBindEntityList.isEmpty();
-    boolean p3 = otaEntityList.isEmpty();
-    boolean p4 = otaXiaozhiEntityList.isEmpty();
-    boolean p5 = mcpServerEntityList.isEmpty();
-    boolean p6 = knowledgeChatEntityList.isEmpty();
-    boolean p7 = productRouterSetEntityList.isEmpty();
-    boolean p8 = productToolsBanEntityList.isEmpty();
-    boolean p9 = agentLongMemoryEntityList.isEmpty();
-    boolean p10 = productVoiceDiyEntityList.isEmpty();
-    boolean p11 = productLlmModelEntityList.isEmpty();
-    if (!knowledgeGraphicNodeList.isEmpty()) {
-      for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
-        long kId = knowledgeGraphicNodeEntity.getId();
-        knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
-        knowledgeGraphicAttributeRepository.deleteByBelong(kId);
-      }
-      knowledgeGraphicNodeRepository.deleteAllByProductId(id);
-    }
-    if (p1 && p2 && p3 && p4 && p5 && p6 && p7 && p8 && p9 && p10 && p11) {
+    List<ProductSkillsEntity> productSkillsEntityList =
+        productSkillsRepository.findAllByProductId(id);
+    productToolsBanEntityList.removeIf(productToolsBanEntity -> {
+      productToolsBanRepository.delete(productToolsBanEntity);
+      return true;
+    });
+    boolean condition = true;
+    condition &= productModelEntityList.isEmpty();
+    condition &= wxProductBindEntityList.isEmpty();
+    condition &= otaEntityList.isEmpty();
+    condition &= otaXiaozhiEntityList.isEmpty();
+    condition &= mcpServerEntityList.isEmpty();
+    condition &= knowledgeChatEntityList.isEmpty();
+    condition &= productRouterSetEntityList.isEmpty();
+    condition &= agentLongMemoryEntityList.isEmpty();
+    condition &= productVoiceDiyEntityList.isEmpty();
+    condition &= productLlmModelEntityList.isEmpty();
+    condition &= productSkillsEntityList.isEmpty();
+    if (condition) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -246,6 +252,18 @@ public class ProductServiceImpl implements ProductService {
             }
           } catch (Exception ignore) {
           }
+        }
+        if (!knowledgeGraphicNodeList.isEmpty()) {
+          for (KnowledgeGraphicNodeEntity knowledgeGraphicNodeEntity : knowledgeGraphicNodeList) {
+            long kId = knowledgeGraphicNodeEntity.getId();
+            knowledgeGraphicRelationRepository.deleteAllByFrom(kId);
+            knowledgeGraphicRelationRepository.deleteAllByTo(kId);
+            knowledgeGraphicAttributeRepository.deleteByBelong(kId);
+          }
+          knowledgeGraphicNodeRepository.deleteAllByProductId(id);
+        }
+        if (!productToolsBanEntityList.isEmpty()) {
+          productToolsBanRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }

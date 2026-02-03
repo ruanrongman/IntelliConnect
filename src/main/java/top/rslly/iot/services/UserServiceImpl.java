@@ -35,7 +35,7 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,9 +70,9 @@ public class UserServiceImpl implements UserService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public UserEntity insert(UserEntity userEntity) {
-    userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(userEntity.getPassword()));// adapt
-                                                                                          // new
-                                                                                          // version
+    userEntity.setPassword(passwordEncoder.encode(userEntity.getPassword()));// adapt
+                                                                             // new
+                                                                             // version
     // spring security
     return userRepository.save(userEntity);
   }
@@ -91,7 +91,7 @@ public class UserServiceImpl implements UserService {
       return ResultTool.fail(ResultCode.EMAIL_ALREADY_EXIST);
     }
     UserEntity userEntity = new UserEntity();
-    userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(user.getPassword()));
+    userEntity.setPassword(passwordEncoder.encode(user.getPassword()));
     userEntity.setUsername(user.getUsername());
     userEntity.setEmail(email);
     userEntity.setRole("guest");
@@ -113,7 +113,7 @@ public class UserServiceImpl implements UserService {
     }
 
     UserEntity userEntity = users.get(0);
-    userEntity.setPassword("{bcrypt}" + passwordEncoder.encode(user.getPassword()));
+    userEntity.setPassword(passwordEncoder.encode(user.getPassword()));
     redisUtil.del(user.getUsername() + user.getUserCode());
     userRepository.save(userEntity);
     return ResultTool.success();

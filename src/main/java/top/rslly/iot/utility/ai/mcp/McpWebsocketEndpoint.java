@@ -26,9 +26,9 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.utility.JwtTokenUtil;
 
-import javax.annotation.PreDestroy;
-import javax.websocket.*;
-import javax.websocket.server.ServerEndpoint;
+import jakarta.annotation.PreDestroy;
+import jakarta.websocket.*;
+import jakarta.websocket.server.ServerEndpoint;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

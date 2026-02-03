@@ -23,7 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.utility.result.JsonResult;
 
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 public interface AiService {

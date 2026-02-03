@@ -31,9 +31,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.ProductSkillsEntity;
 import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
+import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -42,6 +44,7 @@ import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
 import top.rslly.iot.utility.ai.tools.BaseTool;
+import top.rslly.iot.utility.ai.tools.JsExecuteTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
@@ -74,6 +77,10 @@ public class McpAgent implements BaseTool<String> {
   private McpWebsocket mcpWebsocket;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
+  @Autowired
+  private ProductSkillsServiceImpl productSkillsService;
+  @Autowired
+  private JsExecuteTool jsExecuteTool;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -106,12 +113,17 @@ public class McpAgent implements BaseTool<String> {
     var mcpWebSocketRunning = mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId);
     var mcpEndpointRunning =
         mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId);
-    if (mcpServerEntities.isEmpty() && !mcpWebSocketRunning && !mcpEndpointRunning) {
+    var productSkillsEntities = productSkillsService.findAllByProductId(productId);
+    if (mcpServerEntities.isEmpty() && productSkillsEntities.isEmpty() && !mcpWebSocketRunning
+        && !mcpEndpointRunning) {
       return "工具无效，请勿调用";
     }
     StringBuilder toolDescriptions = new StringBuilder();
     for (var mcpServerEntity : mcpServerEntities) {
       toolDescriptions.append(mcpServerEntity.getDescription()).append("|");
+    }
+    for (var productSkillsEntity : productSkillsEntities) {
+      toolDescriptions.append(productSkillsEntity.getName()).append("|");
     }
     toolDescriptions.append(mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
     toolDescriptions
@@ -179,9 +191,10 @@ public class McpAgent implements BaseTool<String> {
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
     if (mcpServerService.findAllByProductId(productId).isEmpty()
+        && productSkillsService.findAllByProductId(productId).isEmpty()
         && !mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
         && !mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId))
-      return "产品下面没有任何mcp服务器，请先绑定mcp服务器";
+      return "产品下面没有任何mcp服务器或者skills，请先绑定mcp服务器或者skills";
     if (!mcpServerService.findAllByProductId(productId).isEmpty()) {
       try {
         initClients(productId, clientMap);
@@ -205,6 +218,9 @@ public class McpAgent implements BaseTool<String> {
       if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
         toolDescriptions += mcpWebsocket.combineToolDescription(McpWebsocket.ENDPOINT_SERVER_NAME,
             "mcp" + productId);
+      }
+      if (!productSkillsService.findAllByProductId(productId).isEmpty()) {
+        toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
       system = reactPrompt.getReact(toolDescriptions, question, productId);
     } catch (Exception e) {
@@ -291,6 +307,18 @@ public class McpAgent implements BaseTool<String> {
             toolResult =
                 mcpWebsocket.sendToolCall(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId,
                     toolName, args, McpWebsocketEndpoint.clients.get("mcp" + productId), true);
+          } else if (serverKey.equals("skills")) {
+            if (toolName.equals(jsExecuteTool.getName())) {
+              toolResult = jsExecuteTool.run(args, globalMessage);
+            } else {
+              List<ProductSkillsEntity> skillsEntity =
+                  productSkillsService.findAllByProductIdAndName(productId, toolName);
+              if (skillsEntity.isEmpty()) {
+                toolResult = "调用skills失败";
+              } else {
+                toolResult = productSkillsService.readSkills(skillsEntity.get(0).getFilePath());
+              }
+            }
           } else {
             McpSyncClient client = clientMap.get(serverKey);
             if (client == null) {

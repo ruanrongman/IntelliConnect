@@ -47,11 +47,21 @@ public class ChatToolEventSourceListener extends EventSourceListener {
 
   @Override
   public void onOpen(EventSource eventSource, Response response) {
+    if (queueMap == null || !queueMap.containsKey(chatId)) {
+      log.warn("资源已被释放，关闭连接: chatId={}", chatId);
+      eventSource.cancel();
+      return;
+    }
     log.info("OpenAI建立sse连接...");
   }
 
   @Override
   public void onEvent(EventSource eventSource, String id, String type, String data) {
+    if (queueMap == null || !queueMap.containsKey(chatId)) {
+      log.warn("queueMap已被释放，切断连接: chatId={}", chatId);
+      eventSource.cancel();
+      return;
+    }
     if (data == null) {
       log.warn("Received null data from OpenAI");
       return;
@@ -97,6 +107,12 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   @Override
   public void onFailure(EventSource eventSource, Throwable t, Response response) {
     log.error("OpenAI  sse连接异常");
+    if (queueMap == null || !queueMap.containsKey(chatId)) {
+      log.warn("资源已被释放，直接关闭连接");
+      if (eventSource != null)
+        eventSource.cancel();
+      return;
+    }
     var lock = chatTool.getLockMap().get(chatId);
     if (lock != null) {
       lock.lock();

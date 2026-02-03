@@ -21,7 +21,7 @@ package top.rslly.iot.models;
 
 import org.hibernate.annotations.Comment;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "knowledge_graphic_node", schema = "cwliot1.8", catalog = "")

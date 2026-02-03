@@ -30,7 +30,7 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -127,7 +127,7 @@ public class ProductLlmModelServiceImpl implements ProductLlmModelService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     Set<String> allowed = Set.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-        "classifier", "longMemory", "memory");
+        "classifier", "longMemory", "memory", "knowledgeGraphic");
     if (!allowed.contains(productLlmModel.getToolsId())) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }

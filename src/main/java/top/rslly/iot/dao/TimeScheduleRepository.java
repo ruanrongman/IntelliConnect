@@ -22,7 +22,7 @@ package top.rslly.iot.dao;
 import org.springframework.data.jpa.repository.JpaRepository;
 import top.rslly.iot.models.TimeScheduleEntity;
 
-import javax.transaction.Transactional;
+import jakarta.transaction.Transactional;
 import java.util.List;
 
 public interface TimeScheduleRepository extends JpaRepository<TimeScheduleEntity, Long> {

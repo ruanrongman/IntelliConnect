@@ -368,7 +368,7 @@ let intervalId;
     
 onMounted(() => {    
   fetchProduct();    
-  // intervalId = setInterval(fetchProduct, 1000); // 每 60 秒钟刷新一次数据
+  intervalId = setInterval(fetchProduct, 1000); // 每 60 秒钟刷新一次数据
 });    
     
     
@@ -708,7 +708,7 @@ const handleDelete = (record) => {
     .catch((err) => {    
       console.log(err);    
     });    
-};    
+};
 </script>    
     
     

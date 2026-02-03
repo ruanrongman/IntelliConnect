@@ -19,34 +19,68 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
+import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
 public class KnowledgeGraphicPrompt {
+  @Autowired
+  private KnowledgeGraphicService knowledgeGraphicService;
+
   private final static String knowledgeGraphicPrompt =
       """
-            Please refer to the following user conversation to see if it involves any of the following memory concepts.
-            If the conversation contains or updates information related to these memory concepts, please update them accordingly.
-            Otherwise, do not add to the memory_Key and memory_value lists.
-            If none of the concepts match or are updated, you may set both lists to [].
+            Please refer to the following user conversation to see if it involves any relation of the following knowledge graphic.
+            If the conversation contains or updates information related to the knowledge graphic, please update them accordingly.
+            Otherwise, do not add to the nodes and relations lists. If the conversation mentioned entities or relations that
+            haven't bee added to the knowledge graphic, add them to the graphic.
 
-            The current concept of memory and its content: {memory_map}
+            The current concept of the graphic and its content: {graphic}
             ## Output Format
-              ```json
-               {
+            ```json
+            {
                 "thought": "The thought of what to do and why.(use Chinese)",
                 "action":
-                    {
-                    "memory_Key": [],
-                    "memory_value": [],
-                    }
-               }
-              ```
+                {
+                    "nodes": [],
+                    "relations": []
+                }
+            }
+            ```
             ## Attention
-              - Your output is JSON only and no explanation.
-              - Each memory-value must be less than 800 words
+            - Your output is JSON only and no explanation.
+            - Each node struct would be like this:
+                ```
+                {
+                    "name": "Entity name",
+                    "des": "Description of the entity",
+                    "attributes":[],
+                    "nodeAction": "`New`, `Delete` or `Update`"
+                }
+                ```
+            - Each attribute should less than 10 words.
+            - Each relation struct would be like this:
+                ```
+                {
+                    "name": "Relation description",
+                    "from": "Source node name",
+                    "to": "Target node name",
+                    "relationAction": "`New`, `Delete` or `Update`"
+                }
+                ```
+            - If relation mentions a new entity(whatever source or target), please add it to the nodes list.
             ## Current Conversation
-              Below is the current conversation consisting of interleaving human and assistant history.
+            Below is the current conversation consisting of interleaving human and assistant history.
           """;
 
-  public String getKnowledgeGraphicPrompt() {
-    return knowledgeGraphicPrompt;
+  public String getKnowledgeGraphicPrompt(int productId) {
+    String knowledgeGraphic = knowledgeGraphicService.getKnowledgeGraphicJSON(productId);
+    Map<String, String> map = new HashMap<>();
+    map.put("graphic", knowledgeGraphic);
+    return StringUtils.formatString(knowledgeGraphicPrompt, map);
   }
 }

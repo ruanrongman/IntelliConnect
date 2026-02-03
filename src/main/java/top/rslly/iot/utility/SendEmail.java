@@ -29,7 +29,6 @@ import org.springframework.stereotype.Component;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-import javax.mail.MessagingException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +57,7 @@ public class SendEmail {
     MimeMessageHelper helper = null;
     try {
       helper = new MimeMessageHelper(javaMailSender.createMimeMessage(), true);
-    } catch (MessagingException e) {
+    } catch (Exception e) {
       log.error("send email error{}", e.getMessage());
       return;
     }

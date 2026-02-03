@@ -19,7 +19,7 @@
  */
 package top.rslly.iot.utility.ai.voice.TTS;
 
-import javax.websocket.Session;
+import jakarta.websocket.Session;
 
 public interface TtsService {
   void websocketAudioSync(String text, Float pitch, Float speed, Session session, String chatId,

@@ -34,10 +34,10 @@ import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
-import javax.annotation.PreDestroy;
-import javax.websocket.*;
-import javax.websocket.server.PathParam;
-import javax.websocket.server.ServerEndpoint;
+import jakarta.annotation.PreDestroy;
+import jakarta.websocket.*;
+import jakarta.websocket.server.PathParam;
+import jakarta.websocket.server.ServerEndpoint;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;

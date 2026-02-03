@@ -74,9 +74,11 @@ public class Router {
   private ProductToolsBanServiceImpl productToolsBanService;
   @Autowired
   private LongMemoryTool longMemoryTool;
+  @Autowired
+  private KnowledgeGraphicTool knowledgeGraphicTool;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
-  // chatId in wechat module need to use openid
+  // chatId in WeChat module need to use openid
   public String response(String content, String chatId, int productId, String... microappid) {
     List<ModelMessage> memory;
     String answer;
@@ -187,10 +189,11 @@ public class Router {
       memoryTool.run(content, globalMessage);
       longMemoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
+      if (!banTools.contains("knowledgeGraphic")) {
+        knowledgeGraphicTool.run(content, globalMessage);
+      }
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);
     return answer;
   }
-
-
 }
