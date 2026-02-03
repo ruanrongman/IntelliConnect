@@ -109,6 +109,7 @@ let intervalId = setInterval(  //设置定时器，1s更新一次
           if(errorCode==2001){
            router.push('/login')
           }
+          if(!data) return;
           const {SystemCpuUsage,jvmMemoryUsage,memoryUsage} = data
           
           homeData.value = SystemCpuUsage

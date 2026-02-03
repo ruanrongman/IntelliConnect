@@ -34,6 +34,7 @@ import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.HardWareServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
 import top.rslly.iot.services.storage.DataServiceImpl;
 import top.rslly.iot.services.storage.EventStorageServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
@@ -50,7 +51,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
-import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/api/v2")
@@ -92,6 +92,8 @@ public class Tool {
   private LlmProviderInformationServiceImpl llmProviderInformationService;
   @Autowired
   private ProductLlmModelServiceImpl productLlmModelService;
+  @Autowired
+  private KnowledgeGraphicService knowledgeGraphicService;
   @Autowired
   private ProductSkillsServiceImpl productSkillsService;
 
@@ -491,6 +493,20 @@ public class Tool {
     return productToolsBanService.getProductToolsBan(productId);
   }
 
+  @Operation(summary = "查询工具是否被禁止", description = "查询当前产品的某个工具是否被禁止")
+  @RequestMapping(value = "/productToolsBan/{toolsName}", method = RequestMethod.GET)
+  public JsonResult<?> getProductToolsBanByName(@PathVariable String toolsName,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.getProductToolsBanByNameAndProductId(toolsName, productId);
+  }
+
   @Operation(summary = "禁止内部工具", description = "禁止内部工具")
   @RequestMapping(value = "/productToolsBan", method = RequestMethod.POST)
   public JsonResult<?> postProductToolsBan(
@@ -505,7 +521,7 @@ public class Tool {
     return productToolsBanService.postProductToolsBan(productToolsBan);
   }
 
-  @Operation(summary = "禁止内部工具", description = "禁止内部工具")
+  @Operation(summary = "解禁全部工具", description = "解禁全部工具")
   @RequestMapping(value = "/productToolsBan", method = RequestMethod.DELETE)
   public JsonResult<?> deleteProductToolsBan(@RequestParam("productId") int productId,
       @RequestHeader("Authorization") String header) {
@@ -516,6 +532,34 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productToolsBanService.deleteProductToolsBan(productId);
+  }
+
+  @Operation(summary = "禁止单个工具", description = "禁止单个工具")
+  @RequestMapping(value = "/productToolsBanSingle", method = RequestMethod.POST)
+  public JsonResult<?> postProductToolsBanSingle(@RequestParam("productId") int productId,
+      @RequestParam("toolName") @Valid @NotNull @Size(min = 1, max = 255) String toolName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.addProductToolBan(toolName, productId);
+  }
+
+  @Operation(summary = "解禁单个工具", description = "解禁单个工具")
+  @RequestMapping(value = "/productToolsBanSingle", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductToolsBanSingle(@RequestParam("productId") int productId,
+      @RequestParam("toolName") @Valid @NotNull @Size(min = 1, max = 255) String toolName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productToolsBanService.deleteProductToolBan(toolName, productId);
   }
 
   // 长期记忆
@@ -721,5 +765,233 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productSkillsService.deleteProductSkill(id);
+  }
+
+  @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")
+  @RequestMapping(value = "/kg/graphic", method = RequestMethod.GET)
+  public JsonResult<?> getKnowledgeGraphic(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getKnowledgeGraphicByProductId(productId);
+  }
+
+  @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")
+  @RequestMapping(value = "/kg/node", method = RequestMethod.POST)
+  public JsonResult<?> addKgNode(@Valid @RequestBody KnowledgeGraphicNode node,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, node.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.addNode(node);
+  }
+
+  @Operation(summary = "获取知识图谱节点", description = "通过节点名称获取节点")
+  @RequestMapping(value = "/kg/node", method = RequestMethod.GET)
+  public JsonResult<?> getKgNode(@RequestParam("name") String name,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getNode(name, productId);
+  }
+
+  @Operation(summary = "获取知识图谱节点列表", description = "获取产品下的所有知识图谱节点")
+  @RequestMapping(value = "/kg/nodes", method = RequestMethod.GET)
+  public JsonResult<?> getKgNodes(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getNodes(productId);
+  }
+
+  @Operation(summary = "更新知识图谱节点", description = "更新节点，但只更新节点的基本属性（名称、描述）")
+  @RequestMapping(value = "/kg/node", method = RequestMethod.PUT)
+  public JsonResult<?> updateNode(@RequestBody KnowledgeGraphicNode node,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, node.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.updateNode(node);
+  }
+
+  @Operation(summary = "删除知识图谱节点", description = "通过节点ID删除知识图谱节点")
+  @RequestMapping(value = "/kg/node", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteKgNodeById(@Valid @RequestBody KnowledgeGraphicNode node,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, node.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteNode(node.id);
+  }
+
+  @Operation(summary = "删除知识图谱节点", description = "通过节点名称删除知识图谱节点")
+  @RequestMapping(value = "/kg/nodeByName", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteKgNodeByName(@RequestParam("name") String name,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteNode(name, productId);
+  }
+
+  @Operation(summary = "新增属性", description = "为节点新增属性")
+  @RequestMapping(value = "/kg/attr", method = RequestMethod.POST)
+  public JsonResult<?> addAttribute(@Valid @RequestBody KnowledgeGraphicAttribute attribute,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, attribute.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.addAttribute(attribute);
+  }
+
+  @Operation(summary = "删除属性", description = "删除节点的属性")
+  @RequestMapping(value = "/kg/attr", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteAttribute(@RequestBody KnowledgeGraphicAttribute attribute,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, attribute.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteAttribute(attribute);
+  }
+
+  @Operation(summary = "更新属性名称", description = "更新属性名称")
+  @RequestMapping(value = "/kg/attr", method = RequestMethod.PUT)
+  public JsonResult<?> updateAttributeByName(
+      @Valid @RequestBody KnowledgeGraphicAttribute attribute,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, attribute.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.updateAttribute(attribute.name, attribute.id);
+  }
+
+  @Operation(summary = "获取节点属性", description = "获取节点的所有属性")
+  @RequestMapping(value = "/kg/attr", method = RequestMethod.GET)
+  public JsonResult<?> getAttributesByNodeId(@RequestParam("nodeId") long nodeId,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getAttributes(nodeId);
+  }
+
+  @Operation(summary = "新增关系", description = "新增节点关系")
+  @RequestMapping(value = "/kg/relation", method = RequestMethod.POST)
+  public JsonResult<?> addRelation(@Valid @RequestBody KnowledgeGraphicRelation relation,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, relation.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.addRelation(relation);
+  }
+
+  @Operation(summary = "删除关系", description = "通过关系ID删除节点关系")
+  @RequestMapping(value = "/kg/relationById", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteRelation(@RequestBody KnowledgeGraphicRelation relation,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, relation.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteRelation(relation.id);
+  }
+
+  @Operation(summary = "删除关系", description = "通过关系两端的节点删除关系")
+  @RequestMapping(value = "/kg/relation", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteRelationByNodes(@RequestBody KnowledgeGraphicRelation relation,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, relation.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteRelationByFromAndTo(relation.from, relation.to);
+  }
+
+  @Operation(summary = "更新关系描述", description = "通过关系ID更新节点关系描述")
+  @RequestMapping(value = "/kg/relation", method = RequestMethod.PUT)
+  public JsonResult<?> updateRelation(@RequestBody KnowledgeGraphicRelation relation,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, relation.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.updateRelation(relation);
+  }
+
+  @Operation(summary = "获取源节点的关系", description = "通过源节点的ID获取关系列表")
+  @RequestMapping(value = "/kg/relation", method = RequestMethod.GET)
+  public JsonResult<?> getRelations(@RequestParam("nodeId") long nodeId,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getNodeRelations(nodeId);
+  }
+
+  @Operation(summary = "获取关系", description = "通过关系两端的节点获取关系")
+  @RequestMapping(value = "/kg/relationByNodes", method = RequestMethod.GET)
+  public JsonResult<?> getRelationByNodes(@RequestParam("from") long from,
+      @RequestParam("to") long to,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.getRelationByNodes(from, to);
   }
 }

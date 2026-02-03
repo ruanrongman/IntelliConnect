@@ -16,21 +16,25 @@ spring:
     show-sql: false
     hibernate:
       #更新或者创建数据库表结构(第一次启动请设置为update)
-      ddl-auto: none
+      ddl-auto: update
+    properties:
+      hibernate:
+        connection:
+          characterEncoding: utf8mb4
   influx:
     user: cwl
     # 你的数据库url
-    url: http://192.168.49.129:8086
+    url: http://localhost:8086
     password: 1234
     mapper-location: top.rslly.iot.dao
     dataBaseName: data
     retention: autogen     #保存策略
   datasource:
-    username: cwliot1.8
-    url: jdbc:mysql://192.168.49.129:3306/cwliot1.8?useUnicode=true&characterEncoding=UTF-8&useSSL=false
+    username: root
+    url: jdbc:mysql://localhost:3306/cwliot1.8?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.jdbc.Driver
     # 输入你自己的mysql密码,该密码为随机生成
-    password: "DMKRjBbHCiPAyAdn"
+    password: "XzHvhX4CDaN696oQAXdmlcsrqgWbkxRl"
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
       # 下面为连接池的补充设置，应用到上面所有数据源中
@@ -64,7 +68,7 @@ spring:
         login-password: 123456
   data:
     redis:
-      host: 192.168.49.129
+      host: localhost
       password: 1234
       port: 6379
       timeout: 1000
@@ -166,7 +170,7 @@ ai:
   vision-model: silicon-Qwen/Qwen3-VL-8B-Instruct
   glm-key: XXX
   deepSeek-key: XXX
-  siliconFlow-Key: XXX
+  siliconFlow-Key: sk-dmsxtfzmrgqvqiypyvoeftzpsfbhnxrzqipjhndvfmdhhelu
   uniApi-Key: XXX
   dashscope-key: XXX
   robot-name: 小创
@@ -174,11 +178,11 @@ ai:
   custom-key: XXX
   custom-llm-provider-url: XXX
   agent-epoch-limit: 5
-  chatTool-llm: dashscope-qwen3-235b-a22b-instruct-2507
+  chatTool-llm: silicon-Qwen/Qwen3-32B
   chatTool-speedUp: true
   emotionTool-llm: silicon-Qwen/Qwen3-30B-A3B-think-no
   memoryTool-llm: silicon-Qwen/Qwen2.5-32B-Instruct
-  classifierTool-llm: dashscope-qwen3-next-80b-a3b-instruct
+  classifierTool-llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   classifierTool-speedUp: true
   controlTool-llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   musicTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
@@ -189,12 +193,13 @@ ai:
   wxProductActiveTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   scheduleTool-llm: silicon-Qwen/Qwen3-30B-A3B-think-128
   searchTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
-  agent-llm: dashscope-qwen3-235b-a22b-instruct-2507
+  agent-llm: silicon-Qwen/Qwen3-235B-A22B-Instruct-2507
   agent-speedUp: true
   longMemoryTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   wx_smart_robot_llm: glm
+  knowledge_graphic_llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
   mcp:
-    agent-llm: dashscope-qwen3-max
+    agent-llm: silicon-Qwen/Qwen3-235B-A22B-Instruct-2507
     agent-speedUp: true
     agent-epoch-limit: 5
 jwt:

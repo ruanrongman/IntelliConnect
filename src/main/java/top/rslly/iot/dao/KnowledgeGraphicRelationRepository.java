@@ -17,27 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.dao;
 
-import com.alibaba.fastjson.JSON;
-import top.rslly.iot.param.request.ProductToolsBan;
-import top.rslly.iot.utility.result.JsonResult;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.KnowledgeGraphicRelationEntity;
 
 import java.util.List;
 
-public interface ProductToolsBanService {
+public interface KnowledgeGraphicRelationRepository
+    extends JpaRepository<KnowledgeGraphicRelationEntity, Long> {
+  public List<KnowledgeGraphicRelationEntity> getAllByFrom(long fromId);
 
-  List<String> getProductToolsBanList(int productId);
+  public List<KnowledgeGraphicRelationEntity> getAllByTo(long toId);
 
-  JsonResult<?> getProductToolsBan(int productId);
+  public KnowledgeGraphicRelationEntity getByFromAndTo(long fromId, long toId);
 
-  JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId);
+  void deleteAllByFrom(long fromId);
 
-  JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan);
-
-  JsonResult<?> addProductToolBan(String toolName, int productId);
-
-  JsonResult<?> deleteProductToolBan(String toolName, int productId);
-
-  JsonResult<?> deleteProductToolsBan(int productId);
+  void deleteAllByTo(long to);
 }

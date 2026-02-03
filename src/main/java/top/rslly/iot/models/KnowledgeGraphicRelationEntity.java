@@ -17,27 +17,56 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.models;
 
-import com.alibaba.fastjson.JSON;
-import top.rslly.iot.param.request.ProductToolsBan;
-import top.rslly.iot.utility.result.JsonResult;
+import jakarta.persistence.*;
 
-import java.util.List;
+@Entity
+@Table(name = "knowledge_graphic_relation", schema = "cwliot1.8")
+public class KnowledgeGraphicRelationEntity {
+  @Id
+  @Column(name = "id")
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private long id;
 
-public interface ProductToolsBanService {
+  @Column(name = "r_from")
+  private long from;
 
-  List<String> getProductToolsBanList(int productId);
+  @Column(name = "r_to")
+  private long to;
 
-  JsonResult<?> getProductToolsBan(int productId);
+  @Column(name = "des")
+  private String des;
 
-  JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId);
+  public long getId() {
+    return id;
+  }
 
-  JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan);
+  public void setId(long id) {
+    this.id = id;
+  }
 
-  JsonResult<?> addProductToolBan(String toolName, int productId);
+  public long getFrom() {
+    return from;
+  }
 
-  JsonResult<?> deleteProductToolBan(String toolName, int productId);
+  public void setFrom(long from) {
+    this.from = from;
+  }
 
-  JsonResult<?> deleteProductToolsBan(int productId);
+  public long getTo() {
+    return to;
+  }
+
+  public void setTo(long to) {
+    this.to = to;
+  }
+
+  public String getDes() {
+    return des;
+  }
+
+  public void setDes(String des) {
+    this.des = des;
+  }
 }

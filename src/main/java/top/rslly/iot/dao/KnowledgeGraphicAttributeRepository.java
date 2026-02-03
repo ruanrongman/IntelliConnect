@@ -17,27 +17,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.dao;
 
-import com.alibaba.fastjson.JSON;
-import top.rslly.iot.param.request.ProductToolsBan;
-import top.rslly.iot.utility.result.JsonResult;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.KnowledgeGraphicAttributeEntity;
 
 import java.util.List;
 
-public interface ProductToolsBanService {
+public interface KnowledgeGraphicAttributeRepository
+    extends JpaRepository<KnowledgeGraphicAttributeEntity, Long> {
+  List<KnowledgeGraphicAttributeEntity> findByBelong(long belongId);
 
-  List<String> getProductToolsBanList(int productId);
+  void deleteByBelong(long belongId);
 
-  JsonResult<?> getProductToolsBan(int productId);
+  KnowledgeGraphicAttributeEntity getByName(String name);
 
-  JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId);
+  List<KnowledgeGraphicAttributeEntity> getAllByBelong(long id);
 
-  JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan);
+  void deleteAllByName(String name);
 
-  JsonResult<?> addProductToolBan(String toolName, int productId);
+  KnowledgeGraphicAttributeEntity getByNameAndBelong(String name, long belongId);
 
-  JsonResult<?> deleteProductToolBan(String toolName, int productId);
-
-  JsonResult<?> deleteProductToolsBan(int productId);
+  void deleteByBelongAndName(long belong, String name);
 }

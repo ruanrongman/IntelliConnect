@@ -17,27 +17,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.param.request;
 
-import com.alibaba.fastjson.JSON;
-import top.rslly.iot.param.request.ProductToolsBan;
-import top.rslly.iot.utility.result.JsonResult;
+import lombok.Data;
 
-import java.util.List;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
-public interface ProductToolsBanService {
-
-  List<String> getProductToolsBanList(int productId);
-
-  JsonResult<?> getProductToolsBan(int productId);
-
-  JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId);
-
-  JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan);
-
-  JsonResult<?> addProductToolBan(String toolName, int productId);
-
-  JsonResult<?> deleteProductToolBan(String toolName, int productId);
-
-  JsonResult<?> deleteProductToolsBan(int productId);
+@Data
+public class KnowledgeGraphicRelation {
+  @NotBlank(message = "关系描述不能为空！")
+  @Size(min = 1, max = 255)
+  public String des;
+  public long from;
+  public long to;
+  public int productId;
+  public int id;
 }

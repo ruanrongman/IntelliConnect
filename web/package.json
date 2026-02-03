@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "@dvgis/dc-sdk": "^2.17.0",
-    "ant-design-vue": "^2.2.6",
+    "ant-design-vue": "^4.2.6",
     "axios": "^0.21.1",
     "decimal.js": "^10.3.1",
-    "echarts": "^5.1.2",
+    "echarts": "^6.0.0",
     "editor.md": "^1.5.0",
     "file-saver": "^2.0.5",
     "flv.js": "^1.6.2",
@@ -60,7 +60,7 @@
     "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard": "^22.0.0",
     "stylelint-order": "^4.1.0",
-    "unplugin-vue-components": "^0.14.9",
+    "unplugin-vue-components": "^0.14.13",
     "vite": "^2.5.1",
     "vite-plugin-style-import": "^1.2.1",
     "vite-plugin-svg-icons": "^1.0.5"

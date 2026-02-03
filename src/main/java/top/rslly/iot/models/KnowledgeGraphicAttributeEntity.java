@@ -17,27 +17,49 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.models;
 
-import com.alibaba.fastjson.JSON;
-import top.rslly.iot.param.request.ProductToolsBan;
-import top.rslly.iot.utility.result.JsonResult;
+import lombok.Data;
+import org.hibernate.annotations.Comment;
 
-import java.util.List;
+import jakarta.persistence.*;
 
-public interface ProductToolsBanService {
+@Entity
+@Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")
+public class KnowledgeGraphicAttributeEntity {
+  @Id
+  @Column(name = "id")
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private long id;
 
-  List<String> getProductToolsBanList(int productId);
+  @Column(name = "name")
+  private String name;
 
-  JsonResult<?> getProductToolsBan(int productId);
+  @Column(name = "belong")
+  @Comment("Node id which this attribute belongs to")
+  private long belong;
 
-  JsonResult<?> getProductToolsBanByNameAndProductId(String toolsName, int productId);
+  public long getId() {
+    return id;
+  }
 
-  JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan);
+  public void setId(long id) {
+    this.id = id;
+  }
 
-  JsonResult<?> addProductToolBan(String toolName, int productId);
+  public String getName() {
+    return name;
+  }
 
-  JsonResult<?> deleteProductToolBan(String toolName, int productId);
+  public void setName(String name) {
+    this.name = name;
+  }
 
-  JsonResult<?> deleteProductToolsBan(int productId);
+  public long getBelong() {
+    return belong;
+  }
+
+  public void setBelong(long belong) {
+    this.belong = belong;
+  }
 }

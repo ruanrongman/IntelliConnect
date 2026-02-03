@@ -33,3 +33,6 @@ build/
 .vscode/
 ### lck ###
 .lck
+
+/docker/models
+/web/package-lock.json

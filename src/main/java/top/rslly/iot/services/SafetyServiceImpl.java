@@ -22,14 +22,12 @@ package top.rslly.iot.services;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import top.rslly.iot.dao.KnowledgeChatRepository;
-import top.rslly.iot.dao.ProductRouterSetRepository;
-import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
 import top.rslly.iot.services.thingsModel.*;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
@@ -84,6 +82,8 @@ public class SafetyServiceImpl implements SafetyService {
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
+  @Autowired
+  private KnowledgeGraphicService knowledgeGraphicService;
   @Autowired
   private LlmProviderInformationServiceImpl llmProviderInformationService;
   @Autowired
@@ -240,6 +240,16 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("knowledgeChatId not found!");
     return this.controlAuthorizeProduct(token,
         knowledgeChatEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeKnowledgeGraphicNode(String token, int id) {
+    List<KnowledgeGraphicNodeEntity> knowledgeGraphicNodeEntities =
+        knowledgeGraphicService.getNodesById(id);
+    if (knowledgeGraphicNodeEntities.isEmpty())
+      throw new NullPointerException("knowledgeGraphicNodeId not found!");
+    return this.controlAuthorizeProduct(token,
+        knowledgeGraphicNodeEntities.get(0).getProductId());
   }
 
   @Override

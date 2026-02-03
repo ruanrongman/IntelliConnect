@@ -14,25 +14,19 @@ const getters = {
   },
 }
 const mutations = {
-  GENERATE_ROUTES(state, auth) {
+  async GENERATE_ROUTES(state, auth) {
     const layout = constantRoutes.find((item) => item.path === '/')
     const authRoutes = traversalRoutes(asyncRoutes, auth)
     layout.children = [...authRoutes]
     state.menuList = authRoutes
-    // console.log(auth)
     state.auth = auth
-    // console.log(constantRoutes)
-    //router.addRoute(constantRoutes)
     constantRoutes.forEach((r) => router.addRoute(r))
   },
   SET_AUTH(state, auth) {
-    console.log("hfuifhuiwhf")
-    console.log(state)
     state.auth = auth
     localStorage.setItem('access-token', auth)
   },
   CLEAR_AUTH(state) {
-    console.log(122121212)
     localStorage.removeItem('access-token')
     state.auth = ''
   },
@@ -50,12 +44,10 @@ export default {
 function traversalRoutes(routes, auth) {
   const result = []
   routes.forEach((r) => {
-    let { meta, children } = r
-    console.log(r)
-    console.log(jwtDecode(auth))
-    console.log(meta.auth.includes(jwtDecode(auth).role))
+    let { meta, children} = r
+    jwtDecode(auth)
+    meta.auth.includes(jwtDecode(auth).role)
     if (meta.auth.includes(jwtDecode(auth).role)) {
-      console.log("whdhqdqw")
       if (children && children.length) {
         r.children = traversalRoutes(children, auth)
       }

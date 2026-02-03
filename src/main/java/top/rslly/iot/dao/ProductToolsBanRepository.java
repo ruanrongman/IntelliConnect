@@ -30,4 +30,6 @@ public interface ProductToolsBanRepository extends JpaRepository<ProductToolsBan
 
   @Transactional
   List<ProductToolsBanEntity> deleteAllByProductId(int productId);
+
+  ProductToolsBanEntity findTopByToolsNameAndProductId(String toolsName, int productId);
 }

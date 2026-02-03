@@ -200,8 +200,16 @@ export default [
             title: 'productLlmModel',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           },
+        },
+        {
+          path: '/knowledgeGraphic',
+          name: 'knowledgeGraphic',
+          component: () => import("@/views/knowledgeGraphic/index.vue"),
+          meta: {
+            title: 'knowledgeGraphic',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          }
         }
-
       ],
     },
   ]

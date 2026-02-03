@@ -54,6 +54,8 @@ public interface SafetyService {
 
   boolean controlAuthorizeKnowledgeChat(String token, int id);
 
+  boolean controlAuthorizeKnowledgeGraphicNode(String token, int id);
+
   boolean controlAuthorizeProductRouterSet(String token, int id);
 
   boolean controlAuthorizeAgentLongMemory(String token, int id);

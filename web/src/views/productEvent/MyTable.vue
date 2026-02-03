@@ -19,7 +19,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { message } from 'ant-design-vue'
-import { getProductEvent,deleteProductEvent } from '@/api/ProductEvent';
+import { getProductEvent,deleteProductEvent } from '@/api/productEvent';
 import { useRouter } from 'vue-router'
 const router = useRouter()
 

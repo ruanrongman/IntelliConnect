@@ -70,6 +70,7 @@ const product ={
   alarmEventAdd: 'alarmEventAdd',
   llmProviderInformation: 'Model Provider',
   productLlmModel: 'LLM Model',
+  knowledgeGraphic: "knowledgeGraphic",
   productSkills: 'Product Skills'
 }
 const permission = {
