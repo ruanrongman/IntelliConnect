@@ -132,7 +132,7 @@ function fetchProducts() {
     if (errorCode === 200 && data && Array.isArray(data)) {
       products.value = data.map((item, index) => {
         return {
-          key: item.keyvalue ? item.keyvalue : index,
+          key: item.id,
           value: item.id,
           label: item.productName,
         }
