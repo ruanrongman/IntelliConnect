@@ -159,8 +159,7 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
     OtaXiaozhiEntity otaXiaozhiEntity = new OtaXiaozhiEntity();
     List<ProductEntity> productEntityList =
         productRepository.findAllById(otaXiaozhi.getProductId());
-    if (productEntityList.isEmpty() || role.equals("ROLE_" + "wx_user")
-        || !redisUtil.hasKey(otaXiaozhi.getCode())) {
+    if (productEntityList.isEmpty() || !redisUtil.hasKey(otaXiaozhi.getCode())) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     }
     String mac = (String) redisUtil.get(otaXiaozhi.getCode());
