@@ -123,7 +123,7 @@ js:
   local:
     use_js_sandbox: true
     monitor_thread_pool_size: 4
-    max_cpu_time: 300000
+    max_cpu_time: 10000
     max_black_list_duration_sec: 60
     max_requests_timeout: 10
     js_thread_pool_size: 16
@@ -198,6 +198,8 @@ ai:
   longMemoryTool-llm: silicon-Qwen/Qwen2.5-14B-Instruct
   wx_smart_robot_llm: glm
   knowledge_graphic_llm: silicon-Qwen/Qwen3-Next-80B-A3B-Instruct
+  knowledge_graphic:
+    max_graphic_length: 30000
   mcp:
     agent-llm: silicon-Qwen/Qwen3-235B-A22B-Instruct-2507
     agent-speedUp: true
