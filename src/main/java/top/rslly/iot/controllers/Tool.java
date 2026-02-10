@@ -167,6 +167,18 @@ public class Tool {
     return aiService.getAiResponse(aiControl, header);
   }
 
+  @Operation(summary = "请求Agent")
+  @RequestMapping(value="/agent", method=RequestMethod.POST)
+  public JsonResult<?> aiControl(@RequestBody OpenAIRequest openAIRequest,
+                                 @RequestHeader("Authorization") String header){
+    int productId = (int) openAIRequest.getExtraParams().get("productId");
+    String message = openAIRequest.getMessages().getLast().getContent();
+    AiControl aiControl = new AiControl();
+    aiControl.setProductId(productId);
+    aiControl.setContent(message);
+    return aiService.getAiResponse(aiControl, header);
+  }
+
   @Operation(summary = "使用大模型控制设备(语音)", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl/audio", method = RequestMethod.POST)
   public JsonResult<?> aiControl(

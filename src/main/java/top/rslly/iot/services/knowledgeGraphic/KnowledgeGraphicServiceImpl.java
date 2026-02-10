@@ -39,9 +39,11 @@ import org.w3c.dom.Text;
 import top.rslly.iot.dao.KnowledgeGraphicAttributeRepository;
 import top.rslly.iot.dao.KnowledgeGraphicNodeRepository;
 import top.rslly.iot.dao.KnowledgeGraphicRelationRepository;
+import top.rslly.iot.dao.KnowledgeGraphicSearchCountRepository;
 import top.rslly.iot.models.KnowledgeGraphicAttributeEntity;
 import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
 import top.rslly.iot.models.KnowledgeGraphicRelationEntity;
+import top.rslly.iot.models.KnowledgeGraphicSearchCountEntity;
 import top.rslly.iot.param.request.KnowledgeGraphicAttribute;
 import top.rslly.iot.param.request.KnowledgeGraphicNode;
 import top.rslly.iot.param.request.KnowledgeGraphicRelation;
@@ -69,6 +71,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   private KnowledgeGraphicRelationRepository knowledgeGraphicRelationRepository;
 
   @Autowired
+  private KnowledgeGraphicSearchCountRepository knowledgeGraphicSearchCountRepository;
+
+  @Autowired
   private EmbeddingModel embeddingModel;
 
   @Autowired
@@ -84,6 +89,27 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     TextSegment segment = TextSegment.from(nodeDes, metaData);
     log.info("embeddingNode: productId={}, nodeId={}", productId, nodeId);
     embeddingStore.add(embedding, segment);
+  }
+
+  @Async("taskExecutor")
+  public void clearNode(int productId){
+    KnowledgeGraphicSearchCountEntity searchCount = knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
+    if(searchCount == null){
+      searchCount = new KnowledgeGraphicSearchCountEntity();
+      searchCount.setProductId(productId);
+      searchCount.setCount(0);
+    }
+    searchCount.setCount(searchCount.getCount() + 1);
+    knowledgeGraphicSearchCountRepository.save(searchCount);
+    if(searchCount.getCount() <= 30) return;
+    List<KnowledgeGraphicNodeEntity> nodes = knowledgeGraphicNodeRepository.findAllByProductId(productId);
+    for(KnowledgeGraphicNodeEntity node : nodes){
+      if(node.getHitTimes() < 5 && node.getSearchTimes() < 20){
+        this.deleteNode(node.getId());
+      }
+    }
+    searchCount.setCount(0);
+    knowledgeGraphicSearchCountRepository.save(searchCount);
   }
 
   public String queryKnowledgeGraphic(String query, int productId) {
@@ -149,6 +175,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
       // Too deep will cause performance problem.
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+    // Update start node hit count.
+    rootNode.setHitTimes(rootNode.getHitTimes() + 1);
+    knowledgeGraphicNodeRepository.save(rootNode);
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
     Stack<KnowledgeGraphicNodeEntity> nodeStack = new Stack<>();
     List<KnowledgeGraphicNodeEntity> nodeList =
@@ -160,6 +189,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     while (!nodeStack.isEmpty() && maxDepth > 0) {
       List<KnowledgeGraphicNodeEntity> nextNodeList = new ArrayList<>();
       for (KnowledgeGraphicNodeEntity node : nodeList) {
+        // Update node search count.
+        node.setSearchTimes(node.getSearchTimes() + 1);
+        knowledgeGraphicNodeRepository.save(node);
         List<KnowledgeGraphicRelationEntity> relationList =
             knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
         for (KnowledgeGraphicRelationEntity relation : relationList) {

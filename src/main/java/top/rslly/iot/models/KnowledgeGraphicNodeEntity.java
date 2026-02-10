@@ -19,11 +19,13 @@
  */
 package top.rslly.iot.models;
 
+import lombok.Data;
 import org.hibernate.annotations.Comment;
 
 import jakarta.persistence.*;
 
 @Entity
+@Data
 @Table(name = "knowledge_graphic_node", schema = "cwliot1.8", catalog = "")
 public class KnowledgeGraphicNodeEntity {
 
@@ -43,35 +45,11 @@ public class KnowledgeGraphicNodeEntity {
   @Comment("Which user this node belongs to")
   private int productId;
 
-  public long getId() {
-    return id;
-  }
+  @Column(name = "hit_times")
+  @Comment("Direct hit count since last graph clear")
+  private int hitTimes;
 
-  public void setId(long id) {
-    this.id = id;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public void setName(String name) {
-    this.name = name;
-  }
-
-  public String getDes() {
-    return des;
-  }
-
-  public void setDes(String des) {
-    this.des = des;
-  }
-
-  public int getProductId() {
-    return productId;
-  }
-
-  public void setProductId(int productUid) {
-    this.productId = productUid;
-  }
+  @Column(name = "search_times")
+  @Comment("Count of how many times this node being searched over")
+  private int searchTimes;
 }

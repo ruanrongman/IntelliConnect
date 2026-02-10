@@ -20,8 +20,10 @@
 package top.rslly.iot.models;
 
 import jakarta.persistence.*;
+import lombok.Data;
 
 @Entity
+@Data
 @Table(name = "knowledge_graphic_relation", schema = "cwliot1.8")
 public class KnowledgeGraphicRelationEntity {
   @Id
@@ -37,36 +39,4 @@ public class KnowledgeGraphicRelationEntity {
 
   @Column(name = "des")
   private String des;
-
-  public long getId() {
-    return id;
-  }
-
-  public void setId(long id) {
-    this.id = id;
-  }
-
-  public long getFrom() {
-    return from;
-  }
-
-  public void setFrom(long from) {
-    this.from = from;
-  }
-
-  public long getTo() {
-    return to;
-  }
-
-  public void setTo(long to) {
-    this.to = to;
-  }
-
-  public String getDes() {
-    return des;
-  }
-
-  public void setDes(String des) {
-    this.des = des;
-  }
 }
