@@ -101,10 +101,10 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     }
     searchCount.setCount(searchCount.getCount() + 1);
     knowledgeGraphicSearchCountRepository.save(searchCount);
-    if(searchCount.getCount() <= 30) return;
+    if(searchCount.getCount() <= 10) return;
     List<KnowledgeGraphicNodeEntity> nodes = knowledgeGraphicNodeRepository.findAllByProductId(productId);
     for(KnowledgeGraphicNodeEntity node : nodes){
-      if(node.getHitTimes() < 5 && node.getSearchTimes() < 20){
+      if(node.getHitTimes() + node.getSearchTimes() < 5){
         this.deleteNode(node.getId());
       }
     }
