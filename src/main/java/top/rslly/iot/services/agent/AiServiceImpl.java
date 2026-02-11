@@ -91,7 +91,7 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
-  public void getAiResponseStream(AiControl aiControl, String token){
+  public void getAiResponseStream(AiControl aiControl, String token) {
 
   }
 

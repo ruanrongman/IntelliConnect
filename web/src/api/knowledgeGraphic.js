@@ -129,35 +129,100 @@ export const getRelationByNodes = (params) => request({
     }
 })
 
-export const enableKnowledgeGraphic = (params) => request({
-    url: "/api/v2/productToolsBanSingle",
-    method: "delete",
-    params: {
-        "toolName": "knowledgeGraphic",
-        ...params
+export const enableKnowledgeGraphic = (params) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...params,
+      name: 'knowledge_graph.toggle',
+      type: 'boolean',
+      value: 'true',
+      defaultValue: 'false',
+      required: true,
+      des: 'Knowledge graph toggle',
     },
     headers: {
-        'Authorization': token
-    }
-})
+      Authorization: token,
+    },
+  })
 
-export const disabledKnowledgeGraphic = (params) => request({
-    url: "/api/v2/productToolsBanSingle",
-    method: "post",
-    params: {
-        "toolName": "knowledgeGraphic",
-        ...params
+export const disabledKnowledgeGraphic = (params) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...params,
+      name: 'knowledge_graph.toggle',
+      type: 'boolean',
+      value: 'false',
+      defaultValue: 'false',
+      required: true,
+      des: 'Knowledge graph toggle',
     },
     headers: {
-        'Authorization': token
-    }
-})
+      Authorization: token,
+    },
+  })
 
-export const getKnowledgeGraphicState = (params) => request({
-    url: '/api/v2/productToolsBan/knowledgeGraphic',
+export const getKnowledgeGraphicState = (params) =>
+  request({
+    url: '/api/v2/user/config/knowledge_graph.toggle',
     method: 'get',
     params,
     headers: {
-      'Authorization': token
+      Authorization: token,
+    },
+  })
+
+export const addKnowledgeGraphicToggleConfig = (data) => request({
+  url: '/api/v2/user/config',
+  method: 'post',
+  data:{
+    ...data,
+    name: 'knowledge_graph.toggle',
+    type: "boolean",
+    value: "false",
+    defaultValue: "false",
+    required: true,
+    des: "Knowledge graph toggle"
+  },
+  headers: {
+    Authorization: token
+  },
+})
+
+export const addKnowledgeGraphicForgetToggleConfig = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'post',
+    data: {
+      ...data,
+      name: 'knowledge_graph.forget.toggle',
+      type: 'boolean',
+      value: 'false',
+      defaultValue: 'false',
+      required: true,
+      des: 'Knowledge graph forget toggle',
+    },
+    headers: {
+      Authorization: token,
+    },
+  })
+
+export const knowledgeGraphicForgetToggle = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...data,
+      name: 'knowledge_graph.forget.toggle',
+      type: 'boolean',
+      defaultValue: 'false',
+      required: true,
+      des: 'Knowledge graph forget toggle',
+    },
+    headers: {
+      Authorization: token,
     },
   })

@@ -17,23 +17,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.models;
+package top.rslly.iot.dao;
 
-import jakarta.persistence.*;
-import lombok.Data;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.UserConfigEntity;
 
-@Entity
-@Data
-@Table(name = "knowledge_graphic_search_count", schema = "cwloit1.8")
-public class KnowledgeGraphicSearchCountEntity {
-  @Id
-  @Column(name = "id")
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private long id;
+import java.util.List;
 
-  @Column(name = "product_id")
-  private int productId;
+public interface UserConfigRepository extends JpaRepository<UserConfigEntity, Long> {
+  List<UserConfigEntity> getAllByProductId(int productId);
 
-  @Column(name = "r_count")
-  private int count;
+  UserConfigEntity getTopByProductIdAndName(int productId, String name);
+
+  void deleteAllByProductId(int productId);
 }

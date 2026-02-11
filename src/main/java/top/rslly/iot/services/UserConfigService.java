@@ -17,23 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.models;
+package top.rslly.iot.services;
 
-import jakarta.persistence.*;
-import lombok.Data;
+import org.apache.poi.ss.formula.functions.T;
+import top.rslly.iot.param.request.UserConfig;
+import top.rslly.iot.utility.result.JsonResult;
 
-@Entity
-@Data
-@Table(name = "knowledge_graphic_search_count", schema = "cwloit1.8")
-public class KnowledgeGraphicSearchCountEntity {
-  @Id
-  @Column(name = "id")
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private long id;
+public interface UserConfigService {
+  JsonResult<?> addUserConfig(UserConfig userConfig);
 
-  @Column(name = "product_id")
-  private int productId;
+  JsonResult<?> deleteUserConfig(UserConfig userConfig);
 
-  @Column(name = "r_count")
-  private int count;
+  JsonResult<?> deleteAllByProductId(int productId);
+
+  JsonResult<?> updateUserConfig(UserConfig userConfig);
+
+  JsonResult<?> getAllUserConfig(int productId);
+
+  JsonResult<?> getUserConfigByName(int productId, String name);
 }

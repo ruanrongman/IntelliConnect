@@ -25,6 +25,7 @@ import {
   enableKnowledgeGraphic,
   disabledKnowledgeGraphic,
   getKnowledgeGraphicState,
+  addKnowledgeGraphicToggleConfig,
 } from '@/api/knowledgeGraphic'
 import { getProduct } from '@/api/product'
 
@@ -596,7 +597,20 @@ function getCurrentKnowledgeGraphicState() {
       router.push('/login')
       return
     }
-    knowledgeGraphicEnable.value = data === null
+    if (data === null) {
+      addKnowledgeGraphicToggleConfig({
+        productId: currentProductId.value,
+      }).then((res) => {
+        const { errorCode } = res.data
+        if (errorCode === 2001) {
+          router.push('/login')
+          return
+        }
+        getCurrentKnowledgeGraphicState()
+      })
+    } else {
+      knowledgeGraphicEnable.value = data.value === 'true'
+    }
   })
 }
 
