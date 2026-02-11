@@ -17,23 +17,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.wechat;
+package top.rslly.iot.param.response;
 
-import top.rslly.iot.models.WxUserEntity;
-import top.rslly.iot.param.request.WxUser;
-import top.rslly.iot.utility.result.JsonResult;
+import lombok.Data;
 
-import java.io.IOException;
-import java.util.List;
-
-public interface WxUserService {
-  JsonResult<?> wxLogin(WxUser wxUser) throws IOException;
-
-  WxUserEntity wxRegister(String appid, String openid);
-
-  List<WxUserEntity> findAllByAppidAndOpenid(String appid, String openid);
-
-  List<WxUserEntity> findAllByName(String name);
-
-  JsonResult<?> wxGetAllUser();
+@Data
+public class WxLoginResponse {
+  private String token;
+  private Boolean isNewUser;
 }

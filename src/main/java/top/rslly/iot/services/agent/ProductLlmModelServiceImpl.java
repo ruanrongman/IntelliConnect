@@ -118,6 +118,15 @@ public class ProductLlmModelServiceImpl implements ProductLlmModelService {
   }
 
   @Override
+  public JsonResult<?> getProductLlmModelByProductId(int productId) {
+    var result = productLlmModelRepository.findAllByProductId(productId);
+    if (result.isEmpty()) {
+      return ResultTool.success(new ArrayList<>());
+    }
+    return ResultTool.success(result);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductLlmModel(ProductLlmModel productLlmModel) {
     if (productRepository.findAllById(productLlmModel.getProductId()).isEmpty()) {

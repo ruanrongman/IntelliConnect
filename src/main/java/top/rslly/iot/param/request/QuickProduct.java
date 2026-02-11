@@ -17,23 +17,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.wechat;
+package top.rslly.iot.param.request;
 
-import top.rslly.iot.models.WxUserEntity;
-import top.rslly.iot.param.request.WxUser;
-import top.rslly.iot.utility.result.JsonResult;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
 
-import java.io.IOException;
-import java.util.List;
-
-public interface WxUserService {
-  JsonResult<?> wxLogin(WxUser wxUser) throws IOException;
-
-  WxUserEntity wxRegister(String appid, String openid);
-
-  List<WxUserEntity> findAllByAppidAndOpenid(String appid, String openid);
-
-  List<WxUserEntity> findAllByName(String name);
-
-  JsonResult<?> wxGetAllUser();
+@Data
+public class QuickProduct {
+  @NotBlank(message = "assistantName 不能为空")
+  @Size(min = 1, max = 255, message = "assistantName 长度必须在 1 到 255 之间")
+  private String assistantName;
+  @NotBlank(message = "userName 不能为空")
+  @Size(min = 1, max = 255, message = "userName 长度必须在 1 到 255 之间")
+  private String userName;
+  @NotBlank(message = "role 不能为空")
+  @Size(min = 1, max = 255, message = "role 长度必须在 1 到 255 之间")
+  private String role;
+  @NotBlank(message = "city 不能为空")
+  @Size(min = 1, max = 255, message = "city 长度必须在 1 到 255 之间")
+  private String city;
 }

@@ -67,11 +67,6 @@ public class Wx {
     return wxUserService.wxLogin(wxUser);
   }
 
-  @RequestMapping(value = "/wxRegister", method = RequestMethod.POST)
-  public JsonResult<?> wxRegister(@Valid @RequestBody WxUser wxUser) throws IOException {
-    return wxUserService.wxRegister(wxUser);
-  }
-
   @RequestMapping(value = "/wxBindProduct", method = RequestMethod.GET)
   public JsonResult<?> wxBindProduct(@RequestHeader("Authorization") String header) {
     return wxProductBindService.wxGetBindProduct(header);

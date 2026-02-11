@@ -51,6 +51,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
+import java.util.ArrayList;
 
 @RestController
 @RequestMapping(value = "/api/v2")
@@ -700,6 +701,19 @@ public class Tool {
   @RequestMapping(value = "/productLlmModel", method = RequestMethod.GET)
   public JsonResult<?> getProductLlmModel(@RequestHeader("Authorization") String header) {
     return productLlmModelService.getProductLlmModel(header);
+  }
+
+  @Operation(summary = "获取产品LLM模型配置", description = "获取产品LLM模型配置(产品id)")
+  @RequestMapping(value = "/productLlmModelByProductId", method = RequestMethod.GET)
+  public JsonResult<?> getProductLlmModelByProductId(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.success(new ArrayList<>());
+    }
+    return productLlmModelService.getProductLlmModelByProductId(productId);
   }
 
   @Operation(summary = "创建或更新产品LLM模型配置", description = "创建或更新产品LLM模型配置")

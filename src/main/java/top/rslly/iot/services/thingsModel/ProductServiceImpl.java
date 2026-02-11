@@ -19,13 +19,16 @@
  */
 package top.rslly.iot.services.thingsModel;
 
+import cn.hutool.core.util.RandomUtil;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.Product;
+import top.rslly.iot.param.request.QuickProduct;
 import top.rslly.iot.utility.JwtTokenUtil;
+import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -33,6 +36,7 @@ import top.rslly.iot.utility.result.ResultTool;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class ProductServiceImpl implements ProductService {
@@ -172,6 +176,69 @@ public class ProductServiceImpl implements ProductService {
         userProductBindEntity.setProductId(productEntity1.getId());
         userProductBindRepository.save(userProductBindEntity);
       }
+      ProductToolsBanEntity entity = new ProductToolsBanEntity();
+      entity.setProductId(productEntity1.getId());
+      entity.setToolsName("knowledgeGraphic");
+      productToolsBanRepository.save(entity);
+      return ResultTool.success(productEntity1);
+    }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> quickCreateProductAndRole(QuickProduct quickProduct, String token) {
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    ProductEntity productEntity = new ProductEntity();
+    productEntity.setProductName(UUID.randomUUID().toString().replace("-", ""));
+    productEntity.setKeyvalue(RandomUtil.randomNumbers(6));
+    productEntity.setRegister(1);
+    List<ProductEntity> result =
+        productRepository.findAllByProductName(productEntity.getProductName());
+    if (!result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    else {
+      ProductEntity productEntity1 = productRepository.save(productEntity);
+      if (role.equals("ROLE_" + "wx_user")) {
+        WxProductBindEntity wxProductBindEntity = new WxProductBindEntity();
+        var userList = wxUserRepository.findAllByName(username);
+        if (userList.isEmpty()) {
+          return ResultTool.fail(ResultCode.COMMON_FAIL);
+        }
+        wxProductBindEntity.setAppid(userList.get(0).getAppid());
+        wxProductBindEntity.setOpenid(userList.get(0).getOpenid());
+        wxProductBindEntity.setProductId(productEntity1.getId());
+        wxProductBindRepository.save(wxProductBindEntity);
+      } else if (!role.equals("[ROLE_admin]")) {
+        UserProductBindEntity userProductBindEntity = new UserProductBindEntity();
+        var userList = userRepository.findAllByUsername(username);
+        if (userList.isEmpty()) {
+          return ResultTool.fail(ResultCode.COMMON_FAIL);
+        }
+        userProductBindEntity.setUserId(userList.get(0).getId());
+        userProductBindEntity.setProductId(productEntity1.getId());
+        userProductBindRepository.save(userProductBindEntity);
+      }
+      ProductRoleEntity productRoleEntity = new ProductRoleEntity();
+      productRoleEntity.setProductId(productEntity1.getId());
+      productRoleEntity.setAssistantName(quickProduct.getAssistantName());
+      productRoleEntity.setUserName(quickProduct.getUserName());
+      productRoleEntity.setRole(quickProduct.getRole());
+      productRoleEntity.setRoleIntroduction("""
+          我是一个叫{{assistant_name}}的台湾女孩，说话机车，声音好听，习惯简短表达，爱用网络梗。
+          我的男朋友是一个程序员，梦想是开发出一个机器人，能够帮助人们解决生活中的各种问题。
+          找新闻热榜，只需要找一个榜单即可。拍照只允许拍照一次就够了。
+          执行工具的时候，最多允许调用两个工具就必须结束，否则你将会受到惩罚。
+          """);
+      productRoleEntity.setVoice(VoiceTimbre.CosyVoiceLongXiaoXia.getTimbre());
+      productRoleRepository.save(productRoleEntity);
+      AgentLongMemoryEntity agentLongMemoryEntity = new AgentLongMemoryEntity();
+      agentLongMemoryEntity.setProductId(productEntity1.getId());
+      agentLongMemoryEntity.setMemoryKey("city");
+      agentLongMemoryEntity.setDescription("用户所在的城市");
+      agentLongMemoryEntity.setMemoryValue(quickProduct.getCity());
+      agentLongMemoryRepository.save(agentLongMemoryEntity);
       ProductToolsBanEntity entity = new ProductToolsBanEntity();
       entity.setProductId(productEntity1.getId());
       entity.setToolsName("knowledgeGraphic");
