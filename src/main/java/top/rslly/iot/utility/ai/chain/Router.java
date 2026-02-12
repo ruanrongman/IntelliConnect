@@ -24,8 +24,10 @@ import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanService;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
+import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
@@ -76,6 +78,10 @@ public class Router {
   private LongMemoryTool longMemoryTool;
   @Autowired
   private KnowledgeGraphicTool knowledgeGraphicTool;
+  @Autowired
+  private KnowledgeGraphicServiceImpl knowledgeGraphicService;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in WeChat module need to use openid
@@ -189,8 +195,18 @@ public class Router {
       memoryTool.run(content, globalMessage);
       longMemoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
-      if (!banTools.contains("knowledgeGraphic")) {
+      // if (!banTools.contains("knowledgeGraphic")) {
+      // knowledgeGraphicTool.run(content, globalMessage);
+      // if (!banTools.contains("clearKnowledgeGraphicNode")) {
+      // knowledgeGraphicService.clearNode(productId);
+      // }
+      // }
+      if (userConfigService.getConfigValue(productId, "knowledge_graph.toggle").equals("true")) {
         knowledgeGraphicTool.run(content, globalMessage);
+      }
+      if (userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle")
+          .equals("true")) {
+        knowledgeGraphicService.clearNode(productId);
       }
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);

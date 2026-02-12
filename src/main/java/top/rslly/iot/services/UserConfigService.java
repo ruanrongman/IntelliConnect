@@ -17,26 +17,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.models;
+package top.rslly.iot.services;
 
-import lombok.Data;
-import org.hibernate.annotations.Comment;
+import org.apache.poi.ss.formula.functions.T;
+import top.rslly.iot.param.request.UserConfig;
+import top.rslly.iot.utility.result.JsonResult;
 
-import jakarta.persistence.*;
+public interface UserConfigService {
+  JsonResult<?> addUserConfig(UserConfig userConfig);
 
-@Entity
-@Data
-@Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")
-public class KnowledgeGraphicAttributeEntity {
-  @Id
-  @Column(name = "id")
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private long id;
+  JsonResult<?> deleteUserConfig(UserConfig userConfig);
 
-  @Column(name = "name")
-  private String name;
+  JsonResult<?> deleteAllByProductId(int productId);
 
-  @Column(name = "belong")
-  @Comment("Node id which this attribute belongs to")
-  private long belong;
+  JsonResult<?> updateUserConfig(UserConfig userConfig);
+
+  JsonResult<?> getAllUserConfig(int productId);
+
+  JsonResult<?> getUserConfigByName(int productId, String name);
 }

@@ -17,26 +17,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.models;
+package top.rslly.iot.dao;
 
-import lombok.Data;
-import org.hibernate.annotations.Comment;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.KnowledgeGraphicSearchCountEntity;
 
-import jakarta.persistence.*;
+public interface KnowledgeGraphicSearchCountRepository
+    extends JpaRepository<KnowledgeGraphicSearchCountEntity, Long> {
+  KnowledgeGraphicSearchCountEntity getTopByProductId(int productId);
 
-@Entity
-@Data
-@Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")
-public class KnowledgeGraphicAttributeEntity {
-  @Id
-  @Column(name = "id")
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private long id;
-
-  @Column(name = "name")
-  private String name;
-
-  @Column(name = "belong")
-  @Comment("Node id which this attribute belongs to")
-  private long belong;
+  void deleteAllByProductId(int productId);
 }

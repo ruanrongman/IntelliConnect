@@ -91,6 +91,11 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
+  public void getAiResponseStream(AiControl aiControl, String token) {
+
+  }
+
+  @Override
   public JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token) {
     if (!safetyService.controlAuthorizeProduct(token, productId)) {
