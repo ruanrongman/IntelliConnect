@@ -106,9 +106,10 @@ public class UserConfigServiceImpl implements UserConfigService {
     return ResultTool.success(entity);
   }
 
-  public String getConfigValue(int productId, String name){
+  public String getConfigValue(int productId, String name) {
     UserConfigEntity entity = userConfigRepository.getTopByProductIdAndName(productId, name);
-    if(entity == null || entity.getValue() == null) return "";
+    if (entity == null || entity.getValue() == null)
+      return "";
     return entity.getValue();
   }
 }

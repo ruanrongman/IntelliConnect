@@ -32,8 +32,8 @@ public class UserConfig {
 
   public int productId;
 
-  @NotBlank(message="配置名称不能为空")
-  @Size(min=1, max=255)
+  @NotBlank(message = "配置名称不能为空")
+  @Size(min = 1, max = 255)
   public String name;
 
   public String type;

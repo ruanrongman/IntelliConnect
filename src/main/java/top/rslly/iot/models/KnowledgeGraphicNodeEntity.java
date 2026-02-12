@@ -26,7 +26,7 @@ import jakarta.persistence.*;
 
 @Entity
 @Data
-@Table(name = "knowledge_graphic_node", schema = "cwliot1.8", catalog = "")
+@Table(name = "knowledge_graphic_node", schema = "cwliot1.8")
 public class KnowledgeGraphicNodeEntity {
 
   @Id
@@ -52,4 +52,8 @@ public class KnowledgeGraphicNodeEntity {
   @Column(name = "search_times")
   @Comment("Count of how many times this node being searched over")
   private int searchTimes;
+
+  @Column(name = "create_epoch")
+  @Comment("When was this node create, for calculating whether this node should be forgot")
+  private int createEpoch;
 }

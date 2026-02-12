@@ -26,6 +26,11 @@ import {
   disabledKnowledgeGraphic,
   getKnowledgeGraphicState,
   addKnowledgeGraphicToggleConfig,
+  getKnowledgeGraphicForgetState,
+  addKnowledgeGraphicForgetToggleConfig,
+  knowledgeGraphicForgetToggle,
+  updateKnowledgeGraphicForgetEpoch,
+  getKnowledgeGraphicForgetEpoch,
 } from '@/api/knowledgeGraphic'
 import { getProduct } from '@/api/product'
 
@@ -104,6 +109,8 @@ const newNodeForm = reactive({
 })
 
 const knowledgeGraphicEnable = ref(false)
+const knowledgeGraphForgetEnable = ref(false)
+const knowledgeGraphForgetEpoch = ref(10)
 
 const cavWidth = ref(300)
 const cavHeight = ref(100)
@@ -141,14 +148,21 @@ function fetchProducts() {
       productLoading.value = false
       currentProductId.value = data.length > 0 ? data[0].id : null
       if (currentProductId.value !== null) {
-        getCurrentKnowledgeGraphicState()
-        getCurrentKnowledgeGraphic()
+        afterFetchCurrentProduct()
       }
     } else {
       products.value = []
       productLoading.value = false
     }
   })
+}
+
+function afterFetchCurrentProduct() {
+  // When product id changed, invoke this hook
+  getCurrentKnowledgeGraphicState()
+  getCurrentKnowledgeGraphic()
+  getCurrentKnowledgeGraphForgetState()
+  getCurrentKnowledgeGraphForgetEpoch()
 }
 
 function handleKnowledgeGraphicEnableToggle() {
@@ -174,6 +188,45 @@ function handleKnowledgeGraphicEnableToggle() {
         getCurrentKnowledgeGraphicState()
       })
   }
+}
+
+function handleKnowledgeGraphForgetEnableToggle() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+  }
+  const data = {
+    productId: currentProductId.value,
+    value: String(!knowledgeGraphForgetEnable.value),
+  }
+  knowledgeGraphicForgetToggle(data)
+    .then((res) => resultPreFilter(res))
+    .then(() => {
+      if (knowledgeGraphForgetEnable.value) {
+        message.info('已关闭知识图谱遗忘功能')
+      } else {
+        message.info('已开启知识图谱遗忘功能')
+      }
+      knowledgeGraphForgetEnable.value = !knowledgeGraphForgetEnable.value
+    })
+}
+
+function handleKnowledgeGraphForgetEpochChange(value) {
+  knowledgeGraphForgetEpoch.value = value
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const data = {
+    productId: currentProductId.value,
+    value: knowledgeGraphForgetEpoch.value,
+  }
+  updateKnowledgeGraphicForgetEpoch(data).then((res) => resultPreFilter(res))
 }
 
 function handleStartAddNewNode() {
@@ -325,8 +378,7 @@ function updateGraphicData() {
 
 function handleProductIdChange(value) {
   currentProductId.value = value
-  getCurrentKnowledgeGraphicState()
-  getCurrentKnowledgeGraphic()
+  afterFetchCurrentProduct()
 }
 
 function handleRepulsionChange(value) {
@@ -614,6 +666,62 @@ function getCurrentKnowledgeGraphicState() {
   })
 }
 
+function getCurrentKnowledgeGraphForgetState() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const params = { productId: currentProductId.value }
+  getKnowledgeGraphicForgetState(params)
+    .then((res) => resultPreFilter(res))
+    .then((res) => {
+      const { data, errorCode } = res
+      if (errorCode !== 200) {
+        message.error('获取知识图谱遗忘功能状态失败！')
+        return
+      }
+      if (data === null) {
+        addKnowledgeGraphicForgetToggleConfig(params).then(() => {
+          getCurrentKnowledgeGraphForgetState()
+        })
+      } else {
+        knowledgeGraphForgetEnable.value = data.value === 'true'
+      }
+    })
+}
+
+function getCurrentKnowledgeGraphForgetEpoch() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const params = { productId: currentProductId.value }
+  getKnowledgeGraphicForgetEpoch(params)
+    .then((res) => resultPreFilter(res))
+    .then((res) => {
+      const { data, errorCode } = res
+      if (errorCode !== 200) {
+        message.error('获取知识图谱遗忘轮次出错！')
+        return
+      }
+      if (data === null) {
+        const createData = {
+          productId: currentProductId.value,
+          value: 10,
+        }
+        updateKnowledgeGraphicForgetEpoch(createData)
+      } else {
+        knowledgeGraphForgetEpoch.value = parseInt(data.value)
+      }
+    })
+}
+
 onMounted(() => {
   fetchProducts()
   initializeCanvas()
@@ -641,6 +749,14 @@ onUnmounted(() => {
             @change="handleProductIdChange"
           >
           </Select>
+        </div>
+        <div class="option-item">
+          <Button
+            :type="'primary'"
+            :disabled="!currentProductId"
+            @click="getCurrentKnowledgeGraphic"
+            >手动刷新数据</Button
+          >
         </div>
         <div v-if="currentProductId !== null" class="option-item">
           <label class="option-label" for="connect-toggle"> 知识图谱自动生成开关 </label>
@@ -670,22 +786,42 @@ onUnmounted(() => {
             @click="handleConnectingToggle"
           />
         </div>
-        <div class="option-item">
-          <Button
-            :type="'primary'"
-            :disabled="!currentProductId"
-            @click="getCurrentKnowledgeGraphic"
-            >手动刷新数据</Button
-          >
-        </div>
         <div v-if="currentProductId !== null" class="option-item repulsion">
-          <label for="repulsion">节点斥力大小（边长）</label>
+          <label class="option-label" for="repulsion">节点斥力大小（边长）</label>
           <Slider
             id="repulsion"
             :max="255"
             width="200"
             :value="repulsion"
             @change="handleRepulsionChange"
+          />
+        </div>
+        <div v-if="currentProductId !== null" class="option-item">
+          <label class="option-label" for="forget-toggle"> 知识图谱遗忘开关 </label>
+          <Switch
+            id="forget-toggle"
+            :checked="knowledgeGraphForgetEnable"
+            @click="handleKnowledgeGraphForgetEnableToggle"
+          />
+        </div>
+        <div
+          v-if="currentProductId !== null && knowledgeGraphForgetEnable"
+          class="option-item repulsion"
+        >
+          <label for="repulsion" class="option-label">
+            <Tooltip
+              title="对话达到这个轮次后会自动执行一次节点清理（模拟遗忘），随后重新计数。注意！这个值小于4时清理永远不会生效！"
+            >
+              <QuestionCircleOutlined />
+            </Tooltip>
+            知识图谱遗忘轮次
+          </label>
+          <Slider
+            id="forget-epoch"
+            :min="3"
+            :max="40"
+            :value="knowledgeGraphForgetEpoch"
+            @change="handleKnowledgeGraphForgetEpochChange"
           />
         </div>
       </div>
@@ -811,6 +947,10 @@ onUnmounted(() => {
 
 #repulsion {
   width: 200px;
+}
+
+#forget-epoch {
+  width: 150px;
 }
 
 .option-label {

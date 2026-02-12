@@ -195,16 +195,17 @@ public class Router {
       memoryTool.run(content, globalMessage);
       longMemoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
-//      if (!banTools.contains("knowledgeGraphic")) {
-//        knowledgeGraphicTool.run(content, globalMessage);
-//        if (!banTools.contains("clearKnowledgeGraphicNode")) {
-//          knowledgeGraphicService.clearNode(productId);
-//        }
-//      }
-      if(userConfigService.getConfigValue(productId, "knowledge_graph.toggle").equals("true")){
+      // if (!banTools.contains("knowledgeGraphic")) {
+      // knowledgeGraphicTool.run(content, globalMessage);
+      // if (!banTools.contains("clearKnowledgeGraphicNode")) {
+      // knowledgeGraphicService.clearNode(productId);
+      // }
+      // }
+      if (userConfigService.getConfigValue(productId, "knowledge_graph.toggle").equals("true")) {
         knowledgeGraphicTool.run(content, globalMessage);
       }
-      if(userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle").equals("true")){
+      if (userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle")
+          .equals("true")) {
         knowledgeGraphicService.clearNode(productId);
       }
     }

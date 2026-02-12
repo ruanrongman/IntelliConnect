@@ -192,6 +192,16 @@ export const addKnowledgeGraphicToggleConfig = (data) => request({
   },
 })
 
+export const getKnowledgeGraphicForgetState = (params) =>
+  request({
+    url: '/api/v2/user/config/knowledge_graph.forget.toggle',
+    method: 'get',
+    params,
+    headers: {
+      Authorization: token,
+    },
+  })
+
 export const addKnowledgeGraphicForgetToggleConfig = (data) =>
   request({
     url: '/api/v2/user/config',
@@ -221,6 +231,33 @@ export const knowledgeGraphicForgetToggle = (data) =>
       defaultValue: 'false',
       required: true,
       des: 'Knowledge graph forget toggle',
+    },
+    headers: {
+      Authorization: token,
+    },
+  })
+
+export const getKnowledgeGraphicForgetEpoch = (params) =>
+  request({
+    url: '/api/v2/user/config/knowledge_graph.forget.epoch',
+    method: 'get',
+    params,
+    headers: {
+      Authorization: token,
+    },
+  })
+
+export const updateKnowledgeGraphicForgetEpoch = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...data,
+      name: 'knowledge_graph.forget.epoch',
+      type: 'integer',
+      defaultValue: '10',
+      required: false,
+      des: 'Knowledge graph forget epoch',
     },
     headers: {
       Authorization: token,

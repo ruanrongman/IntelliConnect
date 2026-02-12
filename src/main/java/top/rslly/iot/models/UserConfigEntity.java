@@ -49,8 +49,7 @@ public class UserConfigEntity {
   private int productId;
 
   /**
-   * Combine with module、task name、sub-task name, such as:
-   * `module.task_name.sub_task_name.opt_name`
+   * Combine with module、task name、sub-task name, such as: `module.task_name.sub_task_name.opt_name`
    **/
   @Column(name = "name")
   private String name;
