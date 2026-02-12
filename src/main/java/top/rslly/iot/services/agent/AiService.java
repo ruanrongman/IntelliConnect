@@ -32,6 +32,8 @@ public interface AiService {
   JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token);
 
+  void getAiResponseStream(AiControl aiControl, String token);
+
   JsonResult<?> getMcpPointUrl(int productId);
 
   JsonResult<?> getMcpPointTools(int productId);

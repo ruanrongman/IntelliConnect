@@ -17,26 +17,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.models;
+package top.rslly.iot.param.request;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
-import org.hibernate.annotations.Comment;
+import org.jetbrains.annotations.NotNull;
 
-import jakarta.persistence.*;
-
-@Entity
 @Data
-@Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")
-public class KnowledgeGraphicAttributeEntity {
-  @Id
-  @Column(name = "id")
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private long id;
+public class UserConfig {
+  public int id;
 
-  @Column(name = "name")
-  private String name;
+  public int userId;
 
-  @Column(name = "belong")
-  @Comment("Node id which this attribute belongs to")
-  private long belong;
+  public int productId;
+
+  @NotBlank(message = "配置名称不能为空")
+  @Size(min = 1, max = 255)
+  public String name;
+
+  public String type;
+
+  public String value;
+
+  public String defaultValue;
+
+  public String min;
+
+  public String max;
+
+  public boolean required;
+
+  public long parent;
+
+  public String des;
 }

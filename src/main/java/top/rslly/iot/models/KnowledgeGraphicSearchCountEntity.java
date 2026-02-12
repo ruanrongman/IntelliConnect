@@ -19,41 +19,21 @@
  */
 package top.rslly.iot.models;
 
-import lombok.Data;
-import org.hibernate.annotations.Comment;
-
 import jakarta.persistence.*;
+import lombok.Data;
 
 @Entity
 @Data
-@Table(name = "knowledge_graphic_node", schema = "cwliot1.8")
-public class KnowledgeGraphicNodeEntity {
-
+@Table(name = "knowledge_graphic_search_count", schema = "cwloit1.8")
+public class KnowledgeGraphicSearchCountEntity {
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id")
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private long id;
 
-  @Column(name = "name")
-  private String name;
-
-  @Column(name = "des")
-  @Comment("Description of this node")
-  private String des;
-
   @Column(name = "product_id")
-  @Comment("Which user this node belongs to")
   private int productId;
 
-  @Column(name = "hit_times")
-  @Comment("Direct hit count since last graph clear")
-  private int hitTimes;
-
-  @Column(name = "search_times")
-  @Comment("Count of how many times this node being searched over")
-  private int searchTimes;
-
-  @Column(name = "create_epoch")
-  @Comment("When was this node create, for calculating whether this node should be forgot")
-  private int createEpoch;
+  @Column(name = "r_count")
+  private int count;
 }

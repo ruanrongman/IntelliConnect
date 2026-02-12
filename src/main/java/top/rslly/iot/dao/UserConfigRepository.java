@@ -17,26 +17,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.models;
+package top.rslly.iot.dao;
 
-import lombok.Data;
-import org.hibernate.annotations.Comment;
+import org.springframework.data.jpa.repository.JpaRepository;
+import top.rslly.iot.models.UserConfigEntity;
 
-import jakarta.persistence.*;
+import java.util.List;
 
-@Entity
-@Data
-@Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")
-public class KnowledgeGraphicAttributeEntity {
-  @Id
-  @Column(name = "id")
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private long id;
+public interface UserConfigRepository extends JpaRepository<UserConfigEntity, Long> {
+  List<UserConfigEntity> getAllByProductId(int productId);
 
-  @Column(name = "name")
-  private String name;
+  UserConfigEntity getTopByProductIdAndName(int productId, String name);
 
-  @Column(name = "belong")
-  @Comment("Node id which this attribute belongs to")
-  private long belong;
+  void deleteAllByProductId(int productId);
 }

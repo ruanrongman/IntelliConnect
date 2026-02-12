@@ -22,8 +22,10 @@ package top.rslly.iot.utility.ai.tools;
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
 import top.rslly.iot.param.request.KnowledgeGraphicNode;
@@ -42,7 +44,7 @@ import java.util.*;
 @Component
 @Data
 @Slf4j
-public class KnowledgeGraphicTool implements BaseTool<String> {
+public class KnowledgeGraphicTool {
   @Autowired
   private ProductService productService;
   @Autowired
@@ -53,40 +55,62 @@ public class KnowledgeGraphicTool implements BaseTool<String> {
   private KnowledgeGraphicPrompt knowledgeGraphicPrompt;
   @Value("${ai.knowledge_graphic_llm}")
   private String llmName;
+  @Value("${ai.knowledge_graphic.max_graphic_length:30000}")
+  private int maxGraphicLength;
   private String name = "knowledgeGraphicTool";
   private String description = """
       This tool is working for knowledge graphic generation to help LLM
       handle relations between entities.
       """;
 
-  @Override
   public String run(String question) {
     return null;
   }
 
-  @Override
-  public String run(String question, Map<String, Object> globalMessage) {
+  @Async("taskExecutor")
+  public void run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
     if (productService.findAllById(productId).isEmpty())
-      return "";
+      return;
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "knowledgeGraphic");
     List<ModelMessage> memory =
         Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
             .orElse(Collections.emptyList());
     List<ModelMessage> messages = new ArrayList<>();
+    String knowledgeSystemPrompt =
+        knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId) + memory;
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(),
-        knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId) + memory);
-    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
-        "Start generate knowledge graphic.");
+        knowledgeSystemPrompt);
+    ModelMessage userMessage = getUserMessage(knowledgeSystemPrompt);
     messages.add(systemMessage);
     messages.add(userMessage);
+    if (knowledgeSystemPrompt.length() > maxGraphicLength) {
+      log.error("Knowledge Graphic extract error:\n{}", "Knowledge Graphic is too long.");
+      return;
+    }
     var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     try {
       process_llm_result(obj, productId);
     } catch (Exception e) {
       log.error("Knowledge Graphic extract error:\n{}", e.getMessage());
     }
-    return null;
+  }
+
+  private @NonNull ModelMessage getUserMessage(String knowledgeSystemPrompt) {
+    ModelMessage userMessage;
+    if (knowledgeSystemPrompt.length() > maxGraphicLength / 2) {
+      log.info("Knowledge start summary");
+      userMessage = new ModelMessage(ModelMessageRole.USER.value(),
+          """
+              The graph has reached its maximum capacity.
+              Summarize the graph immediately, ensuring that the most recent content is not lost,
+              and begin generating the graph.
+              """);
+    } else {
+      userMessage = new ModelMessage(ModelMessageRole.USER.value(),
+          "Start generate knowledge graphic.");
+    }
+    return userMessage;
   }
 
   private void process_llm_result(JSONObject jsonObject, int productId) {

@@ -246,6 +246,7 @@ const fetchDeviceList = async () => {
           }
           
           return {
+            key: item.id,
             value: item.name,
             label: productName 
               ? `${item.name} (${productName})` 

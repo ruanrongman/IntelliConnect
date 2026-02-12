@@ -27,6 +27,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import top.rslly.iot.dao.UserConfigRepository;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
 import top.rslly.iot.services.agent.*;
@@ -96,6 +97,8 @@ public class Tool {
   private KnowledgeGraphicService knowledgeGraphicService;
   @Autowired
   private ProductSkillsServiceImpl productSkillsService;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -164,6 +167,18 @@ public class Tool {
   @RequestMapping(value = "/aiControl", method = RequestMethod.POST)
   public JsonResult<?> aiControl(@Valid @RequestBody AiControl aiControl,
       @RequestHeader("Authorization") String header) {
+    return aiService.getAiResponse(aiControl, header);
+  }
+
+  @Operation(summary = "请求Agent")
+  @RequestMapping(value = "/agent", method = RequestMethod.POST)
+  public JsonResult<?> aiControl(@RequestBody OpenAIRequest openAIRequest,
+      @RequestHeader("Authorization") String header) {
+    int productId = (int) openAIRequest.getExtraParams().get("productId");
+    String message = openAIRequest.getMessages().getLast().getContent();
+    AiControl aiControl = new AiControl();
+    aiControl.setProductId(productId);
+    aiControl.setContent(message);
     return aiService.getAiResponse(aiControl, header);
   }
 
@@ -993,5 +1008,84 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return knowledgeGraphicService.getRelationByNodes(from, to);
+  }
+
+  @Operation(summary = "用户配置", description = "查询一项用户配置")
+  @RequestMapping(value = "/user/config/{name}", method = RequestMethod.GET)
+  public JsonResult<?> getUserConfigByName(@PathVariable String name,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return userConfigService.getUserConfigByName(productId, name);
+  }
+
+  @Operation(summary = "用户配置", description = "查询一项用户配置")
+  @RequestMapping(value = "/user/config", method = RequestMethod.GET)
+  public JsonResult<?> getUserConfig(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return userConfigService.getAllUserConfig(productId);
+  }
+
+  @Operation(summary = "用户配置", description = "添加一项用户配置")
+  @RequestMapping(value = "/user/config", method = RequestMethod.POST)
+  public JsonResult<?> addUserConfig(@Valid @RequestBody UserConfig userConfig,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, userConfig.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return userConfigService.addUserConfig(userConfig);
+  }
+
+  @Operation(summary = "用户配置", description = "删除用户配置")
+  @RequestMapping(value = "/user/config", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteUserConfig(@Valid @RequestBody UserConfig userConfig,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, userConfig.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return userConfigService.deleteUserConfig(userConfig);
+  }
+
+  @Operation(summary = "用户配置", description = "通过产品ID删除该产品下的所有用户配置")
+  @RequestMapping(value = "/user/config/{productId}", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteUserConfigByProductId(@PathVariable int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return userConfigService.deleteAllByProductId(productId);
+  }
+
+  @Operation(summary = "用户配置", description = "更新用户配置")
+  @RequestMapping(value = "/user/config", method = RequestMethod.PUT)
+  public JsonResult<?> updateUserConfig(@Valid @RequestBody UserConfig userConfig,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, userConfig.productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return userConfigService.updateUserConfig(userConfig);
   }
 }
