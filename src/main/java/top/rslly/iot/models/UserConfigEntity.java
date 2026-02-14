@@ -21,6 +21,8 @@ package top.rslly.iot.models;
 
 import com.alibaba.fastjson.annotation.JSONField;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -79,4 +81,9 @@ public class UserConfigEntity {
 
   @Column(name = "des")
   private String des;
+
+  @Size(max = 255)
+  @NotNull
+  @Column(name = "is_wechat_user", nullable = false)
+  private String isWechatUser;
 }

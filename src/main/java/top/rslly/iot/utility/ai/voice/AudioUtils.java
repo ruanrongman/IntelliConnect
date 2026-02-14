@@ -191,52 +191,88 @@ public class AudioUtils {
   public static void asyncSendAudioQueue(String chatId, Session session,
       BlockingQueue<byte[]> queue) {
     try {
-      // 首先检查会话是否有效
       if (session == null || !session.isOpen()) {
         log.warn("WebSocket session is null or closed for chatId: {}", chatId);
         queue.clear();
         return;
       }
+
       final long startTime = System.nanoTime();
       int playPosition = 0;
 
       // Pre-buffer: collect up to PRE_BUFFER_COUNT frames.
       List<byte[]> preBuffer = new ArrayList<>();
       for (int i = 0; i < PRE_BUFFER_COUNT; i++) {
-        byte[] frame = queue.take();
-        if (frame.length == 0) { // EOS encountered.
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
+          queue.clear();
+          return;
+        }
+        // 修改：take() -> poll()，避免无限阻塞
+        byte[] frame = queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS);
+        if (frame == null || frame.length == 0) {
           break;
         }
         preBuffer.add(frame);
       }
+
       // Send pre-buffer frames immediately.
       for (byte[] bytes : preBuffer) {
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false) || !session.isOpen()) {
+          queue.clear();
+          return;
+        }
         session.getBasicRemote().sendBinary(AudioUtils.byte2Bytebuffer(bytes));
-        // log.info("预缓冲帧 {}, 时间: {}ms", i, (System.nanoTime() - startTime) / 1_000_000.0);
       }
+
       // Continue sending remaining frames with timing control.
-      while (!XiaoZhiWebsocket.isAbort.get(chatId)) {
-        byte[] opusPacket = queue.take();
-        if (opusPacket.length == 0) { // End-of-stream marker.
+      while (true) {
+        // 每次循环检查打断
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false) || !session.isOpen()) {
+          queue.clear();
+          return;
+        }
+
+        // 修改：take() -> poll()，避免无限阻塞
+        byte[] opusPacket = queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS);
+        if (opusPacket == null) {
+          // 超时，继续检查打断状态
+          continue;
+        }
+        if (opusPacket.length == 0) {
           break;
         }
+
         long expectedTimeNs = startTime + playPosition * 1_000_000L;
         long currentTimeNs = System.nanoTime();
         long delayNs = expectedTimeNs - currentTimeNs;
-        if (delayNs > 0) {
-          long delayMs = delayNs / 1_000_000L;
-          int extraNanos = (int) (delayNs % 1_000_000L);
-          Thread.sleep(delayMs, extraNanos);
+
+        // 修改：分段sleep，快速响应打断
+        while (delayNs > 0) {
+          if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
+            queue.clear();
+            return;
+          }
+          long sleepMs = Math.min(delayNs / 1_000_000L, 20);
+          if (sleepMs > 0) {
+            Thread.sleep(sleepMs);
+          }
+          delayNs = expectedTimeNs - System.nanoTime();
         }
-        long beforeSend = System.nanoTime();
+
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false) || !session.isOpen()) {
+          queue.clear();
+          return;
+        }
+
         session.getBasicRemote().sendBinary(AudioUtils.byte2Bytebuffer(opusPacket));
-        double actualIntervalMs = (System.nanoTime() - beforeSend) / 1_000_000.0;
-        // log.info("发送帧，位置: {}ms, 实际间隔: {}ms", playPosition, actualIntervalMs);
         playPosition += FRAME_DURATION;
       }
-      queue.clear();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     } catch (Exception e) {
       log.error("Error in asyncSendAudioQueue: {}", e.getMessage(), e);
+    } finally {
+      queue.clear();
     }
   }
 }

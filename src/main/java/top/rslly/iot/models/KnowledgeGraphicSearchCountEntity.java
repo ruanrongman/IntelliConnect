@@ -34,6 +34,6 @@ public class KnowledgeGraphicSearchCountEntity {
   @Column(name = "product_id")
   private int productId;
 
-  @Column(name = "r_count")
+  @Column(name = "r_count", columnDefinition = "INT DEFAULT 0")
   private int count;
 }

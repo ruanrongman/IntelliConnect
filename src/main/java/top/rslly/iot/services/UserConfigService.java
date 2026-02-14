@@ -24,13 +24,13 @@ import top.rslly.iot.param.request.UserConfig;
 import top.rslly.iot.utility.result.JsonResult;
 
 public interface UserConfigService {
-  JsonResult<?> addUserConfig(UserConfig userConfig);
+  JsonResult<?> addUserConfig(UserConfig userConfig, String header);
 
   JsonResult<?> deleteUserConfig(UserConfig userConfig);
 
   JsonResult<?> deleteAllByProductId(int productId);
 
-  JsonResult<?> updateUserConfig(UserConfig userConfig);
+  JsonResult<?> updateUserConfig(UserConfig userConfig, String header);
 
   JsonResult<?> getAllUserConfig(int productId);
 

@@ -38,6 +38,7 @@ public interface WxProductBindRepository extends JpaRepository<WxProductBindEnti
   @Query("SELECT new top.rslly.iot.param.response.WxBindProductResponse(e.id, e.productId) FROM WxProductBindEntity e WHERE e.appid = ?1 AND e.openid = ?2")
   List<WxBindProductResponse> findProductIdByAppidAndOpenid(String appid, String openid);
 
+  Long countByAppidAndOpenid(String appid, String openid);
 
   @Transactional
   List<WxProductBindEntity> deleteById(int id);

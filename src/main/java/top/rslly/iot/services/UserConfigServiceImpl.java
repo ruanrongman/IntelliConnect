@@ -19,13 +19,18 @@
  */
 package top.rslly.iot.services;
 
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.formula.functions.T;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import top.rslly.iot.dao.UserConfigRepository;
+import top.rslly.iot.dao.UserRepository;
+import top.rslly.iot.dao.WxUserRepository;
 import top.rslly.iot.models.UserConfigEntity;
 import top.rslly.iot.param.request.UserConfig;
+import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -35,17 +40,33 @@ import java.util.List;
 @Service
 @Slf4j
 public class UserConfigServiceImpl implements UserConfigService {
-  @Autowired
+  @Resource
   private UserConfigRepository userConfigRepository;
+  @Resource
+  private UserRepository userRepository;
+  @Resource
+  private WxUserRepository wxUserRepository;
 
   @Override
-  public JsonResult<?> addUserConfig(UserConfig userConfig) {
+  public JsonResult<?> addUserConfig(UserConfig userConfig, String header) {
+    String token_deal = header.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    int userId = 0;
+    String isWechatUser = "false";
+    if (role.equals("ROLE_" + "wx_user")) {
+      isWechatUser = "true";
+      userId = wxUserRepository.findAllByName(username).get(0).getId();
+    } else {
+      userId = userRepository.findAllByUsername(username).get(0).getId();
+    }
     UserConfigEntity entity =
         userConfigRepository.getTopByProductIdAndName(userConfig.productId, userConfig.name);
     if (entity == null) {
       // Use MapStruct!!!
       entity = UserConfigEntity.builder()
-          .userId(userConfig.userId)
+          .userId(userId)
+          .isWechatUser(isWechatUser)
           .productId(userConfig.productId)
           .name(userConfig.name)
           .type(userConfig.type)
@@ -90,8 +111,8 @@ public class UserConfigServiceImpl implements UserConfigService {
   }
 
   @Override
-  public JsonResult<?> updateUserConfig(UserConfig userConfig) {
-    return addUserConfig(userConfig);
+  public JsonResult<?> updateUserConfig(UserConfig userConfig, String header) {
+    return addUserConfig(userConfig, header);
   }
 
   @Override

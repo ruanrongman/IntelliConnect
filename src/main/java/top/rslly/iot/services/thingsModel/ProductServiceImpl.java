@@ -21,6 +21,7 @@ package top.rslly.iot.services.thingsModel;
 
 import cn.hutool.core.util.RandomUtil;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
@@ -84,7 +85,10 @@ public class ProductServiceImpl implements ProductService {
   private ProductLlmModelRepository productLlmModelRepository;
   @Resource
   private ProductSkillsRepository productSkillsRepository;
-
+  @Resource
+  private UserConfigRepository userConfigRepository;
+  @Value("${product-limit}")
+  private int productLimit;
 
   @Override
   public JsonResult<?> getProductName(int id) {
@@ -162,8 +166,13 @@ public class ProductServiceImpl implements ProductService {
         if (userList.isEmpty()) {
           return ResultTool.fail(ResultCode.COMMON_FAIL);
         }
-        wxProductBindEntity.setAppid(userList.get(0).getAppid());
-        wxProductBindEntity.setOpenid(userList.get(0).getOpenid());
+        String appid = userList.get(0).getAppid();
+        String openid = userList.get(0).getOpenid();
+        if (wxProductBindRepository.countByAppidAndOpenid(appid, openid) > productLimit) {
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+        }
+        wxProductBindEntity.setAppid(appid);
+        wxProductBindEntity.setOpenid(openid);
         wxProductBindEntity.setProductId(productEntity1.getId());
         wxProductBindRepository.save(wxProductBindEntity);
       } else if (!role.equals("[ROLE_admin]")) {
@@ -172,14 +181,13 @@ public class ProductServiceImpl implements ProductService {
         if (userList.isEmpty()) {
           return ResultTool.fail(ResultCode.COMMON_FAIL);
         }
+        if (userProductBindRepository.countByUserId(userList.get(0).getId()) > productLimit) {
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+        }
         userProductBindEntity.setUserId(userList.get(0).getId());
         userProductBindEntity.setProductId(productEntity1.getId());
         userProductBindRepository.save(userProductBindEntity);
       }
-      ProductToolsBanEntity entity = new ProductToolsBanEntity();
-      entity.setProductId(productEntity1.getId());
-      entity.setToolsName("knowledgeGraphic");
-      productToolsBanRepository.save(entity);
       return ResultTool.success(productEntity1);
     }
   }
@@ -206,6 +214,11 @@ public class ProductServiceImpl implements ProductService {
         if (userList.isEmpty()) {
           return ResultTool.fail(ResultCode.COMMON_FAIL);
         }
+        String appid = userList.get(0).getAppid();
+        String openid = userList.get(0).getOpenid();
+        if (wxProductBindRepository.countByAppidAndOpenid(appid, openid) > productLimit) {
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+        }
         wxProductBindEntity.setAppid(userList.get(0).getAppid());
         wxProductBindEntity.setOpenid(userList.get(0).getOpenid());
         wxProductBindEntity.setProductId(productEntity1.getId());
@@ -215,6 +228,9 @@ public class ProductServiceImpl implements ProductService {
         var userList = userRepository.findAllByUsername(username);
         if (userList.isEmpty()) {
           return ResultTool.fail(ResultCode.COMMON_FAIL);
+        }
+        if (userProductBindRepository.countByUserId(userList.get(0).getId()) > productLimit) {
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
         }
         userProductBindEntity.setUserId(userList.get(0).getId());
         userProductBindEntity.setProductId(productEntity1.getId());
@@ -239,10 +255,6 @@ public class ProductServiceImpl implements ProductService {
       agentLongMemoryEntity.setDescription("用户所在的城市");
       agentLongMemoryEntity.setMemoryValue(quickProduct.getCity());
       agentLongMemoryRepository.save(agentLongMemoryEntity);
-      ProductToolsBanEntity entity = new ProductToolsBanEntity();
-      entity.setProductId(productEntity1.getId());
-      entity.setToolsName("knowledgeGraphic");
-      productToolsBanRepository.save(entity);
       return ResultTool.success(productEntity1);
     }
   }
@@ -279,6 +291,8 @@ public class ProductServiceImpl implements ProductService {
         productLlmModelRepository.findAllByProductId(id);
     List<ProductSkillsEntity> productSkillsEntityList =
         productSkillsRepository.findAllByProductId(id);
+    List<UserConfigEntity> userConfigEntityList =
+        userConfigRepository.getAllByProductId(id);
     productToolsBanEntityList.removeIf(productToolsBanEntity -> {
       productToolsBanRepository.delete(productToolsBanEntity);
       return true;
@@ -311,6 +325,9 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!productLlmModelEntityList.isEmpty()) {
           productLlmModelRepository.deleteAllByProductId(id);
+        }
+        if (!userConfigEntityList.isEmpty()) {
+          userConfigRepository.deleteAllByProductId(id);
         }
         if (!adminConfigEntityList.isEmpty()) {
           try {

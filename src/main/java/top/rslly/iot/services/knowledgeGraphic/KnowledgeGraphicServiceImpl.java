@@ -89,6 +89,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Async("taskExecutor")
+  @Transactional(rollbackFor = Exception.class)
   public void clearNode(int productId) {
     KnowledgeGraphicSearchCountEntity searchCount =
         knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
@@ -112,6 +113,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     }
     if (forgetEpoch <= 3)
       return;
+    int limitThreshold = (int) Math.ceil(3 * Math.log(forgetEpoch + 2) - 5);
     if (searchCount.getCount() <= forgetEpoch)
       return;
     List<KnowledgeGraphicNodeEntity> nodes =
@@ -127,7 +129,11 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         node.setCreateEpoch(0);
         // Notice that this node could be important for user, if `forgetEpoch` less than 9,
         // it will not being forgotten, so it could be easily keep when user hit it after clear
-        node.setHitTimes(2);
+        if (limitThreshold <= 0) {
+          node.setHitTimes(0);
+        } else {
+          node.setHitTimes(limitThreshold - 1);
+        }
         node.setSearchTimes(0);
         knowledgeGraphicNodeRepository.save(node);
       }
@@ -204,8 +210,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     knowledgeGraphicNodeRepository.save(rootNode);
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
     Stack<KnowledgeGraphicNodeEntity> nodeStack = new Stack<>();
-    List<KnowledgeGraphicNodeEntity> nodeList =
-        knowledgeGraphicNodeRepository.findAllByProductId(rootNode.getProductId());
+    List<KnowledgeGraphicNodeEntity> nodeList = new ArrayList<>();
+    nodeList.add(rootNode);
+    knowledgeGraphic.addNode(rootNode.getName(), rootNode.getDes());
     for (KnowledgeGraphicNodeEntity node : nodeList) {
       nodeStack.push(node);
       knowledgeGraphic.addNode(node.getName());
@@ -298,8 +305,12 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNode node) {
     KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
-    int currentEpoch =
-        knowledgeGraphicSearchCountRepository.getTopByProductId(node.productId).getCount();
+    KnowledgeGraphicSearchCountEntity searchCountEntity =
+        knowledgeGraphicSearchCountRepository.getTopByProductId(node.getProductId());
+    int currentEpoch = 0;
+    if (searchCountEntity != null) {
+      currentEpoch = searchCountEntity.getCount();
+    }
     if (nodeDb == null) {
       nodeDb = new KnowledgeGraphicNodeEntity();
       nodeDb.setName(node.name);
@@ -320,8 +331,12 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   public JsonResult<?> addNode(String name, String des, int productId) {
     KnowledgeGraphicNodeEntity node =
         knowledgeGraphicNodeRepository.findByNameAndProductId(name, productId);
-    int currentEpoch =
-        knowledgeGraphicSearchCountRepository.getTopByProductId(productId).getCount();
+    KnowledgeGraphicSearchCountEntity searchCountEntity =
+        knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
+    int currentEpoch = 0;
+    if (searchCountEntity != null) {
+      currentEpoch = searchCountEntity.getCount();
+    }
     String historyDes;
     boolean needEmbedding = false;
     if (node == null) {

@@ -1061,7 +1061,7 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return userConfigService.addUserConfig(userConfig);
+    return userConfigService.addUserConfig(userConfig, header);
   }
 
   @Operation(summary = "用户配置", description = "删除用户配置")
@@ -1100,6 +1100,6 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return userConfigService.updateUserConfig(userConfig);
+    return userConfigService.updateUserConfig(userConfig, header);
   }
 }

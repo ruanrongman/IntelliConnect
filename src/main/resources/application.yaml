@@ -207,6 +207,8 @@ ai:
 jwt:
   # JWT 密钥
   secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9JWTTokenGenerationThatIsAtLeast32CharactersLong
+product-limit:
+  20
 emq:
   api:
     url: http://192.168.49.129:18083/api/v5/clients
