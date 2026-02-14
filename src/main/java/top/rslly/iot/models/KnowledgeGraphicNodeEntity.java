@@ -45,15 +45,15 @@ public class KnowledgeGraphicNodeEntity {
   @Comment("Which user this node belongs to")
   private int productId;
 
-  @Column(name = "hit_times")
+  @Column(name = "hit_times", columnDefinition = "INT DEFAULT 0")
   @Comment("Direct hit count since last graph clear")
   private int hitTimes;
 
-  @Column(name = "search_times")
+  @Column(name = "search_times", columnDefinition = "INT DEFAULT 0")
   @Comment("Count of how many times this node being searched over")
   private int searchTimes;
 
-  @Column(name = "create_epoch")
+  @Column(name = "create_epoch", columnDefinition = "INT DEFAULT 0")
   @Comment("When was this node create, for calculating whether this node should be forgot")
   private int createEpoch;
 }

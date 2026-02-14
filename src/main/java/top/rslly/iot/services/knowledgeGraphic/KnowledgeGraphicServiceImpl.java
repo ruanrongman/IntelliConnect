@@ -298,8 +298,11 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNode node) {
     KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
-    int currentEpoch =
-        knowledgeGraphicSearchCountRepository.getTopByProductId(node.productId).getCount();
+    KnowledgeGraphicSearchCountEntity searchCountEntity = knowledgeGraphicSearchCountRepository.getTopByProductId(node.getProductId());
+    int currentEpoch = 0;
+    if (searchCountEntity != null) {
+      currentEpoch = searchCountEntity.getCount();
+    }
     if (nodeDb == null) {
       nodeDb = new KnowledgeGraphicNodeEntity();
       nodeDb.setName(node.name);
@@ -320,8 +323,11 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   public JsonResult<?> addNode(String name, String des, int productId) {
     KnowledgeGraphicNodeEntity node =
         knowledgeGraphicNodeRepository.findByNameAndProductId(name, productId);
-    int currentEpoch =
-        knowledgeGraphicSearchCountRepository.getTopByProductId(productId).getCount();
+    KnowledgeGraphicSearchCountEntity searchCountEntity = knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
+    int currentEpoch = 0;
+    if (searchCountEntity != null) {
+      currentEpoch = searchCountEntity.getCount();
+    }
     String historyDes;
     boolean needEmbedding = false;
     if (node == null) {
