@@ -59,7 +59,9 @@ public class ScheduleToolPrompt {
                  "task_name": "The name of the scheduled task",
                  "time" : "execution time,Here is the response formatted:yyyy-MM-dd HH:mm:ss",
                  "cron": "Linux Crontab expression",
-                 "taskType":"set or cancel; otherwise, output 'query'."
+                 "taskType":"set or cancel; otherwise, output 'query'.",
+                 "exec":"If further processing is required, output true; otherwise, output false.",
+                 "exec_command":"Specific follow-up actions to perform."
                }
                ]
                }
@@ -71,22 +73,24 @@ public class ScheduleToolPrompt {
            The current time is 2024-06-06 10:40:05
            ```json
             {
-             "thought": "用户想要在5分钟后提醒",
+             "thought": "用户想要在5分钟后帮我开灯",
              "action":{
              "answer": "🔍\s你的日程
-              1.【5分钟后提醒】
-                - 日期：2024-06-06
-                - 时间：10:40:10
-                - 提醒：日程开始时
-                - 备注：5分钟后提醒",
+              1.【5分钟后提醒】.
+                - 日期：2024-06-06.
+                - 时间：10:40:10.
+                - 提醒：日程开始时.
+                - 备注：5分钟后开灯".
              "taskParameters":[
                  {
                  "code": "200",
-                 "task_name": "5 seconds task",
+                 "task_name": "Turn on the light in 5 minutes.",
                  "repeat": "false",
                  "time": "2024-06-06 10:40:10",
                  "cron": null,
-                 "taskType":"set"
+                 "taskType":"set",
+                 "exec":"true",
+                 "exec_command":"Turn on the light"
                  }
              ]
              }
@@ -100,16 +104,16 @@ public class ScheduleToolPrompt {
              "thought": "用户想要每天中午12点提醒",
              "action":{
              "answer": "🔍\s你的日程
-              1.【资料提交提醒任务】
-               - 日期：2024-06-19
-               - 时间：10:40:10
-               - 提醒：日程开始时
-               - 备注：手机充电提醒
-              2.【每天中午12点提醒】
-               - 日期：每天
-               - 时间：12:0:0
-               - 提醒：日程开始时
-               - 备注：每天中午12点提醒",
+              1.【资料提交提醒任务】.
+               - 日期：2024-06-19.
+               - 时间：10:40:10.
+               - 提醒：日程开始时.
+               - 备注：手机充电提醒.
+              2.【每天中午12点提醒】.
+               - 日期：每天.
+               - 时间：12:0:0.
+               - 提醒：日程开始时.
+               - 备注：每天中午12点提醒".
              "taskParameters":[
                  {
                  "code": "200",
@@ -117,7 +121,9 @@ public class ScheduleToolPrompt {
                  "repeat": "true",
                  "time": null,
                  "cron": "0 0 12 * * ?",
-                 "taskType":"set"
+                 "taskType":"set",
+                 "exec":"false",
+                 "exec_command":""
                  }
               ]
               }

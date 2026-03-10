@@ -50,6 +50,7 @@ mysql,redis,emqx和influxdb环境。
 | **Skills技能整合** | ✅ | 重磅功能，独家提供智能体Skills集成           |
 | **微信小智**            | ✅ | 重磅功能，独家提供微信小程序，服务号集成           |
 | **原生知识图谱**          | ✅ | 重磅功能，原生知识图谱，知识图谱可视化和智能遗忘机制     |
+| **定时Agent**          | ✅ | 重磅功能，实现类似openclaw的7*24小时定时调用智能体 |
 
 ### 开发中功能 🚧
 
@@ -90,7 +91,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，免费获取智控台的前端源码，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/ade66fb46bfa130be8f55e2573f00f51.jpg" width="250px"/>
+    <img src="./images/f83897ebf723f40665125479f20c918a.jpg" width="250px"/>
 </div>
 
 

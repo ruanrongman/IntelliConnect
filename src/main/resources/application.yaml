@@ -193,6 +193,7 @@ ai:
   wxBoundProductTool-llm: dashscope-qwen2.5-14b-instruct
   wxProductActiveTool-llm: dashscope-qwen2.5-14b-instruct
   scheduleTool-llm: dashscope-qwen3-next-80b-a3b-instruct
+  scheduleTool-llm-speed: true
   searchTool-llm: silicon-Qwen3-30B-A3B-think-64
   agent-llm: dashscope-qwen3-max
   agent-speedUp: true

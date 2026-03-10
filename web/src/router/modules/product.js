@@ -209,6 +209,15 @@ export default [
             title: 'knowledgeGraphic',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           }
+        },
+        {
+          path: '/timeSchedule',
+          name: 'timeSchedule',
+          component: () => import("@/views/timeSchedule/index.vue"),
+          meta: {
+            title: 'timeSchedule',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          }
         }
       ],
     },

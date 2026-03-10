@@ -71,7 +71,8 @@ const product ={
   llmProviderInformation: 'Model Provider',
   productLlmModel: 'LLM Model',
   knowledgeGraphic: "knowledgeGraphic",
-  productSkills: 'Product Skills'
+  productSkills: 'Product Skills',
+  timeSchedule: 'Time Schedule'
 }
 const permission = {
   permission: 'SystemSetting',

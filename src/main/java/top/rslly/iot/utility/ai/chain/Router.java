@@ -93,7 +93,7 @@ public class Router {
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in WeChat module need to use openid
-  public String response(String content, String chatId, int productId, String... microappid) {
+  public String response(String content, String chatId, int productId, String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
@@ -104,10 +104,10 @@ public class Router {
     Queue<String> queue = new LinkedList<>();
     queueMap.put(chatId, queue);
     Object memory_cache;
-    if (microappid.length > 0) {
+    if (dataArgs.length > 0 && !dataArgs[0].equals("false")) {
       globalMessage.put("openId", chatId);
-      globalMessage.put("microappid", microappid[0]);
-      chatId = microappid[0] + chatId;
+      globalMessage.put("microappid", dataArgs[0]);
+      chatId = dataArgs[0] + chatId;
       queueMap.put(chatId, queue);
       globalMessage.put("chatId", chatId);
     }
@@ -217,8 +217,8 @@ public class Router {
           case "8" -> {
             predictionCancelled.set(true);
             predictionQueue.clear();
-            if (!(microappid.length > 0))
-              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
+            if (dataArgs.length > 0 && dataArgs[0].equals("false"))
+              toolResult = "定时任务禁止递归调用!!!";
             else {
               toolResult = scheduleTool.run(args, globalMessage);
             }

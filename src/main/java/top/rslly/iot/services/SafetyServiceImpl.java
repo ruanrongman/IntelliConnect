@@ -90,6 +90,8 @@ public class SafetyServiceImpl implements SafetyService {
   private ProductLlmModelServiceImpl productLlmModelService;
   @Autowired
   private ProductSkillsServiceImpl productSkillsService;
+  @Autowired
+  private TimeScheduleServiceImpl timeScheduleService;
 
   @Override
   public boolean controlAuthorizeModel(String token, int modelId) {
@@ -370,6 +372,16 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("productSkillsId not found!");
     return this.controlAuthorizeProduct(token,
         productSkillsEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeTimeSchedule(String token, int timeScheduleId) {
+    List<TimeScheduleEntity> timeScheduleEntityList =
+        timeScheduleService.findAllById(timeScheduleId);
+    if (timeScheduleEntityList.isEmpty())
+      throw new NullPointerException("timeScheduleId not found!");
+    return this.controlAuthorizeProduct(token,
+        timeScheduleEntityList.get(0).getProductId());
   }
 
   @Override

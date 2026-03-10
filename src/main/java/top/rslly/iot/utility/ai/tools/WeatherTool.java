@@ -88,9 +88,11 @@ public class WeatherTool implements BaseTool<String> {
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
 
-    // 初始化当前会话的锁和条件变量
-    lockMap.putIfAbsent(chatId, new ReentrantLock());
-    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    // 只有在speedUp模式下才初始化锁和条件变量
+    if (speedUp && !mcpIsTool) {
+      lockMap.putIfAbsent(chatId, new ReentrantLock());
+      conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    }
 
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(), weatherToolPrompt.getWeatherTool());

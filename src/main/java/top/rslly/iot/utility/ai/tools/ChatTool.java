@@ -93,9 +93,11 @@ public class ChatTool implements BaseTool<String> {
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
 
-    // 初始化当前会话的锁和条件变量
-    lockMap.putIfAbsent(chatId, new ReentrantLock());
-    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    // 仅在 speedUp 模式下初始化同步资源
+    if (speedUp) {
+      lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
+      conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
+    }
     String memoryChatId = chatId;
     if (chatId.endsWith("_prediction")) {
       memoryChatId = chatId.substring(0, chatId.length() - "_prediction".length());
@@ -138,6 +140,7 @@ public class ChatTool implements BaseTool<String> {
     messages.add(systemMessage);
     messages.add(userMessage);
     // log.info("chatTool: " + messages);
+    String result;
     if (speedUp) {
       dataMap.remove(chatId); // 使用 chatId 作为 key
       llm.streamJsonChat(question, messages, true,
@@ -154,13 +157,14 @@ public class ChatTool implements BaseTool<String> {
       } finally {
         chatLock.unlock();
       }
-      String data = dataMap.get(chatId);
-      dataMap.remove(chatId);
-      conditionMap.remove(chatId);
-      lockMap.remove(chatId);
-      return data;
+      result = dataMap.get(chatId);
     } else {
-      return llm.commonChat(question, messages, true);
+      result = llm.commonChat(question, messages, true);
     }
+    // 统一清理资源
+    dataMap.remove(chatId);
+    conditionMap.remove(chatId);
+    lockMap.remove(chatId);
+    return result;
   }
 }

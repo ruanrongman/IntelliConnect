@@ -100,6 +100,8 @@ public class Tool {
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
+  @Autowired
+  private TimeScheduleService timeScheduleService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -1101,5 +1103,51 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return userConfigService.updateUserConfig(userConfig, header);
+  }
+
+  @Operation(summary = "获取日程安排", description = "获取当前用户的日程安排列表")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.GET)
+  public JsonResult<?> getTimeSchedule(@RequestHeader("Authorization") String header) {
+    return timeScheduleService.getTimeSchedule(header);
+  }
+
+  @Operation(summary = "创建日程安排", description = "创建一个新的日程安排")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.POST)
+  public JsonResult<?> postTimeSchedule(@Valid @RequestBody TimeScheduleParam timeScheduleParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, timeScheduleParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return timeScheduleService.postTimeSchedule(timeScheduleParam);
+  }
+
+  @Operation(summary = "更新日程安排", description = "更新已有的日程安排")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.PUT)
+  public JsonResult<?> putTimeSchedule(
+      @Valid @RequestBody TimeSchedulePutParam timeSchedulePutParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeTimeSchedule(header, timeSchedulePutParam.getId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return timeScheduleService.putTimeSchedule(timeSchedulePutParam);
+  }
+
+  @Operation(summary = "删除日程安排", description = "根据ID删除日程安排")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteTimeSchedule(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeTimeSchedule(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return timeScheduleService.deleteTimeSchedule(id);
   }
 }

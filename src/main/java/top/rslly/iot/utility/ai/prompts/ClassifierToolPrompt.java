@@ -64,21 +64,21 @@ public class ClassifierToolPrompt {
            {router_set}
            {task_map}
            The current concept of memory and its content: {memory_map}
-           You now need to classify based on user input
+           Classify the user's input into the single most appropriate task from the Available Tasks above.
            ## Output Format
            ```json
            {
            {thought}
            "action": # the action to take, must be one of provided tools
                {
-               "value": "one of task No., json list data like [1],If it doesn't match, please output []",
-               "args": "Combined with Current Conversation and memory,Summarize the context,Be sure to convey the intention completely,not null"
+               "value": "Output at most one matched task number as a JSON array (e.g., [1]). If none, output []",
+               "args": "Summarized context from Current Conversation and memory, conveying complete user intent (not null)"
                }
            }
            ```
            ## Attention
            - Your output is JSON only and no explanation.
-           - Electrical control tools are not allowed when the user requests xiaozhi_device operations.
+           - Electrical control tools (task 2) must NOT be selected for xiaozhi_device operations.
            - If the 10 intention exists and the user requests xiaozhi_device, please always use the 10 intention
            - If the 10 intention exists and the user requests you to look at what is in front of you, you always use 10 intention
            ## Current Conversation
@@ -92,15 +92,15 @@ public class ClassifierToolPrompt {
         "Control and query electrical (excluding playing music and xiaozhi_device)");
     classifierMap.put("3", "Request a song or play music.(including Recommend music.)");
     classifierMap.put("4",
-        "Complex tasks that require in-depth planning and thinking(like according to weather control electrical)");
+        "Complex tasks requiring multi-step planning and reasoning (e.g., control electrical devices based on weather conditions)");
     classifierMap.put("5",
-        "Common chat or Unable to match the task");
+        "Common chat or unable to match any other task");
     if (!chatId.startsWith("chatProduct")) {
       classifierMap.put("6", "Bind or unbind products");
-      classifierMap.put("7", "switch controlled products");
-      classifierMap.put("8", "Schedule management and reminder tasks");
+      classifierMap.put("7", "Switch controlled products");
     }
-    classifierMap.put("9", "All about role and voice");
+    classifierMap.put("8", "Scheduled and reminder tasks");
+    classifierMap.put("9", "Configuration related to role and voice settings");
     var mcpServerList = mcpServerService.findAllByProductId(productId);
     var productSkillsEntities = productSkillsService.findAllByProductId(productId);
     if (!productSkillsEntities.isEmpty() || !mcpServerList.isEmpty()

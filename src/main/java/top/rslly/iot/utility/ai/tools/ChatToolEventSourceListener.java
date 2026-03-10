@@ -122,8 +122,8 @@ public class ChatToolEventSourceListener extends EventSourceListener {
         eventSource.cancel();
       var queue = queueMap.get(chatId);
       queue.add("[DONE]");
-      chatTool.getConditionMap().get(chatId).signal();
       chatTool.getDataMap().put(chatId, "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
+      chatTool.getConditionMap().get(chatId).signal();
     } catch (Exception e) {
       log.error("OpenAI  sse连接异常:{}", e.getMessage());
     } finally {

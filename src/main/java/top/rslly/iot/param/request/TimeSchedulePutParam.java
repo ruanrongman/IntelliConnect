@@ -17,30 +17,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.param.request;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.TimeScheduleEntity;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
 
-import jakarta.transaction.Transactional;
-import java.util.List;
-
-public interface TimeScheduleRepository extends JpaRepository<TimeScheduleEntity, Long> {
-  List<TimeScheduleEntity> findAllByAppidAndOpenid(String appid, String openid);
-
-  List<TimeScheduleEntity> findAllByAppidAndOpenidAndTaskName(String appid, String openid,
-      String taskName);
-
-  List<TimeScheduleEntity> findAllByProductId(int productId);
-
-  List<TimeScheduleEntity> findAllById(int id);
-
-  @Transactional
-  List<TimeScheduleEntity> deleteAllById(int id);
-
-  @Transactional
-  void deleteByAppidAndOpenidAndTaskName(String appid, String openid, String taskName);
-
-  @Transactional
-  void deleteAllByProductId(int productId);
+@Data
+public class TimeSchedulePutParam {
+  @NotNull
+  private Integer id;
+  @NotBlank(message = "cron 不能为空")
+  @Size(min = 1, max = 255, message = "cron 长度必须在 1 到 255 之间")
+  private String cron;
+  @NotNull
+  private Boolean exec;
+  @NotBlank(message = "execCommand 不能为空")
+  @Size(min = 1, max = 255, message = "execCommand 长度必须在 1 到 255 之间")
+  private String execCommand;
 }

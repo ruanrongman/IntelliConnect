@@ -29,6 +29,7 @@ import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.Product;
 import top.rslly.iot.param.request.QuickProduct;
 import top.rslly.iot.utility.JwtTokenUtil;
+import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -87,6 +88,8 @@ public class ProductServiceImpl implements ProductService {
   private ProductSkillsRepository productSkillsRepository;
   @Resource
   private UserConfigRepository userConfigRepository;
+  @Resource
+  private TimeScheduleRepository timeScheduleRepository;
   @Value("${product-limit}")
   private int productLimit;
 
@@ -293,6 +296,8 @@ public class ProductServiceImpl implements ProductService {
         productSkillsRepository.findAllByProductId(id);
     List<UserConfigEntity> userConfigEntityList =
         userConfigRepository.getAllByProductId(id);
+    List<TimeScheduleEntity> timeScheduleEntityList =
+        timeScheduleRepository.findAllByProductId(id);
     productToolsBanEntityList.removeIf(productToolsBanEntity -> {
       productToolsBanRepository.delete(productToolsBanEntity);
       return true;
@@ -348,6 +353,15 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!productToolsBanEntityList.isEmpty()) {
           productToolsBanRepository.deleteAllByProductId(id);
+        }
+        if (!timeScheduleEntityList.isEmpty()) {
+          for (TimeScheduleEntity timeScheduleEntity : timeScheduleEntityList) {
+            String groupName =
+                timeScheduleEntity.getAppid() + ":" + timeScheduleEntity.getOpenid();
+            String taskName = timeScheduleEntity.getTaskName();
+            QuartzManager.removeJob(taskName, groupName, taskName, groupName);
+          }
+          timeScheduleRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }

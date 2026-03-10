@@ -362,12 +362,13 @@ public class XiaoZhiUtil {
                 // 截取标点之前的内容（包括标点）
                 String partBeforePunctuation = element.substring(0, punctuationIndex + 1);
                 answerBuilder.append(partBeforePunctuation);
+                String answerBuilderString = answerBuilder.toString().replace("\\n", "");
 
                 // 立即发送已累积的内容
                 JSONObject jsonObject = new JSONObject();
                 jsonObject.put("type", "tts");
                 jsonObject.put("state", "sentence_start");
-                jsonObject.put("text", answerBuilder.toString());
+                jsonObject.put("text", answerBuilderString);
 
                 session = XiaoZhiWebsocket.clients.get(chatId);
                 if (session != null && session.isOpen()) {
@@ -375,10 +376,10 @@ public class XiaoZhiUtil {
                       .sendText(jsonObject.toJSONString());
                 }
                 if (ttsServiceFactory != null
-                    && !shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
+                    && !shouldSkipTts(answerBuilderString, skipToolPrefix)) {
                   session = XiaoZhiWebsocket.clients.get(chatId);
                   if (session != null && session.isOpen()) {
-                    ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
+                    ttsServiceFactory.websocketAudioSync(answerBuilderString,
                         session,
                         chatId, productId);
                   }

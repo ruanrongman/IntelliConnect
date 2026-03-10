@@ -20,6 +20,9 @@
 package top.rslly.iot.models;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.util.Objects;
 
 @Entity
@@ -30,6 +33,9 @@ public class TimeScheduleEntity {
   private String taskName;
   private String cron;
   private String appid;
+  private String exec;
+  private String execCommand;
+  private Integer productId;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -82,20 +88,51 @@ public class TimeScheduleEntity {
     this.appid = appid;
   }
 
+  @Size(max = 255)
+  @NotNull
+  @Column(name = "exec", nullable = false)
+  public String getExec() {
+    return exec;
+  }
+
+  public void setExec(String exec) {
+    this.exec = exec;
+  }
+
+  @Size(max = 255)
+  @NotNull
+  @Column(name = "exec_command", nullable = false)
+  public String getExecCommand() {
+    return execCommand;
+  }
+
+  public void setExecCommand(String execCommand) {
+    this.execCommand = execCommand;
+  }
+
+  @NotNull
+  @Column(name = "product_id", nullable = false)
+  public Integer getProductId() {
+    return productId;
+  }
+
+  public void setProductId(Integer productId) {
+    this.productId = productId;
+  }
+
   @Override
   public boolean equals(Object o) {
-    if (this == o)
-      return true;
     if (o == null || getClass() != o.getClass())
       return false;
     TimeScheduleEntity that = (TimeScheduleEntity) o;
     return id == that.id && Objects.equals(openid, that.openid)
         && Objects.equals(taskName, that.taskName) && Objects.equals(cron, that.cron)
-        && Objects.equals(appid, that.appid);
+        && Objects.equals(appid, that.appid) && Objects.equals(exec, that.exec)
+        && Objects.equals(execCommand, that.execCommand);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, openid, appid, taskName, cron);
+    return Objects.hash(id, openid, taskName, cron, appid, exec, execCommand);
   }
 }
