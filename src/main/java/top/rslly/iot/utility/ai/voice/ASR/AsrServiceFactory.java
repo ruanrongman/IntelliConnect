@@ -50,10 +50,14 @@ public class AsrServiceFactory {
   /**
    * 根据提供商名称获取ASR服务
    *
-   * @param provider 提供商名称（dashscope/funasr）
+   * @param provider 提供商名称（dashscope/funasr），为null时使用默认配置
    * @return ASR服务实例
    */
   public AsrService getService(String provider) {
+    // 如果provider为null或空，使用默认配置
+    if (provider == null || provider.isEmpty()) {
+      return getService(defaultProvider);
+    }
     if ("funasr".equalsIgnoreCase(provider)) {
       return funAsrClient;
     }

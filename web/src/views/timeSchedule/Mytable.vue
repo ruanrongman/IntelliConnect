@@ -524,7 +524,7 @@ const handleDelete = (record) => {
 onMounted(() => {
   fetchProductList()
   fetchTimeSchedule()
-  intervalId = setInterval(fetchTimeSchedule, 5000)
+  intervalId = setInterval(fetchTimeSchedule, 1000)
 })
 
 onUnmounted(() => {

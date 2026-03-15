@@ -37,6 +37,7 @@ public class ChatToolPrompt {
   private String robotName;
   @Value("${ai.team-name}")
   private String teamName;
+
   private static final String chatPrompt =
       """
           Your role is {role}, {role_introduction}, your name is {agent_name}, developed by the {team_name} team.
@@ -61,11 +62,19 @@ public class ChatToolPrompt {
           - No line breaks (\\n) in response
           - NO emojis
           - Speak naturally, avoid robotic or overly formal tone
+          {tts_control}
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
       String roleIntroduction, String memory, String information, String memoryMap,
       String knowledgeGraphicInject, String question) {
+    return getChatTool(assistantName, userName, role, roleIntroduction, memory, information,
+        memoryMap, knowledgeGraphicInject, question, null);
+  }
+
+  public String getChatTool(String assistantName, String userName, String role,
+      String roleIntroduction, String memory, String information, String memoryMap,
+      String knowledgeGraphicInject, String question, String voice) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
@@ -96,7 +105,30 @@ public class ChatToolPrompt {
     params.put("role", Objects.requireNonNullElse(role, "智能助手"));
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
         "你是一个友好、自然的对话伙伴，擅长用简洁有趣的方式回答问题，像朋友一样交流，避免刻板的客服语气"));
+    // MiniMax TTS 控制提示，根据数据库中的 voice 字段判断
+    params.put("tts_control", buildTtsControlPrompt(voice));
     return StringUtils.formatString(chatPrompt, params);
+  }
+
+  /**
+   * 构建 MiniMax TTS 控制提示 根据 voice 字段判断是否使用 MiniMax TTS speech-2.8 模型
+   *
+   * @param voice 数据库中存储的音色值，如 "minimax-Chinese (Mandarin)_Warm_Bestie"
+   * @return TTS 控制提示字符串
+   */
+  private String buildTtsControlPrompt(String voice) {
+    if (voice == null || !voice.startsWith("minimax-")) {
+      return "";
+    }
+
+    // MiniMax TTS speech-2.8 系列支持语气词标签
+    // 所有 MiniMax 音色都支持 speech-2.8-hd 或 speech-2.8-turbo 的语气词功能
+    return """
+        ## TTS Speech Control (Optional)
+        You can use emotion/para-verbal tags to add natural expressions:
+           - (laughs), (chuckle), (sighs), (emm), (breath), (gasps), (coughs), (sneezes)
+           - Example: "今天天气真好(chuckles)，我们出去玩吧！"
+        """;
   }
 
   /**

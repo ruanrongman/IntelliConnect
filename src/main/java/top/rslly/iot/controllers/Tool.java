@@ -102,6 +102,8 @@ public class Tool {
   private UserConfigServiceImpl userConfigService;
   @Autowired
   private TimeScheduleService timeScheduleService;
+  @Autowired
+  private ProductAsrServiceImpl productAsrService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -796,6 +798,52 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productSkillsService.deleteProductSkill(id);
+  }
+
+  @Operation(summary = "获取产品ASR配置", description = "获取产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.GET)
+  public JsonResult<?> getProductAsr(@RequestHeader("Authorization") String header) {
+
+    return productAsrService.getProductAsr(header);
+  }
+
+  @Operation(summary = "添加产品ASR配置", description = "添加产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.POST)
+  public JsonResult<?> addProductAsr(@Valid @RequestBody ProductAsrParam productAsrParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productAsrParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productAsrService.addProductAsr(productAsrParam);
+  }
+
+  @Operation(summary = "更新产品ASR配置", description = "更新产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.PUT)
+  public JsonResult<?> updateProductAsr(@Valid @RequestBody ProductAsrParam productAsrParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productAsrParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productAsrService.updateProductAsr(productAsrParam);
+  }
+
+  @Operation(summary = "删除产品ASR配置", description = "根据ID删除产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductAsr(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductAsr(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productAsrService.deleteProductAsr(id);
   }
 
   @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")

@@ -153,6 +153,14 @@ ai:
   asr:
     provider: funasr # dashscope 或 funasr
     wx_smart_robot_asr: dashscope
+  minimax:
+    api-key: XXX
+    group-id: XXX
+    tts:
+      enabled: true
+      # 模型选择: speech-02-hd(默认) / speech-2.8-hd / speech-2.8-turbo
+      # speech-2.8-hd 和 speech-2.8-turbo 支持语气词标签
+      model: speech-2.8-hd
   funasr:
     host: 192.168.49.129
     port: 10095

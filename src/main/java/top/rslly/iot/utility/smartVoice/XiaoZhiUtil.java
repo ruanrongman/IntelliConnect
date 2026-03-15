@@ -27,7 +27,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AdminConfigEntity;
+import top.rslly.iot.models.ProductAsrEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
+import top.rslly.iot.dao.ProductAsrRepository;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.mcp.McpProtocolDeal;
@@ -65,6 +67,8 @@ public class XiaoZhiUtil {
   private McpProtocolDeal mcpProtocolDeal;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Autowired
+  private ProductAsrRepository productAsrRepository;
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
   @Value("${ai.tts.skip-tool-prefix:true}")
@@ -181,7 +185,7 @@ public class XiaoZhiUtil {
           Files.write(tempFile, bos.toByteArray());
           bos.close();
           if (asrServiceFactory != null) {
-            var audio2Text = asrServiceFactory.getService();
+            var audio2Text = asrServiceFactory.getService(getProductAsrProvider(productId));
             if (audio2Text != null) {
               String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
               log.info("text{}", text);
@@ -603,5 +607,25 @@ public class XiaoZhiUtil {
     }
     // 数据库查不到时使用配置文件默认值
     return detectRandom;
+  }
+
+  private String getProductAsrProvider(int productId) {
+    try {
+      if (productAsrRepository != null) {
+        List<ProductAsrEntity> productAsrList = productAsrRepository.findAllByProductId(productId);
+        if (productAsrList != null && !productAsrList.isEmpty() && productAsrList.get(0) != null) {
+          String asrName = productAsrList.get(0).getAsrName();
+          if (asrName != null && !asrName.isEmpty()) {
+            log.info("产品 {} 使用数据库配置的ASR: {}", productId, asrName);
+            return asrName;
+          }
+        }
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取产品ASR配置失败, productId: {}", productId, e);
+    }
+    // 数据库没有配置，返回null让AsrServiceFactory使用默认配置
+    log.info("产品 {} 没有数据库ASR配置，使用默认配置", productId);
+    return null;
   }
 }

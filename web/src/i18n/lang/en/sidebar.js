@@ -72,6 +72,7 @@ const product ={
   productLlmModel: 'LLM Model',
   knowledgeGraphic: "knowledgeGraphic",
   productSkills: 'Product Skills',
+  productAsr: 'ASR Config',
   timeSchedule: 'Time Schedule'
 }
 const permission = {

@@ -68,8 +68,11 @@
       <a-select  
         v-model:value="formState.voice"  
         :options="voiceOptions"  
+        :field-names="{ label: 'label', value: 'value' }"
         placeholder="请选择语音"  
         allowClear  
+        show-search
+        :filter-option="filterOption"
       />  
     </a-form-item>  
 
@@ -133,6 +136,11 @@ const formState = reactive({
   roleIntroduction: "",
   voice: ""
 });  
+
+// 语音选项搜索过滤
+const filterOption = (input, option) => {
+  return option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0;
+};  
 
 const handleSubmit = () => {  
   postProductRole(toRaw(formState))  

@@ -21,6 +21,7 @@ package top.rslly.iot.services.agent;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
@@ -44,6 +45,9 @@ import java.util.List;
 @Service
 @Slf4j
 public class ProductRoleServiceImpl implements ProductRoleService {
+  @Value("${ai.minimax.tts.enabled:false}")
+  private boolean minimaxTtsEnabled;
+
   @Resource
   private ProductRepository productRepository;
   @Resource
@@ -151,6 +155,11 @@ public class ProductRoleServiceImpl implements ProductRoleService {
     if (!VoiceTimbre.isValidVoice(productRole.getVoice())) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+    // 校验 MiniMax 音色是否启用
+    if (!minimaxTtsEnabled && productRole.getVoice().startsWith("minimax-")) {
+      log.warn("MiniMax TTS is not enabled, cannot set minimax voice: {}", productRole.getVoice());
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     if (result.isEmpty() || !p1.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     else {
@@ -166,6 +175,11 @@ public class ProductRoleServiceImpl implements ProductRoleService {
         productRoleRepository.findAllByProductId(productRole.getProductId());
     // 校验声音voice是否在VoiceTimbre enum中
     if (!VoiceTimbre.isValidVoice(productRole.getVoice())) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    // 校验 MiniMax 音色是否启用
+    if (!minimaxTtsEnabled && productRole.getVoice().startsWith("minimax-")) {
+      log.warn("MiniMax TTS is not enabled, cannot set minimax voice: {}", productRole.getVoice());
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     if (productRoleEntityList.isEmpty())

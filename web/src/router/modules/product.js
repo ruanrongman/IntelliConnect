@@ -94,6 +94,15 @@ export default [
           },
         },
         {
+          path: '/productAsr',
+          name: 'productAsr',
+          component: () => import('@/views/productAsr/index.vue'),
+          meta: {
+            title: 'productAsr',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productModel',
           name: 'productModel',
           component: () => import('@/views/productModel/index.vue'),

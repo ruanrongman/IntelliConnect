@@ -117,11 +117,13 @@ public class ChatTool implements BaseTool<String> {
     String userName = null;
     String role = null;
     String roleIntroduction = null;
+    String voice = null;
     if (!productRole.isEmpty()) {
       assistantName = productRole.get(0).getAssistantName();
       userName = productRole.get(0).getUserName();
       role = productRole.get(0).getRole();
       roleIntroduction = productRole.get(0).getRoleIntroduction();
+      voice = productRole.get(0).getVoice();
     }
     String information = "";
     var productToolsBanList = productToolsBanService.getProductToolsBanList(productId);
@@ -133,7 +135,7 @@ public class ChatTool implements BaseTool<String> {
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory, information, memoryMap, knowledgeGraphic, question));
+                currentMemory, information, memoryMap, knowledgeGraphic, question, voice));
     log.info(llmName);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     // log.info("systemMessage: {}", systemMessage.getContent());

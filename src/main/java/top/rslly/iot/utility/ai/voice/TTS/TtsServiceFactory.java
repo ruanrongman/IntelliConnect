@@ -34,6 +34,8 @@ public class TtsServiceFactory {
   @Autowired
   private EdgeTTs edgeTTs;
   @Autowired
+  private MiniMaxTtsService miniMaxTtsService;
+  @Autowired
   private ProductRoleServiceImpl productRoleService;
   @Autowired
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
@@ -41,6 +43,8 @@ public class TtsServiceFactory {
   public TtsService getTtsService(String type) {
     if (type.equals("edge")) {
       return edgeTTs;
+    } else if (type.equals("minimax")) {
+      return miniMaxTtsService;
     }
     return text2audio;
   }
@@ -60,6 +64,9 @@ public class TtsServiceFactory {
         if (voice.startsWith("edge-")) {
           provider = "edge";
           voice = voice.substring(5);
+        } else if (voice.startsWith("minimax-")) {
+          provider = "minimax";
+          voice = voice.substring(8);
         }
       }
       var voiceDiyEntityList = productVoiceDiyService.findAllByProductId(productId);

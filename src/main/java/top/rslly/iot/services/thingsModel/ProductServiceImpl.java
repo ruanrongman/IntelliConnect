@@ -90,6 +90,8 @@ public class ProductServiceImpl implements ProductService {
   private UserConfigRepository userConfigRepository;
   @Resource
   private TimeScheduleRepository timeScheduleRepository;
+  @Resource
+  private ProductAsrRepository productAsrRepository;
   @Value("${product-limit}")
   private int productLimit;
 
@@ -298,6 +300,8 @@ public class ProductServiceImpl implements ProductService {
         userConfigRepository.getAllByProductId(id);
     List<TimeScheduleEntity> timeScheduleEntityList =
         timeScheduleRepository.findAllByProductId(id);
+    List<ProductAsrEntity> productAsrEntityList =
+        productAsrRepository.findAllByProductId(id);
     productToolsBanEntityList.removeIf(productToolsBanEntity -> {
       productToolsBanRepository.delete(productToolsBanEntity);
       return true;
@@ -362,6 +366,9 @@ public class ProductServiceImpl implements ProductService {
             QuartzManager.removeJob(taskName, groupName, taskName, groupName);
           }
           timeScheduleRepository.deleteAllByProductId(id);
+        }
+        if (!productAsrEntityList.isEmpty()) {
+          productAsrRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }
