@@ -101,7 +101,7 @@ public class Router {
     globalMessage.put("productId", productId);
     globalMessage.put("chatId", chatId);
     globalMessage.put("queueMap", queueMap);
-    Queue<String> queue = new LinkedList<>();
+    Queue<String> queue = createResponseQueue();
     queueMap.put(chatId, queue);
     Object memory_cache;
     if (dataArgs.length > 0 && !dataArgs[0].equals("false")) {
@@ -286,6 +286,10 @@ public class Router {
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);
     return answer;
+  }
+
+  static Queue<String> createResponseQueue() {
+    return new ConcurrentLinkedQueue<>();
   }
 
   private String resolveChatToolAnswer(

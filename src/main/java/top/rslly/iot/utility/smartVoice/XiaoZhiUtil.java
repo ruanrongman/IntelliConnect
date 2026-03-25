@@ -41,6 +41,7 @@ import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.websocket.Session;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -48,6 +49,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Component
@@ -77,6 +79,7 @@ public class XiaoZhiUtil {
   private boolean detectRandom;
   @Value("${ai.showThinking:false}")
   private boolean showThinking;
+  private final ExecutorService routerExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
   public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     if (chatId == null || helloObject == null) {
@@ -145,6 +148,7 @@ public class XiaoZhiUtil {
   public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
       String... detect)
       throws IOException {
+    Path tempFile = null;
     try {
       if (audioList == null || chatId == null) {
         log.error("dealWithAudio参数错误: audioList={}, chatId={}", audioList, chatId);
@@ -181,7 +185,7 @@ public class XiaoZhiUtil {
             }
           }
           log.info("data_size{}", bos.size());
-          Path tempFile = Files.createTempFile("audio_", ".wav");
+          tempFile = Files.createTempFile("audio_", ".wav");
           Files.write(tempFile, bos.toByteArray());
           bos.close();
           if (asrServiceFactory != null) {
@@ -262,12 +266,13 @@ public class XiaoZhiUtil {
               .supplyAsync(
                   () -> router.response(XiaoZhiWebsocket.voiceContent.get(chatId), chatId,
                       productId),
-                  Executors.newVirtualThreadPerTaskExecutor());
+                  routerExecutor);
         }
         // String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
         // Integer.parseInt(chatId));
         String answer = null;
         StringBuilder answerBuilder = new StringBuilder();
+        boolean queuePlaybackDelivered = false;
         boolean emotionFlag = false;
         if (isManual) {
           session = XiaoZhiWebsocket.clients.get(chatId);
@@ -327,6 +332,7 @@ public class XiaoZhiUtil {
                 if (session != null && session.isOpen()) {
                   session.getBasicRemote()
                       .sendText(jsonObject.toJSONString());
+                  queuePlaybackDelivered = true;
                 }
                 if (ttsServiceFactory != null
                     && !shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
@@ -378,6 +384,7 @@ public class XiaoZhiUtil {
                 if (session != null && session.isOpen()) {
                   session.getBasicRemote()
                       .sendText(jsonObject.toJSONString());
+                  queuePlaybackDelivered = true;
                 }
                 if (ttsServiceFactory != null
                     && !shouldSkipTts(answerBuilderString, skipToolPrefix)) {
@@ -406,6 +413,7 @@ public class XiaoZhiUtil {
                     session.getBasicRemote()
                         .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
                             + answerBuilder + "\"}");
+                    queuePlaybackDelivered = true;
                   }
                   if (ttsServiceFactory != null
                       && !shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
@@ -442,9 +450,12 @@ public class XiaoZhiUtil {
         if (answer == null || answer.equals("")) {
           answer = "抱歉，我暂时无法理解您的问题。";
         }
+        answer = resolveFinalVoiceAnswer(answer, answerBuilder.toString(), queuePlaybackDelivered);
         if (answer.length() > 500)
           answer = answer.substring(0, 500);
-        splitSentences(answer, chatId, productId);
+        if (!answer.isBlank()) {
+          splitSentences(answer, chatId, productId);
+        }
       }
     } catch (Exception e) {
       log.error("Error in dealWithAudio: {}", e.getMessage(), e);
@@ -452,6 +463,14 @@ public class XiaoZhiUtil {
       XiaoZhiWebsocket.haveVoice.put(chatId, false);
       XiaoZhiWebsocket.isAbort.put(chatId, false);
       try {
+        if (tempFile != null) {
+          Files.deleteIfExists(tempFile);
+        }
+      } catch (IOException e) {
+        log.warn("Failed to delete temp audio file for {}: {}", chatId, e.getMessage());
+      }
+      try {
+        Router.queueMap.remove(chatId);
         Session session = XiaoZhiWebsocket.clients.get(chatId);
         if (session != null && session.isOpen()) {
           session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
@@ -460,6 +479,11 @@ public class XiaoZhiUtil {
         log.warn("Failed to send stop message to client {}: {}", chatId, e.getMessage());
       }
     }
+  }
+
+  @PreDestroy
+  public void shutdownExecutors() {
+    routerExecutor.close();
   }
 
   public void dealDetect(String chatId, int productId, String text) throws IOException {
@@ -589,6 +613,14 @@ public class XiaoZhiUtil {
     if (text == null)
       return false;
     return ToolPrefix.startsWithAnyPrefix(text);
+  }
+
+  static String resolveFinalVoiceAnswer(String finalAnswer, String pendingStreamText,
+      boolean queuePlaybackDelivered) {
+    if (!queuePlaybackDelivered) {
+      return finalAnswer == null ? "" : finalAnswer;
+    }
+    return pendingStreamText == null ? "" : pendingStreamText;
   }
 
   private boolean getDetectRandomConfig() {

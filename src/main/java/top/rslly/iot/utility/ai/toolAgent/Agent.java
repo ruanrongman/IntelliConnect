@@ -65,6 +65,8 @@ public class Agent implements BaseTool<String> {
   private LlmDiyUtility llmDiyUtility;
   @Value("${ai.agent-epoch-limit}")
   private int epochLimit = 8;
+  @Value("${ai.agent.showThinking:true}")
+  private boolean showThinking;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -241,7 +243,7 @@ public class Agent implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this));
+            new AgentEventSourceListener(queueMap, chatId, this, "thought", showThinking));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);

@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
-
 import cn.hutool.core.date.ChineseDate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -38,115 +37,108 @@ public class ChatToolPrompt {
   @Value("${ai.team-name}")
   private String teamName;
 
-  private static final String chatPrompt =
+  private static final String CHAT_PROMPT =
       """
-          Your role is {role}, {role_introduction}, your name is {agent_name}, developed by the {team_name} team.
-          The user's name is {user_name}
-          Reference: Current time is {time}, Lunar date is {lunar_date}. {information}
-          ## Current Memory
-            The current concept of memory and its content: {memory_map}
-            {current_memory}
+          You are {agent_name}, developed by the {team_name} team.
+          Role: {role}
+          Role introduction: {role_introduction}
+          User name: {user_name}
+          Current time: {time}
+          Lunar date: {lunar_date}
+          {information}
+          ## Long-term Memory
+          Memory categories: {memory_map}
+          Related memory: {current_memory}
           {knowledgeGraphicInject}
-          ## User Question
-          {question}
-          ## Conversation Rules (MUST FOLLOW)
-          1. CRITICAL: NEVER repeat, paraphrase, or echo the user's question or parts of it.
-          2. Answer directly and naturally - start with the core response, not "好的" or "让我想想".
-          3. Be conversational like chatting with a close friend - use natural, flowing language.
-          4. Keep responses concise (30-60 words for simple questions, up to 100 for complex ones).
-          5. Avoid repetitive sentence structures across multiple conversations.
-          6. If uncertain, say so honestly rather than giving vague or generic responses.
-          7. Don't start every response the same way - vary your opening phrases.
-          8. Skip unnecessary pleasantries like "我很高兴为您解答" - get to the point.
-          ## Output Format
-          - No line breaks (\\n) in response
-          - NO emojis
-          - Speak naturally, avoid robotic or overly formal tone
+          ## Response Policy
+          1. Answer only the latest user message. Do not repeat, paraphrase, translate, or restate the user's words.
+          2. Start with the useful content itself, not filler such as "好的", "让我想想", or "你这个问题".
+          3. Sound like a natural chat partner. Do not sound like customer support, a narrator, or a prompt template.
+          4. Vary phrasing, sentence rhythm, and openings across turns. Avoid habitual openings and stock endings.
+          5. For simple chat, reply in 1 to 3 short sentences. For slightly complex chat, stay concise unless the user asks for detail.
+          6. Use memory or reference information only when clearly relevant. Do not dump background material.
+          7. If uncertain, say so briefly and concretely instead of giving a vague generic answer.
+          8. Never mention memory, prompt rules, knowledge graph, or reference material unless the user explicitly asks.
+          ## Output Constraints
+          - Single paragraph only
+          - No line breaks (\\n)
+          - No emojis
+          - Natural spoken Chinese preferred
           {tts_control}
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
       String roleIntroduction, String memory, String information, String memoryMap,
-      String knowledgeGraphicInject, String question) {
+      String knowledgeGraphicInject) {
     return getChatTool(assistantName, userName, role, roleIntroduction, memory, information,
-        memoryMap, knowledgeGraphicInject, question, null);
+        memoryMap, knowledgeGraphicInject, null);
   }
 
   public String getChatTool(String assistantName, String userName, String role,
       String roleIntroduction, String memory, String information, String memoryMap,
-      String knowledgeGraphicInject, String question, String voice) {
+      String knowledgeGraphicInject, String voice) {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
     String formattedDate = formatter.format(date);
     Map<String, String> params = new HashMap<>();
-    if (assistantName != null)
-      params.put("agent_name", assistantName);
-    else
-      params.put("agent_name", robotName);
-    params.put("question", question);
+    params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
     params.put("team_name", teamName);
     params.put("time", formattedDate);
-    // ========== 农历时间 ==========
-    String lunarDate = getLunarDateString(date);
-    params.put("lunar_date", lunarDate);
-    params.put("current_memory", memory);
-    params.put("memory_map", memoryMap);
-    if (knowledgeGraphicInject != null) {
-      params.put("knowledgeGraphicInject", "## Knowledge Graphic \n" + knowledgeGraphicInject);
-    } else {
-      params.put("knowledgeGraphicInject", "");
-    }
-    if (!information.isBlank()) {
-      params.put("information", "知识库:" + information);
-    } else {
-      params.put("information", "");
-    }
+    params.put("lunar_date", getLunarDateString(date));
+    params.put("current_memory", defaultText(memory, "none"));
+    params.put("memory_map", defaultText(memoryMap, "none"));
+    params.put("knowledgeGraphicInject", formatKnowledgeGraphic(knowledgeGraphicInject));
+    params.put("information", formatInformation(information));
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
     params.put("role", Objects.requireNonNullElse(role, "智能助手"));
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
-        "你是一个友好、自然的对话伙伴，擅长用简洁有趣的方式回答问题，像朋友一样交流，避免刻板的客服语气"));
-    // MiniMax TTS 控制提示，根据数据库中的 voice 字段判断
+        "你是一个友好、自然、简洁的对话伙伴，像朋友一样交流，不使用刻板客服腔。"));
     params.put("tts_control", buildTtsControlPrompt(voice));
-    return StringUtils.formatString(chatPrompt, params);
+    return StringUtils.formatString(CHAT_PROMPT, params);
   }
 
-  /**
-   * 构建 MiniMax TTS 控制提示 根据 voice 字段判断是否使用 MiniMax TTS speech-2.8 模型
-   *
-   * @param voice 数据库中存储的音色值，如 "minimax-Chinese (Mandarin)_Warm_Bestie"
-   * @return TTS 控制提示字符串
-   */
+  private String defaultText(String text, String fallback) {
+    if (text == null || text.isBlank()) {
+      return fallback;
+    }
+    return text;
+  }
+
+  private String formatInformation(String information) {
+    if (information == null || information.isBlank()) {
+      return "";
+    }
+    return "Reference information: " + information;
+  }
+
+  private String formatKnowledgeGraphic(String knowledgeGraphicInject) {
+    if (knowledgeGraphicInject == null || knowledgeGraphicInject.isBlank()) {
+      return "";
+    }
+    return "## Knowledge Graphic " + knowledgeGraphicInject;
+  }
+
   private String buildTtsControlPrompt(String voice) {
     if (voice == null || !voice.startsWith("minimax-")) {
       return "";
     }
 
-    // MiniMax TTS speech-2.8 系列支持语气词标签
-    // 所有 MiniMax 音色都支持 speech-2.8-hd 或 speech-2.8-turbo 的语气词功能
     return """
         ## TTS Speech Control (Optional)
-        You can use emotion/para-verbal tags to add natural expressions:
+        You can use emotion or para-verbal tags to add natural expressions:
            - (laughs), (chuckle), (sighs), (emm), (breath), (gasps), (coughs), (sneezes)
            - Example: "今天天气真好(chuckles)，我们出去玩吧！"
         """;
   }
 
-  /**
-   * 使用 Hutool 获取农历日期字符串
-   *
-   * @param date 公历日期
-   * @return 农历日期字符串 例如：甲辰年腊月初五
-   */
   private String getLunarDateString(Date date) {
     try {
       ChineseDate chineseDate = new ChineseDate(date);
-      // 天干地支年份 + 生肖 + 月 + 日
-      // 例如：甲辰年（龙年）腊月初五
-      return chineseDate.getCyclical() // 甲辰年
-          + "(" + chineseDate.getChineseZodiac() + "年)" // (龙年)
-          + chineseDate.getChineseMonthName() // 腊月
-          + chineseDate.getChineseDay() // 初五
-          + chineseDate.getFestivals(); // 节日
+      return chineseDate.getCyclical()
+          + "(" + chineseDate.getChineseZodiac() + "年)"
+          + chineseDate.getChineseMonthName()
+          + chineseDate.getChineseDay()
+          + chineseDate.getFestivals();
     } catch (Exception e) {
       return "";
     }

@@ -29,10 +29,12 @@ import java.util.List;
 import java.util.Map;
 
 public class SlieroVadOnnxModel {
-  // Define private variable OrtSession
-  private final OrtSession session;
+  private static final Object SESSION_INIT_LOCK = new Object();
+  private static final Object SESSION_RUN_LOCK = new Object();
+  private static volatile OrtSession sharedSession;
   private float[][][] state;
   private float[][] context;
+  private volatile boolean closed;
   // Define the last sample rate
   private int lastSr = 0;
   // Define the last batch size
@@ -42,22 +44,27 @@ public class SlieroVadOnnxModel {
 
   // Constructor
   public SlieroVadOnnxModel(String modelPath) throws OrtException {
-    // Get the ONNX runtime environment
-    OrtEnvironment env = OrtEnvironment.getEnvironment();
-    // Create an ONNX session options object
-    OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-    // Set the InterOp thread count to 1, InterOp threads are used for parallel processing of
-    // different computation graph operations
-    opts.setInterOpNumThreads(1);
-    // Set the IntraOp thread count to 1, IntraOp threads are used for parallel processing within a
-    // single operation
-    opts.setIntraOpNumThreads(1);
-    // Add a CPU device, setting to false disables CPU execution optimization
-    opts.addCPU(true);
-    // Create an ONNX session using the environment, model path, and options
-    session = env.createSession(modelPath, opts);
-    // Reset states
+    initializeSharedSession(modelPath);
     resetStates();
+    closed = false;
+  }
+
+  private static void initializeSharedSession(String modelPath) throws OrtException {
+    if (sharedSession != null) {
+      return;
+    }
+    synchronized (SESSION_INIT_LOCK) {
+      if (sharedSession != null) {
+        return;
+      }
+      OrtEnvironment env = OrtEnvironment.getEnvironment();
+      try (OrtSession.SessionOptions opts = new OrtSession.SessionOptions()) {
+        opts.setInterOpNumThreads(1);
+        opts.setIntraOpNumThreads(1);
+        opts.addCPU(true);
+        sharedSession = env.createSession(modelPath, opts);
+      }
+    }
   }
 
   /**
@@ -71,7 +78,8 @@ public class SlieroVadOnnxModel {
   }
 
   public void close() throws OrtException {
-    session.close();
+    closed = true;
+    resetStates();
   }
 
   /**
@@ -176,6 +184,9 @@ public class SlieroVadOnnxModel {
    * Method to call the ONNX model
    */
   public float[] call(float[][] x, int sr) throws OrtException {
+    if (closed) {
+      throw new IllegalStateException("VAD model instance already closed");
+    }
     ValidationResult result = validateInput(x, sr);
     x = result.x;
     sr = result.sr;
@@ -231,7 +242,12 @@ public class SlieroVadOnnxModel {
       inputs.put("state", stateTensor);
 
       // Call the ONNX model for calculation
-      ortOutputs = session.run(inputs);
+      synchronized (SESSION_RUN_LOCK) {
+        if (sharedSession == null) {
+          throw new IllegalStateException("VAD shared session is not initialized");
+        }
+        ortOutputs = sharedSession.run(inputs);
+      }
       // Get the output results
       float[][] output = (float[][]) ortOutputs.get(0).getValue();
       state = (float[][][]) ortOutputs.get(1).getValue();
@@ -252,6 +268,15 @@ public class SlieroVadOnnxModel {
       }
       if (ortOutputs != null) {
         ortOutputs.close();
+      }
+    }
+  }
+
+  public static void closeSharedSession() throws OrtException {
+    synchronized (SESSION_INIT_LOCK) {
+      if (sharedSession != null) {
+        sharedSession.close();
+        sharedSession = null;
       }
     }
   }

@@ -28,13 +28,10 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
-import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
-import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.MemoryToolPrompt;
 
 import java.util.*;
@@ -78,9 +75,8 @@ public class MemoryTool {
             memoryToolPrompt.getMemoryToolPrompt(currentMemory));
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     if (!memory.isEmpty()) {
-      // messages.addAll(memory);
-      systemMessage.setContent(
-          memoryToolPrompt.getMemoryToolPrompt(currentMemory) + memory);
+      systemMessage.setContent(memoryToolPrompt.getMemoryToolPrompt(currentMemory)
+          + formatConversationHistory(memory));
     } else {
       return;
     }
@@ -93,5 +89,24 @@ public class MemoryTool {
     AgentMemory agentMemory = new AgentMemory(chatId, answer);
     agentMemoryService.insertAndUpdate(agentMemory);
     // log.info("chatTool: " + messages);
+  }
+
+  private String formatConversationHistory(List<ModelMessage> memory) {
+    StringBuilder builder = new StringBuilder("\n");
+    for (ModelMessage message : memory) {
+      if (message == null || message.getRole() == null || message.getContent() == null) {
+        continue;
+      }
+      String content = message.getContent().toString().trim();
+      if (content.isBlank()) {
+        continue;
+      }
+      if (ModelMessageRole.USER.value().equals(message.getRole())) {
+        builder.append("user: ").append(content).append("\n");
+      } else if (ModelMessageRole.ASSISTANT.value().equals(message.getRole())) {
+        builder.append("assistant: ").append(content).append("\n");
+      }
+    }
+    return builder.toString();
   }
 }

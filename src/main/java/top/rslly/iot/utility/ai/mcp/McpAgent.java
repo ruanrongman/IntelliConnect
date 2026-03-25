@@ -67,6 +67,8 @@ public class McpAgent implements BaseTool<String> {
   private int epochLimit;
   @Value("${ai.mcp.agent-speedUp:true}")
   private boolean speedUp;
+  @Value("${ai.agent.showThinking:true}")
+  private boolean showThinking;
   private String name = "mcpAgent";
 
   @Autowired
@@ -414,7 +416,7 @@ public class McpAgent implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this));
+            new AgentEventSourceListener(queueMap, chatId, this, "thought", showThinking));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);

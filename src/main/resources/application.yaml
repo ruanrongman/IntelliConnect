@@ -140,7 +140,19 @@ rag:
   embedding_modelName: bge-small-zh-v1.5-quantized
   knowledge_chat_embeddingStore_url: http://localhost:8000
 weather:
-  key: XXX
+  # 高德天气配置
+  amap-key: XXX
+  # 和风天气配置 (使用JWT认证)
+  qweather:
+    enabled: true
+    # API Host: 免费订阅 api.qweather.com, 商业订阅 api.qweather.com
+    api-host: XXX
+    # 项目ID (sub)
+    project-id: XXX
+    # 凭据ID (kid)
+    key-id: XXX
+    # Ed25519私钥 (PKCS8格式，Base64编码，不含-----BEGIN PRIVATE KEY-----等标记)
+    private-key: XXX
 ai:
   detectRandom: false
   showThinking: false
