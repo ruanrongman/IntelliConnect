@@ -131,7 +131,7 @@ public class LLMFactory {
       String modelName = baseLlmName.substring("dashscope-".length());
       if (thinkMode) {
         return new Qwen3(dashScopeApiKey, modelName, enableThinking,
-            thinkingBudget, "https://dashscope.aliyuncs.com/v1/chat/completions");
+            thinkingBudget, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
       }
       return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
           dashScopeApiKey);

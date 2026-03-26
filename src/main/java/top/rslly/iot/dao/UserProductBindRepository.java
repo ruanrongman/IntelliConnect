@@ -32,6 +32,8 @@ public interface UserProductBindRepository extends JpaRepository<UserProductBind
 
   List<UserProductBindEntity> findAllByProductId(int productId);
 
+  Long countByUserId(int userId);
+
   @Transactional
   List<UserProductBindEntity> deleteById(int id);
 

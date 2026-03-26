@@ -144,6 +144,13 @@ public class Auth {
     return productService.postProduct(product, header);
   }
 
+  @Operation(summary = "快速创建产品及角色", description = "快速创建产品及角色")
+  @RequestMapping(value = "/quickCreateProductAndRole", method = RequestMethod.POST)
+  public JsonResult<?> quickCreateProductAndRole(@Valid @RequestBody QuickProduct quickProduct,
+      @RequestHeader("Authorization") String header) {
+    return productService.quickCreateProductAndRole(quickProduct, header);
+  }
+
   @Operation(summary = "删除产品信息（慎用）", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.DELETE)
   public JsonResult<?> Product(@RequestParam("id") int id,

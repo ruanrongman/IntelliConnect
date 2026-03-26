@@ -89,6 +89,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   @Async("taskExecutor")
+  @Transactional(rollbackFor = Exception.class)
   public void clearNode(int productId) {
     KnowledgeGraphicSearchCountEntity searchCount =
         knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
@@ -112,6 +113,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     }
     if (forgetEpoch <= 3)
       return;
+    int limitThreshold = (int) Math.ceil(6 * Math.log(forgetEpoch + 2) - 5);
     if (searchCount.getCount() <= forgetEpoch)
       return;
     List<KnowledgeGraphicNodeEntity> nodes =
@@ -119,7 +121,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     // threshold_hits = 3 * log(Count + 2) - 5
     for (KnowledgeGraphicNodeEntity node : nodes) {
       int count = forgetEpoch - node.getCreateEpoch();
-      int threshold_hits = (int) Math.ceil(3 * Math.log(count + 2) - 5);
+      int threshold_hits = (int) Math.ceil(6 * Math.log(count + 2) - 5);
       if (node.getHitTimes() + node.getSearchTimes() < threshold_hits) {
         this.deleteNode(node.getId());
       } else {
@@ -127,7 +129,11 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         node.setCreateEpoch(0);
         // Notice that this node could be important for user, if `forgetEpoch` less than 9,
         // it will not being forgotten, so it could be easily keep when user hit it after clear
-        node.setHitTimes(2);
+        if (limitThreshold <= 0) {
+          node.setHitTimes(0);
+        } else {
+          node.setHitTimes(limitThreshold - 1);
+        }
         node.setSearchTimes(0);
         knowledgeGraphicNodeRepository.save(node);
       }
@@ -203,9 +209,17 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     rootNode.setHitTimes(rootNode.getHitTimes() + 1);
     knowledgeGraphicNodeRepository.save(rootNode);
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
+
+    // Use Set to record visited node IDs for self-loop detection and deduplication
+    Set<Long> visitedNodeIds = new HashSet<>();
+
     Stack<KnowledgeGraphicNodeEntity> nodeStack = new Stack<>();
-    List<KnowledgeGraphicNodeEntity> nodeList =
-        knowledgeGraphicNodeRepository.findAllByProductId(rootNode.getProductId());
+    List<KnowledgeGraphicNodeEntity> nodeList = new ArrayList<>();
+
+    // Add root node to visited set
+    visitedNodeIds.add(rootNode.getId());
+    nodeList.add(rootNode);
+    knowledgeGraphic.addNode(rootNode.getName(), rootNode.getDes());
     for (KnowledgeGraphicNodeEntity node : nodeList) {
       nodeStack.push(node);
       knowledgeGraphic.addNode(node.getName());
@@ -220,7 +234,16 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
             knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
         for (KnowledgeGraphicRelationEntity relation : relationList) {
           KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
-          // Null is not on consideration, cause relation must with from and to
+
+          // Self-loop + deduplication, use contains() instead of == comparison
+          if (visitedNodeIds.contains(to.getId())) {
+            // Even if node is visited, relation still needs to be added (avoid losing edge info)
+            knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
+            continue;
+          }
+
+          // Mark this node as visited
+          visitedNodeIds.add(to.getId());
           nextNodeList.add(to);
           knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
         }
@@ -298,7 +321,8 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addNode(KnowledgeGraphicNode node) {
     KnowledgeGraphicNodeEntity nodeDb = knowledgeGraphicNodeRepository.findByName(node.name);
-    KnowledgeGraphicSearchCountEntity searchCountEntity = knowledgeGraphicSearchCountRepository.getTopByProductId(node.getProductId());
+    KnowledgeGraphicSearchCountEntity searchCountEntity =
+        knowledgeGraphicSearchCountRepository.getTopByProductId(node.getProductId());
     int currentEpoch = 0;
     if (searchCountEntity != null) {
       currentEpoch = searchCountEntity.getCount();
@@ -323,7 +347,8 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   public JsonResult<?> addNode(String name, String des, int productId) {
     KnowledgeGraphicNodeEntity node =
         knowledgeGraphicNodeRepository.findByNameAndProductId(name, productId);
-    KnowledgeGraphicSearchCountEntity searchCountEntity = knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
+    KnowledgeGraphicSearchCountEntity searchCountEntity =
+        knowledgeGraphicSearchCountRepository.getTopByProductId(productId);
     int currentEpoch = 0;
     if (searchCountEntity != null) {
       currentEpoch = searchCountEntity.getCount();

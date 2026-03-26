@@ -29,8 +29,6 @@ import java.util.List;
 public interface WxUserService {
   JsonResult<?> wxLogin(WxUser wxUser) throws IOException;
 
-  JsonResult<?> wxRegister(WxUser wxUser) throws IOException;
-
   WxUserEntity wxRegister(String appid, String openid);
 
   List<WxUserEntity> findAllByAppidAndOpenid(String appid, String openid);

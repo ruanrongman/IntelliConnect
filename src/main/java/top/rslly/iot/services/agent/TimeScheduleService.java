@@ -20,6 +20,9 @@
 package top.rslly.iot.services.agent;
 
 import top.rslly.iot.models.TimeScheduleEntity;
+import top.rslly.iot.param.request.TimeScheduleParam;
+import top.rslly.iot.param.request.TimeSchedulePutParam;
+import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
 
@@ -30,6 +33,16 @@ public interface TimeScheduleService {
       String taskName);
 
   List<TimeScheduleEntity> findAll();
+
+  List<TimeScheduleEntity> findAllById(int id);
+
+  JsonResult<?> getTimeSchedule(String token);
+
+  JsonResult<?> postTimeSchedule(TimeScheduleParam timeScheduleParam);
+
+  JsonResult<?> putTimeSchedule(TimeSchedulePutParam timeSchedulePutParam);
+
+  JsonResult<?> deleteTimeSchedule(int id);
 
   void insert(TimeScheduleEntity timeScheduleEntity);
 

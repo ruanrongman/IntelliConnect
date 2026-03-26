@@ -26,15 +26,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
-import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.WeatherToolPrompt;
 
 import java.io.IOException;
@@ -50,14 +47,16 @@ import java.util.concurrent.locks.ReentrantLock;
 public class WeatherTool implements BaseTool<String> {
   @Autowired
   private WeatherToolPrompt weatherToolPrompt;
-  @Value("${weather.key}")
-  private String AmapKey;
+  @Value("${weather.amap-key}")
+  private String amapKey;
   @Value("${ai.weatherTool-speedUp}")
   private boolean speedUp;
   @Autowired
   private HttpRequestUtils httpRequestUtils;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
+  @Autowired
+  private QWeatherService qWeatherService;
   // 将锁和条件变量改为每个 chatId 独立
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
@@ -88,9 +87,11 @@ public class WeatherTool implements BaseTool<String> {
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
 
-    // 初始化当前会话的锁和条件变量
-    lockMap.putIfAbsent(chatId, new ReentrantLock());
-    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    // 只有在speedUp模式下才初始化锁和条件变量
+    if (speedUp && !mcpIsTool) {
+      lockMap.putIfAbsent(chatId, new ReentrantLock());
+      conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    }
 
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(), weatherToolPrompt.getWeatherTool());
@@ -126,17 +127,25 @@ public class WeatherTool implements BaseTool<String> {
           chatLock.unlock();
         }
         String data = dataMap.get(chatId);
-        dataMap.remove(chatId);
-        conditionMap.remove(chatId);
-        lockMap.remove(chatId);
         return data;
       } else {
         return llm.commonChat(question, messages, false);
       }
     } catch (Exception e) {
-      e.printStackTrace();
+      if (speedUp && !mcpIsTool) {
+        queueMap.get(chatId).add("查询天气失败，可能是所在地区不支持");
+      }
+      log.error("ChatTool error{}", e.getMessage());
+    } finally {
+      cleanupResources(chatId);
     }
     return "查询天气失败，请检查是否输入具体城市名称。";
+  }
+
+  private void cleanupResources(String chatId) {
+    dataMap.remove(chatId);
+    conditionMap.remove(chatId);
+    lockMap.remove(chatId);
   }
 
   private Map<String, String> process_llm_result(JSONObject llmObject)
@@ -145,8 +154,32 @@ public class WeatherTool implements BaseTool<String> {
       Map<String, String> result = new HashMap<>();
       String address = llmObject.getString("address");
       if (address != null && !address.equals("")) {
+        // 优先使用和风天气
+        if (qWeatherService.isAvailable()) {
+          try {
+            log.info("Using QWeather API for weather query");
+            String locationId = qWeatherService.getLocationIdByCityName(address);
+            if (locationId != null) {
+              JSONObject nowData = qWeatherService.getWeatherNow(locationId);
+              JSONObject forecastData = qWeatherService.getWeatherForecast(locationId, "3d");
+
+              String lives = qWeatherService.convertNowToLivesFormat(nowData);
+              String forecasts = qWeatherService.convertForecastToFormat(forecastData);
+
+              result.put("lives", lives);
+              result.put("forecasts", forecasts);
+              result.put("source", "和风天气");
+              return result;
+            }
+          } catch (Exception e) {
+            log.warn("QWeather API failed, falling back to Amap: {}", e.getMessage());
+          }
+        }
+
+        // 回退到高德天气
+        log.info("Using Amap API for weather query");
         var adCodeSearch = httpRequestUtils.httpGet(
-            "https://restapi.amap.com/v3/geocode/geo?address=" + address + "&key=" + AmapKey);
+            "https://restapi.amap.com/v3/geocode/geo?address=" + address + "&key=" + amapKey);
         String cityCodeMessage = Objects.requireNonNull(adCodeSearch.body()).string();
         JSONObject jsonObject = JSON.parseObject(cityCodeMessage);
         var geocodes = jsonObject.getJSONArray("geocodes");
@@ -154,10 +187,10 @@ public class WeatherTool implements BaseTool<String> {
         String adCode = adCodeObj.getString("adcode");
         var weatherForecast =
             httpRequestUtils.httpGet("https://restapi.amap.com/v3/weather/weatherInfo?city="
-                + adCode + "&key=" + AmapKey + "&extensions=all");
+                + adCode + "&key=" + amapKey + "&extensions=all");
         var weatherLives =
             httpRequestUtils.httpGet("https://restapi.amap.com/v3/weather/weatherInfo?city="
-                + adCode + "&key=" + AmapKey + "&extensions=base");
+                + adCode + "&key=" + amapKey + "&extensions=base");
         String weatherForecastMessage = Objects.requireNonNull(weatherForecast.body()).string();
         String weatherLivesMessage = Objects.requireNonNull(weatherLives.body()).string();
         JSONObject weatherForecastObj = JSON.parseObject(weatherForecastMessage);
@@ -166,6 +199,7 @@ public class WeatherTool implements BaseTool<String> {
         String forecasts = weatherForecastObj.getJSONArray("forecasts").toString();
         result.put("lives", lives);
         result.put("forecasts", forecasts);
+        result.put("source", "高德天气");
         return result;
       } else
         throw new IcAiException("llm response error");

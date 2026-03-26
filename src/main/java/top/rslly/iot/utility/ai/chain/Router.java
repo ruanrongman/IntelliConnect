@@ -23,6 +23,7 @@ package top.rslly.iot.utility.ai.chain;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanService;
@@ -38,6 +39,11 @@ import top.rslly.iot.utility.ai.tools.*;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component
 @Slf4j
@@ -82,10 +88,12 @@ public class Router {
   private KnowledgeGraphicServiceImpl knowledgeGraphicService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
+  @Value("${ai.branch-prediction.enabled:true}")
+  private boolean branchPredictionEnabled;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in WeChat module need to use openid
-  public String response(String content, String chatId, int productId, String... microappid) {
+  public String response(String content, String chatId, int productId, String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
@@ -93,13 +101,13 @@ public class Router {
     globalMessage.put("productId", productId);
     globalMessage.put("chatId", chatId);
     globalMessage.put("queueMap", queueMap);
-    Queue<String> queue = new LinkedList<>();
+    Queue<String> queue = createResponseQueue();
     queueMap.put(chatId, queue);
     Object memory_cache;
-    if (microappid.length > 0) {
+    if (dataArgs.length > 0 && !dataArgs[0].equals("false")) {
       globalMessage.put("openId", chatId);
-      globalMessage.put("microappid", microappid[0]);
-      chatId = microappid[0] + chatId;
+      globalMessage.put("microappid", dataArgs[0]);
+      chatId = dataArgs[0] + chatId;
       queueMap.put(chatId, queue);
       globalMessage.put("chatId", chatId);
     }
@@ -114,6 +122,40 @@ public class Router {
     else
       memory = new ArrayList<>();
     globalMessage.put("memory", memory);
+    // ========== 分支预测启动 ==========
+    final AtomicReference<String> predictionResult = new AtomicReference<>(null);
+    final CountDownLatch predictionLatch = new CountDownLatch(1);
+    final Queue<String> predictionQueue = new ConcurrentLinkedQueue<>();
+    final AtomicBoolean predictionCancelled = new AtomicBoolean(false);
+    Thread predictionThread = null;
+
+    if (branchPredictionEnabled) {
+      final String predictionContent = content;
+      final Map<String, Object> predictionGlobalMessage = new HashMap<>(globalMessage);
+      final Map<String, Queue<String>> predictionQueueMap = new ConcurrentHashMap<>();
+      final String predictionChatId = chatId + "_prediction";
+      predictionQueueMap.put(predictionChatId, predictionQueue);
+      predictionGlobalMessage.put("queueMap", predictionQueueMap);
+      predictionGlobalMessage.put("chatId", predictionChatId);
+      // predictionGlobalMessage.put("memory", new ArrayList<>(memory));
+
+      predictionThread = Thread.ofVirtual().start(() -> {
+        try {
+          if (predictionCancelled.get())
+            return;
+          String result = chatTool.run(predictionContent, predictionGlobalMessage);
+          if (!predictionCancelled.get()) {
+            predictionResult.set(result);
+          }
+          log.debug("[BranchPrediction] completed, chatId={}", predictionChatId);
+        } catch (Exception e) {
+          log.warn("[BranchPrediction] failed, chatId={}", predictionChatId, e);
+        } finally {
+          predictionLatch.countDown();
+        }
+      });
+    }
+    // ========== 分支预测启动 END ==========
     var resultMap = classifierTool.run(content, globalMessage);
     String args;
     Object argsObject = resultMap.get("args");
@@ -131,58 +173,91 @@ public class Router {
         }
         switch (value.get(0)) {
           case "1" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = weatherTool.run(args, globalMessage);
             answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
           }
           case "2" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = controlTool.run(args, globalMessage);
             answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
           }
           case "3" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             var musicMap = musicTool.run(args, globalMessage);
             toolResult = musicMap.get("answer");
             answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
           }
           case "4" -> {
-
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = agent.run(content, globalMessage);
             answer = ToolPrefix.AGENT.getPrefix() + toolResult;
           }
-          case "5" -> answer = chatTool.run(content, globalMessage);
+          case "5" -> {
+            answer = resolveChatToolAnswer(content, globalMessage,
+                predictionThread, predictionResult, predictionCancelled,
+                predictionLatch, queue, predictionQueue, chatId);
+          }
           case "6" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = wxBoundProductTool.run(args, globalMessage);
             answer = ToolPrefix.WX_BOUND_PRODUCT.getPrefix() + toolResult;
           }
           case "7" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = wxProductActiveTool.run(args, globalMessage);
             answer = ToolPrefix.WX_PRODUCT_ACTIVE.getPrefix() + toolResult;
           }
           case "8" -> {
-            if (!(microappid.length > 0))
-              toolResult = "检测到当前不在微信客服对话环境，该功能无法使用";
+            predictionCancelled.set(true);
+            predictionQueue.clear();
+            if (dataArgs.length > 0 && dataArgs[0].equals("false"))
+              toolResult = "定时任务禁止递归调用!!!";
             else {
               toolResult = scheduleTool.run(args, globalMessage);
             }
             answer = ToolPrefix.SCHEDULE.getPrefix() + toolResult;
           }
           case "9" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = productRoleTool.run(args, globalMessage);
             answer = ToolPrefix.PRODUCT_ROLE.getPrefix() + toolResult;
           }
           case "10" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = mcpAgent.run(args, globalMessage);
             answer = ToolPrefix.MCP_AGENT.getPrefix() + toolResult;
           }
           case "11" -> {
+            predictionCancelled.set(true);
+            predictionQueue.clear();
             toolResult = goodByeTool.run(args, globalMessage);
             answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
           }
-          default -> answer = chatTool.run(content, globalMessage);
+          default -> {
+            answer = resolveChatToolAnswer(content, globalMessage,
+                predictionThread, predictionResult, predictionCancelled,
+                predictionLatch, queue, predictionQueue, chatId);
+          }
         }
-      } else
-        answer = chatTool.run(content, globalMessage);
-    } else
-      answer = chatTool.run(content, globalMessage);
+      } else {
+        answer = resolveChatToolAnswer(content, globalMessage,
+            predictionThread, predictionResult, predictionCancelled,
+            predictionLatch, queue, predictionQueue, chatId);
+      }
+    } else {
+      answer = resolveChatToolAnswer(content, globalMessage,
+          predictionThread, predictionResult, predictionCancelled,
+          predictionLatch, queue, predictionQueue, chatId);
+    }
     if (toolResult == null || toolResult.equals(""))
       toolResult = answer;
     ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), content);
@@ -191,8 +266,8 @@ public class Router {
     memory.add(chatMessage);
     // System.out.println(memory.size());
     // slide memory window
+    memoryTool.run(content, globalMessage);
     if (memory.size() > 6) {
-      memoryTool.run(content, globalMessage);
       longMemoryTool.run(content, globalMessage);
       memory.subList(0, memory.size() - 6).clear();
       // if (!banTools.contains("knowledgeGraphic")) {
@@ -211,5 +286,74 @@ public class Router {
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);
     return answer;
+  }
+
+  static Queue<String> createResponseQueue() {
+    return new ConcurrentLinkedQueue<>();
+  }
+
+  private String resolveChatToolAnswer(
+      String content,
+      Map<String, Object> globalMessage,
+      Thread predictionThread,
+      AtomicReference<String> predictionResult,
+      AtomicBoolean predictionCancelled,
+      CountDownLatch predictionLatch,
+      Queue<String> mainQueue,
+      Queue<String> predictionQueue,
+      String chatId) {
+
+    if (!branchPredictionEnabled || predictionThread == null) {
+      return chatTool.run(content, globalMessage);
+    }
+
+    // ✅ 修复1：只要预测线程还活着(或已有结果)，就认为HIT，不再看队列是否为空
+    if (predictionThread.isAlive() || predictionResult.get() != null) {
+      log.info("[BranchPrediction] HIT, chatId={}", chatId);
+
+      Thread.ofVirtual().start(() -> {
+        try {
+          while (predictionThread.isAlive() || !predictionQueue.isEmpty()) {
+            if (predictionCancelled.get()) {
+              predictionQueue.clear();
+              break;
+            }
+            String token = predictionQueue.poll();
+            if (token != null) {
+              mainQueue.offer(token);
+            } else {
+              // ✅ 修复2：线程还活着但队列暂时为空，yield等待新token
+              Thread.yield();
+            }
+          }
+        } catch (Exception e) {
+          predictionQueue.clear();
+          Thread.currentThread().interrupt();
+        }
+      });
+
+      try {
+        predictionLatch.await(100, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.warn("[BranchPrediction] interrupted, chatId={}", chatId);
+      }
+
+      String result = predictionResult.get();
+      if (result != null) {
+        return result;
+      }
+
+      log.warn("[BranchPrediction] null result, chatId={}", chatId);
+      predictionCancelled.set(true);
+      predictionQueue.clear();
+      return "";
+    }
+
+    // MISS：预测线程已死且无结果（异常退出）
+    log.debug("[BranchPrediction] MISS, chatId={}", chatId);
+    predictionCancelled.set(true);
+    predictionQueue.clear();
+    return chatTool.run(content, globalMessage);
   }
 }

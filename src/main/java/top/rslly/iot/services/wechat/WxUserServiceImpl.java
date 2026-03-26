@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.WxUserRepository;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.WxUser;
+import top.rslly.iot.param.response.WxLoginResponse;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -52,35 +53,35 @@ public class WxUserServiceImpl implements WxUserService {
   private String microAppSecret;
 
   @Override
-  public JsonResult<?> wxLogin(WxUser wxUser) throws IOException {
-    String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
-    String openid = (String) JSON.parseObject(s).get("openid");
-    // System.out.println(openid);
-    List<WxUserEntity> user = wxUserRepository.findAllByAppidAndOpenid(microAppid, openid);
-    if (user.isEmpty())
-      return ResultTool.fail(ResultCode.USER_ACCOUNT_NOT_EXIST);
-    return ResultTool.success(JwtTokenUtil.TOKEN_PREFIX
-        + JwtTokenUtil.createToken(user.get(0).getName(), "ROLE_" + "wx_user"));
-  }
-
-  @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> wxRegister(WxUser wxUser) throws IOException {
+  public JsonResult<?> wxLogin(WxUser wxUser) throws IOException {
     String s = dealWx.getOpenid(wxUser.getCode(), microAppid, microAppSecret);
     log.info(s);
     String openid = (String) JSON.parseObject(s).get("openid");
     if (openid == null) {
       return ResultTool.fail(ResultCode.USER_CODE_ERROR);
     }
+    // System.out.println(openid);
     List<WxUserEntity> user = wxUserRepository.findAllByAppidAndOpenid(microAppid, openid);
-    if (!user.isEmpty())
-      return ResultTool.fail(ResultCode.USER_ACCOUNT_ALREADY_EXIST);
-    WxUserEntity wxUserEntity = new WxUserEntity();
-    wxUserEntity.setName(UUID.randomUUID().toString());
-    wxUserEntity.setOpenid(openid);
-    wxUserEntity.setAppid(microAppid);
-    var res = wxUserRepository.save(wxUserEntity);
-    return ResultTool.success(res);
+    WxLoginResponse wxLoginResponse = new WxLoginResponse();
+    WxUserEntity currentUser;
+    if (user.isEmpty()) {
+      // 新用户注册
+      WxUserEntity wxUserEntity = new WxUserEntity();
+      wxUserEntity.setName(UUID.randomUUID().toString());
+      wxUserEntity.setOpenid(openid);
+      wxUserEntity.setAppid(microAppid);
+      wxUserRepository.save(wxUserEntity);
+      currentUser = wxUserEntity; // 使用刚创建的用户对象
+      wxLoginResponse.setIsNewUser(true);
+    } else {
+      // 老用户
+      currentUser = user.get(0); // 获取已存在的用户
+      wxLoginResponse.setIsNewUser(false);
+    }
+    wxLoginResponse.setToken(JwtTokenUtil.TOKEN_PREFIX
+        + JwtTokenUtil.createToken(currentUser.getName(), "ROLE_" + "wx_user"));
+    return ResultTool.success(wxLoginResponse);
   }
 
   @Override

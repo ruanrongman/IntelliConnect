@@ -95,7 +95,7 @@ const fetchproductModel = () => {
       }
       if(errorCode==200&& data && Array.isArray(data)){
         dataSource.value = data.map((item, index) => ({
-          key: index,
+          key: item.id,
           id: item.id,
           otaId: item.otaId,
           deviceId: item.deviceId,

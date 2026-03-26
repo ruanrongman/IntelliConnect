@@ -65,6 +65,8 @@ public class Agent implements BaseTool<String> {
   private LlmDiyUtility llmDiyUtility;
   @Value("${ai.agent-epoch-limit}")
   private int epochLimit = 8;
+  @Value("${ai.agent.showThinking:true}")
+  private boolean showThinking;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -114,9 +116,11 @@ public class Agent implements BaseTool<String> {
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
-    // 初始化当前会话的锁和条件变量
-    lockMap.putIfAbsent(chatId, new ReentrantLock());
-    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    // 仅在 speedUp 模式下初始化同步资源
+    if (speedUp) {
+      lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
+      conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
+    }
     globalMessage.put("mcpIsTool", true);
     var queue = queueMap.get(chatId);
     if (queue != null) {
@@ -124,7 +128,8 @@ public class Agent implements BaseTool<String> {
       queue.add(getRandomComfortPhrase());
     }
     String system =
-        reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId);
+        reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId, 1,
+            epochLimit);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);
@@ -135,6 +140,11 @@ public class Agent implements BaseTool<String> {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(chatId);
         return "操作已取消";
+      }
+      // 更新当前轮次信息
+      if (iteration > 0) {
+        conversationPrompt
+            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1, epochLimit));
       }
       messages.clear();
       ModelMessage systemMessage =
@@ -233,7 +243,7 @@ public class Agent implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this));
+            new AgentEventSourceListener(queueMap, chatId, this, "thought", showThinking));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);

@@ -67,6 +67,8 @@ public class McpAgent implements BaseTool<String> {
   private int epochLimit;
   @Value("${ai.mcp.agent-speedUp:true}")
   private boolean speedUp;
+  @Value("${ai.agent.showThinking:true}")
+  private boolean showThinking;
   private String name = "mcpAgent";
 
   @Autowired
@@ -203,9 +205,11 @@ public class McpAgent implements BaseTool<String> {
       }
     }
 
-    // 初始化当前会话的锁和条件变量
-    lockMap.putIfAbsent(chatId, new ReentrantLock());
-    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
+    // 仅在 speedUp 模式下初始化同步资源
+    if (speedUp) {
+      lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
+      conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
+    }
 
     // 构建 system prompt，包括所有服务器的工具描述
     String system;
@@ -222,7 +226,7 @@ public class McpAgent implements BaseTool<String> {
       if (!productSkillsService.findAllByProductId(productId).isEmpty()) {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
-      system = reactPrompt.getReact(toolDescriptions, question, productId);
+      system = reactPrompt.getReact(toolDescriptions, question, productId, 1, epochLimit);
     } catch (Exception e) {
       return "获取工具描述失败";
     }
@@ -245,6 +249,11 @@ public class McpAgent implements BaseTool<String> {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(clientMap, chatId);
         return "操作已取消";
+      }
+      // 更新当前轮次信息
+      if (iteration > 0) {
+        conversationPrompt
+            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1, epochLimit));
       }
       messages.clear();
       messages
@@ -407,7 +416,7 @@ public class McpAgent implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this));
+            new AgentEventSourceListener(queueMap, chatId, this, "thought", showThinking));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);

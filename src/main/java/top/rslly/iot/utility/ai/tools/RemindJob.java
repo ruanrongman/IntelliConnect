@@ -25,6 +25,7 @@ import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import top.rslly.iot.utility.SpringBeanUtils;
+import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.wx.DealWx;
 
 import java.time.LocalDateTime;
@@ -40,12 +41,39 @@ public class RemindJob implements Job {
     log.info("task name: {}", jobName);
 
     DealWx dealWx = (DealWx) SpringBeanUtils.getBean("dealWx");
+    Router router = (Router) SpringBeanUtils.getBean("router");
+    // 添加 null 检查
+    Object data1 = jobDataMap.get("data1");
+    Object data2 = jobDataMap.get("data2");
+    Object data3 = jobDataMap.get("data3");
+    Object data4 = jobDataMap.get("data4");
+    Object data5 = jobDataMap.get("data5");
+    Object data6 = jobDataMap.get("data6");
+
+    if (data1 == null || data2 == null || data3 == null || data4 == null || data5 == null
+        || data6 == null) {
+      log.error("定时任务参数不完整，缺少必要的参数");
+      return;
+    }
     String openid = jobDataMap.get("data1").toString();
     String microappid = jobDataMap.get("data2").toString();
+    String exec = jobDataMap.get("data3").toString();
+    String chatId = jobDataMap.get("data4").toString();
+    int productId = (int) jobDataMap.get("data5");
+    String exec_command = jobDataMap.get("data6").toString();
     log.info("openid:{}", openid);
     log.info("microappid:{}", microappid);
+    log.info("exec:{}", exec);
+    log.info("chatId:{}", chatId);
+    log.info("productId:{}", productId);
+    log.info("exec_command:{}", exec_command);
     try {
-      dealWx.sendContent(openid, jobName + "提醒时间到了！！！", microappid);
+      if (exec.equals("true")) {
+        String res = router.response(exec_command, chatId, productId, "false");
+        dealWx.sendContent(openid, res, microappid);
+      } else {
+        dealWx.sendContent(openid, jobName + "提醒时间到了！！！", microappid);
+      }
     } catch (Exception e) {
       log.error("发送失败", e);
     }

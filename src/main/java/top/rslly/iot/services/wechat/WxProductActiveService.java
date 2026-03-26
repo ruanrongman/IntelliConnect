@@ -30,4 +30,6 @@ public interface WxProductActiveService {
       String openid);
 
   List<WxProductActiveEntity> findAllByAppidAndOpenid(String appid, String openid);
+
+  List<WxProductActiveEntity> findAllByProductId(int productId);
 }

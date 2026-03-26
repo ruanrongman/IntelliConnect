@@ -52,6 +52,7 @@ public class XiaoZhiWebsocket {
   public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   public static final Map<String, String> voiceContent = new ConcurrentHashMap<>();
   private static final Map<String, ByteArrayOutputStream> pcmVadBuffer = new ConcurrentHashMap<>();
+  private static final Map<String, OpusDecoder> opusDecoderMap = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
   private static volatile SafetyServiceImpl safetyService;
@@ -62,8 +63,8 @@ public class XiaoZhiWebsocket {
   public static final AtomicBoolean isSystemShuttingDown = new AtomicBoolean(false);
   // 改为静态Map，为每个会话维护独立的VAD监听器实例
   private static final Map<String, SlieroVadListener> vadListenerMap = new ConcurrentHashMap<>();
-  // 在类的静态字段中添加
-  private static final Map<String, Long> sessionStartTimeMap = new ConcurrentHashMap<>();
+  // 记录最近一次有效交互时间，用于空闲超时判断
+  private static final Map<String, Long> lastInteractionTimeMap = new ConcurrentHashMap<>();
   List<byte[]> audioList = new CopyOnWriteArrayList<>();
   private String chatId;
   private int productId;
@@ -72,7 +73,7 @@ public class XiaoZhiWebsocket {
 
   // 使用静态变量存储配置
   private static long TIMEOUT_NORMAL = 60; // 默认60秒
-  private static long TIMEOUT_REALTIME = 120000; // 默认120秒
+  private static long TIMEOUT_REALTIME = 120; // 默认120秒
 
   // 通过静态setter注入配置
   @Value("${ai.vad.timeout:60}")
@@ -153,10 +154,21 @@ public class XiaoZhiWebsocket {
         clients.put(this.chatId, session);
         isAbort.put(this.chatId, false);
         haveVoice.put(this.chatId, false);
+        refreshInteractionTime(this.chatId);
         // 为该会话创建独立的VAD监听器实例
         SlieroVadListener listener = new SlieroVadListener();
         listener.init();
+        if (!listener.isReady()) {
+          session.getBasicRemote().sendText("VAD初始化失败");
+          session.close();
+          clients.remove(this.chatId);
+          isAbort.remove(this.chatId);
+          haveVoice.remove(this.chatId);
+          lastInteractionTimeMap.remove(this.chatId);
+          return;
+        }
         vadListenerMap.put(this.chatId, listener);
+        opusDecoderMap.put(this.chatId, new OpusDecoder(16000, 1));
         return;
       } catch (Exception e) {
         log.info("发送失败");
@@ -202,10 +214,36 @@ public class XiaoZhiWebsocket {
       clients.put(this.chatId, session);
       isAbort.put(this.chatId, false);
       haveVoice.put(this.chatId, false);
-      // 为该会话创建独立的VAD监听器实例
-      SlieroVadListener listener = new SlieroVadListener();
-      listener.init();
-      vadListenerMap.put(this.chatId, listener);
+      refreshInteractionTime(this.chatId);
+      try {
+        // 为该会话创建独立的VAD监听器实例
+        SlieroVadListener listener = new SlieroVadListener();
+        listener.init();
+        if (!listener.isReady()) {
+          session.getBasicRemote().sendText("VAD初始化失败");
+          session.close();
+          clients.remove(this.chatId);
+          isAbort.remove(this.chatId);
+          haveVoice.remove(this.chatId);
+          lastInteractionTimeMap.remove(this.chatId);
+          return;
+        }
+        vadListenerMap.put(this.chatId, listener);
+        opusDecoderMap.put(this.chatId, new OpusDecoder(16000, 1));
+      } catch (Exception e) {
+        log.error("初始化VAD会话失败, chatId={}", this.chatId, e);
+        try {
+          session.getBasicRemote().sendText("VAD初始化失败");
+          session.close();
+        } catch (IOException ex) {
+          log.error("关闭初始化失败会话失败, chatId={}", this.chatId, ex);
+        }
+        clients.remove(this.chatId);
+        isAbort.remove(this.chatId);
+        haveVoice.remove(this.chatId);
+        lastInteractionTimeMap.remove(this.chatId);
+        return;
+      }
       log.info("header{}", token);
     } else {
       log.info("冲突，无法连接");
@@ -250,8 +288,9 @@ public class XiaoZhiWebsocket {
       isAbort.remove(chatId);
       haveVoice.remove(chatId);
       pcmVadBuffer.remove(chatId); // 清理缓冲区
+      opusDecoderMap.remove(chatId);
       voiceContent.remove(chatId); // 清理语音内容
-      sessionStartTimeMap.remove(chatId); // 清理时间记录
+      lastInteractionTimeMap.remove(chatId); // 清理时间记录
     }
   }
 
@@ -262,6 +301,7 @@ public class XiaoZhiWebsocket {
   public void onMessage(String message) {
     log.info("message{}", message);
     try {
+      refreshInteractionTime(chatId);
       // OpusDecoder decoder = new OpusDecoder(16000, 1);
       var json = JSON.parseObject(message);
       String type = json.getString("type");
@@ -310,8 +350,7 @@ public class XiaoZhiWebsocket {
             }
             log.info("listen start");
             voiceContent.clear();
-            // 重置会话开始时间
-            sessionStartTimeMap.put(chatId, System.currentTimeMillis());
+            refreshInteractionTime(chatId);
           }
           case "stop" -> {
             if (xiaoZhiUtil != null) {
@@ -330,44 +369,15 @@ public class XiaoZhiWebsocket {
   public void onBinaryMessage(byte[] message) {
     if (!isManual) {
       try {
-        // 检查超时 - 基于时间而不是缓冲区大小
         long currentTime = System.currentTimeMillis();
-        long startTime = sessionStartTimeMap.computeIfAbsent(chatId, k -> currentTime);
-
-        long timeoutThreshold = isRealTime ? TIMEOUT_REALTIME * 1000L : TIMEOUT_NORMAL * 1000L;
-        // 如果没有检测到语音且超时，则退出
-        if (haveVoice.get(chatId) != null && !haveVoice.get(chatId)
-            && (currentTime - startTime) > timeoutThreshold) {
-          log.info("会话超时，chatId: {}, 经过时间: {}ms", chatId, (currentTime - startTime));
-
-          // 清理所有缓冲区
-          audioList.clear();
-          pcmVadBuffer.remove(chatId);
-
-          Session session = XiaoZhiWebsocket.clients.get(chatId);
-          if (session != null && session.isOpen()) {
-            session.getBasicRemote().sendText("""
-                {
-                  "type": "tts",
-                  "state": "start"
-                }""");
-            if (ttsServiceFactory != null) {
-              ttsServiceFactory.websocketAudioSync("时间过得真快，没什么事我先退下了", session, chatId,
-                  productId);
-            }
-            try {
-              session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-              session.close();
-            } catch (IOException e) {
-              log.error("Failed to close session: {}", e.getMessage());
-            }
-          }
-          isAbort.put(chatId, false);
-          return;
-        }
         byte[] bytes = message.clone();
-        OpusDecoder decoder = new OpusDecoder(16000, 1);
+        OpusDecoder decoder = opusDecoderMap.get(chatId);
+        if (decoder == null) {
+          decoder = new OpusDecoder(16000, 1);
+          opusDecoderMap.put(chatId, decoder);
+        }
         byte[] data_packet = new byte[16000];
+        boolean interactionDetected = Boolean.TRUE.equals(haveVoice.get(chatId));
 
         // 解码音频数据
         int pcm_frame = decoder.decode(bytes, 0, bytes.length,
@@ -405,6 +415,7 @@ public class XiaoZhiWebsocket {
             if (map != null && map.containsKey("start")) {
               log.info("检测到语音开始: {}", map);
               haveVoice.put(chatId, true);
+              interactionDetected = true;
               if (isRealTime) {
                 isAbort.put(chatId, true);
               }
@@ -416,9 +427,11 @@ public class XiaoZhiWebsocket {
             }
             if (map != null && map.containsKey("end")) {
               log.info("检测到语音结束: {}", map);
+              interactionDetected = true;
               if (isRealTime) {
                 isAbort.put(chatId, false);
               }
+              refreshInteractionTime(chatId);
               if (xiaoZhiUtil != null) {
                 xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual);
               }
@@ -426,6 +439,13 @@ public class XiaoZhiWebsocket {
               return;
             }
             processed += 512 * 2;
+          }
+
+          if (interactionDetected) {
+            refreshInteractionTime(chatId);
+          } else if (hasExceededIdleTimeout(chatId, currentTime, isRealTime)) {
+            closeSessionForIdleTimeout(currentTime);
+            return;
           }
 
           // 保留未处理数据
@@ -497,9 +517,10 @@ public class XiaoZhiWebsocket {
     clients.clear();
     voiceContent.clear();
     pcmVadBuffer.clear();
+    opusDecoderMap.clear();
     isAbort.clear();
     haveVoice.clear();
-    sessionStartTimeMap.clear();
+    lastInteractionTimeMap.clear();
     // 清理所有VAD监听器实例
     for (Map.Entry<String, SlieroVadListener> entry : vadListenerMap.entrySet()) {
       try {
@@ -509,6 +530,7 @@ public class XiaoZhiWebsocket {
       }
     }
     vadListenerMap.clear();
+    SlieroVadListener.destroySharedResources();
     if (otaXiaozhiService != null) {
       otaXiaozhiService.cleanStatus();
     }
@@ -536,6 +558,57 @@ public class XiaoZhiWebsocket {
       return null;
     }
     return deviceId;
+  }
+
+  static boolean hasExceededIdleTimeout(String chatId, long currentTime, boolean isRealTime) {
+    Long lastInteractionTime = lastInteractionTimeMap.computeIfAbsent(chatId, k -> currentTime);
+    return hasExceededIdleTimeout(lastInteractionTime, currentTime, isRealTime);
+  }
+
+  static boolean hasExceededIdleTimeout(long lastInteractionTime, long currentTime,
+      boolean isRealTime) {
+    long timeoutThreshold = getIdleTimeoutMillis(isRealTime);
+    return (currentTime - lastInteractionTime) > timeoutThreshold;
+  }
+
+  static long getIdleTimeoutMillis(boolean isRealTime) {
+    long timeoutSeconds = isRealTime ? TIMEOUT_REALTIME : TIMEOUT_NORMAL;
+    return timeoutSeconds * 1000L;
+  }
+
+  private static void refreshInteractionTime(String chatId) {
+    if (chatId != null) {
+      lastInteractionTimeMap.put(chatId, System.currentTimeMillis());
+    }
+  }
+
+  private void closeSessionForIdleTimeout(long currentTime) throws IOException {
+    Long lastInteractionTime = lastInteractionTimeMap.get(chatId);
+    long idleMillis = lastInteractionTime == null ? 0L : currentTime - lastInteractionTime;
+    log.info("会话空闲超时，chatId: {}, 空闲时长: {}ms", chatId, idleMillis);
+
+    audioList.clear();
+    pcmVadBuffer.remove(chatId);
+
+    Session session = XiaoZhiWebsocket.clients.get(chatId);
+    if (session != null && session.isOpen()) {
+      session.getBasicRemote().sendText("""
+          {
+            "type": "tts",
+            "state": "start"
+          }""");
+      if (ttsServiceFactory != null) {
+        ttsServiceFactory.websocketAudioSync("时间过得真快，没什么事我先退下了", session, chatId,
+            productId);
+      }
+      try {
+        session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+        session.close();
+      } catch (IOException e) {
+        log.error("Failed to close session: {}", e.getMessage());
+      }
+    }
+    isAbort.put(chatId, false);
   }
 
 

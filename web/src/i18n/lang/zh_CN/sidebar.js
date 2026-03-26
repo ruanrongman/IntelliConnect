@@ -78,7 +78,9 @@ const product ={
   knowledgeGraphic: '知识图谱',
   llmProviderInformation: '模型服务商配置',
   productLlmModel: '产品LLM模型配置',
-  productSkills: '产品技能配置'
+  productSkills: '产品技能配置',
+  productAsr: 'ASR语音识别配置',
+  timeSchedule: '定时任务'
 }
 const deviceData = {
   deviceDataPage: '设备数据',

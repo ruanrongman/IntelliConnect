@@ -45,6 +45,7 @@ public class AgentEventSourceListener extends EventSourceListener {
 
   // 新增：可配置的字段名
   private final String targetFieldName;
+  private final boolean emitTargetFieldToQueue;
 
   // 错误处理常量
   private static final String ERROR_MESSAGE = "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
@@ -63,15 +64,21 @@ public class AgentEventSourceListener extends EventSourceListener {
 
   public AgentEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
       BaseTool<?> tool) {
-    this(queueMap, chatId, tool, "thought"); // 默认使用 "thought"
+    this(queueMap, chatId, tool, "thought", true); // 默认使用 "thought"
   }
 
   public AgentEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
       BaseTool<?> tool, String targetFieldName) {
+    this(queueMap, chatId, tool, targetFieldName, true);
+  }
+
+  public AgentEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
+      BaseTool<?> tool, String targetFieldName, boolean emitTargetFieldToQueue) {
     this.queueMap = queueMap;
     this.chatId = chatId;
     this.chatTool = tool;
     this.targetFieldName = targetFieldName; // 保存字段名
+    this.emitTargetFieldToQueue = emitTargetFieldToQueue;
     this.parseStateMap.put(chatId, new ThoughtParseState());
   }
 
@@ -181,7 +188,9 @@ public class AgentEventSourceListener extends EventSourceListener {
       jsonBuffer.append(content);
 
       // 处理thought字段的流式提取
-      processThoughtStream(content);
+      if (emitTargetFieldToQueue) {
+        processThoughtStream(content);
+      }
 
     } catch (Exception e) {
       log.error("解析SSE数据异常: {}, 原始数据: {}", e.getMessage(), data, e);

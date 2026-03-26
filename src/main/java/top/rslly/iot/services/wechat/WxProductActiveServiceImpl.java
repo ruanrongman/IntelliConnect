@@ -55,4 +55,9 @@ public class WxProductActiveServiceImpl implements WxProductActiveService {
   public List<WxProductActiveEntity> findAllByAppidAndOpenid(String appid, String openid) {
     return wxProductActiveRepository.findAllByAppidAndOpenid(appid, openid);
   }
+
+  @Override
+  public List<WxProductActiveEntity> findAllByProductId(int productId) {
+    return wxProductActiveRepository.findAllByProductId(productId);
+  }
 }

@@ -286,9 +286,11 @@ class DemoApplicationTests {
   public void ScheduleToolTest() throws InterruptedException {
     SpringBeanUtils.setApplicationContext(applicationContext);
     Map<String, Object> globalMessage = new HashMap<>();
-    globalMessage.put("openid", "test");
+    globalMessage.put("productId", 1);
+    globalMessage.put("chatId", "test");
+    globalMessage.put("openId", "test");
     globalMessage.put("microappid", "test");
-    scheduleTool.run("5分钟后提醒我", globalMessage);
+    scheduleTool.run("1分钟后开灯", globalMessage);
     Thread.sleep(100000);
   }
 

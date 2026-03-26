@@ -44,8 +44,10 @@ public class QuartzInit implements CommandLineRunner {
       // CronChecker.isCronExpired(cronExpression)
       if (!QuartzCronDateUtils.isCronExpired(s.getCron())) {
         String groupName = s.getAppid() + ":" + s.getOpenid();
+        String chatId = s.getAppid() + s.getOpenid();
         QuartzManager.addJob(s.getTaskName(), groupName, s.getTaskName(), groupName,
-            RemindJob.class, s.getCron(), s.getOpenid(), s.getAppid());
+            RemindJob.class, s.getCron(), s.getOpenid(), s.getAppid(), s.getExec(),
+            chatId, s.getProductId(), s.getExecCommand());
       } else
         timeScheduleService.deleteByAppidAndOpenidAndTaskName(s.getAppid(), s.getOpenid(),
             s.getTaskName());

@@ -19,22 +19,22 @@
       @finish="onFinish"  
       @finishFailed="onFinishFailed"  
     >  
-      <a-form-item  
-        label="固件"  
-        name="name"  
-        :rules="[{ required: true, message: '请选择固件!' }]"  
-      >  
-        <a-select  
-          v-model:value="formState.name"  
-          :options="firmwareOptions"  
-          placeholder="请选择固件"  
-          :disabled="submitting"  
-          :loading="loadingFirmware"  
-          allowClear  
-          show-search  
-          :filter-option="filterOption"  
-        />  
-      </a-form-item>  
+      <a-form-item
+        label="固件"
+        name="firmwareId"
+        :rules="[{ required: true, message: '请选择固件!' }]"
+      >
+        <a-select
+          v-model:value="formState.firmwareId"
+          :options="firmwareOptions"
+          placeholder="请选择固件"
+          :disabled="submitting"
+          :loading="loadingFirmware"
+          allowClear
+          show-search
+          :filter-option="filterOption"
+        />
+      </a-form-item>
 
       <a-form-item  
         label="设备"  
@@ -125,13 +125,13 @@ const deviceOptions = ref([])
 const loadingFirmware = ref(false)  
 const loadingDevices = ref(false)  
 
-// 表单数据  
-const formState = reactive({  
-  name: '',        // 固件名称  
-  deviceName: '',  // 设备名称  
-  versionName: '', // 版本名称  
-  description: ''  // 固件描述
-})  
+// 表单数据
+const formState = reactive({
+  firmwareId: undefined, // 固件ID（用于下拉选择唯一标识）
+  deviceName: '',        // 设备名称
+  versionName: '',       // 版本名称
+  description: ''        // 固件描述
+})
 
 // 显示模态框  
 const showModal = () => {
@@ -150,12 +150,13 @@ const handleCancel = () => {
   visible.value = false  
 }  
 
-// 重置表单  
-const resetForm = () => {  
-  formState.name = ''  
-  formState.deviceName = ''  
-  formState.versionName = ''  
-}  
+// 重置表单
+const resetForm = () => {
+  formState.firmwareId = undefined
+  formState.deviceName = ''
+  formState.versionName = ''
+  formState.description = ''
+}
 
 // 获取产品名称的方法
 const getProductNameById = async (productId) => {
@@ -198,10 +199,11 @@ const fetchFirmwareList = async () => {
           }
           
           return {
-            value: item.name,
-            label: productName 
-              ? `${item.name} (${productName})` 
+            value: item.id,    // 使用 id 作为唯一标识
+            label: productName
+              ? `${item.name} (${productName})`
               : item.name,
+            name: item.name,   // 保存原始名称用于提交
             title: `${item.name} (路径: ${item.path})${productName ? ` - ${productName}` : ''}`
           }
         })
@@ -274,18 +276,28 @@ const filterOption = (input, option) => {
   return option.label.toLowerCase().includes(input.toLowerCase())  
 }  
 
-// 处理提交  
-const handleSubmit = async () => {  
-  submitting.value = true  
-    
-  try {  
-    const hideMessage = message.loading('正在提交配置，请稍候...', 0)  
-      
-    const submitData = toRaw(formState)  
-      
-    console.log('提交数据:', submitData)  
-      
-    const res = await postOtaPassive(submitData)  
+// 处理提交
+const handleSubmit = async () => {
+  submitting.value = true
+
+  try {
+    const hideMessage = message.loading('正在提交配置，请稍候...', 0)
+
+    // 根据 firmwareId 找到对应的固件名称
+    const selectedFirmware = firmwareOptions.value.find(
+      item => item.value === formState.firmwareId
+    )
+
+    const submitData = {
+      name: selectedFirmware?.name || '',  // 提交固件名称
+      deviceName: formState.deviceName,
+      versionName: formState.versionName,
+      description: formState.description
+    }
+
+    console.log('提交数据:', submitData)
+
+    const res = await postOtaPassive(submitData)
       
     hideMessage()  
       

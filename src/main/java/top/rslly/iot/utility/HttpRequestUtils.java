@@ -39,11 +39,21 @@ public class HttpRequestUtils {
   }
 
   public Response httpGet(String url) throws IOException {
+    return httpGet(url, null);
+  }
 
-
-    Request request = new Request.Builder().header("User-Agent",
+  public Response httpGet(String url, Map<String, String> headers) throws IOException {
+    Request.Builder requestBuilder = new Request.Builder().header("User-Agent",
         "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; CIBA; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729; .NET4.0C; InfoPath.2; .NET4.0E)")
-        .url(url).build();
+        .url(url);
+
+    if (headers != null && !headers.isEmpty()) {
+      for (Map.Entry<String, String> entry : headers.entrySet()) {
+        requestBuilder.header(entry.getKey(), entry.getValue());
+      }
+    }
+
+    Request request = requestBuilder.build();
     Call call = okHttpClient.newCall(request);
 
     return call.execute();

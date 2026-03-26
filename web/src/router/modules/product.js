@@ -94,6 +94,15 @@ export default [
           },
         },
         {
+          path: '/productAsr',
+          name: 'productAsr',
+          component: () => import('@/views/productAsr/index.vue'),
+          meta: {
+            title: 'productAsr',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productModel',
           name: 'productModel',
           component: () => import('@/views/productModel/index.vue'),
@@ -207,6 +216,15 @@ export default [
           component: () => import("@/views/knowledgeGraphic/index.vue"),
           meta: {
             title: 'knowledgeGraphic',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          }
+        },
+        {
+          path: '/timeSchedule',
+          name: 'timeSchedule',
+          component: () => import("@/views/timeSchedule/index.vue"),
+          meta: {
+            title: 'timeSchedule',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
           }
         }

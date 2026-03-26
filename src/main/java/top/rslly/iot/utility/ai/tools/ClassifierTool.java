@@ -75,10 +75,12 @@ public class ClassifierTool {
     List<ModelMessage> memory =
         Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
             .orElse(Collections.emptyList());
-    // 初始化当前会话的同步资源
-    lockMap.putIfAbsent(chatId, new ReentrantLock());
-    conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
-    dataMap.putIfAbsent(chatId, new HashMap<>());
+    // 初始化当前会话的同步资源（仅在 speedUp 模式下需要）
+    if (speedUp) {
+      lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
+      conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
+      dataMap.computeIfAbsent(chatId, k -> new HashMap<>());
+    }
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             classifierToolPrompt.getClassifierTool(productId, chatId));
@@ -109,12 +111,8 @@ public class ClassifierTool {
       } catch (Exception e) {
         log.error("ClassifierTool error{}", e.getMessage());
         resultMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
-        return resultMap;
       } finally {
         lockMap.get(chatId).unlock();
-        dataMap.remove(chatId);
-        conditionMap.remove(chatId);
-        lockMap.remove(chatId);
       }
     } else {
       var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
@@ -124,12 +122,14 @@ public class ClassifierTool {
         resultMap.put("value", value.get("value"));
         resultMap.put("args", value.get("args"));
         resultMap.put("answer", answer);
-
       } catch (Exception e) {
         resultMap.put("answer", answer);
-        return resultMap;
       }
     }
+    // 统一清理资源
+    dataMap.remove(chatId);
+    conditionMap.remove(chatId);
+    lockMap.remove(chatId);
     return resultMap;
   }
 

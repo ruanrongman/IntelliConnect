@@ -34,6 +34,8 @@ public interface ProductLlmModelService {
 
   JsonResult<?> getProductLlmModel(String token);
 
+  JsonResult<?> getProductLlmModelByProductId(int productId);
+
   JsonResult<?> postProductLlmModel(ProductLlmModel productLlmModel);
 
   JsonResult<?> deleteProductLlmModel(int id);

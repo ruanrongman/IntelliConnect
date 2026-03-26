@@ -52,6 +52,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
+import java.util.ArrayList;
 
 @RestController
 @RequestMapping(value = "/api/v2")
@@ -99,6 +100,10 @@ public class Tool {
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
+  @Autowired
+  private TimeScheduleService timeScheduleService;
+  @Autowired
+  private ProductAsrServiceImpl productAsrService;
 
   @Operation(summary = "用于获取平台运行环境信息", description = "单位为百分比")
   @RequestMapping(value = "/machineMessage", method = RequestMethod.GET)
@@ -717,6 +722,19 @@ public class Tool {
     return productLlmModelService.getProductLlmModel(header);
   }
 
+  @Operation(summary = "获取产品LLM模型配置", description = "获取产品LLM模型配置(产品id)")
+  @RequestMapping(value = "/productLlmModelByProductId", method = RequestMethod.GET)
+  public JsonResult<?> getProductLlmModelByProductId(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.success(new ArrayList<>());
+    }
+    return productLlmModelService.getProductLlmModelByProductId(productId);
+  }
+
   @Operation(summary = "创建或更新产品LLM模型配置", description = "创建或更新产品LLM模型配置")
   @RequestMapping(value = "/productLlmModel", method = RequestMethod.POST)
   public JsonResult<?> postProductLlmModel(
@@ -780,6 +798,52 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productSkillsService.deleteProductSkill(id);
+  }
+
+  @Operation(summary = "获取产品ASR配置", description = "获取产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.GET)
+  public JsonResult<?> getProductAsr(@RequestHeader("Authorization") String header) {
+
+    return productAsrService.getProductAsr(header);
+  }
+
+  @Operation(summary = "添加产品ASR配置", description = "添加产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.POST)
+  public JsonResult<?> addProductAsr(@Valid @RequestBody ProductAsrParam productAsrParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productAsrParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productAsrService.addProductAsr(productAsrParam);
+  }
+
+  @Operation(summary = "更新产品ASR配置", description = "更新产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.PUT)
+  public JsonResult<?> updateProductAsr(@Valid @RequestBody ProductAsrParam productAsrParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productAsrParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productAsrService.updateProductAsr(productAsrParam);
+  }
+
+  @Operation(summary = "删除产品ASR配置", description = "根据ID删除产品ASR配置")
+  @RequestMapping(value = "/productAsr", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductAsr(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductAsr(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productAsrService.deleteProductAsr(id);
   }
 
   @Operation(summary = "获取知识图谱", description = "通过产品ID获取该产品的知识图谱")
@@ -1047,7 +1111,7 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return userConfigService.addUserConfig(userConfig);
+    return userConfigService.addUserConfig(userConfig, header);
   }
 
   @Operation(summary = "用户配置", description = "删除用户配置")
@@ -1086,6 +1150,52 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return userConfigService.updateUserConfig(userConfig);
+    return userConfigService.updateUserConfig(userConfig, header);
+  }
+
+  @Operation(summary = "获取日程安排", description = "获取当前用户的日程安排列表")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.GET)
+  public JsonResult<?> getTimeSchedule(@RequestHeader("Authorization") String header) {
+    return timeScheduleService.getTimeSchedule(header);
+  }
+
+  @Operation(summary = "创建日程安排", description = "创建一个新的日程安排")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.POST)
+  public JsonResult<?> postTimeSchedule(@Valid @RequestBody TimeScheduleParam timeScheduleParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, timeScheduleParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return timeScheduleService.postTimeSchedule(timeScheduleParam);
+  }
+
+  @Operation(summary = "更新日程安排", description = "更新已有的日程安排")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.PUT)
+  public JsonResult<?> putTimeSchedule(
+      @Valid @RequestBody TimeSchedulePutParam timeSchedulePutParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeTimeSchedule(header, timeSchedulePutParam.getId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return timeScheduleService.putTimeSchedule(timeSchedulePutParam);
+  }
+
+  @Operation(summary = "删除日程安排", description = "根据ID删除日程安排")
+  @RequestMapping(value = "/timeSchedule", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteTimeSchedule(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeTimeSchedule(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return timeScheduleService.deleteTimeSchedule(id);
   }
 }

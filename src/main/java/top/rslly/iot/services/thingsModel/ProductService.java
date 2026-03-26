@@ -22,6 +22,7 @@ package top.rslly.iot.services.thingsModel;
 
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.param.request.Product;
+import top.rslly.iot.param.request.QuickProduct;
 import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
@@ -33,6 +34,8 @@ public interface ProductService {
   JsonResult<?> getProduct(String token);
 
   JsonResult<?> postProduct(Product product, String token);
+
+  JsonResult<?> quickCreateProductAndRole(QuickProduct quickProduct, String token);
 
   JsonResult<?> deleteProduct(int id);
 

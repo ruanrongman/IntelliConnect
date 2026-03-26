@@ -31,6 +31,16 @@ public interface TimeScheduleRepository extends JpaRepository<TimeScheduleEntity
   List<TimeScheduleEntity> findAllByAppidAndOpenidAndTaskName(String appid, String openid,
       String taskName);
 
+  List<TimeScheduleEntity> findAllByProductId(int productId);
+
+  List<TimeScheduleEntity> findAllById(int id);
+
+  @Transactional
+  List<TimeScheduleEntity> deleteAllById(int id);
+
   @Transactional
   void deleteByAppidAndOpenidAndTaskName(String appid, String openid, String taskName);
+
+  @Transactional
+  void deleteAllByProductId(int productId);
 }

@@ -177,7 +177,35 @@ public enum VoiceTimbre {
                                                   "edge-zh-TW-HsiaoYuNeural",
                                                   "中文 (繁体) - 台湾 - 女 (晓雨)"), ZH_TW_YUNJHE_NEURAL(
                                                       "edge-zh-TW-YunJheNeural",
-                                                      "中文 (繁体) - 台湾 - 男 (云哲)");
+                                                      "中文 (繁体) - 台湾 - 男 (云哲)"),
+
+  // MiniMax TTS 系列音色 - 普通话
+  MINIMAX_MANDARIN_WARM_BESTIE("minimax-Chinese (Mandarin)_Warm_Bestie",
+      "MiniMax - 普通话 - 温暖闺蜜女"), MINIMAX_MANDARIN_NEWS_ANCHOR(
+          "minimax-Chinese (Mandarin)_News_Anchor",
+          "MiniMax - 普通话 - 新闻主播"), MINIMAX_MANDARIN_GENTLEMAN(
+              "minimax-Chinese (Mandarin)_Gentleman",
+              "MiniMax - 普通话 - 绅士男"), MINIMAX_MANDARIN_SWEET_LADY(
+                  "minimax-Chinese (Mandarin)_Sweet_Lady",
+                  "MiniMax - 普通话 - 甜美女士"), MINIMAX_MANDARIN_MALE_ANNOUNCER(
+                      "minimax-Chinese (Mandarin)_Male_Announcer",
+                      "MiniMax - 普通话 - 男播音员"), MINIMAX_MANDARIN_RELIABLE_EXECUTIVE(
+                          "minimax-Chinese (Mandarin)_Reliable_Executive",
+                          "MiniMax - 普通话 - 可靠高管男"), MINIMAX_MANDARIN_HK_FLIGHT_ATTENDANT(
+                              "minimax-Chinese (Mandarin)_HK_Flight_Attendant",
+                              "MiniMax - 普通话 - 香港空乘"),
+
+  // MiniMax TTS 系列音色 - 粤语
+  MINIMAX_CANTONESE_FEMALE_HOST("minimax-Cantonese_ProfessionalHost (F)",
+      "MiniMax - 粤语 - 专业女主持"), MINIMAX_CANTONESE_GENTLE_LADY("minimax-Cantonese_GentleLady",
+          "MiniMax - 粤语 - 温柔女士"), MINIMAX_CANTONESE_MALE_HOST(
+              "minimax-Cantonese_ProfessionalHost (M)",
+              "MiniMax - 粤语 - 专业男主持"), MINIMAX_CANTONESE_CUTE_GIRL("minimax-Cantonese_CuteGirl",
+                  "MiniMax - 粤语 - 可爱女孩"), MINIMAX_CANTONESE_PLAYFUL_MAN(
+                      "minimax-Cantonese_PlayfulMan",
+                      "MiniMax - 粤语 - 顽皮男"), MINIMAX_CANTONESE_KIND_WOMAN(
+                          "minimax-Cantonese_KindWoman",
+                          "MiniMax - 粤语 - 善良女士");
 
 
   private String timbre;

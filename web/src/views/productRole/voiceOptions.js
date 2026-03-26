@@ -545,5 +545,59 @@ const voiceOptions = [
     value: 'edge-ja-JP-NanamiNeural',
     label: '日语 - 日本 - 女 (南ami)'
   },
+  // MiniMax TTS 系列音色 - 普通话
+  {
+    value: 'minimax-Chinese (Mandarin)_Warm_Bestie',
+    label: '【MiniMax】温暖闺蜜女'
+  },
+  {
+    value: 'minimax-Chinese (Mandarin)_News_Anchor',
+    label: '【MiniMax】新闻主播'
+  },
+  {
+    value: 'minimax-Chinese (Mandarin)_Gentleman',
+    label: '【MiniMax】绅士男'
+  },
+  {
+    value: 'minimax-Chinese (Mandarin)_Sweet_Lady',
+    label: '【MiniMax】甜美女士'
+  },
+  {
+    value: 'minimax-Chinese (Mandarin)_Male_Announcer',
+    label: '【MiniMax】男播音员'
+  },
+  {
+    value: 'minimax-Chinese (Mandarin)_Reliable_Executive',
+    label: '【MiniMax】可靠高管男'
+  },
+  {
+    value: 'minimax-Chinese (Mandarin)_HK_Flight_Attendant',
+    label: '【MiniMax】香港空乘'
+  },
+  // MiniMax TTS 系列音色 - 粤语
+  {
+    value: 'minimax-Cantonese_ProfessionalHost (F)',
+    label: '【MiniMax】粤语-专业女主持'
+  },
+  {
+    value: 'minimax-Cantonese_GentleLady',
+    label: '【MiniMax】粤语-温柔女士'
+  },
+  {
+    value: 'minimax-Cantonese_ProfessionalHost (M)',
+    label: '【MiniMax】粤语-专业男主持'
+  },
+  {
+    value: 'minimax-Cantonese_CuteGirl',
+    label: '【MiniMax】粤语-可爱女孩'
+  },
+  {
+    value: 'minimax-Cantonese_PlayfulMan',
+    label: '【MiniMax】粤语-顽皮男'
+  },
+  {
+    value: 'minimax-Cantonese_KindWoman',
+    label: '【MiniMax】粤语-善良女士'
+  },
 ];
 export default voiceOptions;
