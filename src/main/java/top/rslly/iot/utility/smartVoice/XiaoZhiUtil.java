@@ -22,8 +22,10 @@ package top.rslly.iot.utility.smartVoice;
 import cn.hutool.captcha.generator.RandomGenerator;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AdminConfigEntity;
@@ -43,6 +45,8 @@ import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.websocket.Session;
+import top.rslly.iot.utility.ai.voice.concentus.OpusException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -71,6 +75,8 @@ public class XiaoZhiUtil {
   private AdminConfigServiceImpl adminConfigService;
   @Autowired
   private ProductAsrRepository productAsrRepository;
+  @Autowired
+  private RedisTemplate<String, String> redisTemplate;
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
   @Value("${ai.tts.skip-tool-prefix:true}")
@@ -144,6 +150,190 @@ public class XiaoZhiUtil {
     mcpProtocolDeal.destroyMcp(McpWebsocket.DEVICE_SERVER_NAME, chatId);
   }
 
+  /**
+   * ASR处理，同步方法，解码音频二进制流
+   * @param audioList 音频流
+   * @param detect  检测文本
+   * @return  解码后的数据或Null
+   * @throws OpusException  Opus异常
+   */
+  public String ASRHandler(List<byte[]> audioList, int productId, String... detect) throws OpusException, IOException {
+    // 数据太短
+    if(audioList.size() <= 20 && detect.length == 0) return "<|2SRT|>";
+    // 如果ASR服务没有启动成功，那么应当字节返回空
+    if(asrServiceFactory == null) return null;
+    // 已有检测文本
+    if(detect.length != 0) return detect[0];
+    var asrService = asrServiceFactory.getService(getProductAsrProvider(productId));
+    if(asrService == null) return null;
+    // 构造解码器
+    OpusDecoder decoder = new OpusDecoder(16000, 1);
+    // 通过字节列表输出流构造字节列表并写入文件，完成WAV->PCM的转换
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    for(byte[] bytes: audioList){
+      if(bytes == null) continue;
+      byte[] data_packet = new byte[16000];
+      int pcm_frame = decoder.decode(bytes, 0, bytes.length,
+              data_packet, 0, 960, false);
+      bos.write(data_packet, 0, pcm_frame * 2);
+    }
+    // 生成WAV文件
+    Path tempFile = Files.createTempFile("audio_", ".wav");
+    Files.write(tempFile, bos.toByteArray());
+    bos.close();
+    // 读取WAV文件并使用ASR服务提取文本返回
+    String ret = asrService.getTextRealtime(tempFile.toFile(), 16000, "pcm");
+    Files.deleteIfExists(tempFile);
+    return ret;
+  }
+
+  /**
+   * 消息太短或无法解析时的回复
+   * @param chatId  聊天的ID
+   */
+  private void sendForUnclearMsg(String chatId){
+    XiaoZhiWebsocket.send(chatId, "{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+  }
+
+  /**
+   * 发送助手正在思考的信息
+   * @param chatId  聊天ID
+   */
+  private void sendWhenThinking(String chatId){
+    XiaoZhiWebsocket.send(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
+            + " \"text\": \"智能助手思考中" + "\"}");
+    JSONObject emotionObject = new JSONObject();
+    emotionObject.put("type", "llm");
+    emotionObject.put("text", "🤔");
+    emotionObject.put("emotion", "thinking");
+    XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
+  }
+
+  private void sendTTSStart(String chatId){
+    XiaoZhiWebsocket.send(chatId, "{\"type\":\"tts\",\"state\":\"start\"}");
+  }
+
+  /**
+   * 发送结束信息
+   * @param chatId  聊天ID
+   */
+  private void sendEndMsg(String chatId){
+    XiaoZhiWebsocket.send(chatId, "{\"type\":\"tts\",\"state\":\"stop\"}");
+  }
+
+  private void clearAudioHandlers(String chatId){
+    XiaoZhiWebsocket.haveVoice.put(chatId, false);
+    XiaoZhiWebsocket.isAbort.put(chatId, false);
+    Router.queueMap.remove(chatId);
+    this.sendEndMsg(chatId);
+  }
+
+  @Async("taskExecutor")
+  public void dealWthAudio2(List<byte[]> audioList, String chatId, int productId, boolean isManual,
+      String... detect) throws InterruptedException {
+    if(audioList == null || chatId == null){
+      log.error("audioList或chatId为空，audioList: {}, chatId: {}", audioList, chatId);
+      return;
+    }
+    String text = "";
+    try {
+      text = ASRHandler(audioList, productId, detect);
+    }catch(OpusException e){
+      log.error("Opus音频解码错误: {}", e.getMessage());
+      return;
+    }catch(Exception e){
+      log.error("ASR提取失败！错误：{}", e.getMessage());
+      return;
+    }
+    // 如果ASR处理结果为空，通知用户并返回
+    if(StringUtils.isEmpty(text)){
+      this.sendForUnclearMsg(chatId);
+      this.sendEndMsg(chatId);
+      return;
+    }
+    // 如果音频太短，通知用户并返回
+    if(text.equals("<|2SRT|>")){
+      // 保留最后的10帧信息
+      int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
+      if (audioList.size() > keepFrames) {
+        audioList.subList(0, audioList.size() - keepFrames).clear();
+      }
+      this.sendForUnclearMsg(chatId);
+    }
+    final String tCopy = text;
+    XiaoZhiWebsocket.voiceContent.computeIfPresent(chatId, (k, v) -> v + tCopy);
+    XiaoZhiWebsocket.voiceContent.putIfAbsent(chatId, text);
+    XiaoZhiWebsocket.send(chatId, text);
+    audioList.clear();
+    // 到这里，voiceContent不可能为空
+    sendWhenThinking(chatId);
+    // 下面是TTS的部分
+    String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
+    Map<String, Object> emotionMessage = new HashMap<>();
+    emotionMessage.put("chatId", chatId);
+    var emotionRes = emotionToolAsync.run(voiceContent, emotionMessage);
+    CompletableFuture<String> res = null;
+    // 首先获取router的结果
+    if(router != null){
+      res = CompletableFuture.supplyAsync(
+              () -> router.response(voiceContent, chatId, productId),
+              routerExecutor
+      );
+    }
+    // 结果字符串构造器
+    StringBuilder answerSB = new StringBuilder();
+    // 用于存储回复句子
+    List<String> answerList = new ArrayList<>();
+    boolean emotionFlag = false;
+    if(isManual){
+      this.sendTTSStart(chatId);
+    }
+    while(res != null && !res.isDone() ||
+            Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()){
+      // 表情处理模块
+      if(emotionRes != null&& emotionRes.isDone() && !emotionFlag){
+        try {
+          Map<String, String> emotionResult = emotionRes.get();
+          if(emotionResult == null) continue;
+          JSONObject emotionObject = new JSONObject();
+          emotionObject.put("type", "llm");
+          emotionObject.put("text", emotionResult.get("emoji"));
+          emotionObject.put("emotion", emotionResult.get("text"));
+          XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
+        }catch(Exception e){
+          log.error("处理表情响应出错：{}", e.getMessage());
+        }
+      }
+      // 处理终止
+      if(XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)){
+        XiaoZhiWebsocket.haveVoice.put(chatId, false);
+        XiaoZhiWebsocket.isAbort.put(chatId, false);
+        Router.queueMap.remove(chatId);
+        this.sendEndMsg(chatId);
+      }
+      // SSE元素处理
+      String element = Router.queueMap.get(chatId).poll();
+      if(element == null){
+        Thread.sleep(10);
+        continue;
+      }
+      if(element.equals("[DONE]")){
+        // 已经抵达最后一帧
+        if(!answerSB.isEmpty()){
+          // 将之前累计的元素入队并交由转化线程处理，
+          answerList.add(answerSB.toString());
+          // TODO: 异步TTS处理
+        }
+        break;
+      }else{
+        // TODO: 异步TTS处理
+        // 判断是否存在标点，如果存在，则从将标点之前的已缓存元素构造字符串并入队，
+        // 随后清空字符串构造器，将标点之后的部分存入构造器；如果不存在，则将整个元素
+        // 加入构造器
+      }
+    }
+  }
+
   @Async("taskExecutor")
   public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
       String... detect)
@@ -166,7 +356,7 @@ public class XiaoZhiUtil {
               }""");
         }
 
-        StringBuilder sentences = new StringBuilder("");
+        StringBuilder sentences = new StringBuilder();
         if (detect.length == 0) {
           // 安全读取字节数据
           ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -199,10 +389,10 @@ public class XiaoZhiUtil {
         } else {
           sentences.append(detect[0]);
         }
-        if (sentences.length() > 0) {
+        if (!sentences.isEmpty()) {
           if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
               && XiaoZhiWebsocket.voiceContent.get(chatId) != null
-              && XiaoZhiWebsocket.voiceContent.get(chatId).length() > 0) {
+              && !XiaoZhiWebsocket.voiceContent.get(chatId).isEmpty()) {
             XiaoZhiWebsocket.voiceContent.put(chatId,
                 XiaoZhiWebsocket.voiceContent.get(chatId) + sentences);
           } else {
@@ -239,7 +429,7 @@ public class XiaoZhiUtil {
       }
       if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
           && XiaoZhiWebsocket.voiceContent.get(chatId) != null
-          && XiaoZhiWebsocket.voiceContent.get(chatId).length() > 0) {
+          && !XiaoZhiWebsocket.voiceContent.get(chatId).isEmpty()) {
         Session session = XiaoZhiWebsocket.clients.get(chatId);
         if (session != null && session.isOpen()) {
           if (showThinking) {
@@ -285,7 +475,7 @@ public class XiaoZhiUtil {
           }
         }
         while ((res != null && !res.isDone()) || Router.queueMap.containsKey(chatId)
-            && Router.queueMap.get(chatId).size() > 0) {
+            && !Router.queueMap.get(chatId).isEmpty()) {
           if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
             try {
               Map<String, String> emotionResult = emotionRes.get();
@@ -321,7 +511,7 @@ public class XiaoZhiUtil {
           if (Router.queueMap.containsKey(chatId)) {
             String element = Router.queueMap.get(chatId).poll();
             if (element != null && element.equals("[DONE]")) {
-              if (answerBuilder.length() > 0) {
+              if (!answerBuilder.isEmpty()) {
                 // 立即发送已累积的内容
                 JSONObject jsonObject = new JSONObject();
                 jsonObject.put("type", "tts");
@@ -355,7 +545,8 @@ public class XiaoZhiUtil {
               XiaoZhiWebsocket.isAbort.put(chatId, false);
               Router.queueMap.remove(chatId);
               return;
-            } else if (element != null) {
+            }
+            else if (element != null) {
               element = element.replace("\n", "");
               // 查找字符串中的第一个标点位置
               int punctuationIndex = -1;
@@ -447,7 +638,7 @@ public class XiaoZhiUtil {
         if (res != null) {
           answer = res.get();
         }
-        if (answer == null || answer.equals("")) {
+        if (StringUtils.isEmpty(answer)) {
           answer = "抱歉，我暂时无法理解您的问题。";
         }
         answer = resolveFinalVoiceAnswer(answer, answerBuilder.toString(), queuePlaybackDelivered);

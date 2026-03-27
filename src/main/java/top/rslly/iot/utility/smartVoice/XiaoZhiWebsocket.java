@@ -611,5 +611,13 @@ public class XiaoZhiWebsocket {
     isAbort.put(chatId, false);
   }
 
-
+  public static void send(String chatId, String msg){
+    Session session = XiaoZhiWebsocket.clients.get(chatId);
+    if(session == null || !session.isOpen()) return;
+    try {
+      session.getBasicRemote().sendText(msg);
+    }catch(IOException e){
+      log.error("发送消息失败！");
+    }
+  }
 }
