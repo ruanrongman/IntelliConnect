@@ -560,6 +560,14 @@ public class XiaoZhiWebsocket {
     return deviceId;
   }
 
+  /**
+   * 获取客户端IP地址
+   */
+  public static String getClientIp(Session session) {
+    String ip = (String) session.getUserProperties().get("Client-Ip");
+    return ip != null ? ip : "unknown";
+  }
+
   static boolean hasExceededIdleTimeout(String chatId, long currentTime, boolean isRealTime) {
     Long lastInteractionTime = lastInteractionTimeMap.computeIfAbsent(chatId, k -> currentTime);
     return hasExceededIdleTimeout(lastInteractionTime, currentTime, isRealTime);

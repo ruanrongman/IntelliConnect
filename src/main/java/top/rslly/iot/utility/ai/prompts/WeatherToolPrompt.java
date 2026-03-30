@@ -41,9 +41,8 @@ public class WeatherToolPrompt {
            "thought": "The thought of what to do and why.(use Chinese)",
            "action":
                {
-               "code": "If this is related to weather output 200,else output 400",
                "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
-               "address": "Structured addresses"
+               "address": "Structured addresses, extract city name from user input. If no city mentioned, leave empty."
                }
            }
            ```
@@ -59,6 +58,7 @@ public class WeatherToolPrompt {
   private static final String weatherArrangePrompt = """
       请根据用户的请求，合理使用下列信息，使用人类友善的语言来回答，并推荐用户穿衣以及出行建议,句子尽量不要出现markdown等符号以方便tts系统。
       ## weather information
+      城市位置信息{city}
       当前天气信息{lives}
       未来几天的天气信息{forecast}
       """;
@@ -70,8 +70,9 @@ public class WeatherToolPrompt {
     return StringUtils.formatString(weatherPrompt, params);
   }
 
-  public String getWeatherResponse(String lives, String forecast) {
+  public String getWeatherResponse(String city, String lives, String forecast) {
     Map<String, String> params = new HashMap<>();
+    params.put("city", city);
     params.put("lives", lives);
     params.put("forecast", forecast);
     return StringUtils.formatString(weatherArrangePrompt, params);

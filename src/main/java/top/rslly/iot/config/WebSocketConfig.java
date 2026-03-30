@@ -63,6 +63,63 @@ public class WebSocketConfig extends ServerEndpointConfig.Configurator {
       List<String> header3 = headers.get("Client-Id");
       userProperties.put("Client-Id", header3.get(0));
     }
+    // 获取客户端真实IP地址
+    String clientIp = getRemoteAddr(request);
+    userProperties.put("Client-Ip", clientIp);
+  }
+
+  /**
+   * 获取客户端真实IP地址，支持反向代理场景
+   */
+  private String getRemoteAddr(HandshakeRequest request) {
+    Map<String, List<String>> headers = request.getHeaders();
+
+    // 1. 优先检查 X-Forwarded-For（反向代理常用）
+    String ip = getHeaderFirst(headers, "X-Forwarded-For");
+    if (isValidIp(ip)) {
+      // X-Forwarded-For 格式: client1, proxy1, proxy2，取第一个
+      int index = ip.indexOf(',');
+      if (index > 0) {
+        ip = ip.substring(0, index).trim();
+      }
+      return ip;
+    }
+
+    // 2. 检查 X-Real-IP（Nginx 常用）
+    ip = getHeaderFirst(headers, "X-Real-IP");
+    if (isValidIp(ip)) {
+      return ip;
+    }
+
+    // 3. 检查 Proxy-Client-IP（Apache 服务器常用）
+    ip = getHeaderFirst(headers, "Proxy-Client-IP");
+    if (isValidIp(ip)) {
+      return ip;
+    }
+
+    // 4. 检查 WL-Proxy-Client-IP（WebLogic 常用）
+    ip = getHeaderFirst(headers, "WL-Proxy-Client-IP");
+    if (isValidIp(ip)) {
+      return ip;
+    }
+
+    // 5. 最后尝试从 Host 获取（开发环境直连）
+    ip = getHeaderFirst(headers, "Host");
+    if (ip != null && ip.contains(":")) {
+      ip = ip.substring(0, ip.indexOf(":"));
+    }
+
+    return ip != null ? ip : "unknown";
+  }
+
+  private String getHeaderFirst(Map<String, List<String>> headers, String headerName) {
+    List<String> values = headers.get(headerName);
+    return (values != null && !values.isEmpty()) ? values.get(0) : null;
+  }
+
+  private boolean isValidIp(String ip) {
+    return ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)
+        && !"null".equalsIgnoreCase(ip);
   }
 
   @Bean
