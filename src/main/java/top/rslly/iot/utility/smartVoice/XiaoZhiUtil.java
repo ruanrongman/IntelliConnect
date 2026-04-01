@@ -20,6 +20,7 @@
 package top.rslly.iot.utility.smartVoice;
 
 import cn.hutool.captcha.generator.RandomGenerator;
+import com.alibaba.druid.sql.visitor.functions.Char;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -76,7 +77,9 @@ public class XiaoZhiUtil {
   @Autowired
   private ProductAsrRepository productAsrRepository;
   @Autowired
-  private RedisTemplate<String, String> redisTemplate;
+  private RedisTemplate<String, byte[]> bytesRedisTemplate;
+  @Autowired
+  private RedisTemplate<String, Boolean> redisStateTemplate;  // 用于记录TTS段落的处理状态
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
   @Value("${ai.tts.skip-tool-prefix:true}")
@@ -228,46 +231,34 @@ public class XiaoZhiUtil {
     this.sendEndMsg(chatId);
   }
 
-  @Async("taskExecutor")
-  public void dealWthAudio2(List<byte[]> audioList, String chatId, int productId, boolean isManual,
-      String... detect) throws InterruptedException {
-    if(audioList == null || chatId == null){
-      log.error("audioList或chatId为空，audioList: {}, chatId: {}", audioList, chatId);
-      return;
+  private int getPunctuationPos(String str){
+    Set<Character> punctuationSet = new HashSet<>();
+    String punctuations = "?!:;~.,？！：；~。，";
+    for(char c : punctuations.toCharArray()){
+      punctuationSet.add(c);
     }
-    String text = "";
-    try {
-      text = ASRHandler(audioList, productId, detect);
-    }catch(OpusException e){
-      log.error("Opus音频解码错误: {}", e.getMessage());
-      return;
-    }catch(Exception e){
-      log.error("ASR提取失败！错误：{}", e.getMessage());
-      return;
+    for(int i = 0; i < str.length(); i++){
+      char c = str.charAt(i);
+      if(punctuationSet.contains(c)) return i;
     }
-    // 如果ASR处理结果为空，通知用户并返回
-    if(StringUtils.isEmpty(text)){
-      this.sendForUnclearMsg(chatId);
-      this.sendEndMsg(chatId);
-      return;
-    }
-    // 如果音频太短，通知用户并返回
-    if(text.equals("<|2SRT|>")){
-      // 保留最后的10帧信息
-      int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-      if (audioList.size() > keepFrames) {
-        audioList.subList(0, audioList.size() - keepFrames).clear();
-      }
-      this.sendForUnclearMsg(chatId);
-    }
-    final String tCopy = text;
-    XiaoZhiWebsocket.voiceContent.computeIfPresent(chatId, (k, v) -> v + tCopy);
-    XiaoZhiWebsocket.voiceContent.putIfAbsent(chatId, text);
-    XiaoZhiWebsocket.send(chatId, text);
-    audioList.clear();
-    // 到这里，voiceContent不可能为空
-    sendWhenThinking(chatId);
-    // 下面是TTS的部分
+    return -1;
+  }
+
+  private void asyncTTS(String chatId, String src){
+    // 使用Thread.ofVirtual启动这个部分
+    // 在Redis中写入当前句子的处理状态为false，表示开始处理
+    // 将处理得到的结果转为String并存入Redis，并将当前句子的处理状态置为true以表示完成
+    redisStateTemplate.opsForHash().put(chatId, src, false);
+  }
+
+  /**
+   * 流式返回的处理方法
+   * @param chatId  对话ID
+   * @param productId 产品ID
+   * @param isManual  是否对讲机模式
+   * @throws InterruptedException 由Thread.sleep抛出的异常
+   */
+  private void handlerStreamRsp(String chatId, int productId, boolean isManual) throws InterruptedException{
     String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
     Map<String, Object> emotionMessage = new HashMap<>();
     emotionMessage.put("chatId", chatId);
@@ -283,7 +274,7 @@ public class XiaoZhiUtil {
     // 结果字符串构造器
     StringBuilder answerSB = new StringBuilder();
     // 用于存储回复句子
-    List<String> answerList = new ArrayList<>();
+    Queue<String> answerList = new ArrayDeque<>();
     boolean emotionFlag = false;
     if(isManual){
       this.sendTTSStart(chatId);
@@ -321,19 +312,106 @@ public class XiaoZhiUtil {
         // 已经抵达最后一帧
         if(!answerSB.isEmpty()){
           // 将之前累计的元素入队并交由转化线程处理，
-          answerList.add(answerSB.toString());
-          // TODO: 异步TTS处理
+          // 将构造器中缓存的部分交由虚拟线程处理
+          String sentence = answerSB.toString();
+          // 不允许处理空字符串
+          if(StringUtils.isEmpty(sentence)) break;
+          answerList.add(sentence);
+          Thread.ofVirtual().start(()->{
+            this.asyncTTS(chatId, sentence);
+          });
         }
         break;
       }else{
-        // TODO: 异步TTS处理
         // 判断是否存在标点，如果存在，则从将标点之前的已缓存元素构造字符串并入队，
         // 随后清空字符串构造器，将标点之后的部分存入构造器；如果不存在，则将整个元素
         // 加入构造器
+        element = element.replace("\n", "");
+        int pIdx = this.getPunctuationPos(element);
+        if(pIdx != -1){
+          String eBefore = element.substring(0, pIdx + 1);
+          String eAfter = element.substring(pIdx);
+          answerSB.append(eBefore);
+          String before = answerSB.toString();
+          // 不允许向结果列表中写入空字符串
+          if(StringUtils.isEmpty(before)) continue;
+          answerList.add(before);
+          // 将标点前的部分交由异步虚拟线程处理
+          Thread.ofVirtual().start(()->{
+            this.asyncTTS(chatId, before);
+          });
+          answerSB.setLength(0);
+          answerSB.append(eAfter);
+        }else
+          answerSB.append(element);
       }
+    }
+    String crtS = answerList.poll();
+    // 如果结果列表里第一条就是空的字符串，那么就直接退出
+    if(StringUtils.isEmpty(crtS)) return;
+    while(!answerList.isEmpty()){
+      if(!redisStateTemplate.opsForHash().hasKey(chatId, crtS)) continue;
+      Object state = redisStateTemplate.opsForHash().get(chatId, crtS);
+      if(state == null || !(boolean)state) continue;
+      // TODO: 发送并重新提取下一条
     }
   }
 
+  @Async("taskExecutor")
+  public void dealWithAudio2(List<byte[]> audioList, String chatId, int productId, boolean isManual,
+      String... detect) {
+    if(audioList == null || chatId == null){
+      log.error("audioList或chatId为空，audioList: {}, chatId: {}", audioList, chatId);
+      return;
+    }
+    String text = "";
+    try {
+      text = ASRHandler(audioList, productId, detect);
+    }catch(OpusException e){
+      log.error("Opus音频解码错误: {}", e.getMessage());
+      return;
+    }catch(Exception e){
+      log.error("ASR提取失败！错误：{}", e.getMessage());
+      return;
+    }
+    // 如果ASR处理结果为空，通知用户并返回
+    if(StringUtils.isEmpty(text)){
+      this.sendForUnclearMsg(chatId);
+      this.sendEndMsg(chatId);
+      return;
+    }
+    // 如果音频太短，通知用户并返回
+    if(text.equals("<|2SRT|>")){
+      // 保留最后的10帧信息
+      int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
+      if (audioList.size() > keepFrames) {
+        audioList.subList(0, audioList.size() - keepFrames).clear();
+      }
+      this.sendForUnclearMsg(chatId);
+      this.sendEndMsg(chatId);
+      return;
+    }
+    final String tCopy = text;
+    XiaoZhiWebsocket.voiceContent.computeIfPresent(chatId, (k, v) -> v + tCopy);
+    XiaoZhiWebsocket.voiceContent.putIfAbsent(chatId, text);
+    XiaoZhiWebsocket.send(chatId, text);
+    audioList.clear();
+    // 到这里，voiceContent不可能为空
+    sendWhenThinking(chatId);
+    // 下面是TTS的部分
+    boolean isStreamRsp = Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty();
+    if(isStreamRsp){
+      try {
+        this.handlerStreamRsp(chatId, productId, isManual);
+        return;
+      }catch(InterruptedException e){
+        log.error("音频处理线程出错", e);
+      }
+    }
+    // 非流式的处理方法
+  }
+
+  @Deprecated
   @Async("taskExecutor")
   public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
       String... detect)

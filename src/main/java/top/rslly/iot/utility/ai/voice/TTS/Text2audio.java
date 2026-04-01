@@ -210,5 +210,9 @@ public class Text2audio implements TtsService {
     }
   }
 
+  @Override
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice) {
+    return null;
+  }
 }
 

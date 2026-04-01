@@ -30,6 +30,7 @@ import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import jakarta.websocket.Session;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -43,8 +44,27 @@ public class EdgeTTs implements TtsService {
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
       String chatId, String voice) {
-    // Only used for WebSocket audio sending.
+    List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
+    for(byte[] b: audioList){
+      audioQueue.offer(b);
+    }
+    try{
+      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+    } catch (Exception e) {
+      log.error("websocketAudio error for chatId: {}", chatId, e);
+    }
+  }
+
+  @Override
+  public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice) {
+    // Only used for WebSocket audio sending.
+    List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
     final byte[] EOS = new byte[0];
     final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
@@ -65,20 +85,20 @@ public class EdgeTTs implements TtsService {
       // 获取中文语音
       String finalVoiceName = voiceName;
       Voice voiceObj = TTSVoice.provides().stream()
-          .filter(v -> v.getShortName().equals(finalVoiceName))
-          .collect(Collectors.toList()).get(0);
+              .filter(v -> v.getShortName().equals(finalVoiceName))
+              .collect(Collectors.toList()).get(0);
 
       TTS ttsEngine = new TTS(voiceObj, text);
       // 执行TTS转换获取音频文件
       String outputPath = System.getProperty("java.io.tmpdir");
       String audioFilePath = ttsEngine.findHeadHook()
-          .storage(outputPath)
-          .isRateLimited(true)
-          .voicePitch(pitchHz + "Hz")
-          .voiceRate(ratePercent + "%")
-          .overwrite(false)
-          .formatMp3()
-          .trans();
+              .storage(outputPath)
+              .isRateLimited(true)
+              .voicePitch(pitchHz + "Hz")
+              .voiceRate(ratePercent + "%")
+              .overwrite(false)
+              .formatMp3()
+              .trans();
 
       // 使用 Paths.get 来正确拼接路径，解决缺少分隔符的问题
       fullPath = Paths.get(outputPath, audioFilePath).toString();
@@ -86,17 +106,13 @@ public class EdgeTTs implements TtsService {
       // 1. 将MP3转换为PCM (已经设置为16kHz采样率和单声道)
       byte[] pcmData = AudioUtils.convertMp3ToPcm(fullPath);
       List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
-      for (byte[] packet : packets) {
-        audioQueue.offer(packet);
-      }
+      audioList.addAll(packets);
       packets = encoder.encodePcmToOpus(new byte[0], true);
-      for (byte[] packet : packets) {
-        audioQueue.offer(packet);
-      }
+      audioList.addAll(packets);
       // Signal end-of-stream by adding an empty array.
-      audioQueue.offer(EOS);
+      audioList.add(EOS);
 
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+      return audioList;
 
     } catch (Exception e) {
       log.error("websocketAudio error for chatId: {}", chatId, e);
@@ -110,10 +126,6 @@ public class EdgeTTs implements TtsService {
         }
       }
     }
-  }
-
-  @Override
-  public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
-    throw new UnsupportedOperationException();
+    return null;
   }
 }
