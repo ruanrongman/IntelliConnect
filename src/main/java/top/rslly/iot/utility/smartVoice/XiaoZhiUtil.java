@@ -41,6 +41,7 @@ import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
+import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
 
@@ -50,12 +51,13 @@ import top.rslly.iot.utility.ai.voice.concentus.OpusException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 @Component
 @Slf4j
@@ -244,11 +246,29 @@ public class XiaoZhiUtil {
     return -1;
   }
 
-  private void asyncTTS(String chatId, String src){
+  public static String getShortHash(String input, int bytes) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("MD5"); // 或 "SHA-1"
+      byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+      // 截取前 bytes 个字节
+      byte[] truncated = new byte[bytes];
+      System.arraycopy(digest, 0, truncated, 0, bytes);
+      // 转为十六进制字符串
+      return new BigInteger(1, truncated).toString(16);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private void asyncTTS(String chatId, String src, int productId){
     // 使用Thread.ofVirtual启动这个部分
     // 在Redis中写入当前句子的处理状态为false，表示开始处理
     // 将处理得到的结果转为String并存入Redis，并将当前句子的处理状态置为true以表示完成
     redisStateTemplate.opsForHash().put(chatId, src, false);
+    List<byte[]> audioBytes =  ttsServiceFactory.getTextAudio(chatId, src, productId);
+    String srcHash = getShortHash(src, 16);
+    bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
+    redisStateTemplate.opsForHash().put(chatId, src, true);
   }
 
   /**
@@ -318,7 +338,7 @@ public class XiaoZhiUtil {
           if(StringUtils.isEmpty(sentence)) break;
           answerList.add(sentence);
           Thread.ofVirtual().start(()->{
-            this.asyncTTS(chatId, sentence);
+            this.asyncTTS(chatId, sentence, productId);
           });
         }
         break;
@@ -338,7 +358,7 @@ public class XiaoZhiUtil {
           answerList.add(before);
           // 将标点前的部分交由异步虚拟线程处理
           Thread.ofVirtual().start(()->{
-            this.asyncTTS(chatId, before);
+            this.asyncTTS(chatId, before, productId);
           });
           answerSB.setLength(0);
           answerSB.append(eAfter);
@@ -353,12 +373,50 @@ public class XiaoZhiUtil {
       if(!redisStateTemplate.opsForHash().hasKey(chatId, crtS)) continue;
       Object state = redisStateTemplate.opsForHash().get(chatId, crtS);
       if(state == null || !(boolean)state) continue;
-      // TODO: 发送并重新提取下一条
+      BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
+      String srcHash = getShortHash(crtS, 16);
+      byte[] bytes = bytesRedisTemplate.opsForList().rightPop(srcHash);
+      while(bytes != null){
+        sendQueue.offer(bytes);
+        bytes= bytesRedisTemplate.opsForList().rightPop(srcHash);
+      }
+      Session session = XiaoZhiWebsocket.clients.get(chatId);
+      AudioUtils.asyncSendAudioQueue(chatId, session, sendQueue);
+    }
+    this.clearAudioHandlers(chatId);
+  }
+
+  private void handlerSyncRsp(String chatId, int productId) throws IOException, ExecutionException, InterruptedException {
+    JSONObject emotionObject = new JSONObject();
+    emotionObject.put("type", "llm");
+    emotionObject.put("text", "😶");
+    emotionObject.put("emotion", "neutral");
+
+    XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
+    String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
+    CompletableFuture<String> res = null;
+    if(router != null){
+      res = CompletableFuture.supplyAsync(
+              () -> router.response(voiceContent, chatId, productId),
+              routerExecutor
+      );
+    }
+    String answer = null;
+    if (res != null) {
+      answer = res.get();
+    }
+    if (StringUtils.isEmpty(answer)) {
+      answer = "抱歉，我暂时无法理解您的问题。";
+    }
+    if (answer.length() > 500)
+      answer = answer.substring(0, 500);
+    if (!answer.isBlank()) {
+      splitSentences(answer, chatId, productId);
     }
   }
 
   @Async("taskExecutor")
-  public void dealWithAudio2(List<byte[]> audioList, String chatId, int productId, boolean isManual,
+  public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
       String... detect) {
     if(audioList == null || chatId == null){
       log.error("audioList或chatId为空，audioList: {}, chatId: {}", audioList, chatId);
@@ -409,11 +467,16 @@ public class XiaoZhiUtil {
       }
     }
     // 非流式的处理方法
+    try {
+      handlerSyncRsp(chatId, productId);
+    }catch(Exception e){
+      log.error("音频处理出错", e);
+    }
   }
 
   @Deprecated
   @Async("taskExecutor")
-  public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
+  public void dealWithAudioDeprecated(List<byte[]> audioList, String chatId, int productId, boolean isManual,
       String... detect)
       throws IOException {
     Path tempFile = null;
