@@ -106,7 +106,7 @@ public class XiaoZhiUtil {
 
     session.getBasicRemote().sendText(
         "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
-    log.info("mcp...{}", mcpCanUse);
+    log.debug("mcp...{}", mcpCanUse);
     if (mcpCanUse && !chatId.startsWith("register")) {
       if (visionExplainUrl != null && token != null) {
         session.getBasicRemote()
@@ -155,8 +155,9 @@ public class XiaoZhiUtil {
         return;
       }
 
+      List<byte[]> audioSnapshot = snapshotAudioList(audioList);
       OpusDecoder decoder = new OpusDecoder(16000, 1);
-      if (audioList.size() > 20 || detect.length > 0) {
+      if (audioSnapshot.size() > 20 || detect.length > 0) {
         Session session = XiaoZhiWebsocket.clients.get(chatId);
         if (session != null && session.isOpen() && !isManual) {
           session.getBasicRemote().sendText("""
@@ -170,7 +171,7 @@ public class XiaoZhiUtil {
         if (detect.length == 0) {
           // 安全读取字节数据
           ByteArrayOutputStream bos = new ByteArrayOutputStream();
-          for (byte[] bytes : audioList) {
+          for (byte[] bytes : audioSnapshot) {
             if (bytes != null) {
               try {
                 // log.info("len{}",bytes.length);
@@ -192,7 +193,7 @@ public class XiaoZhiUtil {
             var audio2Text = asrServiceFactory.getService(getProductAsrProvider(productId));
             if (audio2Text != null) {
               String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
-              log.info("text{}", text);
+              log.debug("text{}", text);
               sentences.append(text);
             }
           }
@@ -214,13 +215,11 @@ public class XiaoZhiUtil {
             session.getBasicRemote()
                 .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
           }
-          audioList.clear();
+          clearAudioList(audioList);
         } else {
           // 保留音频数据最后10帧（直接修改原始列表）
           int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-          if (audioList.size() > keepFrames) {
-            audioList.subList(0, audioList.size() - keepFrames).clear();
-          }
+          trimAudioList(audioList, keepFrames);
 
           session = XiaoZhiWebsocket.clients.get(chatId);
           if (session != null && session.isOpen()) {
@@ -254,7 +253,7 @@ public class XiaoZhiUtil {
           session.getBasicRemote()
               .sendText(emotionObject.toJSONString());
         }
-        log.info("listen stop,message{}", XiaoZhiWebsocket.voiceContent.get(chatId));
+        log.debug("listen stop,message{}", XiaoZhiWebsocket.voiceContent.get(chatId));
         Map<String, Object> emotionMessage = new HashMap<>();
         emotionMessage.put("chatId", chatId);
         var emotionRes =
@@ -294,7 +293,7 @@ public class XiaoZhiUtil {
                 emotionObject.put("type", "llm");
                 emotionObject.put("text", emotionResult.get("emoji"));
                 emotionObject.put("emotion", emotionResult.get("text"));
-                log.info("emotionObject{}", emotionObject);
+                log.debug("emotionObject{}", emotionObject);
 
                 session = XiaoZhiWebsocket.clients.get(chatId);
                 if (session != null && session.isOpen()) {
@@ -486,6 +485,27 @@ public class XiaoZhiUtil {
     routerExecutor.close();
   }
 
+  private List<byte[]> snapshotAudioList(List<byte[]> audioList) {
+    synchronized (audioList) {
+      return new ArrayList<>(audioList);
+    }
+  }
+
+  private void clearAudioList(List<byte[]> audioList) {
+    synchronized (audioList) {
+      audioList.clear();
+    }
+  }
+
+  private void trimAudioList(List<byte[]> audioList, int keepFrames) {
+    synchronized (audioList) {
+      int safeKeepFrames = Math.max(0, Math.min(keepFrames, audioList.size()));
+      if (audioList.size() > safeKeepFrames) {
+        audioList.subList(0, audioList.size() - safeKeepFrames).clear();
+      }
+    }
+  }
+
   public void dealDetect(String chatId, int productId, String text) throws IOException {
     if (chatId == null) {
       log.error("dealDetect参数错误: chatId is null");
@@ -648,7 +668,7 @@ public class XiaoZhiUtil {
         if (productAsrList != null && !productAsrList.isEmpty() && productAsrList.get(0) != null) {
           String asrName = productAsrList.get(0).getAsrName();
           if (asrName != null && !asrName.isEmpty()) {
-            log.info("产品 {} 使用数据库配置的ASR: {}", productId, asrName);
+            log.debug("产品 {} 使用数据库配置的ASR: {}", productId, asrName);
             return asrName;
           }
         }

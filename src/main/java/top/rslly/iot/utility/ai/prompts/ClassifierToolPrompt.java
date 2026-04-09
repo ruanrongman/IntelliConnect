@@ -34,8 +34,6 @@ import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,77 +57,53 @@ public class ClassifierToolPrompt {
   private AdminConfigServiceImpl adminConfigService;
   @Value("${ai.classifier.include.thought:true}")
   private boolean includeThought;
+  private static final int MAX_ROUTER_RULES_CHARS = 1200;
+  private static final int MAX_MCP_DESCRIPTION_CHARS = 6000;
   private static final String classifierPrompt =
       """
-           {router_set}
-           {task_map}
-           The current concept of memory and its content: {memory_map}
-           Classify the user's input into the single most appropriate task from the Available Tasks above.
-           ## Output Format
-           ```json
+           You are a router. Pick exactly one task for the latest user input.
+           Rules:
+           - Decide from the latest user input first.
+           - Use history only when the latest input is ambiguous or clearly continues the previous topic.
+           - If the latest input starts a new request or topic, ignore older topics.
+           - Switch phrases like "等一下", "先别", "不用了", "算了", "换个话题", "别查了" mean the previous task should not be continued.
+           - Weather follow-ups like "那明天呢", "广州呢", "要带伞吗" can keep task 1; story, joke, chat, or other new requests must not keep task 1.
+           - Args must be short, normalized, and minimal. Do not copy the user's wording or include filler.
+           - Task 2 must not be used for xiaozhi_device operations.
+           - If task 10 exists and the request is about xiaozhi_device or seeing what is in front of the user, choose task 10.
+           - Output JSON only. No markdown and no explanation.
+           Output:
            {
-           {thought}
-           "action": # the action to take, must be one of provided tools
-               {
-               "value": "Output at most one matched task number as a JSON array (e.g., [1]). If none, output []",
-               "args": "Summarized context from Current Conversation and memory, conveying complete user intent (not null)"
-               }
+           {thought}  "action": {
+               "value": [task_number] or [],
+               "args": "minimal normalized instruction, never null"
+             }
            }
-           ```
-           ## Attention
-           - Your output is JSON only and no explanation.
-           - Electrical control tools (task 2) must NOT be selected for xiaozhi_device operations.
-           - If the 10 intention exists and the user requests xiaozhi_device, please always use the 10 intention
-           - If the 10 intention exists and the user requests you to look at what is in front of you, you always use 10 intention
-           ## Current Conversation
-           Below is the current conversation consisting of interleaving human and assistant history.
+           {router_set_section}Available tasks(JSON): {task_map}
+           {memory_map_section}
+           Recent conversation:
+           {recent_conversation}
           """;
 
-  public String getClassifierTool(int productId, String chatId) {
+  public String getClassifierTool(int productId, String chatId, String recentConversation) {
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
-    classifierMap.put("2",
-        "Control and query electrical (excluding playing music and xiaozhi_device)");
-    classifierMap.put("3", "Request a song or play music.(including Recommend music.)");
-    classifierMap.put("4",
-        "Complex tasks requiring multi-step planning and reasoning (e.g., control electrical devices based on weather conditions)");
-    classifierMap.put("5",
-        "Common chat or unable to match any other task");
+    classifierMap.put("2", "Control and query electrical, excluding music and xiaozhi_device");
+    classifierMap.put("3", "Play or recommend music");
+    classifierMap.put("4", "Complex multi-step task");
+    classifierMap.put("5", "Common chat or fallback");
     if (!chatId.startsWith("chatProduct")) {
       classifierMap.put("6", "Bind or unbind products");
       classifierMap.put("7", "Switch controlled products");
     }
-    classifierMap.put("8", "Scheduled and reminder tasks");
-    classifierMap.put("9", "Configuration related to role and voice settings");
-    var mcpServerList = mcpServerService.findAllByProductId(productId);
-    var productSkillsEntities = productSkillsService.findAllByProductId(productId);
-    if (!productSkillsEntities.isEmpty() || !mcpServerList.isEmpty()
-        || mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
-        || mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
-      StringBuilder mcpServerString = new StringBuilder();
-      if (!mcpServerList.isEmpty()) {
-        for (var mcpServerEntity : mcpServerList) {
-          mcpServerString.append(mcpServerEntity.getDescription());
-          mcpServerString.append("|");
-        }
-      }
-      if (!productSkillsEntities.isEmpty()) {
-        for (var productSkillsEntity : productSkillsEntities) {
-          mcpServerString.append(productSkillsEntity.getName());
-          mcpServerString.append("|");
-        }
-      }
-      if (mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)) {
-        mcpServerString.append(mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
-      }
-      if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
-        mcpServerString.append(
-            mcpWebsocket.getIntention(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId));
-      }
-      classifierMap.put("10", mcpServerString.toString());
+    classifierMap.put("8", "Schedule or reminder");
+    classifierMap.put("9", "Role or voice configuration");
+    String mcpDescription = buildMcpDescription(productId, chatId);
+    if (!mcpDescription.isBlank()) {
+      classifierMap.put("10", mcpDescription);
     }
     if (chatId.startsWith("chatProduct")) {
-      classifierMap.put("11", "Say goodbye or request to step down");
+      classifierMap.put("11", "Say goodbye or step down");
     }
     List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
     if (!banTools.isEmpty()) {
@@ -137,23 +111,91 @@ public class ClassifierToolPrompt {
         classifierMap.remove(banTool);
       }
     }
-    String classifierJson = JSON.toJSONString(classifierMap);
-    var productRouterSetList = productRouterSetService.findAllByProductId(productId);
     Map<String, String> params = new HashMap<>();
-    if (!productRouterSetList.isEmpty()) {
-      params.put("router_set", productRouterSetList.get(0).getPrompt());
-    } else {
-      params.put("router_set", "");
-    }
-    params.put("task_map", classifierJson);
-    params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
-    // 根据配置决定是否包含 thought 字段
+    params.put("router_set_section",
+        buildSection("Custom routing rules",
+            limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS)));
+    params.put("task_map", JSON.toJSONString(classifierMap));
+    params.put("memory_map_section",
+        buildSection("Long-term memory labels",
+            defaultText(descriptionUtil.getAgentLongMemory(productId), "")));
+    params.put("recent_conversation", defaultText(recentConversation, "none"));
     if (getIncludeThoughtConfig()) {
-      params.put("thought", "\"thought\": \"The thought of what to do and why.(use Chinese)\",");
+      params.put("thought", "  \"thought\": \"Brief reason in Chinese.\",\n");
     } else {
       params.put("thought", "");
     }
     return StringUtils.formatString(classifierPrompt, params);
+  }
+
+  private String buildMcpDescription(int productId, String chatId) {
+    var mcpServerList = mcpServerService.findAllByProductId(productId);
+    var productSkillsEntities = productSkillsService.findAllByProductId(productId);
+    boolean hasMcp =
+        !productSkillsEntities.isEmpty()
+            || !mcpServerList.isEmpty()
+            || mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
+            || mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId);
+    if (!hasMcp) {
+      return "";
+    }
+
+    StringBuilder mcpServerString = new StringBuilder();
+    for (var mcpServerEntity : mcpServerList) {
+      appendWithSeparator(mcpServerString, mcpServerEntity.getDescription());
+    }
+    for (var productSkillsEntity : productSkillsEntities) {
+      appendWithSeparator(mcpServerString, productSkillsEntity.getName());
+    }
+    if (mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)) {
+      appendWithSeparator(mcpServerString,
+          mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
+    }
+    if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
+      appendWithSeparator(mcpServerString,
+          mcpWebsocket.getIntention(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId));
+    }
+    return limitText(mcpServerString.toString(), MAX_MCP_DESCRIPTION_CHARS);
+  }
+
+  private void appendWithSeparator(StringBuilder builder, String text) {
+    if (text == null || text.isBlank()) {
+      return;
+    }
+    if (!builder.isEmpty()) {
+      builder.append(" | ");
+    }
+    builder.append(text.trim());
+  }
+
+  private String getRouterSet(int productId) {
+    var productRouterSetList = productRouterSetService.findAllByProductId(productId);
+    if (productRouterSetList.isEmpty()) {
+      return "";
+    }
+    return productRouterSetList.get(0).getPrompt();
+  }
+
+  private String buildSection(String title, String content) {
+    if (content == null || content.isBlank()) {
+      return "";
+    }
+    return title + ": " + content + "\n";
+  }
+
+  private String defaultText(String value, String fallback) {
+    return value == null || value.isBlank() ? fallback : value;
+  }
+
+  private String limitText(String value, int maxChars) {
+    if (value == null) {
+      return "";
+    }
+    String normalized = value.replace("\r", " ").replace("\n", " ").trim();
+    if (normalized.length() <= maxChars) {
+      return normalized;
+    }
+    return normalized.substring(0, maxChars) + "...";
   }
 
   private boolean getIncludeThoughtConfig() {
@@ -166,7 +208,6 @@ public class ClassifierToolPrompt {
     } catch (Exception e) {
       log.error("从数据库获取AI分类器thought配置失败", e);
     }
-    // 数据库查不到时使用配置文件默认值
     return includeThought;
   }
 }

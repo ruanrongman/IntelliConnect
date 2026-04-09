@@ -58,7 +58,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
       eventSource.cancel();
       return;
     }
-    log.info("OpenAI建立sse连接...");
+    log.debug("OpenAI建立sse连接...");
   }
 
   @Override
@@ -74,7 +74,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
       return;
     }
     if (DONE_SIGNAL.equals(data)) {
-      log.info("OpenAI返回数据结束了");
+      log.debug("OpenAI返回数据结束了");
       Lock lock = chatTool.getLockMap().get(chatId);
       Condition condition = chatTool.getConditionMap().get(chatId);
       if (lock == null || condition == null) {
@@ -137,7 +137,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
 
   @Override
   public void onClosed(EventSource eventSource) {
-    log.info("OpenAI关闭sse连接...");
+    log.debug("OpenAI关闭sse连接...");
     currentEventSource.compareAndSet(eventSource, null);
   }
 

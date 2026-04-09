@@ -20,29 +20,30 @@
 package top.rslly.iot.utility.ai.tools;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Response;
-import okhttp3.ResponseBody;
 import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
-import top.rslly.iot.utility.ai.IcAiException;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
 public class ClassifierToolEventSourceListener extends EventSourceListener {
+  private static final String DONE_SIGNAL = "[DONE]";
+  private static final String ERROR_MESSAGE =
+      "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
+  private static final Pattern CLASSIFICATION_PATTERN = Pattern.compile("\\[([^\\]]*)\\]");
+
   private final StringBuilder jsonBuffer = new StringBuilder();
   private final String question;
-  public int[] filter;
+  private final int[] filter;
   private final ClassifierTool classifierTool;
   private final String chatId;
 
@@ -56,121 +57,173 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
 
   @Override
   public void onOpen(EventSource eventSource, Response response) {
-    log.info("OpenAI建立sse连接...");
+    log.debug("ClassifierTool SSE opened, chatId={}", chatId);
   }
 
   @Override
   public void onEvent(EventSource eventSource, String id, String type, String data) {
     if (data == null) {
-      log.warn("Received null data from OpenAI");
+      log.warn("Received null data from classifier stream, chatId={}", chatId);
       return;
     }
-    if ("[DONE]".equals(data)) {
-      // log.info("OpenAI返回数据结束了");
-      // log.info("OpenAI最终返回数据：{}", jsonBuffer.toString());
-      var lock = classifierTool.getLockMap().get(chatId);
-      lock.lock();
-      try {
-        var content = JSON.parseObject(
-            jsonBuffer.toString().replace("```json", "").replace("```JSON", "").replace("```", ""))
-            .getJSONObject("action");
-        var valueJson = content.getJSONArray("value");
-        var argsJson = content.getString("args");
-        Map<String, Object> dataMap = new ConcurrentHashMap<>();
-        dataMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
-        dataMap.put("args", argsJson);
-        dataMap.put("answer", "yes");
-        classifierTool.getDataMap().get(chatId).putAll(dataMap);
-        // ClassifierTool.dataCondition.signal();
-        classifierTool.getConditionMap().get(chatId).signal();
-        log.info("数据{}", classifierTool.getDataMap().get(chatId));
-      } catch (Exception e) {
-        log.error("OpenAi error{}", e.getMessage());
-        classifierTool.getConditionMap().get(chatId).signal();
-        Map<String, Object> dataMap = new ConcurrentHashMap<>();
-        dataMap.put("value", "");
-        dataMap.put("args", "");
-        dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
-        classifierTool.getDataMap().get(chatId).putAll(dataMap);
-      } finally {
-        classifierTool.getConditionMap().get(chatId).signal();
-        lock.unlock();
-      }
+
+    SyncContext context = getSyncContext();
+    if (context == null) {
+      log.warn("ClassifierTool sync context already released, chatId={}", chatId);
+      cancelQuietly(eventSource);
       return;
     }
-    try {
-      var jsonObject = JSON.parseObject(data).getJSONArray("choices").get(0);
-      var delta = JSON.parseObject(jsonObject.toString()).getString("delta");
-      var content = JSON.parseObject(delta).get("content");
-      if (content == null) {
-        // log.warn("Received null data from OpenAI");
-        return;
-      }
-      var lock = classifierTool.getLockMap().get(chatId);
-      lock.lock();
-      try {
-        jsonBuffer.append(content);
-        String regex = "\\[([^\\]]*)\\]";
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(jsonBuffer.toString());
-        while (matcher.find()) {
-          if (matcher.group().equals("[" + filter[0] + "]") || matcher.group().equals("[]")) {
-            Map<String, Object> dataMap = new ConcurrentHashMap<>();
-            dataMap.put("value", matcher.group());
-            dataMap.put("args", question);
-            dataMap.put("answer", "yes");
-            classifierTool.getDataMap().put(chatId, dataMap);
-            classifierTool.getDataMap().get(chatId).putAll(dataMap);
-            classifierTool.getConditionMap().get(chatId).signal();
-            eventSource.cancel();
-            return;
-          }
-          if (matcher.group().equals("[" + filter[1] + "]")) {
-            Map<String, Object> dataMap = new ConcurrentHashMap<>();
-            dataMap.put("value", matcher.group());
-            dataMap.put("args", question);
-            dataMap.put("answer", "yes");
-            classifierTool.getDataMap().put(chatId, dataMap);
-            classifierTool.getDataMap().get(chatId).putAll(dataMap);
-            classifierTool.getConditionMap().get(chatId).signal();
-            eventSource.cancel();
-            return;
-          }
-        }
-      } finally {
-        lock.unlock();
-      }
-      // log.info("OpenAI返回数据：{}", content);
-    } catch (Exception e) {
-      log.error("OpenAi error{}", e.getMessage());
+
+    if (DONE_SIGNAL.equals(data)) {
+      handleDone(eventSource, context);
+      return;
     }
+
+    handleStreamChunk(eventSource, context, data);
   }
 
   @Override
   public void onClosed(EventSource eventSource) {
-    // ClassifierTool.dataCondition.signal();
-    log.info("OpenAI关闭sse连接...");
+    log.debug("ClassifierTool SSE closed, chatId={}", chatId);
   }
 
-  @SneakyThrows
   @Override
   public void onFailure(EventSource eventSource, Throwable t, Response response) {
-    log.error("OpenAI  sse连接异常");
-    var lock = classifierTool.getLockMap().get(chatId);
-    if (lock != null)
-      lock.lock();
+    log.error("ClassifierTool SSE failure, chatId={}", chatId, t);
+    SyncContext context = getSyncContext();
+    if (context == null) {
+      cancelQuietly(eventSource);
+      return;
+    }
+
+    context.lock().lock();
     try {
-      if (eventSource != null)
-        eventSource.cancel();
+      cancelQuietly(eventSource);
       Map<String, Object> dataMap = new ConcurrentHashMap<>();
-      dataMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
-      classifierTool.getDataMap().get(chatId).putAll(dataMap);
-      classifierTool.getConditionMap().get(chatId).signal();
-    } catch (Exception e) {
-      log.error("OpenAI  sse连接异常:{}", e.getMessage());
+      dataMap.put("value", "[]");
+      dataMap.put("args", "");
+      dataMap.put("answer", ERROR_MESSAGE);
+      context.data().putAll(dataMap);
+      context.condition().signalAll();
     } finally {
-      if (lock != null)
-        lock.unlock();
+      context.lock().unlock();
     }
   }
+
+  private void handleDone(EventSource eventSource, SyncContext context) {
+    context.lock().lock();
+    try {
+      JSONObject payload = JSON.parseObject(stripMarkdownFence(jsonBuffer.toString()));
+      JSONObject action = payload.getJSONObject("action");
+      if (action == null) {
+        throw new IllegalStateException("Missing action object");
+      }
+
+      JSONArray valueJson = action.getJSONArray("value");
+      String argsJson = action.getString("args");
+
+      Map<String, Object> dataMap = new ConcurrentHashMap<>();
+      dataMap.put("value",
+          valueJson == null ? "[]" : JSONObject.parseArray(valueJson.toJSONString(), String.class));
+      dataMap.put("args", argsJson == null ? "" : argsJson);
+      dataMap.put("answer", "yes");
+      context.data().putAll(dataMap);
+      context.condition().signalAll();
+      log.debug("ClassifierTool parsed final result, chatId={}", chatId);
+    } catch (Exception e) {
+      log.error("ClassifierTool failed to parse final payload, chatId={}", chatId, e);
+      Map<String, Object> dataMap = new ConcurrentHashMap<>();
+      dataMap.put("value", "");
+      dataMap.put("args", "");
+      dataMap.put("answer", ERROR_MESSAGE);
+      context.data().putAll(dataMap);
+      context.condition().signalAll();
+    } finally {
+      context.lock().unlock();
+      cancelQuietly(eventSource);
+    }
+  }
+
+  private void handleStreamChunk(EventSource eventSource, SyncContext context, String data) {
+    try {
+      JSONObject root = JSON.parseObject(data);
+      if (root == null) {
+        return;
+      }
+
+      JSONArray choices = root.getJSONArray("choices");
+      if (choices == null || choices.isEmpty()) {
+        return;
+      }
+
+      JSONObject choice = choices.getJSONObject(0);
+      if (choice == null) {
+        return;
+      }
+
+      JSONObject delta = choice.getJSONObject("delta");
+      if (delta == null) {
+        return;
+      }
+
+      String content = delta.getString("content");
+      if (content == null) {
+        return;
+      }
+
+      context.lock().lock();
+      try {
+        jsonBuffer.append(content);
+        Matcher matcher = CLASSIFICATION_PATTERN.matcher(jsonBuffer.toString());
+        while (matcher.find()) {
+          String matched = matcher.group();
+          if (isMatchedClassification(matched)) {
+            Map<String, Object> dataMap = new ConcurrentHashMap<>();
+            dataMap.put("value", matched);
+            dataMap.put("args", question);
+            dataMap.put("answer", "yes");
+            context.data().putAll(dataMap);
+            context.condition().signalAll();
+            cancelQuietly(eventSource);
+            return;
+          }
+        }
+      } finally {
+        context.lock().unlock();
+      }
+    } catch (Exception e) {
+      log.error("ClassifierTool failed to parse stream chunk, chatId={}", chatId, e);
+    }
+  }
+
+  private boolean isMatchedClassification(String matched) {
+    return matched.equals("[]")
+        || matched.equals("[" + filter[0] + "]")
+        || matched.equals("[" + filter[1] + "]");
+  }
+
+  private String stripMarkdownFence(String raw) {
+    return raw.replace("```json", "")
+        .replace("```JSON", "")
+        .replace("```", "")
+        .trim();
+  }
+
+  private SyncContext getSyncContext() {
+    Lock lock = classifierTool.getLockMap().get(chatId);
+    Condition condition = classifierTool.getConditionMap().get(chatId);
+    Map<String, Object> data = classifierTool.getDataMap().get(chatId);
+    if (lock == null || condition == null || data == null) {
+      return null;
+    }
+    return new SyncContext(lock, condition, data);
+  }
+
+  private void cancelQuietly(EventSource eventSource) {
+    if (eventSource != null) {
+      eventSource.cancel();
+    }
+  }
+
+  private record SyncContext(Lock lock, Condition condition, Map<String, Object> data) {}
 }

@@ -109,7 +109,7 @@ public class MiniMaxTtsService implements TtsService {
         return;
       }
 
-      log.info("MiniMax TTS API request successful for voice: {}, text length: {}", voice,
+      log.debug("MiniMax TTS API request successful for voice: {}, text length: {}", voice,
           text.length());
 
       // 读取流式响应
@@ -165,7 +165,7 @@ public class MiniMaxTtsService implements TtsService {
             voice, model != null && !model.isBlank() ? model : DEFAULT_MODEL, text.length());
         return;
       }
-      log.info("MiniMax TTS generated {} bytes of audio data for voice: '{}'", mp3Data.length,
+      log.debug("MiniMax TTS generated {} bytes of audio data for voice: '{}'", mp3Data.length,
           voice);
 
       String outputPath = System.getProperty("java.io.tmpdir");

@@ -90,7 +90,7 @@ public class Text2audio implements TtsService {
           // audio = VoiceBitChange(audio);
           aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
           SseEmitterUtil.sendMessage(chatId, aiResponse.toJSONString());
-          log.info(Arrays.toString(message.getAudioFrame().array()));
+          log.debug(Arrays.toString(message.getAudioFrame().array()));
         } else {
           try {
             // For WebSocket: enqueue the frame.
@@ -117,7 +117,7 @@ public class Text2audio implements TtsService {
 
     @Override
     public void onComplete() {
-      System.out.println("synthesis onComplete!");
+      log.debug("synthesis onComplete!");
       if (session == null) {
         SseEmitterUtil.removeUser(chatId);
       } else {
@@ -135,7 +135,7 @@ public class Text2audio implements TtsService {
 
     @Override
     public void onError(Exception e) {
-      System.out.println("synthesis onError!");
+      log.debug("synthesis onError!");
       if (session == null) {
         SseEmitterUtil.removeUser(chatId);
       }
@@ -165,7 +165,7 @@ public class Text2audio implements TtsService {
 
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, null);
     ByteBuffer audio = synthesizer.call(text);
-    log.info("requestId{}", synthesizer.getLastRequestId());
+    log.debug("requestId{}", synthesizer.getLastRequestId());
     // log.info(Arrays.toString(audio.array()));
     return audio;
   }
@@ -186,8 +186,8 @@ public class Text2audio implements TtsService {
       if (voice != null && voice.startsWith("cosy_v2_")) {
         model = "cosyvoice-v2";
         voice = voice.substring(8);
-        log.info(model);
-        log.info(voice);
+        log.debug(model);
+        log.debug(voice);
       }
       // 创建线程安全的参数副本
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()

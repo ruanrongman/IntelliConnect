@@ -86,7 +86,7 @@ public class FunAsrClient implements AsrService {
   public void init() {
     this.wsUri = String.format("%s://%s:%d",
         useSsl ? "wss" : "ws", host, port);
-    log.info("FunASR客户端初始化完成: uri={}, ssl={}", wsUri, useSsl);
+    log.debug("FunASR客户端初始化完成: uri={}, ssl={}", wsUri, useSsl);
   }
 
   /**
@@ -99,7 +99,7 @@ public class FunAsrClient implements AsrService {
       Session session = null;
 
       try {
-        log.info("开始语音识别, sessionId={}, dataSize={}", sessionId, pcmData.length);
+        log.debug("开始语音识别, sessionId={}, dataSize={}", sessionId, pcmData.length);
 
         // 建立 WebSocket，新版返回独立 Session
         session = connectWebSocket(receiveFuture);
@@ -118,7 +118,7 @@ public class FunAsrClient implements AsrService {
 
         String cleanedText = cleanText(rawText);
 
-        log.info("语音识别完成, sessionId={}, text={}", sessionId, cleanedText);
+        log.debug("语音识别完成, sessionId={}, text={}", sessionId, cleanedText);
 
         return new AsrResult(cleanedText, "not support");
 
@@ -275,7 +275,7 @@ public class FunAsrClient implements AsrService {
   @Override
   public String getText(String url) {
     try {
-      log.info("开始从URL获取音频并识别: {}", url);
+      log.debug("开始从URL获取音频并识别: {}", url);
 
       // 从URL下载音频文件
       byte[] audioData = downloadAudioFromUrl(url);
@@ -287,7 +287,7 @@ public class FunAsrClient implements AsrService {
       CompletableFuture<AsrResult> future = speechToText(audioData, sessionId);
       AsrResult result = future.get(DEFAULT_TIMEOUT_SECONDS + 5, TimeUnit.SECONDS);
 
-      log.info("URL音频识别完成: {}", result.getText());
+      log.debug("URL音频识别完成: {}", result.getText());
       return result.getText();
 
     } catch (Exception e) {

@@ -318,7 +318,7 @@ public class Router {
 
     // ✅ 修复1：只要预测线程还活着(或已有结果)，就认为HIT，不再看队列是否为空
     if (predictionThread.isAlive() || predictionResult.get() != null) {
-      log.info("[BranchPrediction] HIT, chatId={}", chatId);
+      log.debug("[BranchPrediction] HIT, chatId={}", chatId);
 
       Thread.ofVirtual().start(() -> {
         try {

@@ -107,7 +107,7 @@ public class DeepSeek implements LLM {
       // System.out.println(e.getMessage().getContent());
       // });
       var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
-      log.info("model output:{} ", response);
+      log.debug("model output:{} ", response);
       var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "");
       JSONObject jsonResponse = JSON.parseObject(temp);
       if (jsonResponse == null)
@@ -137,7 +137,7 @@ public class DeepSeek implements LLM {
       // System.out.println(e.getMessage().getContent());
       // });
       var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
-      log.info("model output:{} ", response);
+      log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
       log.error("model error:{} ", e.getMessage());
@@ -182,7 +182,7 @@ public class DeepSeek implements LLM {
           .build();
       ChatCompletionResponse chatCompletionResponse = openAiClient.chatCompletion(chatCompletion);
       var response = chatCompletionResponse.getChoices().get(0).getMessage().getContent();
-      log.info("model output:{} ", response);
+      log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
       log.error("model error:{} ", e.getMessage());

@@ -61,7 +61,7 @@ public class DashScopeVoice {
         .build();
     try {
       MultiModalConversationResult result = conv.call(param);
-      log.info("语音转换结果{}", result);
+      log.debug("语音转换结果{}", result);
       Matcher matcher = pattern.matcher(result.getOutput().getChoices().get(0).getMessage()
           .getContent().get(0).get("text").toString());
 

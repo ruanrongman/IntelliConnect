@@ -68,8 +68,8 @@ public class Qwen3 implements LLM {
       String reasoningContent =
           responseArray.getJSONObject(0).getJSONObject("message").getString("reasoning_content");
       response = responseArray.getJSONObject(0).getJSONObject("message").getString("content");
-      log.info("model reasoningContent:{} ", reasoningContent);
-      log.info("model output:{} ", response);
+      log.debug("model reasoningContent:{} ", reasoningContent);
+      log.debug("model output:{} ", response);
       if (response == null || response.equals(""))
         throw new Exception("model error: 模型返回结果为空");
       var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "");
@@ -96,8 +96,8 @@ public class Qwen3 implements LLM {
       response = responseArray.getJSONObject(0).getJSONObject("message").getString("content");
       String reasoningContent =
           responseArray.getJSONObject(0).getJSONObject("message").getString("reasoning_content");
-      log.info("model reasoningContent:{} ", reasoningContent);
-      log.info("model output:{} ", response);
+      log.debug("model reasoningContent:{} ", reasoningContent);
+      log.debug("model output:{} ", response);
       if (response == null || response.equals(""))
         throw new Exception("model error: 模型返回结果为空");
       return response;
