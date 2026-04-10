@@ -38,6 +38,7 @@ import top.rslly.iot.utility.ai.prompts.ClassifierToolPrompt;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -59,11 +60,14 @@ public class ClassifierTool {
   private String llmName;
   @Value("${ai.classifierTool-speedUp}")
   private boolean speedUp;
+  @Value("${ai.classifierTool-timeout-seconds:60}")
+  private long responseTimeoutSeconds;
   private String name = "classifierTool";
   private String description = """
       This tool is used to classify users' intentions
       Args: user question(str)
       """;
+  private static final int CLASSIFIER_HISTORY_WINDOW = 6;
 
   public Map<String, Object> run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
@@ -81,15 +85,11 @@ public class ClassifierTool {
       conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
       dataMap.computeIfAbsent(chatId, k -> new HashMap<>());
     }
+    String recentConversation = memory.isEmpty() ? "" : buildRecentConversationWindow(memory);
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
-            classifierToolPrompt.getClassifierTool(productId, chatId));
+            classifierToolPrompt.getClassifierTool(productId, chatId, recentConversation));
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
-    // log.info("systemMessage: " + systemMessage.getContent());
-    if (!memory.isEmpty()) {
-      // messages.addAll(memory);
-      systemMessage.setContent(classifierToolPrompt.getClassifierTool(productId, chatId) + memory);
-    }
     messages.add(systemMessage);
     messages.add(userMessage);
     if (speedUp) {
@@ -99,15 +99,49 @@ public class ClassifierTool {
           new ClassifierToolEventSourceListener(question, new int[] {5, 11}, chatId, this));
       lockMap.get(chatId).lock();
       try {
+        boolean timedOut = false;
+        Thread timeoutGuard = Thread.ofVirtual().start(() -> {
+          try {
+            TimeUnit.SECONDS.sleep(responseTimeoutSeconds);
+            Lock lock = lockMap.get(chatId);
+            Condition condition = conditionMap.get(chatId);
+            Map<String, Object> currentData = dataMap.get(chatId);
+            if (lock == null || condition == null || currentData == null) {
+              return;
+            }
+            lock.lock();
+            try {
+              if (currentData.get("args") == null) {
+                currentData.put("value", "[]");
+                currentData.put("args", "");
+                currentData.put("answer", "__timeout__");
+                condition.signalAll();
+              }
+            } finally {
+              lock.unlock();
+            }
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        });
         while (dataMap.get(chatId).get("args") == null) {
           conditionMap.get(chatId).await();// 等待数据就绪
         }
-        // System.out.println("Consumer: Received data - " + dataMap.get("value"));
-        log.info("Consumer: Received data - {}", dataMap);
-        resultMap.put("value",
-            JSONObject.parseArray(dataMap.get(chatId).get("value").toString(), String.class));
-        resultMap.put("args", dataMap.get(chatId).get("args"));
-        resultMap.put("answer", dataMap.get(chatId).get("answer"));
+        timeoutGuard.interrupt();
+        timedOut = Objects.equals("__timeout__", dataMap.get(chatId).get("answer"));
+        if (timedOut) {
+          log.warn("ClassifierTool streaming response timed out, chatId={}", chatId);
+          resultMap.put("value", Collections.emptyList());
+          resultMap.put("args", "");
+          resultMap.put("answer", "");
+        } else {
+          // System.out.println("Consumer: Received data - " + dataMap.get("value"));
+          log.debug("Consumer: Received data - {}", dataMap);
+          resultMap.put("value",
+              JSONObject.parseArray(dataMap.get(chatId).get("value").toString(), String.class));
+          resultMap.put("args", dataMap.get(chatId).get("args"));
+          resultMap.put("answer", dataMap.get(chatId).get("answer"));
+        }
       } catch (Exception e) {
         log.error("ClassifierTool error{}", e.getMessage());
         resultMap.put("answer", "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置");
@@ -140,5 +174,43 @@ public class ClassifierTool {
     resultMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
     resultMap.put("args", argsJson);
     return resultMap;
+  }
+
+  private String buildRecentConversationWindow(List<ModelMessage> memory) {
+    int start = Math.max(0, memory.size() - CLASSIFIER_HISTORY_WINDOW);
+    StringBuilder historyBuilder = new StringBuilder("Recent Conversation:\n");
+    for (int i = start; i < memory.size(); i++) {
+      ModelMessage modelMessage = memory.get(i);
+      historyBuilder.append("- ")
+          .append(normalizeRole(modelMessage.getRole()))
+          .append(": ")
+          .append(safeContent(modelMessage.getContent()))
+          .append("\n");
+    }
+    return historyBuilder.toString();
+  }
+
+  private String normalizeRole(String role) {
+    if (Objects.equals(role, ModelMessageRole.USER.value())) {
+      return "user";
+    }
+    if (Objects.equals(role, ModelMessageRole.ASSISTANT.value())) {
+      return "assistant";
+    }
+    if (Objects.equals(role, ModelMessageRole.SYSTEM.value())) {
+      return "system";
+    }
+    return role == null ? "unknown" : role;
+  }
+
+  private String safeContent(Object content) {
+    if (content == null) {
+      return "";
+    }
+    String text = String.valueOf(content).replace("\r", " ").replace("\n", " ").trim();
+    if (text.length() > 120) {
+      return text.substring(0, 120) + "...";
+    }
+    return text;
   }
 }

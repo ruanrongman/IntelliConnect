@@ -143,18 +143,26 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   public String queryKnowledgeGraphic(String query, int productId) {
-    Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
-    Embedding queryEmbedding = embeddingModel.embed(query).content();
-    var searchResult = EmbeddingSearchRequest.builder()
-        .queryEmbedding(queryEmbedding)
-        .filter(filterByProductId)
-        .minScore(0.6)
-        .maxResults(2)
-        .build();
-    EmbeddingSearchResult<TextSegment> embeddingSearchResult = embeddingStore.search(searchResult);
-    List<TextSegment> matchSegment = embeddingSearchResult.matches().stream()
-        .map(EmbeddingMatch::embedded)
-        .toList();
+    List<TextSegment> matchSegment;
+    try {
+      Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
+      Embedding queryEmbedding = embeddingModel.embed(query).content();
+      var searchResult = EmbeddingSearchRequest.builder()
+          .queryEmbedding(queryEmbedding)
+          .filter(filterByProductId)
+          .minScore(0.6)
+          .maxResults(2)
+          .build();
+      EmbeddingSearchResult<TextSegment> embeddingSearchResult =
+          embeddingStore.search(searchResult);
+      matchSegment = embeddingSearchResult.matches().stream()
+          .map(EmbeddingMatch::embedded)
+          .toList();
+    } catch (Exception e) {
+      log.warn("queryKnowledgeGraphic degraded, productId={}, query={}, reason={}",
+          productId, safeQueryLog(query), e.getMessage());
+      return null;
+    }
     if (matchSegment.isEmpty()) {
       return null;
     }
@@ -173,6 +181,17 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
       }
     }
     return JSON.toJSONString(knowledgeGraphic);
+  }
+
+  private String safeQueryLog(String query) {
+    if (query == null) {
+      return "";
+    }
+    String normalized = query.replace("\r", " ").replace("\n", " ").trim();
+    if (normalized.length() > 80) {
+      return normalized.substring(0, 80) + "...";
+    }
+    return normalized;
   }
 
   @Async("taskExecutor")

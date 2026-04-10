@@ -75,7 +75,7 @@ public class Audio2Text implements AsrService {
       // 提交转写请求
       TranscriptionResult result = transcription.asyncCall(param);
       // 打印TaskId
-      System.out.println("TaskId: " + result.getTaskId());
+      log.debug("TaskId: {}", result.getTaskId());
       // 等待转写完成
       result =
           transcription.wait(
@@ -98,12 +98,12 @@ public class Audio2Text implements AsrService {
         var JsonStr = gson.toJson(gson.fromJson(reader, JsonObject.class));
         JSONObject jsonObject = JSON.parseObject(JsonStr);
         String res = jsonObject.getJSONArray("transcripts").getJSONObject(0).getString("text");
-        log.info("语音转换结果{}", res);
+        log.debug("语音转换结果{}", res);
         return res;
       } else
         return "语音识别失败";
     } catch (Exception e) {
-      System.out.println("error: " + e);
+      log.error("语音识别失败", e);
       return "语音识别失败";
     }
 

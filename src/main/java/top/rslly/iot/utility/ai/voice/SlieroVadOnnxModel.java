@@ -22,19 +22,22 @@ package top.rslly.iot.utility.ai.voice;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
+import ai.onnxruntime.OrtLoggingLevel;
 import ai.onnxruntime.OrtSession;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SlieroVadOnnxModel {
-  private static final Object SESSION_INIT_LOCK = new Object();
-  private static final Object SESSION_RUN_LOCK = new Object();
-  private static volatile OrtSession sharedSession;
+  private static final Object SESSION_POOL_INIT_LOCK = new Object();
+  private static volatile SessionRunner[] sharedSessionPool;
+  private static final AtomicInteger SESSION_ASSIGNER = new AtomicInteger(0);
   private float[][][] state;
   private float[][] context;
   private volatile boolean closed;
+  private final SessionRunner sessionRunner;
   // Define the last sample rate
   private int lastSr = 0;
   // Define the last batch size
@@ -44,27 +47,49 @@ public class SlieroVadOnnxModel {
 
   // Constructor
   public SlieroVadOnnxModel(String modelPath) throws OrtException {
-    initializeSharedSession(modelPath);
+    initializeSharedSessionPool(modelPath);
+    sessionRunner = acquireSessionRunner();
     resetStates();
     closed = false;
   }
 
-  private static void initializeSharedSession(String modelPath) throws OrtException {
-    if (sharedSession != null) {
+  private static void initializeSharedSessionPool(String modelPath) throws OrtException {
+    if (sharedSessionPool != null) {
       return;
     }
-    synchronized (SESSION_INIT_LOCK) {
-      if (sharedSession != null) {
+    synchronized (SESSION_POOL_INIT_LOCK) {
+      if (sharedSessionPool != null) {
         return;
       }
       OrtEnvironment env = OrtEnvironment.getEnvironment();
-      try (OrtSession.SessionOptions opts = new OrtSession.SessionOptions()) {
-        opts.setInterOpNumThreads(1);
-        opts.setIntraOpNumThreads(1);
-        opts.addCPU(true);
-        sharedSession = env.createSession(modelPath, opts);
+      int poolSize = resolveSessionPoolSize();
+      SessionRunner[] pool = new SessionRunner[poolSize];
+      for (int i = 0; i < poolSize; i++) {
+        try (OrtSession.SessionOptions opts = new OrtSession.SessionOptions()) {
+          opts.setInterOpNumThreads(1);
+          opts.setIntraOpNumThreads(1);
+          opts.setSessionLogLevel(OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR);
+          opts.setSessionLogVerbosityLevel(0);
+          opts.addCPU(true);
+          pool[i] = new SessionRunner(env.createSession(modelPath, opts));
+        }
       }
+      sharedSessionPool = pool;
     }
+  }
+
+  private static int resolveSessionPoolSize() {
+    int processors = Runtime.getRuntime().availableProcessors();
+    return Math.max(2, Math.min(processors, 60));
+  }
+
+  private static SessionRunner acquireSessionRunner() {
+    SessionRunner[] pool = sharedSessionPool;
+    if (pool == null || pool.length == 0) {
+      throw new IllegalStateException("VAD shared session pool is not initialized");
+    }
+    int index = Math.floorMod(SESSION_ASSIGNER.getAndIncrement(), pool.length);
+    return pool[index];
   }
 
   /**
@@ -242,11 +267,11 @@ public class SlieroVadOnnxModel {
       inputs.put("state", stateTensor);
 
       // Call the ONNX model for calculation
-      synchronized (SESSION_RUN_LOCK) {
-        if (sharedSession == null) {
+      synchronized (sessionRunner.runLock) {
+        if (sessionRunner.session == null) {
           throw new IllegalStateException("VAD shared session is not initialized");
         }
-        ortOutputs = sharedSession.run(inputs);
+        ortOutputs = sessionRunner.session.run(inputs);
       }
       // Get the output results
       float[][] output = (float[][]) ortOutputs.get(0).getValue();
@@ -273,11 +298,36 @@ public class SlieroVadOnnxModel {
   }
 
   public static void closeSharedSession() throws OrtException {
-    synchronized (SESSION_INIT_LOCK) {
-      if (sharedSession != null) {
-        sharedSession.close();
-        sharedSession = null;
+    synchronized (SESSION_POOL_INIT_LOCK) {
+      if (sharedSessionPool != null) {
+        OrtException firstException = null;
+        for (SessionRunner runner : sharedSessionPool) {
+          if (runner == null || runner.session == null) {
+            continue;
+          }
+          try {
+            runner.session.close();
+          } catch (OrtException e) {
+            if (firstException == null) {
+              firstException = e;
+            }
+          }
+        }
+        sharedSessionPool = null;
+        SESSION_ASSIGNER.set(0);
+        if (firstException != null) {
+          throw firstException;
+        }
       }
+    }
+  }
+
+  private static final class SessionRunner {
+    private final OrtSession session;
+    private final Object runLock = new Object();
+
+    private SessionRunner(OrtSession session) {
+      this.session = session;
     }
   }
 }

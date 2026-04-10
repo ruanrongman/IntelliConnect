@@ -24,6 +24,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.slf4j.Logger;
@@ -69,9 +70,9 @@ public class MqttConnectionUtils {
   public static void start(String Host, String Username, String Password) throws MqttException {
     try {
       clientId = UUID.randomUUID().toString().trim().replaceAll("-", "");
-      client = new MqttClient(Host, clientId);
+      client = new MqttClient(Host, clientId, new MemoryPersistence());
       connectOptions = new MqttConnectOptions();
-      connectOptions.setCleanSession(false);
+      connectOptions.setCleanSession(true);
       connectOptions.setUserName(Username);
       connectOptions.setPassword(Password.toCharArray());// 密码
                                                          // connectOptions.setConnectionTimeout(10);

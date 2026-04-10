@@ -36,6 +36,8 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.MusicToolPrompt;
+import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
+import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.io.IOException;
 import java.util.*;
@@ -50,8 +52,12 @@ public class MusicTool implements BaseTool<Map<String, String>> {
   private HttpRequestUtils httpRequestUtils;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
+  @Autowired
+  private TtsServiceFactory ttsServiceFactory;
   @Value("${ai.musicTool-llm}")
   private String llmName;
+  @Value("${ai.music.path:}")
+  private String musicPath;
   private String name = "musicTool";
   private String description = """
       A tool for playing music.
@@ -69,6 +75,7 @@ public class MusicTool implements BaseTool<Map<String, String>> {
   @Override
   public Map<String, String> run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
+    String chatId = (String) globalMessage.get("chatId");
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "3");
     List<ModelMessage> messages = new ArrayList<>();
     Map<String, String> responseMap = new HashMap<>();
@@ -82,12 +89,32 @@ public class MusicTool implements BaseTool<Map<String, String>> {
     var answer = (String) obj.get("answer");
     responseMap.put("answer", answer);
     responseMap.put("url", "");
+
+    // 检查是否是小智设备连接
+    boolean isXiaoZhiDevice = chatId != null && XiaoZhiWebsocket.clients.containsKey(chatId);
+
     try {
-      var url = process_llm_result(obj);
-      responseMap.put("url", url);
-      return responseMap;
+      if (isXiaoZhiDevice && musicPath != null && !musicPath.isEmpty()) {
+        // 小智设备：使用本地音乐文件夹播放
+        String singer = obj.getString("singer");
+        String musicName = obj.getString("music");
+        if (musicName != null && !musicName.isEmpty()) {
+          // 异步播放音乐
+          MusicPlayer player = new MusicPlayer(chatId, productId, musicName, singer,
+              musicPath, ttsServiceFactory);
+          Thread.ofVirtual().start(player::play);
+          // 返回空前缀，避免TTS重复播报
+          responseMap.put("answer", "");
+        }
+        return responseMap;
+      } else {
+        // 非小智设备或未配置音乐路径：使用网易云
+        var url = process_llm_result(obj);
+        responseMap.put("url", url);
+        return responseMap;
+      }
     } catch (Exception e) {
-      // e.printStackTrace();
+      log.error("MusicTool error: {}", e.getMessage(), e);
       return responseMap;
     }
   }

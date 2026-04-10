@@ -102,11 +102,14 @@ public class WeatherTool implements BaseTool<String> {
       queueMap.get(chatId).add("我来给你查天气啦!");
     }
     var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
+    // 获取客户端IP用于定位
+    String clientIp = (String) globalMessage.get("clientIp");
     try {
-      Map<String, String> answer = process_llm_result(obj);
+      Map<String, String> answer = process_llm_result(obj, clientIp);
       ModelMessage responseSystemMessage =
           new ModelMessage(ModelMessageRole.SYSTEM.value(),
-              weatherToolPrompt.getWeatherResponse(answer.get("lives"), answer.get("forecasts")));
+              weatherToolPrompt.getWeatherResponse(answer.get("city"),
+                  answer.get("lives"), answer.get("forecasts")));
       messages.clear();
       messages.add(responseSystemMessage);
       messages.add(userMessage);
@@ -148,62 +151,135 @@ public class WeatherTool implements BaseTool<String> {
     lockMap.remove(chatId);
   }
 
-  private Map<String, String> process_llm_result(JSONObject llmObject)
+  private Map<String, String> process_llm_result(JSONObject llmObject, String clientIp)
       throws IcAiException, IOException, NullPointerException {
-    if (llmObject.get("code").equals("200") || llmObject.get("code").equals(200)) {
-      Map<String, String> result = new HashMap<>();
-      String address = llmObject.getString("address");
-      if (address != null && !address.equals("")) {
-        // 优先使用和风天气
-        if (qWeatherService.isAvailable()) {
-          try {
-            log.info("Using QWeather API for weather query");
-            String locationId = qWeatherService.getLocationIdByCityName(address);
-            if (locationId != null) {
-              JSONObject nowData = qWeatherService.getWeatherNow(locationId);
-              JSONObject forecastData = qWeatherService.getWeatherForecast(locationId, "3d");
+    Map<String, String> result = new HashMap<>();
+    String address = llmObject.getString("address");
 
-              String lives = qWeatherService.convertNowToLivesFormat(nowData);
-              String forecasts = qWeatherService.convertForecastToFormat(forecastData);
+    // 如果没有指定城市（code为400或address为空），尝试使用IP定位
+    if ((address == null || address.equals("")) && clientIp != null
+        && !clientIp.equals("unknown")) {
+      address = ipLocate(clientIp);
+      log.info("IP定位结果: ip={}, city={}", clientIp, address);
+    }
 
-              result.put("lives", lives);
-              result.put("forecasts", forecasts);
-              result.put("source", "和风天气");
-              return result;
-            }
-          } catch (Exception e) {
-            log.warn("QWeather API failed, falling back to Amap: {}", e.getMessage());
+    // 无论 code 是 200 还是 400，只要有地址就查询天气
+    if (address != null && !address.equals("")) {
+      // 优先使用和风天气
+      if (qWeatherService.isAvailable()) {
+        try {
+          log.info("Using QWeather API for weather query");
+          String locationId = qWeatherService.getLocationIdByCityName(address);
+          if (locationId != null) {
+            JSONObject nowData = qWeatherService.getWeatherNow(locationId);
+            JSONObject forecastData = qWeatherService.getWeatherForecast(locationId, "3d");
+
+            String lives = qWeatherService.convertNowToLivesFormat(nowData);
+            String forecasts = qWeatherService.convertForecastToFormat(forecastData);
+
+            result.put("city", address);
+            result.put("lives", lives);
+            result.put("forecasts", forecasts);
+            result.put("source", "和风天气");
+            return result;
           }
+        } catch (Exception e) {
+          log.warn("QWeather API failed, falling back to Amap: {}", e.getMessage());
+        }
+      }
+
+      // 回退到高德天气
+      log.info("Using Amap API for weather query");
+      var adCodeSearch = httpRequestUtils.httpGet(
+          "https://restapi.amap.com/v3/geocode/geo?address=" + address + "&key=" + amapKey);
+      String cityCodeMessage = Objects.requireNonNull(adCodeSearch.body()).string();
+      JSONObject jsonObject = JSON.parseObject(cityCodeMessage);
+      var geocodes = jsonObject.getJSONArray("geocodes");
+      JSONObject adCodeObj = (JSONObject) geocodes.get(0);
+      String adCode = adCodeObj.getString("adcode");
+      var weatherForecast =
+          httpRequestUtils.httpGet("https://restapi.amap.com/v3/weather/weatherInfo?city="
+              + adCode + "&key=" + amapKey + "&extensions=all");
+      var weatherLives =
+          httpRequestUtils.httpGet("https://restapi.amap.com/v3/weather/weatherInfo?city="
+              + adCode + "&key=" + amapKey + "&extensions=base");
+      String weatherForecastMessage = Objects.requireNonNull(weatherForecast.body()).string();
+      String weatherLivesMessage = Objects.requireNonNull(weatherLives.body()).string();
+      JSONObject weatherForecastObj = JSON.parseObject(weatherForecastMessage);
+      JSONObject weatherLivesObj = JSON.parseObject(weatherLivesMessage);
+      String lives = weatherLivesObj.getJSONArray("lives").toString();
+      String forecasts = weatherForecastObj.getJSONArray("forecasts").toString();
+      result.put("city", address);
+      result.put("lives", lives);
+      result.put("forecasts", forecasts);
+      result.put("source", "高德天气");
+      return result;
+    }
+
+    // 没有地址且IP定位失败
+    throw new IcAiException("无法确定查询位置");
+  }
+
+  /**
+   * 通过IP地址定位城市
+   *
+   * @param ip 客户端IP地址
+   * @return 城市名称，定位失败返回null
+   */
+  private String ipLocate(String ip) {
+    try {
+      // 内网IP直接返回
+      if (isPrivateIp(ip)) {
+        return "内网IP";
+      }
+
+      String url = "https://get.geojs.io/v1/ip/geo/" + ip + ".json";
+      var response = httpRequestUtils.httpGet(url);
+
+      if (response != null && response.body() != null) {
+        String body = response.body().string();
+        JSONObject json = JSON.parseObject(body);
+
+        if (json == null) {
+          return null;
         }
 
-        // 回退到高德天气
-        log.info("Using Amap API for weather query");
-        var adCodeSearch = httpRequestUtils.httpGet(
-            "https://restapi.amap.com/v3/geocode/geo?address=" + address + "&key=" + amapKey);
-        String cityCodeMessage = Objects.requireNonNull(adCodeSearch.body()).string();
-        JSONObject jsonObject = JSON.parseObject(cityCodeMessage);
-        var geocodes = jsonObject.getJSONArray("geocodes");
-        JSONObject adCodeObj = (JSONObject) geocodes.get(0);
-        String adCode = adCodeObj.getString("adcode");
-        var weatherForecast =
-            httpRequestUtils.httpGet("https://restapi.amap.com/v3/weather/weatherInfo?city="
-                + adCode + "&key=" + amapKey + "&extensions=all");
-        var weatherLives =
-            httpRequestUtils.httpGet("https://restapi.amap.com/v3/weather/weatherInfo?city="
-                + adCode + "&key=" + amapKey + "&extensions=base");
-        String weatherForecastMessage = Objects.requireNonNull(weatherForecast.body()).string();
-        String weatherLivesMessage = Objects.requireNonNull(weatherLives.body()).string();
-        JSONObject weatherForecastObj = JSON.parseObject(weatherForecastMessage);
-        JSONObject weatherLivesObj = JSON.parseObject(weatherLivesMessage);
-        String lives = weatherLivesObj.getJSONArray("lives").toString();
-        String forecasts = weatherForecastObj.getJSONArray("forecasts").toString();
-        result.put("lives", lives);
-        result.put("forecasts", forecasts);
-        result.put("source", "高德天气");
-        return result;
-      } else
-        throw new IcAiException("llm response error");
-    } else
-      throw new IcAiException("llm response error");
+        // 城市
+        String city = json.getString("city");
+        if (isValid(city)) {
+          return city;
+        }
+
+        // 省/州
+        String province = json.getString("region");
+        if (isValid(province)) {
+          return province;
+        }
+
+        // 国家（兜底）
+        String country = json.getString("country");
+        if (isValid(country)) {
+          return country;
+        }
+
+        log.info("IP定位无有效结果: ip={}, response={}", ip, body);
+      }
+
+    } catch (Exception e) {
+      log.error("IP定位异常: ip={}, error={}", ip, e.getMessage());
+    }
+
+    return null;
+  }
+
+  private boolean isValid(String str) {
+    return str != null && !str.trim().isEmpty();
+  }
+
+  private boolean isPrivateIp(String ip) {
+    return ip.startsWith("127.")
+        || ip.startsWith("192.168.")
+        || ip.startsWith("10.")
+        || ip.startsWith("172.16.");
   }
 }

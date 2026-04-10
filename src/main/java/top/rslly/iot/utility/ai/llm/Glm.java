@@ -103,7 +103,7 @@ public class Glm implements LLM {
       ModelApiResponse invokeModelApiResp = client.invokeModelApi(chatCompletionRequest);
       var response =
           invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent().toString();
-      log.info("model output:{} ", response);
+      log.debug("model output:{} ", response);
       var temp = response.replace("```json", "").replace("```JSON", "").replace("```", "");
       return JSON.parseObject(temp);
     } catch (Exception e) {
@@ -140,7 +140,7 @@ public class Glm implements LLM {
 
       var response =
           invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent().toString();
-      log.info("model output:{} ", response);
+      log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
       log.error("model error:{} ", e.getMessage());
@@ -264,7 +264,7 @@ public class Glm implements LLM {
       var response = mapper.writeValueAsString(
           modelApiResponse.getData().getChoices().get(0).getMessage().getContent());
       // System.out.println("model output:" + response);
-      log.info("model output:{}", response);
+      log.debug("model output:{}", response);
       return response;
     } catch (JsonProcessingException e) {
       return "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";

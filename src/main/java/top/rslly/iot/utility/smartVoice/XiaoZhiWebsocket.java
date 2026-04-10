@@ -42,7 +42,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @ServerEndpoint(value = "/xiaozhi/v1/{chatId}", configurator = WebSocketConfig.class)
@@ -65,7 +64,7 @@ public class XiaoZhiWebsocket {
   private static final Map<String, SlieroVadListener> vadListenerMap = new ConcurrentHashMap<>();
   // 记录最近一次有效交互时间，用于空闲超时判断
   private static final Map<String, Long> lastInteractionTimeMap = new ConcurrentHashMap<>();
-  List<byte[]> audioList = new CopyOnWriteArrayList<>();
+  private final List<byte[]> audioList = Collections.synchronizedList(new ArrayList<>());
   private String chatId;
   private int productId;
   private boolean isManual = true;
@@ -299,7 +298,7 @@ public class XiaoZhiWebsocket {
    */
   @OnMessage
   public void onMessage(String message) {
-    log.info("message{}", message);
+    log.debug("message{}", message);
     try {
       refreshInteractionTime(chatId);
       // OpusDecoder decoder = new OpusDecoder(16000, 1);
@@ -349,7 +348,7 @@ public class XiaoZhiWebsocket {
               isRealTime = true;
             }
             log.info("listen start");
-            voiceContent.clear();
+            voiceContent.remove(chatId);
             refreshInteractionTime(chatId);
           }
           case "stop" -> {
@@ -413,7 +412,7 @@ public class XiaoZhiWebsocket {
             // 处理音频片段
             var map = listener.listen(chunk);
             if (map != null && map.containsKey("start")) {
-              log.info("检测到语音开始: {}", map);
+              log.debug("检测到语音开始: {}", map);
               haveVoice.put(chatId, true);
               interactionDetected = true;
               if (isRealTime) {
@@ -421,9 +420,7 @@ public class XiaoZhiWebsocket {
               }
               // 保留音频数据最后10帧（直接修改原始列表）
               int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-              if (audioList.size() > keepFrames) {
-                audioList.subList(0, audioList.size() - keepFrames).clear();
-              }
+              trimAudioFrames(keepFrames);
             }
             if (map != null && map.containsKey("end")) {
               log.info("检测到语音结束: {}", map);
@@ -460,9 +457,7 @@ public class XiaoZhiWebsocket {
           if (audioList.size() > maxFrames) {
             log.warn("audioList过大，chatId: {}, 当前大小: {}, 清理旧数据", chatId, audioList.size());
             int keepFrames = Math.min(100, audioList.size()); // 保留最近100帧
-            if (audioList.size() > keepFrames) {
-              audioList.subList(0, audioList.size() - keepFrames).clear();
-            }
+            trimAudioFrames(keepFrames);
           }
 
           // 防御性清理：如果pcmVadBuffer过大，重置
@@ -515,7 +510,7 @@ public class XiaoZhiWebsocket {
 
 
     clients.clear();
-    voiceContent.clear();
+    new ArrayList<>(voiceContent.keySet()).forEach(voiceContent::remove);
     pcmVadBuffer.clear();
     opusDecoderMap.clear();
     isAbort.clear();
@@ -560,6 +555,14 @@ public class XiaoZhiWebsocket {
     return deviceId;
   }
 
+  /**
+   * 获取客户端IP地址
+   */
+  public static String getClientIp(Session session) {
+    String ip = (String) session.getUserProperties().get("Client-Ip");
+    return ip != null ? ip : "unknown";
+  }
+
   static boolean hasExceededIdleTimeout(String chatId, long currentTime, boolean isRealTime) {
     Long lastInteractionTime = lastInteractionTimeMap.computeIfAbsent(chatId, k -> currentTime);
     return hasExceededIdleTimeout(lastInteractionTime, currentTime, isRealTime);
@@ -579,6 +582,15 @@ public class XiaoZhiWebsocket {
   private static void refreshInteractionTime(String chatId) {
     if (chatId != null) {
       lastInteractionTimeMap.put(chatId, System.currentTimeMillis());
+    }
+  }
+
+  private void trimAudioFrames(int keepFrames) {
+    synchronized (audioList) {
+      int safeKeepFrames = Math.max(0, Math.min(keepFrames, audioList.size()));
+      if (audioList.size() > safeKeepFrames) {
+        audioList.subList(0, audioList.size() - safeKeepFrames).clear();
+      }
     }
   }
 

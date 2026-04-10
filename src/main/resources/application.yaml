@@ -208,6 +208,10 @@ ai:
   controlTool-llm: dashscope-qwen2.5-32b-instruct
   controlTool-llm-speed: true
   musicTool-llm: dashscope-qwen2.5-14b-instruct
+  # 本地音乐文件夹路径（用于小智设备播放音乐），留空则使用网易云
+  # 示例: D:/music/
+  music:
+    path: D:/music/
   productRoleTool-llm: dashscope-qwen2.5-14b-instruct
   weatherTool-llm: dashscope-qwen3-next-80b-a3b-instruct
   weatherTool-speedUp: true

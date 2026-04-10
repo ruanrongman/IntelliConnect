@@ -135,8 +135,8 @@ public class MiniMaxTtsService implements TtsService {
         return null;
       }
 
-      log.info("MiniMax TTS API request successful for voice: {}, text length: {}", voice,
-              text.length());
+      log.debug("MiniMax TTS API request successful for voice: {}, text length: {}", voice,
+          text.length());
 
       // 读取流式响应
       ByteArrayOutputStream audioBuffer = new ByteArrayOutputStream();
@@ -191,8 +191,8 @@ public class MiniMaxTtsService implements TtsService {
                 voice, model != null && !model.isBlank() ? model : DEFAULT_MODEL, text.length());
         return null;
       }
-      log.info("MiniMax TTS generated {} bytes of audio data for voice: '{}'", mp3Data.length,
-              voice);
+      log.debug("MiniMax TTS generated {} bytes of audio data for voice: '{}'", mp3Data.length,
+          voice);
 
       String outputPath = System.getProperty("java.io.tmpdir");
       // 将 chatId 中的冒号替换为下划线，避免 Windows 路径非法字符问题

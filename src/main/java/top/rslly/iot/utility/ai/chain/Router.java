@@ -101,6 +101,15 @@ public class Router {
     globalMessage.put("productId", productId);
     globalMessage.put("chatId", chatId);
     globalMessage.put("queueMap", queueMap);
+    // 从 WebSocket session 获取客户端 IP
+    jakarta.websocket.Session session = top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket.clients
+        .get(chatId);
+    if (session != null) {
+      String clientIp = top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket.getClientIp(session);
+      if (clientIp != null && !clientIp.equals("unknown")) {
+        globalMessage.put("clientIp", clientIp);
+      }
+    }
     Queue<String> queue = createResponseQueue();
     queueMap.put(chatId, queue);
     Object memory_cache;
@@ -309,7 +318,7 @@ public class Router {
 
     // ✅ 修复1：只要预测线程还活着(或已有结果)，就认为HIT，不再看队列是否为空
     if (predictionThread.isAlive() || predictionResult.get() != null) {
-      log.info("[BranchPrediction] HIT, chatId={}", chatId);
+      log.debug("[BranchPrediction] HIT, chatId={}", chatId);
 
       Thread.ofVirtual().start(() -> {
         try {
