@@ -41,6 +41,7 @@ import jakarta.websocket.server.ServerEndpoint;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -54,6 +55,23 @@ public class XiaoZhiWebsocket {
   private static final Map<String, OpusDecoder> opusDecoderMap = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
+
+  /**
+   * Track active playback session for each chatId to prevent audio overlap
+   */
+  public static class PlaybackSession {
+    public final Thread playbackThread;
+    public final BlockingQueue<byte[]> audioQueue;
+    public final AtomicBoolean isCancelled;
+
+    public PlaybackSession(Thread playbackThread, BlockingQueue<byte[]> audioQueue) {
+      this.playbackThread = playbackThread;
+      this.audioQueue = audioQueue;
+      this.isCancelled = new AtomicBoolean(false);
+    }
+  }
+
+  public static final Map<String, PlaybackSession> activePlayback = new ConcurrentHashMap<>();
   private static volatile SafetyServiceImpl safetyService;
   private static volatile TtsServiceFactory ttsServiceFactory;
   private static volatile ProductServiceImpl productService;
@@ -283,6 +301,8 @@ public class XiaoZhiWebsocket {
       if (xiaoZhiUtil != null) {
         xiaoZhiUtil.destroyMcp(chatId);
       }
+      // 取消正在播放的音频
+      cancelActivePlayback(chatId);
       clients.remove(chatId);
       isAbort.remove(chatId);
       haveVoice.remove(chatId);
@@ -418,6 +438,8 @@ public class XiaoZhiWebsocket {
               if (isRealTime) {
                 isAbort.put(chatId, true);
               }
+              // 主动取消当前正在播放的音频，防止混叠
+              cancelActivePlayback(chatId);
               // 保留音频数据最后10帧（直接修改原始列表）
               int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
               trimAudioFrames(keepFrames);
@@ -525,6 +547,7 @@ public class XiaoZhiWebsocket {
       }
     }
     vadListenerMap.clear();
+    activePlayback.clear();
     SlieroVadListener.destroySharedResources();
     if (otaXiaozhiService != null) {
       otaXiaozhiService.cleanStatus();
@@ -621,6 +644,42 @@ public class XiaoZhiWebsocket {
       }
     }
     isAbort.put(chatId, false);
+    cancelActivePlayback(chatId);
+  }
+
+  /**
+   * Cancel active playback for the given chatId to prevent audio overlap.
+   *
+   * Strategy: 1. Mark as cancelled and clear the audio queue immediately 2. Wait a short time
+   * (40ms) for the playback thread to exit naturally 3. Don't force interrupt because that would
+   * interrupt the entire caller thread (e.g. MusicPlayer) causing unexpected side effects like
+   * connection close
+   *
+   * Why 40ms? - The playback thread checks cancellation every ~20ms, so 40ms is enough for it to
+   * detect and exit, and 40ms wait is not noticeable to users.
+   *
+   * This balances: - No audio overlap: Old playback exits before new playback starts - No卡顿: Only
+   * 40ms wait, not noticeable - No side effects: No forced interrupt, MusicPlayer works correctly
+   */
+  public static void cancelActivePlayback(String chatId) {
+    PlaybackSession session = activePlayback.remove(chatId);
+    if (session != null) {
+      log.debug("Cancelling active playback for chatId: {}", chatId);
+      session.isCancelled.set(true);
+      if (session.audioQueue != null) {
+        session.audioQueue.clear();
+      }
+      // Wait a short time for the thread to exit on its own
+      // 40ms is enough because playback checks every ~20ms, not noticeable to users
+      // Don't interrupt - it would break the caller thread causing connection close
+      if (session.playbackThread != null && session.playbackThread.isAlive()) {
+        try {
+          session.playbackThread.join(40);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
   }
 
 
