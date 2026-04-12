@@ -689,7 +689,7 @@ public class XiaoZhiWebsocket {
     try {
       session.getBasicRemote().sendText(msg);
     } catch (IOException e) {
-      log.error("发送消息失败！");
+      log.error("发送消息失败！", e);
     }
   }
 }

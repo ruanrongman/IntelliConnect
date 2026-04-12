@@ -221,7 +221,7 @@ public class XiaoZhiUtil {
    */
   private void sendText(String chatId, String text) {
     XiaoZhiWebsocket.send(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
-        + " \"text\": \"" + text + "\"}");
+        + "\"text\": \"" + text + "\"}");
   }
 
   /**
@@ -240,6 +240,10 @@ public class XiaoZhiUtil {
 
   private void sendTTSStart(String chatId) {
     XiaoZhiWebsocket.send(chatId, "{\"type\":\"tts\",\"state\":\"start\"}");
+  }
+
+  private void sendSTT(String chatId, String text){
+    XiaoZhiWebsocket.send(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}");
   }
 
   /**
@@ -261,7 +265,8 @@ public class XiaoZhiUtil {
 
   private int getPunctuationPos(String str) {
     Set<Character> punctuationSet = new HashSet<>();
-    String punctuations = "?!:;~.,？！：；~。，";
+    String punctuations = "？！：；~。";
+    String[] englishPunctuations = {"? ", "! ", "\" ", " \"", ": ", ", ", ". "};
     for (char c : punctuations.toCharArray()) {
       punctuationSet.add(c);
     }
@@ -270,7 +275,22 @@ public class XiaoZhiUtil {
       if (punctuationSet.contains(c))
         return i;
     }
+    for(int i = 0; i < englishPunctuations.length; i++) {
+      String item = englishPunctuations[i];
+      if(str.contains(item)) {
+        return i;
+      }
+    }
     return -1;
+  }
+
+  /**
+   * 清空Redis历史缓存
+   * @param chatId  对话ID
+   */
+  private void clearRedisCache(String chatId){
+    redisStringTemplate.delete(chatId);
+    redisStateTemplate.delete(chatId + "_state");
   }
 
   public static String getShortHash(String input, int bytes) {
@@ -287,6 +307,12 @@ public class XiaoZhiUtil {
     }
   }
 
+  /**
+   * 异步TTS
+   * @param chatId  对话ID
+   * @param src 原文本
+   * @param productId  产品ID
+   */
   private void asyncTTS(String chatId, String src, int productId) {
     // 使用Thread.ofVirtual启动这个部分
     // 在Redis中写入当前句子的处理状态为false，表示开始处理
@@ -305,7 +331,11 @@ public class XiaoZhiUtil {
     redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
   }
 
-  private void streamRspResultHandler(String chatId) {
+  /**
+   * 流式返回时的结果处理线程
+   * @param chatId  对话ID
+   */
+  private void streamRspResultHandler(String chatId){
     // 设置结果处理线程状态为工作中
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, true);
     Object handleState =
@@ -365,6 +395,7 @@ public class XiaoZhiUtil {
    */
   private void handlerStreamRsp(String chatId, int productId, boolean isManual,
       CompletableFuture<String> res) throws InterruptedException {
+    clearRedisCache(chatId);
     String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
     Map<String, Object> emotionMessage = new HashMap<>();
     emotionMessage.put("chatId", chatId);
@@ -530,10 +561,10 @@ public class XiaoZhiUtil {
       this.sendEndMsg(chatId);
       return;
     }
+    sendSTT(chatId, text);
     final String tCopy = text;
     XiaoZhiWebsocket.voiceContent.computeIfPresent(chatId, (k, v) -> v + tCopy);
     XiaoZhiWebsocket.voiceContent.putIfAbsent(chatId, text);
-    XiaoZhiWebsocket.send(chatId, text);
     audioList.clear();
     // 到这里，voiceContent不可能为空
     if (showThinking)
