@@ -84,7 +84,7 @@ public class TtsServiceFactory {
     ttsService.websocketAudioSync(text, pitch, speed, session, chatId, voice);
   }
 
-  public List<byte[]> getTextAudio(String chatId, String text, int productId){
+  public List<byte[]> getTextAudio(String chatId, String text, int productId) {
     String provider = "dashscope";
     // 语音音调 (0.5-2.0)
     float pitch = 1.0f;

@@ -88,7 +88,8 @@ public class RedisConfig extends CachingConfigurerSupport {
   }
 
   @Bean
-  public RedisTemplate<String, byte[]> bytesRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
+  public RedisTemplate<String, byte[]> bytesRedisTemplate(
+      RedisConnectionFactory redisConnectionFactory) {
     RedisTemplate<String, byte[]> template = new RedisTemplate<>();
     template.setConnectionFactory(redisConnectionFactory);
 
@@ -107,7 +108,8 @@ public class RedisConfig extends CachingConfigurerSupport {
   }
 
   @Bean
-  public RedisTemplate<String, Boolean> boolRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
+  public RedisTemplate<String, Boolean> boolRedisTemplate(
+      RedisConnectionFactory redisConnectionFactory) {
     RedisTemplate<String, Boolean> template = new RedisTemplate<>();
     template.setConnectionFactory(redisConnectionFactory);
 

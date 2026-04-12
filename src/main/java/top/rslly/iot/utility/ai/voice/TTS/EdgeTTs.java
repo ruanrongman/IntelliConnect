@@ -46,10 +46,10 @@ public class EdgeTTs implements TtsService {
       String chatId, String voice) {
     List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
-    for(byte[] b: audioList){
+    for (byte[] b : audioList) {
       audioQueue.offer(b);
     }
-    try{
+    try {
       AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
     } catch (Exception e) {
       log.error("websocketAudio error for chatId: {}", chatId, e);
@@ -62,7 +62,8 @@ public class EdgeTTs implements TtsService {
   }
 
   @Override
-  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice) {
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice) {
     // Only used for WebSocket audio sending.
     List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
@@ -85,20 +86,20 @@ public class EdgeTTs implements TtsService {
       // 获取中文语音
       String finalVoiceName = voiceName;
       Voice voiceObj = TTSVoice.provides().stream()
-              .filter(v -> v.getShortName().equals(finalVoiceName))
-              .collect(Collectors.toList()).get(0);
+          .filter(v -> v.getShortName().equals(finalVoiceName))
+          .collect(Collectors.toList()).get(0);
 
       TTS ttsEngine = new TTS(voiceObj, text);
       // 执行TTS转换获取音频文件
       String outputPath = System.getProperty("java.io.tmpdir");
       String audioFilePath = ttsEngine.findHeadHook()
-              .storage(outputPath)
-              .isRateLimited(true)
-              .voicePitch(pitchHz + "Hz")
-              .voiceRate(ratePercent + "%")
-              .overwrite(false)
-              .formatMp3()
-              .trans();
+          .storage(outputPath)
+          .isRateLimited(true)
+          .voicePitch(pitchHz + "Hz")
+          .voiceRate(ratePercent + "%")
+          .overwrite(false)
+          .formatMp3()
+          .trans();
 
       // 使用 Paths.get 来正确拼接路径，解决缺少分隔符的问题
       fullPath = Paths.get(outputPath, audioFilePath).toString();

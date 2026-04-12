@@ -74,10 +74,10 @@ public class MiniMaxTtsService implements TtsService {
     List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
     // Only used for WebSocket audio sending.
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
-    for(byte[] b : audioList){
+    for (byte[] b : audioList) {
       audioQueue.offer(b);
     }
-    try{
+    try {
       // 异步发送音频队列
       AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
     } catch (Exception e) {
@@ -87,15 +87,17 @@ public class MiniMaxTtsService implements TtsService {
 
   /**
    * 获取文本的Opus音频字节流
-   * @param chatId  对话ID
-   * @param text  文本
+   * 
+   * @param chatId 对话ID
+   * @param text 文本
    * @param pitch 语调
    * @param speed 语速
    * @param voice 声音类型
-   * @return  Null或一个转载有Opus字节流的BlockingQueue
+   * @return Null或一个转载有Opus字节流的BlockingQueue
    */
   @Override
-  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice) {
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice) {
     // Only used for WebSocket audio sending.
     List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
@@ -122,8 +124,8 @@ public class MiniMaxTtsService implements TtsService {
       int responseCode = connection.getResponseCode();
       if (responseCode != 200) {
         BufferedReader errorReader =
-                new BufferedReader(
-                        new InputStreamReader(connection.getErrorStream(), StandardCharsets.UTF_8));
+            new BufferedReader(
+                new InputStreamReader(connection.getErrorStream(), StandardCharsets.UTF_8));
         StringBuilder errorResponse = new StringBuilder();
         String line;
         while ((line = errorReader.readLine()) != null) {
@@ -131,7 +133,7 @@ public class MiniMaxTtsService implements TtsService {
         }
         errorReader.close();
         log.error("MiniMax TTS API error for voice '{}': {} - {}", voice, responseCode,
-                errorResponse);
+            errorResponse);
         return null;
       }
 
@@ -141,7 +143,7 @@ public class MiniMaxTtsService implements TtsService {
       // 读取流式响应
       ByteArrayOutputStream audioBuffer = new ByteArrayOutputStream();
       try (BufferedReader reader = new BufferedReader(
-              new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+          new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
         String line;
         while ((line = reader.readLine()) != null) {
           if (line.startsWith("data: ")) {
@@ -156,9 +158,9 @@ public class MiniMaxTtsService implements TtsService {
               // 检查错误状态
               JsonNode baseResp = root.path("base_resp");
               if (baseResp.has("status_code")
-                      && baseResp.get("status_code").asInt() != 0) {
+                  && baseResp.get("status_code").asInt() != 0) {
                 log.error("MiniMax TTS API returned error: {}",
-                        baseResp.path("status_msg").asText());
+                    baseResp.path("status_msg").asText());
                 continue;
               }
 
@@ -187,8 +189,8 @@ public class MiniMaxTtsService implements TtsService {
       byte[] mp3Data = audioBuffer.toByteArray();
       if (mp3Data.length == 0) {
         log.warn(
-                "MiniMax TTS returned empty audio data for voice: '{}', model: '{}', text length: {}",
-                voice, model != null && !model.isBlank() ? model : DEFAULT_MODEL, text.length());
+            "MiniMax TTS returned empty audio data for voice: '{}', model: '{}', text length: {}",
+            voice, model != null && !model.isBlank() ? model : DEFAULT_MODEL, text.length());
         return null;
       }
       log.debug("MiniMax TTS generated {} bytes of audio data for voice: '{}'", mp3Data.length,

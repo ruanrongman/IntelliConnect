@@ -86,7 +86,7 @@ public class ProductRoleEntity {
   }
 
   @Basic
-  @Column(name = "role_introduction", length=6000)
+  @Column(name = "role_introduction", length = 6000)
   public String getRoleIntroduction() {
     return roleIntroduction;
   }

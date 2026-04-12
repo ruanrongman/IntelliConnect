@@ -682,12 +682,13 @@ public class XiaoZhiWebsocket {
     }
   }
 
-  public static void send(String chatId, String msg){
+  public static void send(String chatId, String msg) {
     Session session = XiaoZhiWebsocket.clients.get(chatId);
-    if(session == null || !session.isOpen()) return;
+    if (session == null || !session.isOpen())
+      return;
     try {
       session.getBasicRemote().sendText(msg);
-    }catch(IOException e){
+    } catch (IOException e) {
       log.error("发送消息失败！");
     }
   }
