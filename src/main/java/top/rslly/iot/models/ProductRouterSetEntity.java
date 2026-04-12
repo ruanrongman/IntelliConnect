@@ -41,7 +41,7 @@ public class ProductRouterSetEntity {
   }
 
   @Basic
-  @Column(name = "prompt")
+  @Column(name = "prompt", length = 2000)
   public String getPrompt() {
     return prompt;
   }

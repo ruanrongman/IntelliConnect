@@ -22,19 +22,34 @@ package top.rslly.iot.config;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ser.std.BooleanSerializer;
+import jakarta.annotation.Nullable;
 import org.springframework.cache.annotation.CachingConfigurerSupport;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.serializer.*;
 import org.springframework.data.redis.core.*;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.RedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
 @EnableCaching // 开启注解
 public class RedisConfig extends CachingConfigurerSupport {
+
+  public class ByteArrayRedisSerializer implements RedisSerializer<byte[]> {
+
+    @Override
+    public byte[] serialize(@Nullable byte[] bytes) throws SerializationException {
+      // 如果输入是 null，返回 null 以匹配 Spring Data Redis 的约定
+      return bytes;
+    }
+
+    @Override
+    public byte[] deserialize(@Nullable byte[] bytes) throws SerializationException {
+      // 如果输入是 null，返回 null
+      return bytes;
+    }
+  }
 
   /**
    * retemplate相关配置
@@ -70,6 +85,70 @@ public class RedisConfig extends CachingConfigurerSupport {
     template.afterPropertiesSet();
 
     return template;
+  }
+
+  @Bean
+  public RedisTemplate<String, byte[]> bytesRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
+    RedisTemplate<String, byte[]> template = new RedisTemplate<>();
+    template.setConnectionFactory(redisConnectionFactory);
+
+    // Key 使用 String 序列化器
+    RedisSerializer<String> keySerializer = new StringRedisSerializer();
+    template.setKeySerializer(keySerializer);
+    template.setHashKeySerializer(keySerializer);
+
+    // Value 使用 ByteArray 序列化器，直接存储字节数组
+    RedisSerializer<byte[]> valueSerializer = new ByteArrayRedisSerializer();
+    template.setValueSerializer(valueSerializer);
+    template.setHashValueSerializer(valueSerializer);
+
+    template.afterPropertiesSet();
+    return template;
+  }
+
+  @Bean
+  public RedisTemplate<String, Boolean> boolRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
+    RedisTemplate<String, Boolean> template = new RedisTemplate<>();
+    template.setConnectionFactory(redisConnectionFactory);
+
+    // Key 使用 String 序列化器
+    RedisSerializer<String> keySerializer = new StringRedisSerializer();
+    template.setKeySerializer(keySerializer);
+    template.setHashKeySerializer(keySerializer);
+
+    // Value 使用自定义 Boolean 序列化器
+    RedisSerializer<Boolean> valueSerializer = new BooleanRedisSerializer();
+    template.setValueSerializer(valueSerializer);
+    template.setHashValueSerializer(valueSerializer);
+
+    template.afterPropertiesSet();
+    return template;
+  }
+
+  /**
+   * 自定义 Boolean 序列化器，将 Boolean 存储为 "1"/"0"
+   */
+  public static class BooleanRedisSerializer implements RedisSerializer<Boolean> {
+
+    private static final byte[] TRUE_BYTES = "1".getBytes();
+    private static final byte[] FALSE_BYTES = "0".getBytes();
+
+    @Override
+    public byte[] serialize(@Nullable Boolean bool) throws RuntimeException {
+      if (bool == null) {
+        return new byte[0];
+      }
+      return bool ? TRUE_BYTES : FALSE_BYTES;
+    }
+
+    @Override
+    public Boolean deserialize(@Nullable byte[] bytes) throws RuntimeException {
+      if (bytes == null || bytes.length == 0) {
+        return null;
+      }
+      // 支持 "1" / "true" / "yes" / "on" 等，此处简单判断第一个字节是否为 '1'
+      return bytes.length > 0 && bytes[0] == '1';
+    }
   }
 
   /**

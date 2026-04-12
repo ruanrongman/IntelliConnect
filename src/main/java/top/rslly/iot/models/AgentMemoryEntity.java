@@ -51,7 +51,7 @@ public class AgentMemoryEntity {
   }
 
   @Basic
-  @Column(name = "content")
+  @Column(name = "content", length = 1000)
   public String getContent() {
     return content;
   }

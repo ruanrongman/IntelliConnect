@@ -82,6 +82,8 @@ public class XiaoZhiUtil {
   private RedisTemplate<String, byte[]> bytesRedisTemplate;
   @Autowired
   private RedisTemplate<String, Boolean> redisStateTemplate;  // 用于记录TTS段落的处理状态
+  @Autowired
+  private RedisTemplate<String, String> redisStringTemplate;
   @Value("${ai.vision-explain-url}")
   private String visionExplainUrl;
   @Value("${ai.tts.skip-tool-prefix:true}")
@@ -91,6 +93,9 @@ public class XiaoZhiUtil {
   @Value("${ai.showThinking:false}")
   private boolean showThinking;
   private final ExecutorService routerExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+  private final String STREAM_AUDIO_HANDLER_FLAG = "<|SAH|>";
+  private final String STREAM_RESULT_HANDLER_FLAG = "<|SRH|>";
 
   public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     if (chatId == null || helloObject == null) {
@@ -201,12 +206,21 @@ public class XiaoZhiUtil {
   }
 
   /**
+   * 发送文本
+   * @param chatId  聊天ID
+   * @param text  需要发送的文本
+   */
+  private void sendText(String chatId, String text){
+    XiaoZhiWebsocket.send(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
+            + " \"text\": \""+ text + "\"}");
+  }
+
+  /**
    * 发送助手正在思考的信息
    * @param chatId  聊天ID
    */
   private void sendWhenThinking(String chatId){
-    XiaoZhiWebsocket.send(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
-            + " \"text\": \"智能助手思考中" + "\"}");
+    sendText(chatId, "智能助手思考中");
     JSONObject emotionObject = new JSONObject();
     emotionObject.put("type", "llm");
     emotionObject.put("text", "🤔");
@@ -227,6 +241,7 @@ public class XiaoZhiUtil {
   }
 
   private void clearAudioHandlers(String chatId){
+    sendEndMsg(chatId);
     XiaoZhiWebsocket.haveVoice.put(chatId, false);
     XiaoZhiWebsocket.isAbort.put(chatId, false);
     Router.queueMap.remove(chatId);
@@ -264,11 +279,58 @@ public class XiaoZhiUtil {
     // 使用Thread.ofVirtual启动这个部分
     // 在Redis中写入当前句子的处理状态为false，表示开始处理
     // 将处理得到的结果转为String并存入Redis，并将当前句子的处理状态置为true以表示完成
-    redisStateTemplate.opsForHash().put(chatId, src, false);
+    if(shouldSkipTts(src, skipToolPrefix)) return;
+    redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
     List<byte[]> audioBytes =  ttsServiceFactory.getTextAudio(chatId, src, productId);
+    if(audioBytes == null){
+      log.error("No TTS result! chatID: {}, text: {}", chatId, src);
+      redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
+      return;
+    }
     String srcHash = getShortHash(src, 16);
     bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
-    redisStateTemplate.opsForHash().put(chatId, src, true);
+    redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
+  }
+
+  private void streamRspResultHandler(String chatId){
+    // 设置结果处理线程状态为工作中
+    redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, true);
+    Object handleState = redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG);
+    if(handleState == null){
+      log.error("处理状态错误");
+      return;
+    }
+    String crtS = null;
+    while((boolean) handleState) {
+      if(XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) break;
+      handleState = redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG);
+      if (handleState == null || !(boolean) handleState) break;
+      // 左进右出模拟队列
+      if(crtS == null) crtS = redisStringTemplate.opsForList().rightPop(chatId);
+      if(StringUtils.isEmpty(crtS)) continue;
+      if(shouldSkipTts(crtS, skipToolPrefix)){
+        sendText(chatId, crtS);
+        crtS = null;
+        continue;
+      }
+      if(crtS.equals("<|EOS|>")) break;
+      if(!redisStateTemplate.opsForHash().hasKey(chatId + "_state", crtS)) continue;
+      Object state = redisStateTemplate.opsForHash().get(chatId + "_state", crtS);
+      if(state == null || !(boolean)state) continue;
+      BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
+      String srcHash = getShortHash(crtS, 16);
+      byte[] bytes = bytesRedisTemplate.opsForList().rightPop(srcHash);
+      while(bytes != null){
+        sendQueue.offer(bytes);
+        bytes= bytesRedisTemplate.opsForList().rightPop(srcHash);
+      }
+      Session session = XiaoZhiWebsocket.clients.get(chatId);
+      sendText(chatId, crtS);
+      AudioUtils.asyncSendAudioQueue(chatId, session, sendQueue);
+      crtS = null;
+    }
+    // 设置结果处理线程状态为结束
+    redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, false);
   }
 
   /**
@@ -278,27 +340,21 @@ public class XiaoZhiUtil {
    * @param isManual  是否对讲机模式
    * @throws InterruptedException 由Thread.sleep抛出的异常
    */
-  private void handlerStreamRsp(String chatId, int productId, boolean isManual) throws InterruptedException{
+  private void handlerStreamRsp(String chatId, int productId, boolean isManual, CompletableFuture<String> res) throws InterruptedException{
     String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
     Map<String, Object> emotionMessage = new HashMap<>();
     emotionMessage.put("chatId", chatId);
     var emotionRes = emotionToolAsync.run(voiceContent, emotionMessage);
-    CompletableFuture<String> res = null;
-    // 首先获取router的结果
-    if(router != null){
-      res = CompletableFuture.supplyAsync(
-              () -> router.response(voiceContent, chatId, productId),
-              routerExecutor
-      );
-    }
     // 结果字符串构造器
     StringBuilder answerSB = new StringBuilder();
-    // 用于存储回复句子
-    Queue<String> answerList = new ArrayDeque<>();
     boolean emotionFlag = false;
-    if(isManual){
-      this.sendTTSStart(chatId);
-    }
+    this.sendTTSStart(chatId);
+    // 设置处理状态为true
+    redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, true);
+    // 逻辑是这样的：将收取到的句子放入Redis队列中，结果处理线程查询队列并以此处理
+    Thread.ofVirtual().start(()->{
+      streamRspResultHandler(chatId);
+    });
     while(res != null && !res.isDone() ||
             Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()){
       // 表情处理模块
@@ -336,10 +392,11 @@ public class XiaoZhiUtil {
           String sentence = answerSB.toString();
           // 不允许处理空字符串
           if(StringUtils.isEmpty(sentence)) break;
-          answerList.add(sentence);
+          redisStringTemplate.opsForList().leftPush(chatId, sentence);
           Thread.ofVirtual().start(()->{
             this.asyncTTS(chatId, sentence, productId);
           });
+          answerSB.setLength(0);
         }
         break;
       }else{
@@ -348,14 +405,15 @@ public class XiaoZhiUtil {
         // 加入构造器
         element = element.replace("\n", "");
         int pIdx = this.getPunctuationPos(element);
-        if(pIdx != -1){
+        // 小于五个字符认为需要连读
+        if(pIdx != -1 && answerSB.length() >= 5){
           String eBefore = element.substring(0, pIdx + 1);
-          String eAfter = element.substring(pIdx);
+          String eAfter = element.substring(pIdx + 1);
           answerSB.append(eBefore);
           String before = answerSB.toString();
           // 不允许向结果列表中写入空字符串
           if(StringUtils.isEmpty(before)) continue;
-          answerList.add(before);
+          redisStringTemplate.opsForList().leftPush(chatId, before);
           // 将标点前的部分交由异步虚拟线程处理
           Thread.ofVirtual().start(()->{
             this.asyncTTS(chatId, before, productId);
@@ -366,41 +424,31 @@ public class XiaoZhiUtil {
           answerSB.append(element);
       }
     }
-    String crtS = answerList.poll();
-    // 如果结果列表里第一条就是空的字符串，那么就直接退出
-    if(StringUtils.isEmpty(crtS)) return;
-    while(!answerList.isEmpty()){
-      if(!redisStateTemplate.opsForHash().hasKey(chatId, crtS)) continue;
-      Object state = redisStateTemplate.opsForHash().get(chatId, crtS);
-      if(state == null || !(boolean)state) continue;
-      BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
-      String srcHash = getShortHash(crtS, 16);
-      byte[] bytes = bytesRedisTemplate.opsForList().rightPop(srcHash);
-      while(bytes != null){
-        sendQueue.offer(bytes);
-        bytes= bytesRedisTemplate.opsForList().rightPop(srcHash);
-      }
-      Session session = XiaoZhiWebsocket.clients.get(chatId);
-      AudioUtils.asyncSendAudioQueue(chatId, session, sendQueue);
+    // 边界处理
+    redisStringTemplate.opsForList().leftPush(chatId, "<|EOS|>");
+    Object resultHandlerState = redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_RESULT_HANDLER_FLAG);
+    if(resultHandlerState == null){
+      log.error("结果处理线程出错");
+      return;
     }
+    // 等待结果处理线程结束
+    while(true){
+      resultHandlerState = redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_RESULT_HANDLER_FLAG);
+      if(resultHandlerState == null) continue;
+      if(!(boolean) resultHandlerState) break;
+    }
+    redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, false);
     this.clearAudioHandlers(chatId);
   }
 
-  private void handlerSyncRsp(String chatId, int productId) throws IOException, ExecutionException, InterruptedException {
+  private void handlerSyncRsp(String chatId, int productId, CompletableFuture<String> res) throws IOException, ExecutionException, InterruptedException {
+    log.info("Sync Rsp");
     JSONObject emotionObject = new JSONObject();
     emotionObject.put("type", "llm");
     emotionObject.put("text", "😶");
     emotionObject.put("emotion", "neutral");
 
     XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
-    String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
-    CompletableFuture<String> res = null;
-    if(router != null){
-      res = CompletableFuture.supplyAsync(
-              () -> router.response(voiceContent, chatId, productId),
-              routerExecutor
-      );
-    }
     String answer = null;
     if (res != null) {
       answer = res.get();
@@ -413,6 +461,7 @@ public class XiaoZhiUtil {
     if (!answer.isBlank()) {
       splitSentences(answer, chatId, productId);
     }
+    this.clearAudioHandlers(chatId);
   }
 
   @Async("taskExecutor")
@@ -455,12 +504,22 @@ public class XiaoZhiUtil {
     XiaoZhiWebsocket.send(chatId, text);
     audioList.clear();
     // 到这里，voiceContent不可能为空
-    sendWhenThinking(chatId);
+    if(showThinking) sendWhenThinking(chatId);
     // 下面是TTS的部分
-    boolean isStreamRsp = Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty();
+    String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
+    CompletableFuture<String> res = null;
+    // 首先获取router的结果
+    if(router != null){
+      res = CompletableFuture.supplyAsync(
+              () -> router.response(voiceContent, chatId, productId),
+              routerExecutor
+      );
+    }
+    boolean isStreamRsp = res != null && !res.isDone() ||
+            Router.queueMap.containsKey(chatId) && Router.queueMap.get(chatId) != null;
     if(isStreamRsp){
       try {
-        this.handlerStreamRsp(chatId, productId, isManual);
+        this.handlerStreamRsp(chatId, productId, isManual, res);
         return;
       }catch(InterruptedException e){
         log.error("音频处理线程出错", e);
@@ -468,347 +527,9 @@ public class XiaoZhiUtil {
     }
     // 非流式的处理方法
     try {
-      handlerSyncRsp(chatId, productId);
+      handlerSyncRsp(chatId, productId, res);
     }catch(Exception e){
       log.error("音频处理出错", e);
-    }
-  }
-
-  @Deprecated
-  @Async("taskExecutor")
-  public void dealWithAudioDeprecated(List<byte[]> audioList, String chatId, int productId, boolean isManual,
-      String... detect)
-      throws IOException {
-    Path tempFile = null;
-    try {
-      if (audioList == null || chatId == null) {
-        log.error("dealWithAudio参数错误: audioList={}, chatId={}", audioList, chatId);
-        return;
-      }
-
-      List<byte[]> audioSnapshot = snapshotAudioList(audioList);
-      OpusDecoder decoder = new OpusDecoder(16000, 1);
-      if (audioSnapshot.size() > 20 || detect.length > 0) {
-        Session session = XiaoZhiWebsocket.clients.get(chatId);
-        if (session != null && session.isOpen() && !isManual) {
-          session.getBasicRemote().sendText("""
-              {
-                "type": "tts",
-                "state": "start"
-              }""");
-        }
-
-        StringBuilder sentences = new StringBuilder();
-        if (detect.length == 0) {
-          // 安全读取字节数据
-          ByteArrayOutputStream bos = new ByteArrayOutputStream();
-          for (byte[] bytes : audioSnapshot) {
-            if (bytes != null) {
-              try {
-                // log.info("len{}",bytes.length);
-                byte[] data_packet = new byte[16000];
-                int pcm_frame = decoder.decode(bytes, 0, bytes.length,
-                    data_packet, 0, 960, false);
-                // log.info("data_packet{}",data_packet);
-                bos.write(data_packet, 0, pcm_frame * 2);
-              } catch (Exception e) {
-                log.error("音频转换失败{}", e.getMessage());
-              }
-            }
-          }
-          log.info("data_size{}", bos.size());
-          tempFile = Files.createTempFile("audio_", ".wav");
-          Files.write(tempFile, bos.toByteArray());
-          bos.close();
-          if (asrServiceFactory != null) {
-            var audio2Text = asrServiceFactory.getService(getProductAsrProvider(productId));
-            if (audio2Text != null) {
-              String text = audio2Text.getTextRealtime(tempFile.toFile(), 16000, "pcm");
-              log.debug("text{}", text);
-              sentences.append(text);
-            }
-          }
-        } else {
-          sentences.append(detect[0]);
-        }
-        if (!sentences.isEmpty()) {
-          if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
-              && XiaoZhiWebsocket.voiceContent.get(chatId) != null
-              && !XiaoZhiWebsocket.voiceContent.get(chatId).isEmpty()) {
-            XiaoZhiWebsocket.voiceContent.put(chatId,
-                XiaoZhiWebsocket.voiceContent.get(chatId) + sentences);
-          } else {
-            XiaoZhiWebsocket.voiceContent.put(chatId, sentences.toString());
-          }
-
-          session = XiaoZhiWebsocket.clients.get(chatId);
-          if (session != null && session.isOpen()) {
-            session.getBasicRemote()
-                .sendText("{\"type\":\"stt\",\"text\":\"" + sentences + "\"}");
-          }
-          clearAudioList(audioList);
-        } else {
-          // 保留音频数据最后10帧（直接修改原始列表）
-          int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-          trimAudioList(audioList, keepFrames);
-
-          session = XiaoZhiWebsocket.clients.get(chatId);
-          if (session != null && session.isOpen()) {
-            session.getBasicRemote()
-                .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-            session.getBasicRemote()
-                .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-          }
-        }
-      } else {
-        Session session = XiaoZhiWebsocket.clients.get(chatId);
-        if (session != null && session.isOpen()) {
-          session.getBasicRemote()
-              .sendText("{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
-        }
-      }
-      if (XiaoZhiWebsocket.voiceContent.containsKey(chatId)
-          && XiaoZhiWebsocket.voiceContent.get(chatId) != null
-          && !XiaoZhiWebsocket.voiceContent.get(chatId).isEmpty()) {
-        Session session = XiaoZhiWebsocket.clients.get(chatId);
-        if (session != null && session.isOpen()) {
-          if (showThinking) {
-            session.getBasicRemote()
-                .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                    + "智能助手思考中" + "\"}");
-          }
-          JSONObject emotionObject = new JSONObject();
-          emotionObject.put("type", "llm");
-          emotionObject.put("text", "🤔");
-          emotionObject.put("emotion", "thinking");
-          session.getBasicRemote()
-              .sendText(emotionObject.toJSONString());
-        }
-        log.debug("listen stop,message{}", XiaoZhiWebsocket.voiceContent.get(chatId));
-        Map<String, Object> emotionMessage = new HashMap<>();
-        emotionMessage.put("chatId", chatId);
-        var emotionRes =
-            emotionToolAsync.run(XiaoZhiWebsocket.voiceContent.get(chatId), emotionMessage);
-        // 异步执行router,成功后把回复发送给前端，future 返回结果
-        CompletableFuture<String> res = null;
-        if (router != null) {
-          res = CompletableFuture
-              .supplyAsync(
-                  () -> router.response(XiaoZhiWebsocket.voiceContent.get(chatId), chatId,
-                      productId),
-                  routerExecutor);
-        }
-        // String answer = router.response(voiceContent.get(chatId), "chatProduct" + chatId,
-        // Integer.parseInt(chatId));
-        String answer = null;
-        StringBuilder answerBuilder = new StringBuilder();
-        boolean queuePlaybackDelivered = false;
-        boolean emotionFlag = false;
-        if (isManual) {
-          session = XiaoZhiWebsocket.clients.get(chatId);
-          if (session != null && session.isOpen()) {
-            session.getBasicRemote().sendText("""
-                {
-                  "type": "tts",
-                  "state": "start"
-                }""");
-          }
-        }
-        while ((res != null && !res.isDone()) || Router.queueMap.containsKey(chatId)
-            && !Router.queueMap.get(chatId).isEmpty()) {
-          if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
-            try {
-              Map<String, String> emotionResult = emotionRes.get();
-              if (emotionResult != null) {
-                JSONObject emotionObject = new JSONObject();
-                emotionObject.put("type", "llm");
-                emotionObject.put("text", emotionResult.get("emoji"));
-                emotionObject.put("emotion", emotionResult.get("text"));
-                log.debug("emotionObject{}", emotionObject);
-
-                session = XiaoZhiWebsocket.clients.get(chatId);
-                if (session != null && session.isOpen()) {
-                  session.getBasicRemote()
-                      .sendText(emotionObject.toJSONString());
-                }
-                emotionFlag = true;
-              }
-            } catch (Exception e) {
-              log.error("处理情绪响应时出错: {}", e.getMessage(), e);
-            }
-          }
-          if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
-            XiaoZhiWebsocket.haveVoice.put(chatId, false);
-            XiaoZhiWebsocket.isAbort.put(chatId, false);
-            Router.queueMap.remove(chatId);
-            session = XiaoZhiWebsocket.clients.get(chatId);
-            if (session != null && session.isOpen()) {
-              session.getBasicRemote()
-                  .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-            }
-            return;
-          }
-          if (Router.queueMap.containsKey(chatId)) {
-            String element = Router.queueMap.get(chatId).poll();
-            if (element != null && element.equals("[DONE]")) {
-              if (!answerBuilder.isEmpty()) {
-                // 立即发送已累积的内容
-                JSONObject jsonObject = new JSONObject();
-                jsonObject.put("type", "tts");
-                jsonObject.put("state", "sentence_start");
-                jsonObject.put("text", answerBuilder.toString());
-
-                session = XiaoZhiWebsocket.clients.get(chatId);
-                if (session != null && session.isOpen()) {
-                  session.getBasicRemote()
-                      .sendText(jsonObject.toJSONString());
-                  queuePlaybackDelivered = true;
-                }
-                if (ttsServiceFactory != null
-                    && !shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
-                  session = XiaoZhiWebsocket.clients.get(chatId);
-                  if (session != null && session.isOpen()) {
-                    ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
-                        session,
-                        chatId, productId);
-                  }
-                }
-                answerBuilder.setLength(0);
-              }
-
-              session = XiaoZhiWebsocket.clients.get(chatId);
-              if (session != null && session.isOpen()) {
-                session.getBasicRemote()
-                    .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-              }
-              XiaoZhiWebsocket.haveVoice.put(chatId, false);
-              XiaoZhiWebsocket.isAbort.put(chatId, false);
-              Router.queueMap.remove(chatId);
-              return;
-            }
-            else if (element != null) {
-              element = element.replace("\n", "");
-              // 查找字符串中的第一个标点位置
-              int punctuationIndex = -1;
-              for (int i = 0; i < element.length(); i++) {
-                char c = element.charAt(i);
-                if (c == '。' || c == '？' || c == '！' || c == '；' || c == '：' || c == '.' || c == '?'
-                    || c == '!' || c == '~' || c == '～') {
-                  punctuationIndex = i;
-                  break;
-                }
-              }
-
-              if (punctuationIndex != -1) {
-                // 截取标点之前的内容（包括标点）
-                String partBeforePunctuation = element.substring(0, punctuationIndex + 1);
-                answerBuilder.append(partBeforePunctuation);
-                String answerBuilderString = answerBuilder.toString().replace("\\n", "");
-
-                // 立即发送已累积的内容
-                JSONObject jsonObject = new JSONObject();
-                jsonObject.put("type", "tts");
-                jsonObject.put("state", "sentence_start");
-                jsonObject.put("text", answerBuilderString);
-
-                session = XiaoZhiWebsocket.clients.get(chatId);
-                if (session != null && session.isOpen()) {
-                  session.getBasicRemote()
-                      .sendText(jsonObject.toJSONString());
-                  queuePlaybackDelivered = true;
-                }
-                if (ttsServiceFactory != null
-                    && !shouldSkipTts(answerBuilderString, skipToolPrefix)) {
-                  session = XiaoZhiWebsocket.clients.get(chatId);
-                  if (session != null && session.isOpen()) {
-                    ttsServiceFactory.websocketAudioSync(answerBuilderString,
-                        session,
-                        chatId, productId);
-                  }
-                }
-                answerBuilder.setLength(0);
-
-                // 将剩余部分添加到builder中（不发送）
-                String remainingPart = element.substring(punctuationIndex + 1);
-                if (!remainingPart.isEmpty()) {
-                  answerBuilder.append(remainingPart);
-                }
-              } else {
-                // 没有标点，直接添加整个元素
-                answerBuilder.append(element);
-
-                // 检查是否需要发送（基于长度条件）
-                if (answerBuilder.length() > 100) {
-                  session = XiaoZhiWebsocket.clients.get(chatId);
-                  if (session != null && session.isOpen()) {
-                    session.getBasicRemote()
-                        .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                            + answerBuilder + "\"}");
-                    queuePlaybackDelivered = true;
-                  }
-                  if (ttsServiceFactory != null
-                      && !shouldSkipTts(answerBuilder.toString(), skipToolPrefix)) {
-                    session = XiaoZhiWebsocket.clients.get(chatId);
-                    if (session != null && session.isOpen()) {
-                      ttsServiceFactory.websocketAudioSync(answerBuilder.toString(),
-                          session,
-                          chatId, productId);
-                    }
-                  }
-                  answerBuilder.setLength(0);
-                }
-              }
-            }
-          }
-          // 延时，防止cpu空转
-          Thread.sleep(10);
-        }
-        if (!emotionFlag) {
-          JSONObject emotionObject = new JSONObject();
-          emotionObject.put("type", "llm");
-          emotionObject.put("text", "😶");
-          emotionObject.put("emotion", "neutral");
-
-          session = XiaoZhiWebsocket.clients.get(chatId);
-          if (session != null && session.isOpen()) {
-            session.getBasicRemote()
-                .sendText(emotionObject.toJSONString());
-          }
-        }
-        if (res != null) {
-          answer = res.get();
-        }
-        if (StringUtils.isEmpty(answer)) {
-          answer = "抱歉，我暂时无法理解您的问题。";
-        }
-        answer = resolveFinalVoiceAnswer(answer, answerBuilder.toString(), queuePlaybackDelivered);
-        if (answer.length() > 500)
-          answer = answer.substring(0, 500);
-        if (!answer.isBlank()) {
-          splitSentences(answer, chatId, productId);
-        }
-      }
-    } catch (Exception e) {
-      log.error("Error in dealWithAudio: {}", e.getMessage(), e);
-    } finally {
-      XiaoZhiWebsocket.haveVoice.put(chatId, false);
-      XiaoZhiWebsocket.isAbort.put(chatId, false);
-      try {
-        if (tempFile != null) {
-          Files.deleteIfExists(tempFile);
-        }
-      } catch (IOException e) {
-        log.warn("Failed to delete temp audio file for {}: {}", chatId, e.getMessage());
-      }
-      try {
-        Router.queueMap.remove(chatId);
-        Session session = XiaoZhiWebsocket.clients.get(chatId);
-        if (session != null && session.isOpen()) {
-          session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-        }
-      } catch (IOException e) {
-        log.warn("Failed to send stop message to client {}: {}", chatId, e.getMessage());
-      }
     }
   }
 
@@ -838,6 +559,7 @@ public class XiaoZhiUtil {
     }
   }
 
+  @Async
   public void dealDetect(String chatId, int productId, String text) throws IOException {
     if (chatId == null) {
       log.error("dealDetect参数错误: chatId is null");
