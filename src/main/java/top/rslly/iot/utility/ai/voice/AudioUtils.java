@@ -197,13 +197,22 @@ public class AudioUtils {
         return;
       }
 
+      // Cancel any existing playback before starting new one
+      XiaoZhiWebsocket.cancelActivePlayback(chatId);
+
+      // Register this playback as the active one
+      XiaoZhiWebsocket.PlaybackSession playbackSession = new XiaoZhiWebsocket.PlaybackSession(
+          Thread.currentThread(), queue);
+      XiaoZhiWebsocket.activePlayback.put(chatId, playbackSession);
+
       final long startTime = System.nanoTime();
       int playPosition = 0;
 
       // Pre-buffer: collect up to PRE_BUFFER_COUNT frames.
       List<byte[]> preBuffer = new ArrayList<>();
       for (int i = 0; i < PRE_BUFFER_COUNT; i++) {
-        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
+            || playbackSession.isCancelled.get()) {
           queue.clear();
           return;
         }
@@ -217,7 +226,9 @@ public class AudioUtils {
 
       // Send pre-buffer frames immediately.
       for (byte[] bytes : preBuffer) {
-        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false) || !session.isOpen()) {
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
+            || playbackSession.isCancelled.get()
+            || !session.isOpen()) {
           queue.clear();
           return;
         }
@@ -227,7 +238,9 @@ public class AudioUtils {
       // Continue sending remaining frames with timing control.
       while (true) {
         // 每次循环检查打断
-        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false) || !session.isOpen()) {
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
+            || playbackSession.isCancelled.get()
+            || !session.isOpen()) {
           queue.clear();
           return;
         }
@@ -248,7 +261,8 @@ public class AudioUtils {
 
         // 修改：分段sleep，快速响应打断
         while (delayNs > 0) {
-          if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
+          if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
+              || playbackSession.isCancelled.get()) {
             queue.clear();
             return;
           }
@@ -259,7 +273,9 @@ public class AudioUtils {
           delayNs = expectedTimeNs - System.nanoTime();
         }
 
-        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false) || !session.isOpen()) {
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
+            || playbackSession.isCancelled.get()
+            || !session.isOpen()) {
           queue.clear();
           return;
         }
@@ -272,6 +288,8 @@ public class AudioUtils {
     } catch (Exception e) {
       log.error("Error in asyncSendAudioQueue: {}", e.getMessage(), e);
     } finally {
+      // Always remove this playback from active list
+      XiaoZhiWebsocket.activePlayback.remove(chatId);
       queue.clear();
     }
   }
