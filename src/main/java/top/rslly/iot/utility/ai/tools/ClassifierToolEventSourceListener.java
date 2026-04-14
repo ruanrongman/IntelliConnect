@@ -39,7 +39,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
   private static final String DONE_SIGNAL = "[DONE]";
   private static final String ERROR_MESSAGE =
       "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
-  private static final Pattern CLASSIFICATION_PATTERN = Pattern.compile("\\[([^\\]]*)\\]");
+  private static final Pattern VALUE_PATTERN = Pattern.compile("\"value\"\\s*:\\s*\"([^\"]*)\"");
 
   private final StringBuilder jsonBuffer = new StringBuilder();
   private final String question;
@@ -100,7 +100,7 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
     try {
       cancelQuietly(eventSource);
       Map<String, Object> dataMap = new ConcurrentHashMap<>();
-      dataMap.put("value", "[]");
+      dataMap.put("value", "");
       dataMap.put("args", "");
       dataMap.put("answer", ERROR_MESSAGE);
       context.data().putAll(dataMap);
@@ -119,12 +119,11 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         throw new IllegalStateException("Missing action object");
       }
 
-      JSONArray valueJson = action.getJSONArray("value");
+      String value = action.getString("value");
       String argsJson = action.getString("args");
 
       Map<String, Object> dataMap = new ConcurrentHashMap<>();
-      dataMap.put("value",
-          valueJson == null ? "[]" : JSONObject.parseArray(valueJson.toJSONString(), String.class));
+      dataMap.put("value", value == null ? "" : value);
       dataMap.put("args", argsJson == null ? "" : argsJson);
       dataMap.put("answer", "yes");
       context.data().putAll(dataMap);
@@ -174,12 +173,12 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
       context.lock().lock();
       try {
         jsonBuffer.append(content);
-        Matcher matcher = CLASSIFICATION_PATTERN.matcher(jsonBuffer.toString());
+        Matcher matcher = VALUE_PATTERN.matcher(jsonBuffer.toString());
         while (matcher.find()) {
-          String matched = matcher.group();
-          if (isMatchedClassification(matched)) {
+          String matchedValue = matcher.group(1); // Extract value between quotes
+          if (isValueValid(matchedValue)) {
             Map<String, Object> dataMap = new ConcurrentHashMap<>();
-            dataMap.put("value", matched);
+            dataMap.put("value", matchedValue); // Use the extracted value directly
             dataMap.put("args", question);
             dataMap.put("answer", "yes");
             context.data().putAll(dataMap);
@@ -196,10 +195,11 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
     }
   }
 
-  private boolean isMatchedClassification(String matched) {
-    return matched.equals("[]")
-        || matched.equals("[" + filter[0] + "]")
-        || matched.equals("[" + filter[1] + "]");
+  private boolean isValueValid(String value) {
+    // Empty string is valid (no task), or value must be one of the allowed task numbers (early exit
+    // only for common 5 and 11)
+    return value.isEmpty() || value.equals(String.valueOf(filter[0]))
+        || value.equals(String.valueOf(filter[1]));
   }
 
   private String stripMarkdownFence(String raw) {

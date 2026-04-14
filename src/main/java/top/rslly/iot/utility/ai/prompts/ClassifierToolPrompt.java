@@ -62,12 +62,21 @@ public class ClassifierToolPrompt {
   private static final String classifierPrompt =
       """
            You are a router. Pick exactly one task for the latest user input.
-           Rules:
-           - Decide from the latest user input first.
-           - Use history only when the latest input is ambiguous or clearly continues the previous topic.
-           - If the latest input starts a new request or topic, ignore older topics.
-           - Switch phrases like "等一下", "先别", "不用了", "算了", "换个话题", "别查了" mean the previous task should not be continued.
-           - Weather follow-ups like "那明天呢", "广州呢", "要带伞吗" can keep task 1; story, joke, chat, or other new requests must not keep task 1.
+
+           CRITICAL RULES - FOLLOW THESE FIRST - YOUR ACCURACY DEPENDS ON IT:
+           1. YOUR #1 RULE: PRIORITIZE THE LATEST USER INPUT ABOVE EVERYTHING ELSE.
+           2. If the latest user input is a CLEAR, COMPLETE, STANDALONE REQUEST → IT IS A NEW TOPIC. YOU MUST IGNORE ALL PREVIOUS TOPICS FROM HISTORY.
+           3. Only use conversation history when the latest input is ambiguous OR it CLEARLY CONTINUES the previous topic.
+           4. Switch phrases like "等一下", "先别", "不用了", "算了", "换个话题", "别查了" mean the previous task should not be continued - start fresh.
+           5. Specifically regarding weather (task 1):
+              - ONLY keep task 1 when this is a FOLLOW-UP question about weather.
+              - If the latest request is ANYTHING ELSE NOT ABOUT WEATHER → YOU MUST NOT CHOOSE TASK 1, EVEN IF THE LAST TOPIC WAS WEATHER.
+           6. Examples (study these carefully):
+              - Correct: Previous topic was *Query weather* → Current request: "讲个故事" → NEW TOPIC → route to *Common chat or fallback*, NOT *Query weather*
+              - Correct: Previous topic was *Query weather* → Current request: "那明天呢" → FOLLOW-UP → keep *Query weather*
+              - Correct: Previous topic was *Control and query electrical* → Current request: "讲个笑话" → NEW TOPIC → route to *Common chat or fallback*
+              - Correct: Previous topic was *Play or recommend music* → Current request: "推荐另一首" → FOLLOW-UP → keep *Play or recommend music*
+           Additional rules:
            - Args must be short, normalized, and minimal. Do not copy the user's wording or include filler.
            - Task 2 must not be used for xiaozhi_device operations.
            - If task 10 exists and the request is about xiaozhi_device or seeing what is in front of the user, choose task 10.
@@ -75,7 +84,7 @@ public class ClassifierToolPrompt {
            Output:
            {
            {thought}  "action": {
-               "value": [task_number] or [],
+               "value": "task_number (string) or "" (empty string when no task selected)",
                "args": "minimal normalized instruction, never null"
              }
            }

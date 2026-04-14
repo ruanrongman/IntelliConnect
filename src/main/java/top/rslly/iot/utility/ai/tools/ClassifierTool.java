@@ -112,7 +112,7 @@ public class ClassifierTool {
             lock.lock();
             try {
               if (currentData.get("args") == null) {
-                currentData.put("value", "[]");
+                currentData.put("value", "");
                 currentData.put("args", "");
                 currentData.put("answer", "__timeout__");
                 condition.signalAll();
@@ -137,8 +137,13 @@ public class ClassifierTool {
         } else {
           // System.out.println("Consumer: Received data - " + dataMap.get("value"));
           log.debug("Consumer: Received data - {}", dataMap);
-          resultMap.put("value",
-              JSONObject.parseArray(dataMap.get(chatId).get("value").toString(), String.class));
+          String valueStr = dataMap.get(chatId).get("value").toString();
+          if (valueStr.isEmpty()) {
+            resultMap.put("value", Collections.emptyList());
+          } else {
+            // Wrap as singleton list for downstream compatibility
+            resultMap.put("value", Collections.singletonList(valueStr));
+          }
           resultMap.put("args", dataMap.get(chatId).get("args"));
           resultMap.put("answer", dataMap.get(chatId).get("answer"));
         }
@@ -169,10 +174,14 @@ public class ClassifierTool {
 
   private Map<String, Object> process_llm_value(JSONObject jsonObject) throws IcAiException {
     Map<String, Object> resultMap = new HashMap<>();
-    var valueJson = jsonObject.getJSONArray("value");
+    String value = jsonObject.getString("value");
     var argsJson = jsonObject.getString("args");
-    resultMap.put("value", JSONObject.parseArray(valueJson.toJSONString(), String.class));
-    resultMap.put("args", argsJson);
+    if (value == null || value.isEmpty()) {
+      resultMap.put("value", Collections.emptyList());
+    } else {
+      resultMap.put("value", Collections.singletonList(value));
+    }
+    resultMap.put("args", argsJson != null ? argsJson : "");
     return resultMap;
   }
 
