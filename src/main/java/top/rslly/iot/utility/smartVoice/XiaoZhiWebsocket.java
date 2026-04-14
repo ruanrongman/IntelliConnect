@@ -44,6 +44,7 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 @ServerEndpoint(value = "/xiaozhi/v1/{chatId}", configurator = WebSocketConfig.class)
 @Component
@@ -686,10 +687,14 @@ public class XiaoZhiWebsocket {
     Session session = XiaoZhiWebsocket.clients.get(chatId);
     if (session == null || !session.isOpen())
       return;
+    ReentrantLock lock = new ReentrantLock();
+    lock.lock();
     try {
       session.getBasicRemote().sendText(msg);
     } catch (IOException e) {
       log.error("发送消息失败！", e);
+    }finally {
+      lock.unlock();
     }
   }
 }

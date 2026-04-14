@@ -25,6 +25,7 @@ import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
 import com.alibaba.dashscope.common.ResultCallback;
 import com.alibaba.fastjson.JSONObject;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +63,7 @@ public class Text2audio implements TtsService {
   @Autowired
   private ProductRoleServiceImpl productRoleService;
 
-
+  @Data
   static class ReactCallback extends ResultCallback<SpeechSynthesisResult> {
     public CountDownLatch latch = new CountDownLatch(1);
     private final String chatId;
@@ -70,13 +71,19 @@ public class Text2audio implements TtsService {
 
     // Only used for WebSocket audio sending.
     private final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
+    private List<byte[]> bytes;
     // End-of-stream marker: an empty byte array.
     private final byte[] EOS = new byte[0];
     private final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
+    private boolean sendAfterHandler = true;
 
     ReactCallback(String chatId, Session session) {
       this.chatId = chatId;
       this.session = session;
+      if(session == null){
+        bytes = new ArrayList<>();
+        sendAfterHandler = false;
+      }
     }
 
     @Override
@@ -84,33 +91,26 @@ public class Text2audio implements TtsService {
       // Write Audio to player
       if (message.getAudioFrame() != null) {
         byte[] audio = message.getAudioFrame().array();
-        if (session == null) {
-          // audioPlayer.write(message.getAudioFrame());
-          JSONObject aiResponse = new JSONObject();
-          // audio = VoiceBitChange(audio);
-          aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
-          SseEmitterUtil.sendMessage(chatId, aiResponse.toJSONString());
-          log.debug(Arrays.toString(message.getAudioFrame().array()));
-        } else {
-          try {
-            // For WebSocket: enqueue the frame.
-            /*
-             * byte[] data_packet = new byte[16000]; OpusEncoder opusEncoder = new
-             * OpusEncoder(16000, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
-             * opusEncoder.setBitrate(16000);
-             * opusEncoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
-             * opusEncoder.setComplexity(10); int bytesEncoded = opusEncoder.encode(audio, 0,
-             * (16000*60)/1000, data_packet, 0, audio.length); byte[] packet = new
-             * byte[bytesEncoded]; System.arraycopy(data_packet, 0, packet, 0, bytesEncoded);
-             */
-            List<byte[]> packets = encoder.encodePcmToOpus(audio, false);
-            for (byte[] packet : packets) {
-              audioQueue.offer(packet);
-            }
-            // audioQueue.offer(packet);
-          } catch (Exception e) {
-            log.error("sendBinary error{}", e.getMessage());
+        try {
+          // For WebSocket: enqueue the frame.
+          /*
+           * byte[] data_packet = new byte[16000]; OpusEncoder opusEncoder = new
+           * OpusEncoder(16000, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
+           * opusEncoder.setBitrate(16000);
+           * opusEncoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
+           * opusEncoder.setComplexity(10); int bytesEncoded = opusEncoder.encode(audio, 0,
+           * (16000*60)/1000, data_packet, 0, audio.length); byte[] packet = new
+           * byte[bytesEncoded]; System.arraycopy(data_packet, 0, packet, 0, bytesEncoded);
+           */
+          List<byte[]> packets = encoder.encodePcmToOpus(audio, false);
+          if(!sendAfterHandler){
+            bytes.addAll(packets);
           }
+          for (byte[] packet : packets) {
+            audioQueue.offer(packet);
+          }
+        } catch (Exception e) {
+          log.error("sendBinary error{}", e.getMessage());
         }
       }
     }
@@ -118,18 +118,17 @@ public class Text2audio implements TtsService {
     @Override
     public void onComplete() {
       log.debug("synthesis onComplete!");
-      if (session == null) {
-        SseEmitterUtil.removeUser(chatId);
-      } else {
-        List<byte[]> packets = encoder.encodePcmToOpus(new byte[0], true);
-        for (byte[] packet : packets) {
-          audioQueue.offer(packet);
-        }
-        // Signal end-of-stream by adding an empty array.
-        audioQueue.offer(EOS);
-        // Asynchronously send the queued frames.
-        AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+      List<byte[]> packets = encoder.encodePcmToOpus(new byte[0], true);
+      if(!sendAfterHandler){
+        bytes.addAll(packets);
+        bytes.add(EOS);
+        latch.countDown();
+        return;
       }
+      // Signal end-of-stream by adding an empty array.
+      audioQueue.offer(EOS);
+      // Asynchronously send the queued frames.
+      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
       latch.countDown();
     }
 
@@ -213,6 +212,31 @@ public class Text2audio implements TtsService {
   @Override
   public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
       String voice) {
+    ReactCallback callback = new ReactCallback(chatId, null);
+    try {
+      String model = param.getModel();
+      if (voice != null && voice.startsWith("cosy_v2_")) {
+        model = "cosyvoice-v2";
+        voice = voice.substring(8);
+        log.debug(model);
+        log.debug(voice);
+      }
+      // 创建线程安全的参数副本
+      SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
+              .apiKey(param.getApiKey())
+              .model(model)
+              .format(param.getFormat())
+              .pitchRate(pitch)
+              .speechRate(speed)
+              .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
+              .build();
+      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
+      synthesizer.call(text);
+      callback.waitForComplete();
+      return callback.bytes;
+    } catch (Exception e) {
+      log.error("getTextAudio error{}", e.getMessage());
+    }
     return null;
   }
 }

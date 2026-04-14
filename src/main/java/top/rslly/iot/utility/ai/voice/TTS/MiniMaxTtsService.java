@@ -40,6 +40,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -197,9 +198,8 @@ public class MiniMaxTtsService implements TtsService {
           voice);
 
       String outputPath = System.getProperty("java.io.tmpdir");
-      // 将 chatId 中的冒号替换为下划线，避免 Windows 路径非法字符问题
-      String safeChatId = chatId.replace(":", "_");
-      tempFilePath = Paths.get(outputPath, "minimax_tts_" + safeChatId + ".mp3").toString();
+      String uuid = UUID.randomUUID().toString();
+      tempFilePath = Paths.get(outputPath, uuid + ".mp3").toString();
       Files.write(Paths.get(tempFilePath), mp3Data);
 
       // 将 MP3 转换为 PCM (16kHz 单声道)

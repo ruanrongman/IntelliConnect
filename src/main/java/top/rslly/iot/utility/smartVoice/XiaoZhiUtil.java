@@ -423,6 +423,8 @@ public class XiaoZhiUtil {
     });
     while (res != null && !res.isDone() ||
         Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()) {
+      Queue<String> queue = Router.queueMap.get(chatId);
+      if(queue == null || queue.isEmpty()) continue;
       // 表情处理模块
       if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
         try {
@@ -446,7 +448,7 @@ public class XiaoZhiUtil {
         this.sendEndMsg(chatId);
       }
       // SSE元素处理
-      String element = Router.queueMap.get(chatId).poll();
+      String element = queue.poll();
       if (element == null) {
         Thread.sleep(10);
         continue;
