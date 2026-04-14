@@ -92,6 +92,8 @@ public class XiaoZhiUtil {
   private boolean detectRandom;
   @Value("${ai.showThinking:false}")
   private boolean showThinking;
+  @Value("${ai.tts.cache-expire-time}")
+  private long ttsCacheExpireTime;
   private final ExecutorService routerExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
   private final String STREAM_AUDIO_HANDLER_FLAG = "<|SAH|>";
@@ -320,14 +322,19 @@ public class XiaoZhiUtil {
     if (shouldSkipTts(src, skipToolPrefix))
       return;
     redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
+    String srcHash = getShortHash(src, 16);
+    if(bytesRedisTemplate.hasKey(srcHash)){
+      redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
+      return;
+    }
     List<byte[]> audioBytes = ttsServiceFactory.getTextAudio(chatId, src, productId);
     if (audioBytes == null) {
       log.error("No TTS result! chatID: {}, text: {}", chatId, src);
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
-    String srcHash = getShortHash(src, 16);
     bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
+    bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
     redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
   }
 
@@ -371,10 +378,14 @@ public class XiaoZhiUtil {
         continue;
       BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
       String srcHash = getShortHash(crtS, 16);
-      byte[] bytes = bytesRedisTemplate.opsForList().rightPop(srcHash);
-      while (bytes != null) {
+      Long audioBytesSize = bytesRedisTemplate.opsForList().size(srcHash);
+      // 如果缓存的长度为0，直接跳过后续步骤
+      if(audioBytesSize == null || audioBytesSize == 0) continue;
+      for(long i = audioBytesSize - 1; i >= 0; i--){
+        // 左进右出，队列
+        byte[] bytes = bytesRedisTemplate.opsForList().index(srcHash, i);
+        if(bytes == null) continue;
         sendQueue.offer(bytes);
-        bytes = bytesRedisTemplate.opsForList().rightPop(srcHash);
       }
       Session session = XiaoZhiWebsocket.clients.get(chatId);
       sendText(chatId, crtS);
