@@ -320,14 +320,19 @@ public class XiaoZhiUtil {
     if (shouldSkipTts(src, skipToolPrefix))
       return;
     redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
+    String srcHash = getShortHash(src, 16);
+    if(bytesRedisTemplate.hasKey(srcHash)){
+      redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
+      return;
+    }
     List<byte[]> audioBytes = ttsServiceFactory.getTextAudio(chatId, src, productId);
     if (audioBytes == null) {
       log.error("No TTS result! chatID: {}, text: {}", chatId, src);
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
-    String srcHash = getShortHash(src, 16);
     bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
+    bytesRedisTemplate.expire(srcHash, 24 * 60 * 60 * 1000, TimeUnit.MILLISECONDS);
     redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
   }
 
