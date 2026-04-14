@@ -244,7 +244,7 @@ public class XiaoZhiUtil {
     XiaoZhiWebsocket.send(chatId, "{\"type\":\"tts\",\"state\":\"start\"}");
   }
 
-  private void sendSTT(String chatId, String text){
+  private void sendSTT(String chatId, String text) {
     XiaoZhiWebsocket.send(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}");
   }
 
@@ -277,9 +277,9 @@ public class XiaoZhiUtil {
       if (punctuationSet.contains(c))
         return i;
     }
-    for(int i = 0; i < englishPunctuations.length; i++) {
+    for (int i = 0; i < englishPunctuations.length; i++) {
       String item = englishPunctuations[i];
-      if(str.contains(item)) {
+      if (str.contains(item)) {
         return i;
       }
     }
@@ -288,9 +288,10 @@ public class XiaoZhiUtil {
 
   /**
    * 清空Redis历史缓存
-   * @param chatId  对话ID
+   * 
+   * @param chatId 对话ID
    */
-  private void clearRedisCache(String chatId){
+  private void clearRedisCache(String chatId) {
     redisStringTemplate.delete(chatId);
     redisStateTemplate.delete(chatId + "_state");
   }
@@ -311,9 +312,10 @@ public class XiaoZhiUtil {
 
   /**
    * 异步TTS
-   * @param chatId  对话ID
+   * 
+   * @param chatId 对话ID
    * @param src 原文本
-   * @param productId  产品ID
+   * @param productId 产品ID
    */
   private void asyncTTS(String chatId, String src, int productId) {
     // 使用Thread.ofVirtual启动这个部分
@@ -323,7 +325,7 @@ public class XiaoZhiUtil {
       return;
     redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
     String srcHash = getShortHash(src, 16);
-    if(bytesRedisTemplate.hasKey(srcHash)){
+    if (bytesRedisTemplate.hasKey(srcHash)) {
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
@@ -340,9 +342,10 @@ public class XiaoZhiUtil {
 
   /**
    * 流式返回时的结果处理线程
-   * @param chatId  对话ID
+   * 
+   * @param chatId 对话ID
    */
-  private void streamRspResultHandler(String chatId){
+  private void streamRspResultHandler(String chatId) {
     // 设置结果处理线程状态为工作中
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, true);
     Object handleState =
@@ -380,11 +383,13 @@ public class XiaoZhiUtil {
       String srcHash = getShortHash(crtS, 16);
       Long audioBytesSize = bytesRedisTemplate.opsForList().size(srcHash);
       // 如果缓存的长度为0，直接跳过后续步骤
-      if(audioBytesSize == null || audioBytesSize == 0) continue;
-      for(long i = audioBytesSize - 1; i >= 0; i--){
+      if (audioBytesSize == null || audioBytesSize == 0)
+        continue;
+      for (long i = audioBytesSize - 1; i >= 0; i--) {
         // 左进右出，队列
         byte[] bytes = bytesRedisTemplate.opsForList().index(srcHash, i);
-        if(bytes == null) continue;
+        if (bytes == null)
+          continue;
         sendQueue.offer(bytes);
       }
       Session session = XiaoZhiWebsocket.clients.get(chatId);
@@ -424,7 +429,8 @@ public class XiaoZhiUtil {
     while (res != null && !res.isDone() ||
         Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()) {
       Queue<String> queue = Router.queueMap.get(chatId);
-      if(queue == null || queue.isEmpty()) continue;
+      if (queue == null || queue.isEmpty())
+        continue;
       // 表情处理模块
       if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
         try {

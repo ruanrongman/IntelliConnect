@@ -693,7 +693,7 @@ public class XiaoZhiWebsocket {
       session.getBasicRemote().sendText(msg);
     } catch (IOException e) {
       log.error("发送消息失败！", e);
-    }finally {
+    } finally {
       lock.unlock();
     }
   }

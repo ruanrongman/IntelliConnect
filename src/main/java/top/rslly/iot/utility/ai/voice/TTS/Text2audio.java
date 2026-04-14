@@ -80,7 +80,7 @@ public class Text2audio implements TtsService {
     ReactCallback(String chatId, Session session) {
       this.chatId = chatId;
       this.session = session;
-      if(session == null){
+      if (session == null) {
         bytes = new ArrayList<>();
         sendAfterHandler = false;
       }
@@ -94,16 +94,15 @@ public class Text2audio implements TtsService {
         try {
           // For WebSocket: enqueue the frame.
           /*
-           * byte[] data_packet = new byte[16000]; OpusEncoder opusEncoder = new
-           * OpusEncoder(16000, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
-           * opusEncoder.setBitrate(16000);
-           * opusEncoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
-           * opusEncoder.setComplexity(10); int bytesEncoded = opusEncoder.encode(audio, 0,
-           * (16000*60)/1000, data_packet, 0, audio.length); byte[] packet = new
-           * byte[bytesEncoded]; System.arraycopy(data_packet, 0, packet, 0, bytesEncoded);
+           * byte[] data_packet = new byte[16000]; OpusEncoder opusEncoder = new OpusEncoder(16000,
+           * 1, OpusApplication.OPUS_APPLICATION_AUDIO); opusEncoder.setBitrate(16000);
+           * opusEncoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE); opusEncoder.setComplexity(10);
+           * int bytesEncoded = opusEncoder.encode(audio, 0, (16000*60)/1000, data_packet, 0,
+           * audio.length); byte[] packet = new byte[bytesEncoded]; System.arraycopy(data_packet, 0,
+           * packet, 0, bytesEncoded);
            */
           List<byte[]> packets = encoder.encodePcmToOpus(audio, false);
-          if(!sendAfterHandler){
+          if (!sendAfterHandler) {
             bytes.addAll(packets);
           }
           for (byte[] packet : packets) {
@@ -119,7 +118,7 @@ public class Text2audio implements TtsService {
     public void onComplete() {
       log.debug("synthesis onComplete!");
       List<byte[]> packets = encoder.encodePcmToOpus(new byte[0], true);
-      if(!sendAfterHandler){
+      if (!sendAfterHandler) {
         bytes.addAll(packets);
         bytes.add(EOS);
         latch.countDown();
@@ -223,13 +222,13 @@ public class Text2audio implements TtsService {
       }
       // 创建线程安全的参数副本
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
-              .apiKey(param.getApiKey())
-              .model(model)
-              .format(param.getFormat())
-              .pitchRate(pitch)
-              .speechRate(speed)
-              .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
-              .build();
+          .apiKey(param.getApiKey())
+          .model(model)
+          .format(param.getFormat())
+          .pitchRate(pitch)
+          .speechRate(speed)
+          .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
+          .build();
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
       synthesizer.call(text);
       callback.waitForComplete();
