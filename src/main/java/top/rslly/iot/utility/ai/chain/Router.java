@@ -33,6 +33,7 @@ import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.llm.FunctionRouterResult;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
@@ -88,8 +89,12 @@ public class Router {
   private KnowledgeGraphicServiceImpl knowledgeGraphicService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
+  @Autowired
+  private FunctionCallingRouterTool functionCallingRouterTool;
   @Value("${ai.branch-prediction.enabled:true}")
   private boolean branchPredictionEnabled;
+  @Value("${ai.router.mode:prompt}")
+  private String routerMode;
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in WeChat module need to use openid
@@ -131,141 +136,148 @@ public class Router {
     else
       memory = new ArrayList<>();
     globalMessage.put("memory", memory);
-    // ========== 分支预测启动 ==========
-    final AtomicReference<String> predictionResult = new AtomicReference<>(null);
-    final CountDownLatch predictionLatch = new CountDownLatch(1);
-    final Queue<String> predictionQueue = new ConcurrentLinkedQueue<>();
-    final AtomicBoolean predictionCancelled = new AtomicBoolean(false);
-    Thread predictionThread = null;
-
-    if (branchPredictionEnabled) {
-      final String predictionContent = content;
-      final Map<String, Object> predictionGlobalMessage = new HashMap<>(globalMessage);
-      final Map<String, Queue<String>> predictionQueueMap = new ConcurrentHashMap<>();
-      final String predictionChatId = chatId + "_prediction";
-      predictionQueueMap.put(predictionChatId, predictionQueue);
-      predictionGlobalMessage.put("queueMap", predictionQueueMap);
-      predictionGlobalMessage.put("chatId", predictionChatId);
-      // predictionGlobalMessage.put("memory", new ArrayList<>(memory));
-
-      predictionThread = Thread.ofVirtual().start(() -> {
-        try {
-          if (predictionCancelled.get())
-            return;
-          String result = chatTool.run(predictionContent, predictionGlobalMessage);
-          if (!predictionCancelled.get()) {
-            predictionResult.set(result);
-          }
-          log.debug("[BranchPrediction] completed, chatId={}", predictionChatId);
-        } catch (Exception e) {
-          log.warn("[BranchPrediction] failed, chatId={}", predictionChatId, e);
-        } finally {
-          predictionLatch.countDown();
-        }
-      });
-    }
-    // ========== 分支预测启动 END ==========
-    var resultMap = classifierTool.run(content, globalMessage);
-    String args;
-    Object argsObject = resultMap.get("args");
-    if (argsObject != null) {
-      args = argsObject.toString();
+    if (isFunctionRouterMode()) {
+      RouteExecutionResult routeExecutionResult =
+          resolveFunctionRoute(content, globalMessage, productId, chatId, dataArgs);
+      answer = routeExecutionResult.answer();
+      toolResult = routeExecutionResult.toolResult();
     } else {
-      args = "";
-    }
-    List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
-    if (resultMap.containsKey("value") && !args.equals("")) {
-      List<String> value = Cast.castList(resultMap.get("value"), String.class);
-      if (!value.isEmpty()) {
-        if (banTools.contains(value.get(0))) {
-          value.set(0, "5");
-        }
-        switch (value.get(0)) {
-          case "1" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = weatherTool.run(args, globalMessage);
-            answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
-          }
-          case "2" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = controlTool.run(args, globalMessage);
-            answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
-          }
-          case "3" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            var musicMap = musicTool.run(args, globalMessage);
-            toolResult = musicMap.get("answer");
-            answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
-          }
-          case "4" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = agent.run(content, globalMessage);
-            answer = ToolPrefix.AGENT.getPrefix() + toolResult;
-          }
-          case "5" -> {
-            answer = resolveChatToolAnswer(content, globalMessage,
-                predictionThread, predictionResult, predictionCancelled,
-                predictionLatch, queue, predictionQueue, chatId);
-          }
-          case "6" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = wxBoundProductTool.run(args, globalMessage);
-            answer = ToolPrefix.WX_BOUND_PRODUCT.getPrefix() + toolResult;
-          }
-          case "7" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = wxProductActiveTool.run(args, globalMessage);
-            answer = ToolPrefix.WX_PRODUCT_ACTIVE.getPrefix() + toolResult;
-          }
-          case "8" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            if (dataArgs.length > 0 && dataArgs[0].equals("false"))
-              toolResult = "定时任务禁止递归调用!!!";
-            else {
-              toolResult = scheduleTool.run(args, globalMessage);
+      // ========== 分支预测启动 ==========
+      final AtomicReference<String> predictionResult = new AtomicReference<>(null);
+      final CountDownLatch predictionLatch = new CountDownLatch(1);
+      final Queue<String> predictionQueue = new ConcurrentLinkedQueue<>();
+      final AtomicBoolean predictionCancelled = new AtomicBoolean(false);
+      Thread predictionThread = null;
+
+      if (branchPredictionEnabled) {
+        final String predictionContent = content;
+        final Map<String, Object> predictionGlobalMessage = new HashMap<>(globalMessage);
+        final Map<String, Queue<String>> predictionQueueMap = new ConcurrentHashMap<>();
+        final String predictionChatId = chatId + "_prediction";
+        predictionQueueMap.put(predictionChatId, predictionQueue);
+        predictionGlobalMessage.put("queueMap", predictionQueueMap);
+        predictionGlobalMessage.put("chatId", predictionChatId);
+        // predictionGlobalMessage.put("memory", new ArrayList<>(memory));
+
+        predictionThread = Thread.ofVirtual().start(() -> {
+          try {
+            if (predictionCancelled.get())
+              return;
+            String result = chatTool.run(predictionContent, predictionGlobalMessage);
+            if (!predictionCancelled.get()) {
+              predictionResult.set(result);
             }
-            answer = ToolPrefix.SCHEDULE.getPrefix() + toolResult;
+            log.debug("[BranchPrediction] completed, chatId={}", predictionChatId);
+          } catch (Exception e) {
+            log.warn("[BranchPrediction] failed, chatId={}", predictionChatId, e);
+          } finally {
+            predictionLatch.countDown();
           }
-          case "9" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = productRoleTool.run(args, globalMessage);
-            answer = ToolPrefix.PRODUCT_ROLE.getPrefix() + toolResult;
+        });
+      }
+      // ========== 分支预测启动 END ==========
+      var resultMap = classifierTool.run(content, globalMessage);
+      String args;
+      Object argsObject = resultMap.get("args");
+      if (argsObject != null) {
+        args = argsObject.toString();
+      } else {
+        args = "";
+      }
+      List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
+      if (resultMap.containsKey("value") && !args.equals("")) {
+        List<String> value = Cast.castList(resultMap.get("value"), String.class);
+        if (!value.isEmpty()) {
+          if (banTools.contains(value.get(0))) {
+            value.set(0, "5");
           }
-          case "10" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = mcpAgent.run(args, globalMessage);
-            answer = ToolPrefix.MCP_AGENT.getPrefix() + toolResult;
+          switch (value.get(0)) {
+            case "1" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = weatherTool.run(args, globalMessage);
+              answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
+            }
+            case "2" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = controlTool.run(args, globalMessage);
+              answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
+            }
+            case "3" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              var musicMap = musicTool.run(args, globalMessage);
+              toolResult = musicMap.get("answer");
+              answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
+            }
+            case "4" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = agent.run(content, globalMessage);
+              answer = ToolPrefix.AGENT.getPrefix() + toolResult;
+            }
+            case "5" -> {
+              answer = resolveChatToolAnswer(content, globalMessage,
+                  predictionThread, predictionResult, predictionCancelled,
+                  predictionLatch, queue, predictionQueue, chatId);
+            }
+            case "6" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = wxBoundProductTool.run(args, globalMessage);
+              answer = ToolPrefix.WX_BOUND_PRODUCT.getPrefix() + toolResult;
+            }
+            case "7" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = wxProductActiveTool.run(args, globalMessage);
+              answer = ToolPrefix.WX_PRODUCT_ACTIVE.getPrefix() + toolResult;
+            }
+            case "8" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              if (dataArgs.length > 0 && dataArgs[0].equals("false"))
+                toolResult = "定时任务禁止递归调用!!!";
+              else {
+                toolResult = scheduleTool.run(args, globalMessage);
+              }
+              answer = ToolPrefix.SCHEDULE.getPrefix() + toolResult;
+            }
+            case "9" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = productRoleTool.run(args, globalMessage);
+              answer = ToolPrefix.PRODUCT_ROLE.getPrefix() + toolResult;
+            }
+            case "10" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = mcpAgent.run(args, globalMessage);
+              answer = ToolPrefix.MCP_AGENT.getPrefix() + toolResult;
+            }
+            case "11" -> {
+              predictionCancelled.set(true);
+              predictionQueue.clear();
+              toolResult = goodByeTool.run(args, globalMessage);
+              answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
+            }
+            default -> {
+              answer = resolveChatToolAnswer(content, globalMessage,
+                  predictionThread, predictionResult, predictionCancelled,
+                  predictionLatch, queue, predictionQueue, chatId);
+            }
           }
-          case "11" -> {
-            predictionCancelled.set(true);
-            predictionQueue.clear();
-            toolResult = goodByeTool.run(args, globalMessage);
-            answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
-          }
-          default -> {
-            answer = resolveChatToolAnswer(content, globalMessage,
-                predictionThread, predictionResult, predictionCancelled,
-                predictionLatch, queue, predictionQueue, chatId);
-          }
+        } else {
+          answer = resolveChatToolAnswer(content, globalMessage,
+              predictionThread, predictionResult, predictionCancelled,
+              predictionLatch, queue, predictionQueue, chatId);
         }
       } else {
         answer = resolveChatToolAnswer(content, globalMessage,
             predictionThread, predictionResult, predictionCancelled,
             predictionLatch, queue, predictionQueue, chatId);
       }
-    } else {
-      answer = resolveChatToolAnswer(content, globalMessage,
-          predictionThread, predictionResult, predictionCancelled,
-          predictionLatch, queue, predictionQueue, chatId);
     }
     if (toolResult == null || toolResult.equals(""))
       toolResult = answer;
@@ -299,6 +311,100 @@ public class Router {
 
   static Queue<String> createResponseQueue() {
     return new ConcurrentLinkedQueue<>();
+  }
+
+  private boolean isFunctionRouterMode() {
+    return "function".equalsIgnoreCase(routerMode);
+  }
+
+  private RouteExecutionResult resolveFunctionRoute(String content,
+      Map<String, Object> globalMessage,
+      int productId, String chatId, String... dataArgs) {
+    FunctionRouterResult result = functionCallingRouterTool.run(content, globalMessage);
+    if (result.isToolCall()) {
+      Optional<FunctionRouterRoute> route =
+          FunctionRouterRoute.fromFunctionName(result.getFunctionName());
+      if (route.isPresent()) {
+        return executeToolRoute(route.get().getTaskId(), content, result.getArguments(),
+            globalMessage, dataArgs);
+      }
+      log.warn("Unknown function router target {}, fallback to legacy router, chatId={}",
+          result.getFunctionName(), chatId);
+    } else if (result.isDirectReply()) {
+      return new RouteExecutionResult(result.getReply(), result.getReply());
+    } else if (result.isUnsupported()) {
+      log.debug("Function router unsupported for current LLM, fallback to legacy router, chatId={}",
+          chatId);
+    } else {
+      log.warn("Function router failed, fallback to legacy router, chatId={}", chatId);
+    }
+
+    var resultMap = classifierTool.run(content, globalMessage);
+    String args = resultMap.get("args") == null ? "" : resultMap.get("args").toString();
+    List<String> value = Cast.castList(resultMap.get("value"), String.class);
+    if (value == null || value.isEmpty()) {
+      String directReply = chatTool.run(content, globalMessage);
+      return new RouteExecutionResult(directReply, directReply);
+    }
+    return executeToolRoute(value.get(0), content, args, globalMessage, dataArgs);
+  }
+
+  private RouteExecutionResult executeToolRoute(String routeId, String content, String args,
+      Map<String, Object> globalMessage, String... dataArgs) {
+    String answer;
+    String toolResult;
+    switch (routeId) {
+      case "1" -> {
+        toolResult = weatherTool.run(args, globalMessage);
+        answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
+      }
+      case "2" -> {
+        toolResult = controlTool.run(args, globalMessage);
+        answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
+      }
+      case "3" -> {
+        var musicMap = musicTool.run(args, globalMessage);
+        toolResult = musicMap.get("answer");
+        answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
+      }
+      case "4" -> {
+        toolResult = agent.run(content, globalMessage);
+        answer = ToolPrefix.AGENT.getPrefix() + toolResult;
+      }
+      case "6" -> {
+        toolResult = wxBoundProductTool.run(args, globalMessage);
+        answer = ToolPrefix.WX_BOUND_PRODUCT.getPrefix() + toolResult;
+      }
+      case "7" -> {
+        toolResult = wxProductActiveTool.run(args, globalMessage);
+        answer = ToolPrefix.WX_PRODUCT_ACTIVE.getPrefix() + toolResult;
+      }
+      case "8" -> {
+        if (dataArgs.length > 0 && dataArgs[0].equals("false")) {
+          toolResult = "瀹氭椂浠诲姟绂佹閫掑綊璋冪敤!!!";
+        } else {
+          toolResult = scheduleTool.run(args, globalMessage);
+        }
+        answer = ToolPrefix.SCHEDULE.getPrefix() + toolResult;
+      }
+      case "9" -> {
+        toolResult = productRoleTool.run(args, globalMessage);
+        answer = ToolPrefix.PRODUCT_ROLE.getPrefix() + toolResult;
+      }
+      case "10" -> {
+        toolResult = mcpAgent.run(args, globalMessage);
+        answer = ToolPrefix.MCP_AGENT.getPrefix() + toolResult;
+      }
+      case "11" -> {
+        toolResult = goodByeTool.run(args, globalMessage);
+        answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
+      }
+      default -> {
+        answer = chatTool.run(content, globalMessage);
+        toolResult = answer;
+      }
+    }
+    return new RouteExecutionResult(answer, toolResult);
   }
 
   private String resolveChatToolAnswer(
@@ -365,4 +471,6 @@ public class Router {
     predictionQueue.clear();
     return chatTool.run(content, globalMessage);
   }
+
+  private record RouteExecutionResult(String answer, String toolResult) {}
 }

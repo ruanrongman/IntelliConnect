@@ -36,3 +36,5 @@ build/
 
 /docker/models
 /web/package-lock.json
+.m2/
+.home/
