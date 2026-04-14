@@ -206,6 +206,8 @@ ai:
   memoryTool-llm: dashscope-qwen2.5-32b-instruct
   classifierTool-llm: dashscope-qwen3-next-80b-a3b-instruct
   classifierTool-speedUp: true
+  router:
+    mode: function
   controlTool-llm: dashscope-qwen2.5-32b-instruct
   controlTool-llm-speed: true
   musicTool-llm: dashscope-qwen2.5-14b-instruct

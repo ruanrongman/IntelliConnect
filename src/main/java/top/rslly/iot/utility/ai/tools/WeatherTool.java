@@ -99,7 +99,7 @@ public class WeatherTool implements BaseTool<String> {
     messages.add(systemMessage);
     messages.add(userMessage);
     if (speedUp && !mcpIsTool) {
-      queueMap.get(chatId).add("我来给你查天气啦!");
+      queueMap.get(chatId).add(ToolPrefix.ToolCall.getPrefix());
     }
     var obj = llm.jsonChat(question, messages, false).getJSONObject("action");
     // 获取客户端IP用于定位

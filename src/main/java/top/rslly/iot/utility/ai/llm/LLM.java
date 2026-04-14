@@ -35,4 +35,20 @@ public interface LLM {
       EventSourceListener listener);
 
   String imageToWord(String question, String url);
+
+  default boolean supportsFunctionRouting() {
+    return false;
+  }
+
+  default FunctionRouterResult functionRouterChat(String content, List<ModelMessage> messages,
+      List<FunctionRouterToolSpec> toolSpecs) {
+    return FunctionRouterResult.unsupported();
+  }
+
+  default void streamFunctionRouterChat(String content, List<ModelMessage> messages,
+      List<FunctionRouterToolSpec> toolSpecs, FunctionRouterStreamHandler handler) {
+    if (handler != null) {
+      handler.onUnsupported();
+    }
+  }
 }

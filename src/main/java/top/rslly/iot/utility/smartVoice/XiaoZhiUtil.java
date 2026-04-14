@@ -633,7 +633,7 @@ public class XiaoZhiUtil {
     }
   }
 
-  @Async
+  @Async("taskExecutor")
   public void dealDetect(String chatId, int productId, String text) throws IOException {
     if (chatId == null) {
       log.error("dealDetect参数错误: chatId is null");
