@@ -182,6 +182,8 @@ ai:
     output-dir: ./funasr_output/
   tts:
     skip-tool-prefix: true
+    # TTS缓存保留时间，单位是毫秒。默认是一天
+    cache-expire-time: 86400000
   chromeDrive-path: XXX
   chrome-path: XXX
   audio-tmp-path: D://temp-music//

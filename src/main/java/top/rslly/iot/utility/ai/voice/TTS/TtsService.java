@@ -21,9 +21,14 @@ package top.rslly.iot.utility.ai.voice.TTS;
 
 import jakarta.websocket.Session;
 
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
+
 public interface TtsService {
   void websocketAudioSync(String text, Float pitch, Float speed, Session session, String chatId,
       String voice);
 
   void asyncSynthesizeAndSaveAudio(String text, String chatId);
+
+  List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice);
 }

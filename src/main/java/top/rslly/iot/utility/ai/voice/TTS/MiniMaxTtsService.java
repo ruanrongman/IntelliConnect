@@ -37,8 +37,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -70,8 +72,35 @@ public class MiniMaxTtsService implements TtsService {
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
       String chatId, String voice) {
+    List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
     // Only used for WebSocket audio sending.
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
+    for (byte[] b : audioList) {
+      audioQueue.offer(b);
+    }
+    try {
+      // 异步发送音频队列
+      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+    } catch (Exception e) {
+      log.error("MiniMax TTS error for chatId: {}", chatId, e);
+    }
+  }
+
+  /**
+   * 获取文本的Opus音频字节流
+   * 
+   * @param chatId 对话ID
+   * @param text 文本
+   * @param pitch 语调
+   * @param speed 语速
+   * @param voice 声音类型
+   * @return Null或一个转载有Opus字节流的BlockingQueue
+   */
+  @Override
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice) {
+    // Only used for WebSocket audio sending.
+    List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
     final byte[] EOS = new byte[0];
     final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
@@ -106,7 +135,7 @@ public class MiniMaxTtsService implements TtsService {
         errorReader.close();
         log.error("MiniMax TTS API error for voice '{}': {} - {}", voice, responseCode,
             errorResponse);
-        return;
+        return null;
       }
 
       log.debug("MiniMax TTS API request successful for voice: {}, text length: {}", voice,
@@ -163,15 +192,14 @@ public class MiniMaxTtsService implements TtsService {
         log.warn(
             "MiniMax TTS returned empty audio data for voice: '{}', model: '{}', text length: {}",
             voice, model != null && !model.isBlank() ? model : DEFAULT_MODEL, text.length());
-        return;
+        return null;
       }
       log.debug("MiniMax TTS generated {} bytes of audio data for voice: '{}'", mp3Data.length,
           voice);
 
       String outputPath = System.getProperty("java.io.tmpdir");
-      // 将 chatId 中的冒号替换为下划线，避免 Windows 路径非法字符问题
-      String safeChatId = chatId.replace(":", "_");
-      tempFilePath = Paths.get(outputPath, "minimax_tts_" + safeChatId + ".mp3").toString();
+      String uuid = UUID.randomUUID().toString();
+      tempFilePath = Paths.get(outputPath, uuid + ".mp3").toString();
       Files.write(Paths.get(tempFilePath), mp3Data);
 
       // 将 MP3 转换为 PCM (16kHz 单声道)
@@ -179,21 +207,16 @@ public class MiniMaxTtsService implements TtsService {
 
       // 编码为 Opus 并发送到队列
       List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
-      for (byte[] packet : packets) {
-        audioQueue.offer(packet);
-      }
+      audioList.addAll(packets);
 
       // 刷新编码器
       packets = encoder.encodePcmToOpus(new byte[0], true);
-      for (byte[] packet : packets) {
-        audioQueue.offer(packet);
-      }
+      audioList.addAll(packets);
 
       // 信号结束
-      audioQueue.offer(EOS);
+      audioList.add(EOS);
 
-      // 异步发送音频队列
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+      return audioList;
 
     } catch (Exception e) {
       log.error("MiniMax TTS error for chatId: {}", chatId, e);
@@ -208,6 +231,7 @@ public class MiniMaxTtsService implements TtsService {
         }
       }
     }
+    return null;
   }
 
   @Override
