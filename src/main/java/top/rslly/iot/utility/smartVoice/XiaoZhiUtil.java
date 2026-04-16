@@ -210,7 +210,7 @@ public class XiaoZhiUtil {
     return ret;
   }
 
-  private void sendBase(String chatId, String msg){
+  private void sendBase(String chatId, String msg) {
     Session session = XiaoZhiWebsocket.clients.get(chatId);
     if (session == null || !session.isOpen())
       return;
@@ -303,22 +303,24 @@ public class XiaoZhiUtil {
 
   /**
    * 移除字符串中的Emoji
-   * @param text  源字符串
-   * @return  移除后的字符串
+   * 
+   * @param text 源字符串
+   * @return 移除后的字符串
    */
   private String removeEmoji(String text) {
-    if (text == null) return null;
+    if (text == null)
+      return null;
 
     // 匹配 Emoji 的正则表达式
-    String emojiRegex = "[\\x{1F600}-\\x{1F64F}]|" +  // 表情符号
-            "[\\x{1F300}-\\x{1F5FF}]|" +  // 符号和象形文字
-            "[\\x{1F680}-\\x{1F6FF}]|" +  // 交通和地图符号
-            "[\\x{1F1E0}-\\x{1F1FF}]|" +  // 国旗
-            "[\\x{2600}-\\x{26FF}]|" +    // 杂项符号
-            "[\\x{2700}-\\x{27BF}]|" +    // 装饰符号
-            "[\\x{1F900}-\\x{1F9FF}]|" +  // 补充符号
-            "[\\x{1FA70}-\\x{1FAFF}]|" +  // 其他符号
-            "[\\x{FE0F}]";                // 变体选择器
+    String emojiRegex = "[\\x{1F600}-\\x{1F64F}]|" + // 表情符号
+        "[\\x{1F300}-\\x{1F5FF}]|" + // 符号和象形文字
+        "[\\x{1F680}-\\x{1F6FF}]|" + // 交通和地图符号
+        "[\\x{1F1E0}-\\x{1F1FF}]|" + // 国旗
+        "[\\x{2600}-\\x{26FF}]|" + // 杂项符号
+        "[\\x{2700}-\\x{27BF}]|" + // 装饰符号
+        "[\\x{1F900}-\\x{1F9FF}]|" + // 补充符号
+        "[\\x{1FA70}-\\x{1FAFF}]|" + // 其他符号
+        "[\\x{FE0F}]"; // 变体选择器
 
     return text.replaceAll(emojiRegex, "");
   }
@@ -367,7 +369,7 @@ public class XiaoZhiUtil {
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
-    if (src.contains(EMOJI_FLAG)){
+    if (src.contains(EMOJI_FLAG)) {
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
@@ -435,11 +437,11 @@ public class XiaoZhiUtil {
         }
         continue;
       }
-      if(crtS.contains(EMOJI_FLAG)){
+      if (crtS.contains(EMOJI_FLAG)) {
         sendBase(chatId, crtS.replace(EMOJI_FLAG, ""));
         try {
           Thread.sleep(10);
-        }catch(InterruptedException e){
+        } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
         crtS = null;
@@ -519,7 +521,7 @@ public class XiaoZhiUtil {
             emotionObject.put("text", emotionResult.get("emoji"));
             emotionObject.put("emotion", emotionResult.get("text"));
             String emojiStr = EMOJI_FLAG + emotionObject.toJSONString();
-            Thread.ofVirtual().start(()->{
+            Thread.ofVirtual().start(() -> {
               redisStringTemplate.opsForList().leftPush(chatId, emojiStr);
               asyncTTS(chatId, emojiStr, productId);
             });
@@ -551,10 +553,11 @@ public class XiaoZhiUtil {
           // 不允许处理空字符串
           if (StringUtils.isEmpty(sentence))
             break;
-          if(StringUtils.isEmpty(removeEmoji(sentence)))
+          if (StringUtils.isEmpty(removeEmoji(sentence)))
             break;
           redisStringTemplate.opsForList().leftPush(chatId, sentence);
-          if(StringUtils.isEmpty(sentence)) break;
+          if (StringUtils.isEmpty(sentence))
+            break;
           Thread.ofVirtual().start(() -> {
             this.asyncTTS(chatId, sentence, productId);
           });
@@ -573,7 +576,7 @@ public class XiaoZhiUtil {
           continue;
         }
         // 纯Emoji处理
-        if(StringUtils.isEmpty(removeEmoji(element).trim())) {
+        if (StringUtils.isEmpty(removeEmoji(element).trim())) {
           continue;
         }
         int pIdx = this.getPunctuationPos(element);
