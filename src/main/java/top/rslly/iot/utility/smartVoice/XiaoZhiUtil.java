@@ -98,6 +98,10 @@ public class XiaoZhiUtil {
 
   private final String STREAM_AUDIO_HANDLER_FLAG = "<|SAH|>";
   private final String STREAM_RESULT_HANDLER_FLAG = "<|SRH|>";
+  private final String AUDIO_CONTENT_TOO_SHORT = "<|2SRT|>";
+  private final String END_OF_STREAM_FLAG = "<|EOS|>";
+  private final String SSE_DONE_FLAG = "[DONE]";
+  private final String EMOJI_FLAG = "<|EMO|>";
 
   public void dealHello(String chatId, JSONObject helloObject, String token) throws IOException {
     if (chatId == null || helloObject == null) {
@@ -174,7 +178,7 @@ public class XiaoZhiUtil {
       throws OpusException, IOException {
     // 数据太短
     if (audioList.size() <= 20 && detect.length == 0)
-      return "<|2SRT|>";
+      return AUDIO_CONTENT_TOO_SHORT;
     // 如果ASR服务没有启动成功，那么应当字节返回空
     if (asrServiceFactory == null)
       return null;
@@ -206,13 +210,24 @@ public class XiaoZhiUtil {
     return ret;
   }
 
+  private void sendBase(String chatId, String msg){
+    Session session = XiaoZhiWebsocket.clients.get(chatId);
+    if (session == null || !session.isOpen())
+      return;
+    try {
+      session.getBasicRemote().sendText(msg);
+    } catch (IOException e) {
+      log.error("发送消息失败：{}", e.getMessage());
+    }
+  }
+
   /**
    * 消息太短或无法解析时的回复
    * 
    * @param chatId 聊天的ID
    */
   private void sendForUnclearMsg(String chatId) {
-    XiaoZhiWebsocket.send(chatId, "{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
   }
 
   /**
@@ -222,7 +237,7 @@ public class XiaoZhiUtil {
    * @param text 需要发送的文本
    */
   private void sendText(String chatId, String text) {
-    XiaoZhiWebsocket.send(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
+    sendBase(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
         + "\"text\": \"" + text + "\"}");
   }
 
@@ -237,15 +252,15 @@ public class XiaoZhiUtil {
     emotionObject.put("type", "llm");
     emotionObject.put("text", "🤔");
     emotionObject.put("emotion", "thinking");
-    XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
+    sendBase(chatId, emotionObject.toJSONString());
   }
 
   private void sendTTSStart(String chatId) {
-    XiaoZhiWebsocket.send(chatId, "{\"type\":\"tts\",\"state\":\"start\"}");
+    sendBase(chatId, "{\"type\":\"tts\",\"state\":\"start\"}");
   }
 
   private void sendSTT(String chatId, String text) {
-    XiaoZhiWebsocket.send(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}");
+    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}");
   }
 
   /**
@@ -254,7 +269,7 @@ public class XiaoZhiUtil {
    * @param chatId 聊天ID
    */
   private void sendEndMsg(String chatId) {
-    XiaoZhiWebsocket.send(chatId, "{\"type\":\"tts\",\"state\":\"stop\"}");
+    sendBase(chatId, "{\"type\":\"tts\",\"state\":\"stop\"}");
   }
 
   private void clearAudioHandlers(String chatId) {
@@ -284,6 +299,28 @@ public class XiaoZhiUtil {
       }
     }
     return -1;
+  }
+
+  /**
+   * 移除字符串中的Emoji
+   * @param text  源字符串
+   * @return  移除后的字符串
+   */
+  private String removeEmoji(String text) {
+    if (text == null) return null;
+
+    // 匹配 Emoji 的正则表达式
+    String emojiRegex = "[\\x{1F600}-\\x{1F64F}]|" +  // 表情符号
+            "[\\x{1F300}-\\x{1F5FF}]|" +  // 符号和象形文字
+            "[\\x{1F680}-\\x{1F6FF}]|" +  // 交通和地图符号
+            "[\\x{1F1E0}-\\x{1F1FF}]|" +  // 国旗
+            "[\\x{2600}-\\x{26FF}]|" +    // 杂项符号
+            "[\\x{2700}-\\x{27BF}]|" +    // 装饰符号
+            "[\\x{1F900}-\\x{1F9FF}]|" +  // 补充符号
+            "[\\x{1FA70}-\\x{1FAFF}]|" +  // 其他符号
+            "[\\x{FE0F}]";                // 变体选择器
+
+    return text.replaceAll(emojiRegex, "");
   }
 
   /**
@@ -327,6 +364,10 @@ public class XiaoZhiUtil {
     String srcHash = getShortHash(src, 16);
     // Early check - but still possible race condition
     if (bytesRedisTemplate.hasKey(srcHash)) {
+      redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
+      return;
+    }
+    if (src.contains(EMOJI_FLAG)){
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
@@ -383,7 +424,7 @@ public class XiaoZhiUtil {
         crtS = null;
         continue;
       }
-      if (crtS.equals("<|EOS|>"))
+      if (crtS.equals(END_OF_STREAM_FLAG))
         break;
       if (!redisStateTemplate.opsForHash().hasKey(chatId + "_state", crtS)) {
         try {
@@ -392,6 +433,16 @@ public class XiaoZhiUtil {
           Thread.currentThread().interrupt();
           break;
         }
+        continue;
+      }
+      if(crtS.contains(EMOJI_FLAG)){
+        sendBase(chatId, crtS.replace(EMOJI_FLAG, ""));
+        try {
+          Thread.sleep(10);
+        }catch(InterruptedException e){
+          Thread.currentThread().interrupt();
+        }
+        crtS = null;
         continue;
       }
       Object state = redisStateTemplate.opsForHash().get(chatId + "_state", crtS);
@@ -442,7 +493,7 @@ public class XiaoZhiUtil {
     emotionMessage.put("chatId", chatId);
     var emotionRes = emotionToolAsync.run(voiceContent, emotionMessage);
     // 结果字符串构造器
-    StringBuilder answerSB = new StringBuilder();
+    StringBuilder answerStrBuffer = new StringBuilder();
     boolean emotionFlag = false;
     this.sendTTSStart(chatId);
     // 设置处理状态为true
@@ -462,13 +513,18 @@ public class XiaoZhiUtil {
       if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
         try {
           Map<String, String> emotionResult = emotionRes.get();
-          if (emotionResult == null)
-            continue;
-          JSONObject emotionObject = new JSONObject();
-          emotionObject.put("type", "llm");
-          emotionObject.put("text", emotionResult.get("emoji"));
-          emotionObject.put("emotion", emotionResult.get("text"));
-          XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
+          if (emotionResult != null && !StringUtils.isEmpty(emotionResult.get("text"))) {
+            JSONObject emotionObject = new JSONObject();
+            emotionObject.put("type", "llm");
+            emotionObject.put("text", emotionResult.get("emoji"));
+            emotionObject.put("emotion", emotionResult.get("text"));
+            String emojiStr = EMOJI_FLAG + emotionObject.toJSONString();
+            Thread.ofVirtual().start(()->{
+              redisStringTemplate.opsForList().leftPush(chatId, emojiStr);
+              asyncTTS(chatId, emojiStr, productId);
+            });
+            emotionFlag = true;
+          }
         } catch (Exception e) {
           log.error("处理表情响应出错：{}", e.getMessage());
         }
@@ -486,20 +542,23 @@ public class XiaoZhiUtil {
         Thread.sleep(10);
         continue;
       }
-      if (element.equals("[DONE]")) {
+      if (element.equals(SSE_DONE_FLAG)) {
         // 已经抵达最后一帧
-        if (!answerSB.isEmpty()) {
+        if (!answerStrBuffer.isEmpty()) {
           // 将之前累计的元素入队并交由转化线程处理，
           // 将构造器中缓存的部分交由虚拟线程处理
-          String sentence = answerSB.toString();
+          String sentence = answerStrBuffer.toString();
           // 不允许处理空字符串
           if (StringUtils.isEmpty(sentence))
             break;
+          if(StringUtils.isEmpty(removeEmoji(sentence)))
+            break;
           redisStringTemplate.opsForList().leftPush(chatId, sentence);
+          if(StringUtils.isEmpty(sentence)) break;
           Thread.ofVirtual().start(() -> {
             this.asyncTTS(chatId, sentence, productId);
           });
-          answerSB.setLength(0);
+          answerStrBuffer.setLength(0);
         }
         break;
       } else {
@@ -513,13 +572,17 @@ public class XiaoZhiUtil {
           sendText(chatId, element);
           continue;
         }
+        // 纯Emoji处理
+        if(StringUtils.isEmpty(removeEmoji(element).trim())) {
+          continue;
+        }
         int pIdx = this.getPunctuationPos(element);
         // 小于五个字符认为需要连读
         if (pIdx != -1) {
           String eBefore = element.substring(0, pIdx + 1);
           String eAfter = element.substring(pIdx + 1);
-          answerSB.append(eBefore);
-          String before = answerSB.toString();
+          answerStrBuffer.append(eBefore);
+          String before = answerStrBuffer.toString();
           // 不允许向结果列表中写入空字符串
           if (StringUtils.isEmpty(before))
             continue;
@@ -528,14 +591,14 @@ public class XiaoZhiUtil {
           Thread.ofVirtual().start(() -> {
             this.asyncTTS(chatId, before, productId);
           });
-          answerSB.setLength(0);
-          answerSB.append(eAfter);
+          answerStrBuffer.setLength(0);
+          answerStrBuffer.append(eAfter);
         } else
-          answerSB.append(element);
+          answerStrBuffer.append(element);
       }
     }
     // 边界处理
-    redisStringTemplate.opsForList().leftPush(chatId, "<|EOS|>");
+    redisStringTemplate.opsForList().leftPush(chatId, END_OF_STREAM_FLAG);
     Object resultHandlerState =
         redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_RESULT_HANDLER_FLAG);
     if (resultHandlerState == null) {
@@ -566,7 +629,7 @@ public class XiaoZhiUtil {
     emotionObject.put("text", "😶");
     emotionObject.put("emotion", "neutral");
 
-    XiaoZhiWebsocket.send(chatId, emotionObject.toJSONString());
+    sendBase(chatId, emotionObject.toJSONString());
     String answer = null;
     if (res != null) {
       answer = res.get();
@@ -606,7 +669,7 @@ public class XiaoZhiUtil {
       return;
     }
     // 如果音频太短，通知用户并返回
-    if (text.equals("<|2SRT|>")) {
+    if (text.equals(AUDIO_CONTENT_TOO_SHORT)) {
       // 保留最后的10帧信息
       int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
       if (audioList.size() > keepFrames) {

@@ -41,7 +41,7 @@ public class AudioUtils {
   // Frame duration in milliseconds (matching Opus encoding)
   private static final int FRAME_DURATION = 60;
   // Number of frames for pre-buffering
-  private static final int PRE_BUFFER_COUNT = 3;
+  private static final int PRE_BUFFER_COUNT = 5;
 
   public static byte[] convertMp3ToPcm(String mp3FilePath) {
     if (mp3FilePath == null || mp3FilePath.trim().isEmpty()) {
@@ -188,6 +188,20 @@ public class AudioUtils {
     return buffer;
   }
 
+  /**
+   * 发送二进制数据（带锁，防止并发发送导致BINARY_FULL_WRITING错误）
+   */
+  public static void sendBinary(Session session, ByteBuffer data) {
+    if (session == null || !session.isOpen())
+      return;
+    // 使用同一个发送锁，保证同一连接上的文本和二进制发送都串行执行
+    try {
+      session.getBasicRemote().sendBinary(data);
+    } catch (IOException e) {
+      log.error("发送二进制数据失败：{}", e.getMessage());
+    }
+  }
+
   public static void asyncSendAudioQueue(String chatId, Session session,
       BlockingQueue<byte[]> queue) {
     try {
@@ -232,7 +246,7 @@ public class AudioUtils {
           queue.clear();
           return;
         }
-        XiaoZhiWebsocket.sendBinary(chatId, session, AudioUtils.byte2Bytebuffer(bytes));
+        sendBinary(session, AudioUtils.byte2Bytebuffer(bytes));
       }
 
       // Continue sending remaining frames with timing control.
@@ -280,7 +294,7 @@ public class AudioUtils {
           return;
         }
 
-        XiaoZhiWebsocket.sendBinary(chatId, session, AudioUtils.byte2Bytebuffer(opusPacket));
+        sendBinary(session, AudioUtils.byte2Bytebuffer(opusPacket));
         playPosition += FRAME_DURATION;
       }
     } catch (InterruptedException e) {

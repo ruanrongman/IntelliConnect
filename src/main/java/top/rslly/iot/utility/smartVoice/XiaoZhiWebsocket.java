@@ -693,32 +693,10 @@ public class XiaoZhiWebsocket {
     if (session == null || !session.isOpen())
       return;
     // 获取或创建该连接对应的发送锁，保证同一连接串行发送
-    ReentrantLock lock = sendLocks.computeIfAbsent(chatId, k -> new ReentrantLock());
-    lock.lock();
     try {
       session.getBasicRemote().sendText(msg);
     } catch (IOException e) {
       log.error("发送消息失败：{}", e.getMessage());
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  /**
-   * 发送二进制数据（带锁，防止并发发送导致BINARY_FULL_WRITING错误）
-   */
-  public static void sendBinary(String chatId, Session session, ByteBuffer data) {
-    if (session == null || !session.isOpen())
-      return;
-    // 使用同一个发送锁，保证同一连接上的文本和二进制发送都串行执行
-    ReentrantLock lock = sendLocks.computeIfAbsent(chatId, k -> new ReentrantLock());
-    lock.lock();
-    try {
-      session.getBasicRemote().sendBinary(data);
-    } catch (IOException e) {
-      log.error("发送二进制数据失败：{}", e.getMessage());
-    } finally {
-      lock.unlock();
     }
   }
 }
