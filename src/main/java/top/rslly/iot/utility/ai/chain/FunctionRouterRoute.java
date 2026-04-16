@@ -28,7 +28,7 @@ public enum FunctionRouterRoute {
           "Play or recommend music"), AGENT("4", "route_agent",
               "Complex multi-step task"), WX_BOUND_PRODUCT("6", "route_bind_product",
                   "Bind or unbind products"), WX_PRODUCT_ACTIVE("7", "route_switch_product",
-                      "Switch controlled products"), SCHEDULE("8", "route_schedule",
+                      "WeChat-Controlled Switching Product"), SCHEDULE("8", "route_schedule",
                           "Schedule or reminder"), PRODUCT_ROLE("9", "route_role",
                               "Role or voice configuration"), MCP("10", "route_mcp",
                                   "Use MCP capability"), GOODBYE("11", "route_step_back",

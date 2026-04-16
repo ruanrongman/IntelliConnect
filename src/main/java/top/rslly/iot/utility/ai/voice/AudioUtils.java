@@ -232,7 +232,7 @@ public class AudioUtils {
           queue.clear();
           return;
         }
-        session.getBasicRemote().sendBinary(AudioUtils.byte2Bytebuffer(bytes));
+        XiaoZhiWebsocket.sendBinary(chatId, session, AudioUtils.byte2Bytebuffer(bytes));
       }
 
       // Continue sending remaining frames with timing control.
@@ -280,7 +280,7 @@ public class AudioUtils {
           return;
         }
 
-        session.getBasicRemote().sendBinary(AudioUtils.byte2Bytebuffer(opusPacket));
+        XiaoZhiWebsocket.sendBinary(chatId, session, AudioUtils.byte2Bytebuffer(opusPacket));
         playPosition += FRAME_DURATION;
       }
     } catch (InterruptedException e) {

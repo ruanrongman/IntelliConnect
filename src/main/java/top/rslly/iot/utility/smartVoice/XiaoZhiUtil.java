@@ -267,7 +267,7 @@ public class XiaoZhiUtil {
 
   private int getPunctuationPos(String str) {
     Set<Character> punctuationSet = new HashSet<>();
-    String punctuations = "？！：；~。";
+    String punctuations = "？！：；~。～";
     String[] englishPunctuations = {"? ", "! ", "\" ", " \"", ": ", ", ", ". "};
     for (char c : punctuations.toCharArray()) {
       punctuationSet.add(c);
@@ -325,6 +325,7 @@ public class XiaoZhiUtil {
       return;
     redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
     String srcHash = getShortHash(src, 16);
+    // Early check - but still possible race condition
     if (bytesRedisTemplate.hasKey(srcHash)) {
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
@@ -335,8 +336,11 @@ public class XiaoZhiUtil {
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
       return;
     }
-    bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
-    bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
+    // Fix race: check again after generation - if another thread already wrote it, skip writing
+    if (!bytesRedisTemplate.hasKey(srcHash)) {
+      bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
+      bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
+    }
     redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
   }
 
@@ -365,20 +369,41 @@ public class XiaoZhiUtil {
       // 左进右出模拟队列
       if (crtS == null)
         crtS = redisStringTemplate.opsForList().rightPop(chatId);
-      if (StringUtils.isEmpty(crtS))
+      if (StringUtils.isEmpty(crtS)) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
         continue;
-      if (shouldSkipTts(crtS, skipToolPrefix)) {
+      }
+      if (shouldSkipTts(crtS.trim(), skipToolPrefix)) {
         sendText(chatId, crtS);
         crtS = null;
         continue;
       }
       if (crtS.equals("<|EOS|>"))
         break;
-      if (!redisStateTemplate.opsForHash().hasKey(chatId + "_state", crtS))
+      if (!redisStateTemplate.opsForHash().hasKey(chatId + "_state", crtS)) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
         continue;
+      }
       Object state = redisStateTemplate.opsForHash().get(chatId + "_state", crtS);
-      if (state == null || !(boolean) state)
+      if (state == null || !(boolean) state) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
         continue;
+      }
       BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
       String srcHash = getShortHash(crtS, 16);
       Long audioBytesSize = bytesRedisTemplate.opsForList().size(srcHash);
@@ -429,8 +454,10 @@ public class XiaoZhiUtil {
     while (res != null && !res.isDone() ||
         Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()) {
       Queue<String> queue = Router.queueMap.get(chatId);
-      if (queue == null || queue.isEmpty())
+      if (queue == null || queue.isEmpty()) {
+        Thread.sleep(10);
         continue;
+      }
       // 表情处理模块
       if (emotionRes != null && emotionRes.isDone() && !emotionFlag) {
         try {
@@ -480,9 +507,15 @@ public class XiaoZhiUtil {
         // 随后清空字符串构造器，将标点之后的部分存入构造器；如果不存在，则将整个元素
         // 加入构造器
         element = element.replace("\n", "");
+        // 跳过工具前缀，直接发送文本但不进行TTS
+        // trim后检查，如果匹配，跳过处理（原元素包含空格仍然需要发送原内容）
+        if (shouldSkipTts(element.trim(), skipToolPrefix)) {
+          sendText(chatId, element);
+          continue;
+        }
         int pIdx = this.getPunctuationPos(element);
         // 小于五个字符认为需要连读
-        if (pIdx != -1 && answerSB.length() >= 5) {
+        if (pIdx != -1) {
           String eBefore = element.substring(0, pIdx + 1);
           String eAfter = element.substring(pIdx + 1);
           answerSB.append(eBefore);
@@ -513,10 +546,13 @@ public class XiaoZhiUtil {
     while (true) {
       resultHandlerState =
           redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_RESULT_HANDLER_FLAG);
-      if (resultHandlerState == null)
+      if (resultHandlerState == null) {
+        Thread.sleep(10);
         continue;
+      }
       if (!(boolean) resultHandlerState)
         break;
+      Thread.sleep(10);
     }
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, false);
     this.clearAudioHandlers(chatId);
@@ -581,9 +617,10 @@ public class XiaoZhiUtil {
       return;
     }
     sendSTT(chatId, text);
-    final String tCopy = text;
-    XiaoZhiWebsocket.voiceContent.computeIfPresent(chatId, (k, v) -> v + tCopy);
-    XiaoZhiWebsocket.voiceContent.putIfAbsent(chatId, text);
+    // Atomic update: compute combines get-and-put into single atomic operation
+    final String finalText = text;
+    XiaoZhiWebsocket.voiceContent.compute(chatId,
+        (k, existing) -> existing == null ? finalText : existing + finalText);
     audioList.clear();
     // 到这里，voiceContent不可能为空
     if (showThinking)

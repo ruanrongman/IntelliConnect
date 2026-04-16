@@ -24,7 +24,6 @@ import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
 import com.alibaba.dashscope.common.ResultCallback;
-import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -37,19 +36,16 @@ import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
-import ws.schild.jave.Encoder;
-import ws.schild.jave.MultimediaObject;
-import ws.schild.jave.encode.AudioAttributes;
-import ws.schild.jave.encode.EncodingAttributes;
 
 import jakarta.websocket.Session;
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -76,6 +72,7 @@ public class Text2audio implements TtsService {
     private final byte[] EOS = new byte[0];
     private final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
     private boolean sendAfterHandler = true;
+    private final ByteArrayOutputStream mp3Buffer = new ByteArrayOutputStream();
 
     ReactCallback(String chatId, Session session) {
       this.chatId = chatId;
@@ -92,22 +89,8 @@ public class Text2audio implements TtsService {
       if (message.getAudioFrame() != null) {
         byte[] audio = message.getAudioFrame().array();
         try {
-          // For WebSocket: enqueue the frame.
-          /*
-           * byte[] data_packet = new byte[16000]; OpusEncoder opusEncoder = new OpusEncoder(16000,
-           * 1, OpusApplication.OPUS_APPLICATION_AUDIO); opusEncoder.setBitrate(16000);
-           * opusEncoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE); opusEncoder.setComplexity(10);
-           * int bytesEncoded = opusEncoder.encode(audio, 0, (16000*60)/1000, data_packet, 0,
-           * audio.length); byte[] packet = new byte[bytesEncoded]; System.arraycopy(data_packet, 0,
-           * packet, 0, bytesEncoded);
-           */
-          List<byte[]> packets = encoder.encodePcmToOpus(audio, false);
-          if (!sendAfterHandler) {
-            bytes.addAll(packets);
-          }
-          for (byte[] packet : packets) {
-            audioQueue.offer(packet);
-          }
+          // Accumulate MP3 chunks - process all at once onComplete
+          mp3Buffer.write(audio);
         } catch (Exception e) {
           log.error("sendBinary error{}", e.getMessage());
         }
@@ -117,9 +100,44 @@ public class Text2audio implements TtsService {
     @Override
     public void onComplete() {
       log.debug("synthesis onComplete!");
-      List<byte[]> packets = encoder.encodePcmToOpus(new byte[0], true);
+      try {
+        if (mp3Buffer.size() > 0) {
+          // All MP3 data received - now convert to PCM
+          byte[] mp3Data = mp3Buffer.toByteArray();
+          String outputPath = System.getProperty("java.io.tmpdir");
+          String uuid = UUID.randomUUID().toString();
+          String tempFilePath = Paths.get(outputPath, uuid + ".mp3").toString();
+          Files.write(Paths.get(tempFilePath), mp3Data);
+
+          // Convert MP3 to PCM (16kHz mono)
+          byte[] pcmData = AudioUtils.convertMp3ToPcm(tempFilePath);
+
+          // Encode PCM to Opus
+          List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
+          if (!sendAfterHandler) {
+            bytes.addAll(packets);
+          }
+          for (byte[] packet : packets) {
+            audioQueue.offer(packet);
+          }
+
+          // Flush encoder
+          packets = encoder.encodePcmToOpus(new byte[0], true);
+          if (!sendAfterHandler) {
+            bytes.addAll(packets);
+          }
+          for (byte[] packet : packets) {
+            audioQueue.offer(packet);
+          }
+
+          // Cleanup temp file
+          Files.deleteIfExists(Paths.get(tempFilePath));
+        }
+      } catch (Exception e) {
+        log.error("MP3 processing error: {}", e.getMessage());
+      }
+
       if (!sendAfterHandler) {
-        bytes.addAll(packets);
         bytes.add(EOS);
         latch.countDown();
         return;
@@ -154,7 +172,7 @@ public class Text2audio implements TtsService {
             // 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
             .apiKey(apiKey)
             .model(model)
-            .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
+            .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
             .voice(voice)
             .build();
   }
@@ -191,7 +209,7 @@ public class Text2audio implements TtsService {
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(model)
-          .format(param.getFormat())
+          .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
           .pitchRate(pitch)
           .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
@@ -214,20 +232,21 @@ public class Text2audio implements TtsService {
     ReactCallback callback = new ReactCallback(chatId, null);
     try {
       String model = param.getModel();
+      String voiceId = param.getVoice();
       if (voice != null && voice.startsWith("cosy_v2_")) {
         model = "cosyvoice-v2";
-        voice = voice.substring(8);
+        voiceId = voice.substring(8);
         log.debug(model);
-        log.debug(voice);
+        log.debug(voiceId);
       }
       // 创建线程安全的参数副本
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(model)
-          .format(param.getFormat())
+          .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
           .pitchRate(pitch)
           .speechRate(speed)
-          .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
+          .voice(StringUtils.isNotBlank(voice) ? voiceId : param.getVoice())
           .build();
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
       synthesizer.call(text);
@@ -239,4 +258,3 @@ public class Text2audio implements TtsService {
     return null;
   }
 }
-

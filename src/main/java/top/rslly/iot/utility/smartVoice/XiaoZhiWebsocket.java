@@ -40,6 +40,7 @@ import jakarta.websocket.server.PathParam;
 import jakarta.websocket.server.ServerEndpoint;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,6 +57,9 @@ public class XiaoZhiWebsocket {
   private static final Map<String, OpusDecoder> opusDecoderMap = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
+  // 每个连接独立的发送锁，保证WebSocket串行发送，避免TEXT_FULL_WRITING错误
+  private static final ConcurrentHashMap<String, ReentrantLock> sendLocks =
+      new ConcurrentHashMap<>();
 
   /**
    * Track active playback session for each chatId to prevent audio overlap
@@ -311,6 +315,7 @@ public class XiaoZhiWebsocket {
       opusDecoderMap.remove(chatId);
       voiceContent.remove(chatId); // 清理语音内容
       lastInteractionTimeMap.remove(chatId); // 清理时间记录
+      sendLocks.remove(chatId); // 清理发送锁
     }
   }
 
@@ -687,12 +692,31 @@ public class XiaoZhiWebsocket {
     Session session = XiaoZhiWebsocket.clients.get(chatId);
     if (session == null || !session.isOpen())
       return;
-    ReentrantLock lock = new ReentrantLock();
+    // 获取或创建该连接对应的发送锁，保证同一连接串行发送
+    ReentrantLock lock = sendLocks.computeIfAbsent(chatId, k -> new ReentrantLock());
     lock.lock();
     try {
       session.getBasicRemote().sendText(msg);
     } catch (IOException e) {
-      log.error("发送消息失败！", e);
+      log.error("发送消息失败：{}", e.getMessage());
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /**
+   * 发送二进制数据（带锁，防止并发发送导致BINARY_FULL_WRITING错误）
+   */
+  public static void sendBinary(String chatId, Session session, ByteBuffer data) {
+    if (session == null || !session.isOpen())
+      return;
+    // 使用同一个发送锁，保证同一连接上的文本和二进制发送都串行执行
+    ReentrantLock lock = sendLocks.computeIfAbsent(chatId, k -> new ReentrantLock());
+    lock.lock();
+    try {
+      session.getBasicRemote().sendBinary(data);
+    } catch (IOException e) {
+      log.error("发送二进制数据失败：{}", e.getMessage());
     } finally {
       lock.unlock();
     }
