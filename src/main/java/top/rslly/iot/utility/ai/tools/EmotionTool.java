@@ -85,10 +85,14 @@ public class EmotionTool implements BaseTool<Map<String, String>> {
     }
     messages.add(systemMessage);
     messages.add(userMessage);
-    var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
     responseMap.put("text", "neutral");
     responseMap.put("emoji", EmotionManager.getCurrentEmotion("neutral"));
     try {
+      JSONObject llmResponse = llm.jsonChat(question, messages, true);
+      JSONObject obj = llmResponse == null ? null : llmResponse.getJSONObject("action");
+      if (obj == null) {
+        return responseMap;
+      }
       return process_llm_result(obj);
     } catch (Exception e) {
       log.error(e.getMessage());
@@ -108,4 +112,5 @@ public class EmotionTool implements BaseTool<Map<String, String>> {
     }
     return result;
   }
+
 }

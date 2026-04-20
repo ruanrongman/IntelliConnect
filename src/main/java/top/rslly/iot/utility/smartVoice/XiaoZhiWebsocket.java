@@ -44,8 +44,12 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicLong;
 
 @ServerEndpoint(value = "/xiaozhi/v1/{chatId}", configurator = WebSocketConfig.class)
 @Component
@@ -57,9 +61,56 @@ public class XiaoZhiWebsocket {
   private static final Map<String, OpusDecoder> opusDecoderMap = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
-  // 每个连接独立的发送锁，保证WebSocket串行发送，避免TEXT_FULL_WRITING错误
-  private static final ConcurrentHashMap<String, ReentrantLock> sendLocks =
+  private static final ConcurrentHashMap<String, SendContext> sendContexts =
       new ConcurrentHashMap<>();
+  private static final ExecutorService sendExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+  public enum OutboundMessageType {
+    TEXT, BINARY, CLOSE
+  }
+
+  public static final class OutboundMessage {
+    private final OutboundMessageType type;
+    private final String text;
+    private final byte[] binary;
+    private final long generation;
+    private final boolean priority;
+
+    private OutboundMessage(OutboundMessageType type, String text, byte[] binary, long generation,
+        boolean priority) {
+      this.type = type;
+      this.text = text;
+      this.binary = binary;
+      this.generation = generation;
+      this.priority = priority;
+    }
+
+    public static OutboundMessage text(String text, long generation) {
+      return new OutboundMessage(OutboundMessageType.TEXT, text, null, generation, false);
+    }
+
+    public static OutboundMessage priorityText(String text, long generation) {
+      return new OutboundMessage(OutboundMessageType.TEXT, text, null, generation, true);
+    }
+
+    public static OutboundMessage binary(byte[] binary, long generation) {
+      return new OutboundMessage(OutboundMessageType.BINARY, null, binary, generation, false);
+    }
+
+    public static OutboundMessage close(long generation) {
+      return new OutboundMessage(OutboundMessageType.CLOSE, null, null, generation, false);
+    }
+  }
+
+  public static final class SendContext {
+    private final LinkedBlockingDeque<OutboundMessage> queue = new LinkedBlockingDeque<>();
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final AtomicBoolean workerStarted = new AtomicBoolean(false);
+    private final AtomicLong generation = new AtomicLong(0L);
+    private final AtomicLong stopGeneration = new AtomicLong(-1L);
+    private final AtomicLong inputRound = new AtomicLong(0L);
+    private final AtomicLong claimedInputRound = new AtomicLong(-1L);
+  }
 
   /**
    * Track active playback session for each chatId to prevent audio overlap
@@ -68,11 +119,14 @@ public class XiaoZhiWebsocket {
     public final Thread playbackThread;
     public final BlockingQueue<byte[]> audioQueue;
     public final AtomicBoolean isCancelled;
+    public final long generation;
 
-    public PlaybackSession(Thread playbackThread, BlockingQueue<byte[]> audioQueue) {
+    public PlaybackSession(Thread playbackThread, BlockingQueue<byte[]> audioQueue,
+        long generation) {
       this.playbackThread = playbackThread;
       this.audioQueue = audioQueue;
       this.isCancelled = new AtomicBoolean(false);
+      this.generation = generation;
     }
   }
 
@@ -92,6 +146,7 @@ public class XiaoZhiWebsocket {
   private int productId;
   private boolean isManual = true;
   private boolean isRealTime = false;
+  private long activeInputRound = 0L;
 
   // 使用静态变量存储配置
   private static long TIMEOUT_NORMAL = 60; // 默认60秒
@@ -143,6 +198,226 @@ public class XiaoZhiWebsocket {
     }
   }
 
+  private static SendContext getOrCreateSendContext(String chatId) {
+    return sendContexts.computeIfAbsent(chatId, key -> new SendContext());
+  }
+
+  public static void initSendContext(String chatId) {
+    if (chatId == null) {
+      return;
+    }
+    SendContext context = getOrCreateSendContext(chatId);
+    context.closed.set(false);
+    context.queue.clear();
+    context.stopGeneration.set(-1L);
+    context.inputRound.set(0L);
+    context.claimedInputRound.set(-1L);
+    startSendWorker(chatId, context);
+  }
+
+  public static void closeSendContext(String chatId) {
+    if (chatId == null) {
+      return;
+    }
+    SendContext context = sendContexts.remove(chatId);
+    if (context != null) {
+      context.closed.set(true);
+      context.queue.clear();
+      context.queue.offerLast(OutboundMessage.close(context.generation.get()));
+    }
+  }
+
+  public static long currentGeneration(String chatId) {
+    if (chatId == null) {
+      return 0L;
+    }
+    return getOrCreateSendContext(chatId).generation.get();
+  }
+
+  public static long nextGeneration(String chatId) {
+    if (chatId == null) {
+      return 0L;
+    }
+    SendContext context = getOrCreateSendContext(chatId);
+    context.queue.clear();
+    context.stopGeneration.set(-1L);
+    cancelActivePlayback(chatId);
+    return context.generation.incrementAndGet();
+  }
+
+  public static boolean isCurrentGeneration(String chatId, long generation) {
+    return generation == currentGeneration(chatId);
+  }
+
+  public static long beginInputRound(String chatId) {
+    if (chatId == null) {
+      return 0L;
+    }
+    return getOrCreateSendContext(chatId).inputRound.incrementAndGet();
+  }
+
+  public static boolean tryClaimInputRound(String chatId, long inputRound) {
+    if (chatId == null || inputRound <= 0L) {
+      return false;
+    }
+    SendContext context = getOrCreateSendContext(chatId);
+    while (true) {
+      long claimedRound = context.claimedInputRound.get();
+      if (claimedRound >= inputRound) {
+        return false;
+      }
+      if (context.claimedInputRound.compareAndSet(claimedRound, inputRound)) {
+        return true;
+      }
+    }
+  }
+
+  public static void enqueueText(String chatId, String message) {
+    enqueueText(chatId, message, currentGeneration(chatId));
+  }
+
+  public static void enqueueText(String chatId, String message, long generation) {
+    if (message == null) {
+      return;
+    }
+    enqueue(chatId, OutboundMessage.text(message, generation));
+  }
+
+  public static void enqueueBinary(String chatId, ByteBuffer data, long generation) {
+    if (data == null) {
+      return;
+    }
+    ByteBuffer duplicate = data.duplicate();
+    byte[] bytes = new byte[duplicate.remaining()];
+    duplicate.get(bytes);
+    enqueue(chatId, OutboundMessage.binary(bytes, generation));
+  }
+
+  public static void enqueueClose(String chatId, long generation) {
+    enqueue(chatId, OutboundMessage.close(generation));
+  }
+
+  public static void enqueueTtsStop(String chatId) {
+    enqueueTtsStop(chatId, currentGeneration(chatId));
+  }
+
+  public static void enqueueTtsStop(String chatId, long generation) {
+    if (chatId == null || !isCurrentGeneration(chatId, generation)) {
+      return;
+    }
+    SendContext context = getOrCreateSendContext(chatId);
+    long markedGeneration = context.stopGeneration.get();
+    if (markedGeneration == generation) {
+      return;
+    }
+    if (markedGeneration == -1L) {
+      if (!context.stopGeneration.compareAndSet(-1L, generation)) {
+        if (context.stopGeneration.get() == generation) {
+          return;
+        }
+        context.stopGeneration.set(generation);
+      }
+    } else {
+      context.stopGeneration.set(generation);
+    }
+    enqueue(chatId,
+        OutboundMessage.priorityText("{\"type\":\"tts\",\"state\":\"stop\"}", generation));
+  }
+
+  public static long abortCurrentOutput(String chatId) {
+    if (chatId == null) {
+      return 0L;
+    }
+    isAbort.put(chatId, true);
+    haveVoice.put(chatId, false);
+    SendContext context = getOrCreateSendContext(chatId);
+    context.queue.clear();
+    context.stopGeneration.set(-1L);
+    cancelActivePlayback(chatId);
+    long generation = context.generation.incrementAndGet();
+    enqueueTtsStop(chatId, generation);
+    return generation;
+  }
+
+  private static void enqueue(String chatId, OutboundMessage message) {
+    if (chatId == null || message == null) {
+      return;
+    }
+    Session session = clients.get(chatId);
+    if (session == null || !session.isOpen()) {
+      return;
+    }
+    SendContext context = getOrCreateSendContext(chatId);
+    if (context.closed.get()) {
+      return;
+    }
+    if (message.priority) {
+      context.queue.offerFirst(message);
+    } else {
+      context.queue.offerLast(message);
+    }
+    startSendWorker(chatId, context);
+  }
+
+  private static void startSendWorker(String chatId, SendContext context) {
+    if (context.workerStarted.compareAndSet(false, true)) {
+      sendExecutor.execute(() -> drainSendQueue(chatId, context));
+    }
+  }
+
+  private static void drainSendQueue(String chatId, SendContext context) {
+    try {
+      while (true) {
+        if (context.closed.get()) {
+          context.queue.clear();
+          return;
+        }
+        Session session = clients.get(chatId);
+        if (session == null || !session.isOpen()) {
+          context.queue.clear();
+          return;
+        }
+        OutboundMessage message =
+            context.queue.pollFirst(200, java.util.concurrent.TimeUnit.MILLISECONDS);
+        if (message == null) {
+          if (context.closed.get()) {
+            context.queue.clear();
+            return;
+          }
+          continue;
+        }
+        if (message.generation != context.generation.get()) {
+          continue;
+        }
+        switch (message.type) {
+          case TEXT -> session.getBasicRemote().sendText(message.text);
+          case BINARY -> session.getBasicRemote().sendBinary(ByteBuffer.wrap(message.binary));
+          case CLOSE -> session.close();
+          default -> {
+          }
+        }
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch (IOException | IllegalStateException e) {
+      log.error("WebSocket发送失败，chatId={}, error={}", chatId, e.getMessage());
+      context.queue.clear();
+      Session session = clients.get(chatId);
+      if (session != null && session.isOpen()) {
+        try {
+          session.close();
+        } catch (IOException closeError) {
+          log.error("关闭异常会话失败，chatId={}, error={}", chatId, closeError.getMessage());
+        }
+      }
+    } finally {
+      context.workerStarted.set(false);
+      if (!context.closed.get() && !context.queue.isEmpty()) {
+        startSendWorker(chatId, context);
+      }
+    }
+  }
+
 
   /**
    * socket start
@@ -174,6 +449,7 @@ public class XiaoZhiWebsocket {
       log.info("注册成功{}", this.chatId);
       try {
         clients.put(this.chatId, session);
+        initSendContext(this.chatId);
         isAbort.put(this.chatId, false);
         haveVoice.put(this.chatId, false);
         refreshInteractionTime(this.chatId);
@@ -234,6 +510,7 @@ public class XiaoZhiWebsocket {
         otaXiaozhiService.updateStatus(deviceId, "connected");
       }
       clients.put(this.chatId, session);
+      initSendContext(this.chatId);
       isAbort.put(this.chatId, false);
       haveVoice.put(this.chatId, false);
       refreshInteractionTime(this.chatId);
@@ -315,7 +592,7 @@ public class XiaoZhiWebsocket {
       opusDecoderMap.remove(chatId);
       voiceContent.remove(chatId); // 清理语音内容
       lastInteractionTimeMap.remove(chatId); // 清理时间记录
-      sendLocks.remove(chatId); // 清理发送锁
+      closeSendContext(chatId);
     }
   }
 
@@ -340,7 +617,7 @@ public class XiaoZhiWebsocket {
           xiaoZhiUtil.dealMcp(chatId, json);
         }
       } else if (type.equals("abort")) {
-        isAbort.put(chatId, true);
+        abortCurrentOutput(chatId);
       } else if (type.equals("listen")) {
         String state = json.getString("state");
         switch (state) {
@@ -374,12 +651,14 @@ public class XiaoZhiWebsocket {
               isRealTime = true;
             }
             log.info("listen start");
+            isAbort.put(chatId, false);
             voiceContent.remove(chatId);
+            activeInputRound = beginInputRound(chatId);
             refreshInteractionTime(chatId);
           }
           case "stop" -> {
             if (xiaoZhiUtil != null) {
-              xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual);
+              xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual, activeInputRound);
             }
           }
         }
@@ -440,9 +719,10 @@ public class XiaoZhiWebsocket {
             if (map != null && map.containsKey("start")) {
               log.debug("检测到语音开始: {}", map);
               haveVoice.put(chatId, true);
+              activeInputRound = beginInputRound(chatId);
               interactionDetected = true;
               if (isRealTime) {
-                isAbort.put(chatId, true);
+                abortCurrentOutput(chatId);
               }
               // 主动取消当前正在播放的音频，防止混叠
               cancelActivePlayback(chatId);
@@ -458,7 +738,7 @@ public class XiaoZhiWebsocket {
               }
               refreshInteractionTime(chatId);
               if (xiaoZhiUtil != null) {
-                xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual);
+                xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual, activeInputRound);
               }
               pcmVadBuffer.remove(chatId);
               return;
@@ -538,6 +818,7 @@ public class XiaoZhiWebsocket {
 
 
     clients.clear();
+    sendContexts.clear();
     new ArrayList<>(voiceContent.keySet()).forEach(voiceContent::remove);
     pcmVadBuffer.clear();
     opusDecoderMap.clear();
@@ -633,21 +914,18 @@ public class XiaoZhiWebsocket {
 
     Session session = XiaoZhiWebsocket.clients.get(chatId);
     if (session != null && session.isOpen()) {
-      session.getBasicRemote().sendText("""
+      long generation = nextGeneration(chatId);
+      enqueueText(chatId, """
           {
             "type": "tts",
             "state": "start"
-          }""");
+          }""", generation);
       if (ttsServiceFactory != null) {
         ttsServiceFactory.websocketAudioSync("时间过得真快，没什么事我先退下了", session, chatId,
-            productId);
+            productId, generation);
       }
-      try {
-        session.getBasicRemote().sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
-        session.close();
-      } catch (IOException e) {
-        log.error("Failed to close session: {}", e.getMessage());
-      }
+      enqueueTtsStop(chatId, generation);
+      enqueueClose(chatId, generation);
     }
     isAbort.put(chatId, false);
     cancelActivePlayback(chatId);
@@ -689,14 +967,6 @@ public class XiaoZhiWebsocket {
   }
 
   public static void send(String chatId, String msg) {
-    Session session = XiaoZhiWebsocket.clients.get(chatId);
-    if (session == null || !session.isOpen())
-      return;
-    // 获取或创建该连接对应的发送锁，保证同一连接串行发送
-    try {
-      session.getBasicRemote().sendText(msg);
-    } catch (IOException e) {
-      log.error("发送消息失败：{}", e.getMessage());
-    }
+    enqueueText(chatId, msg);
   }
 }

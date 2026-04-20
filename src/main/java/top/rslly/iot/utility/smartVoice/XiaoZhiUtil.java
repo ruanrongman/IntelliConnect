@@ -126,15 +126,13 @@ public class XiaoZhiUtil {
       return;
     }
 
-    session.getBasicRemote().sendText(
+    sendBase(chatId,
         "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
     log.debug("mcp...{}", mcpCanUse);
     if (mcpCanUse && !chatId.startsWith("register")) {
       if (visionExplainUrl != null && token != null) {
-        session.getBasicRemote()
-            .sendText(McpProtocolSend.sendInitialize(visionExplainUrl, token, false));
-        session.getBasicRemote()
-            .sendText(McpProtocolSend.sendToolList("", false));
+        sendBase(chatId, McpProtocolSend.sendInitialize(visionExplainUrl, token, false));
+        sendBase(chatId, McpProtocolSend.sendToolList("", false));
       }
     }
   }
@@ -185,7 +183,8 @@ public class XiaoZhiUtil {
     // 已有检测文本
     if (detect.length != 0)
       return detect[0];
-    var asrService = asrServiceFactory.getService(getProductAsrProvider(productId));
+    String asrProvider = getProductAsrProvider(productId);
+    var asrService = asrServiceFactory.getService(asrProvider);
     if (asrService == null)
       return null;
     // 构造解码器
@@ -202,23 +201,63 @@ public class XiaoZhiUtil {
     }
     // 生成WAV文件
     Path tempFile = Files.createTempFile("audio_", ".wav");
-    Files.write(tempFile, bos.toByteArray());
-    bos.close();
-    // 读取WAV文件并使用ASR服务提取文本返回
-    String ret = asrService.getTextRealtime(tempFile.toFile(), 16000, "pcm");
-    Files.deleteIfExists(tempFile);
-    return ret;
+    tempFile.toFile().deleteOnExit();
+    try {
+      Files.write(tempFile, bos.toByteArray());
+      bos.close();
+      // 读取WAV文件并使用ASR服务提取文本返回
+      String ret = asrService.getTextRealtime(tempFile.toFile(), 16000, "pcm");
+      if (StringUtils.isNotBlank(ret)) {
+        return ret;
+      }
+      return null;
+    } finally {
+      closeQuietly(bos);
+      deleteTempFileQuietly(tempFile);
+    }
+  }
+
+  private void closeQuietly(ByteArrayOutputStream bos) {
+    if (bos == null) {
+      return;
+    }
+    try {
+      bos.close();
+    } catch (IOException e) {
+      log.debug("关闭音频缓冲流失败: {}", e.getMessage());
+    }
+  }
+
+  private void deleteTempFileQuietly(Path tempFile) {
+    if (tempFile == null) {
+      return;
+    }
+    for (int i = 0; i < 5; i++) {
+      try {
+        if (!Files.exists(tempFile) || Files.deleteIfExists(tempFile)) {
+          return;
+        }
+      } catch (IOException e) {
+        if (i == 4) {
+          log.warn("临时音频文件删除失败，将交给JVM退出时清理: {}", tempFile, e);
+          return;
+        }
+        try {
+          Thread.sleep(50L * (i + 1));
+        } catch (InterruptedException interruptedException) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+      }
+    }
   }
 
   private void sendBase(String chatId, String msg) {
-    Session session = XiaoZhiWebsocket.clients.get(chatId);
-    if (session == null || !session.isOpen())
-      return;
-    try {
-      session.getBasicRemote().sendText(msg);
-    } catch (IOException e) {
-      log.error("发送消息失败：{}", e.getMessage());
-    }
+    sendBase(chatId, msg, XiaoZhiWebsocket.currentGeneration(chatId));
+  }
+
+  private void sendBase(String chatId, String msg, long generation) {
+    XiaoZhiWebsocket.enqueueText(chatId, msg, generation);
   }
 
   /**
@@ -227,7 +266,11 @@ public class XiaoZhiUtil {
    * @param chatId 聊天的ID
    */
   private void sendForUnclearMsg(String chatId) {
-    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}");
+    sendForUnclearMsg(chatId, XiaoZhiWebsocket.currentGeneration(chatId));
+  }
+
+  private void sendForUnclearMsg(String chatId, long generation) {
+    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}", generation);
   }
 
   /**
@@ -237,8 +280,12 @@ public class XiaoZhiUtil {
    * @param text 需要发送的文本
    */
   private void sendText(String chatId, String text) {
+    sendText(chatId, text, XiaoZhiWebsocket.currentGeneration(chatId));
+  }
+
+  private void sendText(String chatId, String text, long generation) {
     sendBase(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
-        + "\"text\": \"" + text + "\"}");
+        + "\"text\": \"" + text + "\"}", generation);
   }
 
   /**
@@ -247,20 +294,32 @@ public class XiaoZhiUtil {
    * @param chatId 聊天ID
    */
   private void sendWhenThinking(String chatId) {
-    sendText(chatId, "智能助手思考中");
+    sendWhenThinking(chatId, XiaoZhiWebsocket.currentGeneration(chatId));
+  }
+
+  private void sendWhenThinking(String chatId, long generation) {
+    sendText(chatId, "智能助手思考中", generation);
     JSONObject emotionObject = new JSONObject();
     emotionObject.put("type", "llm");
     emotionObject.put("text", "🤔");
     emotionObject.put("emotion", "thinking");
-    sendBase(chatId, emotionObject.toJSONString());
+    sendBase(chatId, emotionObject.toJSONString(), generation);
   }
 
   private void sendTTSStart(String chatId) {
-    sendBase(chatId, "{\"type\":\"tts\",\"state\":\"start\"}");
+    sendTTSStart(chatId, XiaoZhiWebsocket.currentGeneration(chatId));
+  }
+
+  private void sendTTSStart(String chatId, long generation) {
+    sendBase(chatId, "{\"type\":\"tts\",\"state\":\"start\"}", generation);
   }
 
   private void sendSTT(String chatId, String text) {
-    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}");
+    sendSTT(chatId, text, XiaoZhiWebsocket.currentGeneration(chatId));
+  }
+
+  private void sendSTT(String chatId, String text, long generation) {
+    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}", generation);
   }
 
   /**
@@ -269,15 +328,18 @@ public class XiaoZhiUtil {
    * @param chatId 聊天ID
    */
   private void sendEndMsg(String chatId) {
-    sendBase(chatId, "{\"type\":\"tts\",\"state\":\"stop\"}");
+    sendEndMsg(chatId, XiaoZhiWebsocket.currentGeneration(chatId));
   }
 
-  private void clearAudioHandlers(String chatId) {
-    sendEndMsg(chatId);
+  private void sendEndMsg(String chatId, long generation) {
+    XiaoZhiWebsocket.enqueueTtsStop(chatId, generation);
+  }
+
+  private void clearAudioHandlers(String chatId, long generation) {
     XiaoZhiWebsocket.haveVoice.put(chatId, false);
     XiaoZhiWebsocket.isAbort.put(chatId, false);
     Router.queueMap.remove(chatId);
-    this.sendEndMsg(chatId);
+    this.sendEndMsg(chatId, generation);
   }
 
   private int getPunctuationPos(String str) {
@@ -363,28 +425,34 @@ public class XiaoZhiUtil {
     if (shouldSkipTts(src, skipToolPrefix))
       return;
     redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
-    String srcHash = getShortHash(src, 16);
-    // Early check - but still possible race condition
-    if (bytesRedisTemplate.hasKey(srcHash)) {
+    try {
+      String srcHash = getShortHash(src, 16);
+      if (!hasSpeakableContent(src)) {
+        log.debug("跳过无效TTS文本: chatId={}, text={}", chatId, src);
+        return;
+      }
+      // Early check - but still possible race condition
+      if (bytesRedisTemplate.hasKey(srcHash)) {
+        return;
+      }
+      if (src.contains(EMOJI_FLAG)) {
+        return;
+      }
+      List<byte[]> audioBytes = ttsServiceFactory.getTextAudio(chatId, src, productId);
+      if (audioBytes == null || audioBytes.isEmpty()) {
+        log.warn("TTS结果为空，退化为文本输出: chatId={}, text={}", chatId, src);
+        return;
+      }
+      // Fix race: check again after generation - if another thread already wrote it, skip writing
+      if (!bytesRedisTemplate.hasKey(srcHash)) {
+        bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
+        bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
+      }
+    } catch (Exception e) {
+      log.error("异步TTS缓存失败: chatId={}, text={}, error={}", chatId, src, e.getMessage(), e);
+    } finally {
       redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
-      return;
     }
-    if (src.contains(EMOJI_FLAG)) {
-      redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
-      return;
-    }
-    List<byte[]> audioBytes = ttsServiceFactory.getTextAudio(chatId, src, productId);
-    if (audioBytes == null) {
-      log.error("No TTS result! chatID: {}, text: {}", chatId, src);
-      redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
-      return;
-    }
-    // Fix race: check again after generation - if another thread already wrote it, skip writing
-    if (!bytesRedisTemplate.hasKey(srcHash)) {
-      bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
-      bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
-    }
-    redisStateTemplate.opsForHash().put(chatId + "_state", src, true);
   }
 
   /**
@@ -392,91 +460,103 @@ public class XiaoZhiUtil {
    * 
    * @param chatId 对话ID
    */
-  private void streamRspResultHandler(String chatId) {
+  private void streamRspResultHandler(String chatId, long generation) {
     // 设置结果处理线程状态为工作中
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, true);
-    Object handleState =
-        redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG);
-    if (handleState == null) {
-      log.error("处理状态错误");
-      return;
-    }
-    String crtS = null;
-    while ((boolean) handleState) {
-      if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false))
-        break;
-      handleState =
+    try {
+      Object handleState =
           redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG);
-      if (handleState == null || !(boolean) handleState)
-        break;
-      // 左进右出模拟队列
-      if (crtS == null)
-        crtS = redisStringTemplate.opsForList().rightPop(chatId);
-      if (StringUtils.isEmpty(crtS)) {
-        try {
-          Thread.sleep(10);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
+      if (handleState == null) {
+        log.error("处理状态错误");
+        return;
+      }
+      String crtS = null;
+      while ((boolean) handleState) {
+        if (!XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
           break;
         }
-        continue;
-      }
-      if (shouldSkipTts(crtS.trim(), skipToolPrefix)) {
-        sendText(chatId, crtS);
-        crtS = null;
-        continue;
-      }
-      if (crtS.equals(END_OF_STREAM_FLAG))
-        break;
-      if (!redisStateTemplate.opsForHash().hasKey(chatId + "_state", crtS)) {
-        try {
-          Thread.sleep(10);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
+        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false))
           break;
-        }
-        continue;
-      }
-      if (crtS.contains(EMOJI_FLAG)) {
-        sendBase(chatId, crtS.replace(EMOJI_FLAG, ""));
-        try {
-          Thread.sleep(10);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
-        crtS = null;
-        continue;
-      }
-      Object state = redisStateTemplate.opsForHash().get(chatId + "_state", crtS);
-      if (state == null || !(boolean) state) {
-        try {
-          Thread.sleep(10);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
+        handleState =
+            redisStateTemplate.opsForHash().get(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG);
+        if (handleState == null || !(boolean) handleState)
           break;
-        }
-        continue;
-      }
-      BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
-      String srcHash = getShortHash(crtS, 16);
-      Long audioBytesSize = bytesRedisTemplate.opsForList().size(srcHash);
-      // 如果缓存的长度为0，直接跳过后续步骤
-      if (audioBytesSize == null || audioBytesSize == 0)
-        continue;
-      for (long i = audioBytesSize - 1; i >= 0; i--) {
-        // 左进右出，队列
-        byte[] bytes = bytesRedisTemplate.opsForList().index(srcHash, i);
-        if (bytes == null)
+        // 左进右出模拟队列
+        if (crtS == null)
+          crtS = redisStringTemplate.opsForList().rightPop(chatId);
+        if (StringUtils.isEmpty(crtS)) {
+          try {
+            Thread.sleep(10);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            break;
+          }
           continue;
-        sendQueue.offer(bytes);
+        }
+        if (shouldSkipTts(crtS.trim(), skipToolPrefix)) {
+          sendText(chatId, crtS, generation);
+          crtS = null;
+          continue;
+        }
+        if (crtS.equals(END_OF_STREAM_FLAG))
+          break;
+        if (!redisStateTemplate.opsForHash().hasKey(chatId + "_state", crtS)) {
+          try {
+            Thread.sleep(10);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            break;
+          }
+          continue;
+        }
+        if (crtS.contains(EMOJI_FLAG)) {
+          sendBase(chatId, crtS.replace(EMOJI_FLAG, ""), generation);
+          try {
+            Thread.sleep(10);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+          crtS = null;
+          continue;
+        }
+        Object state = redisStateTemplate.opsForHash().get(chatId + "_state", crtS);
+        if (state == null || !(boolean) state) {
+          try {
+            Thread.sleep(10);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            break;
+          }
+          continue;
+        }
+        BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
+        String srcHash = getShortHash(crtS, 16);
+        Long audioBytesSize = bytesRedisTemplate.opsForList().size(srcHash);
+        // TTS失败或返回空音频时，退化成只发文本，避免整轮卡死在当前句子
+        if (audioBytesSize == null || audioBytesSize == 0) {
+          log.warn("TTS音频为空，退化为文本输出: chatId={}, text={}", chatId, crtS);
+          sendText(chatId, crtS, generation);
+          crtS = null;
+          continue;
+        }
+        for (long i = audioBytesSize - 1; i >= 0; i--) {
+          // 左进右出，队列
+          byte[] bytes = bytesRedisTemplate.opsForList().index(srcHash, i);
+          if (bytes == null)
+            continue;
+          sendQueue.offer(bytes);
+        }
+        Session session = XiaoZhiWebsocket.clients.get(chatId);
+        sendText(chatId, crtS, generation);
+        AudioUtils.asyncSendAudioQueue(chatId, session, sendQueue, generation);
+        crtS = null;
       }
-      Session session = XiaoZhiWebsocket.clients.get(chatId);
-      sendText(chatId, crtS);
-      AudioUtils.asyncSendAudioQueue(chatId, session, sendQueue);
-      crtS = null;
+    } catch (Exception e) {
+      log.error("结果处理线程出错", e);
+    } finally {
+      // 设置结果处理线程状态为结束
+      redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, false);
     }
-    // 设置结果处理线程状态为结束
-    redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, false);
   }
 
   /**
@@ -488,7 +568,7 @@ public class XiaoZhiUtil {
    * @throws InterruptedException 由Thread.sleep抛出的异常
    */
   private void handlerStreamRsp(String chatId, int productId, boolean isManual,
-      CompletableFuture<String> res) throws InterruptedException {
+      CompletableFuture<String> res, long generation) throws InterruptedException {
     clearRedisCache(chatId);
     String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
     Map<String, Object> emotionMessage = new HashMap<>();
@@ -497,15 +577,18 @@ public class XiaoZhiUtil {
     // 结果字符串构造器
     StringBuilder answerStrBuffer = new StringBuilder();
     boolean emotionFlag = false;
-    this.sendTTSStart(chatId);
+    this.sendTTSStart(chatId, generation);
     // 设置处理状态为true
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, true);
     // 逻辑是这样的：将收取到的句子放入Redis队列中，结果处理线程查询队列并以此处理
     Thread.ofVirtual().start(() -> {
-      streamRspResultHandler(chatId);
+      streamRspResultHandler(chatId, generation);
     });
     while (res != null && !res.isDone() ||
         Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()) {
+      if (!XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
+        break;
+      }
       Queue<String> queue = Router.queueMap.get(chatId);
       if (queue == null || queue.isEmpty()) {
         Thread.sleep(10);
@@ -536,7 +619,7 @@ public class XiaoZhiUtil {
         XiaoZhiWebsocket.haveVoice.put(chatId, false);
         XiaoZhiWebsocket.isAbort.put(chatId, false);
         Router.queueMap.remove(chatId);
-        this.sendEndMsg(chatId);
+        this.sendEndMsg(chatId, generation);
       }
       // SSE元素处理
       String element = queue.poll();
@@ -572,7 +655,7 @@ public class XiaoZhiUtil {
         // 跳过工具前缀，直接发送文本但不进行TTS
         // trim后检查，如果匹配，跳过处理（原元素包含空格仍然需要发送原内容）
         if (shouldSkipTts(element.trim(), skipToolPrefix)) {
-          sendText(chatId, element);
+          sendText(chatId, element, generation);
           continue;
         }
         // 纯Emoji处理
@@ -621,10 +704,11 @@ public class XiaoZhiUtil {
       Thread.sleep(10);
     }
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, false);
-    this.clearAudioHandlers(chatId);
+    this.clearAudioHandlers(chatId, generation);
   }
 
-  private void handlerSyncRsp(String chatId, int productId, CompletableFuture<String> res)
+  private void handlerSyncRsp(String chatId, int productId, CompletableFuture<String> res,
+      long generation)
       throws IOException, ExecutionException, InterruptedException {
     log.info("Sync Rsp");
     JSONObject emotionObject = new JSONObject();
@@ -632,10 +716,13 @@ public class XiaoZhiUtil {
     emotionObject.put("text", "😶");
     emotionObject.put("emotion", "neutral");
 
-    sendBase(chatId, emotionObject.toJSONString());
+    sendBase(chatId, emotionObject.toJSONString(), generation);
     String answer = null;
     if (res != null) {
       answer = res.get();
+    }
+    if (!XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
+      return;
     }
     if (StringUtils.isEmpty(answer)) {
       answer = "抱歉，我暂时无法理解您的问题。";
@@ -643,21 +730,38 @@ public class XiaoZhiUtil {
     if (answer.length() > 500)
       answer = answer.substring(0, 500);
     if (!answer.isBlank()) {
-      splitSentences(answer, chatId, productId);
+      splitSentences(answer, chatId, productId, generation);
     }
-    this.clearAudioHandlers(chatId);
+    this.clearAudioHandlers(chatId, generation);
   }
 
   @Async("taskExecutor")
   public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
       String... detect) {
+    dealWithAudio(audioList, chatId, productId, isManual, 0L, detect);
+  }
+
+  @Async("taskExecutor")
+  public void dealWithAudio(List<byte[]> audioList, String chatId, int productId, boolean isManual,
+      long inputRound, String... detect) {
     if (audioList == null || chatId == null) {
       log.error("audioList或chatId为空，audioList: {}, chatId: {}", audioList, chatId);
       return;
     }
+    List<byte[]> audioSnapshot = snapshotAudioList(audioList);
+    if (detect.length == 0 && audioSnapshot.isEmpty()) {
+      return;
+    }
+    long effectiveInputRound =
+        inputRound > 0L ? inputRound : XiaoZhiWebsocket.beginInputRound(chatId);
+    if (!XiaoZhiWebsocket.tryClaimInputRound(chatId, effectiveInputRound)) {
+      log.debug("忽略重复音频处理触发: chatId={}, inputRound={}", chatId, effectiveInputRound);
+      return;
+    }
+    long generation = XiaoZhiWebsocket.nextGeneration(chatId);
     String text = "";
     try {
-      text = ASRHandler(audioList, productId, detect);
+      text = ASRHandler(audioSnapshot, productId, detect);
     } catch (OpusException e) {
       log.error("Opus音频解码错误: {}", e.getMessage());
       return;
@@ -667,30 +771,27 @@ public class XiaoZhiUtil {
     }
     // 如果ASR处理结果为空，通知用户并返回
     if (StringUtils.isEmpty(text)) {
-      this.sendForUnclearMsg(chatId);
-      this.sendEndMsg(chatId);
+      clearAudioList(audioList);
+      this.sendForUnclearMsg(chatId, generation);
+      this.clearAudioHandlers(chatId, generation);
       return;
     }
     // 如果音频太短，通知用户并返回
     if (text.equals(AUDIO_CONTENT_TOO_SHORT)) {
-      // 保留最后的10帧信息
-      int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-      if (audioList.size() > keepFrames) {
-        audioList.subList(0, audioList.size() - keepFrames).clear();
-      }
-      this.sendForUnclearMsg(chatId);
-      this.sendEndMsg(chatId);
+      trimAudioList(audioList, 10);
+      this.sendForUnclearMsg(chatId, generation);
+      this.clearAudioHandlers(chatId, generation);
       return;
     }
-    sendSTT(chatId, text);
+    sendSTT(chatId, text, generation);
     // Atomic update: compute combines get-and-put into single atomic operation
     final String finalText = text;
     XiaoZhiWebsocket.voiceContent.compute(chatId,
         (k, existing) -> existing == null ? finalText : existing + finalText);
-    audioList.clear();
+    clearAudioList(audioList);
     // 到这里，voiceContent不可能为空
     if (showThinking)
-      sendWhenThinking(chatId);
+      sendWhenThinking(chatId, generation);
     // 下面是TTS的部分
     String voiceContent = XiaoZhiWebsocket.voiceContent.get(chatId);
     CompletableFuture<String> res = null;
@@ -704,7 +805,7 @@ public class XiaoZhiUtil {
         Router.queueMap.containsKey(chatId) && Router.queueMap.get(chatId) != null;
     if (isStreamRsp) {
       try {
-        this.handlerStreamRsp(chatId, productId, isManual, res);
+        this.handlerStreamRsp(chatId, productId, isManual, res, generation);
         return;
       } catch (InterruptedException e) {
         log.error("音频处理线程出错", e);
@@ -712,7 +813,7 @@ public class XiaoZhiUtil {
     }
     // 非流式的处理方法
     try {
-      handlerSyncRsp(chatId, productId, res);
+      handlerSyncRsp(chatId, productId, res, generation);
     } catch (Exception e) {
       log.error("音频处理出错", e);
     }
@@ -762,11 +863,8 @@ public class XiaoZhiUtil {
       return;
     }
 
-    session.getBasicRemote().sendText("""
-        {
-          "type": "tts",
-          "state": "start"
-        }""");
+    long generation = XiaoZhiWebsocket.nextGeneration(chatId);
+    sendTTSStart(chatId, generation);
     // 定义问候语列表
     List<String> greetings = Arrays.asList(
         "很高兴见到你",
@@ -783,12 +881,11 @@ public class XiaoZhiUtil {
 
     // 发送随机问候语
     if (ttsServiceFactory != null && selectedGreeting != null) {
-      ttsServiceFactory.websocketAudioSync(selectedGreeting, session, chatId, productId);
+      ttsServiceFactory.websocketAudioSync(selectedGreeting, session, chatId, productId,
+          generation);
     }
 
-
-    session.getBasicRemote()
-        .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+    sendEndMsg(chatId, generation);
   }
 
   public void dealRegister(String chatId, int productId) throws IOException {
@@ -812,25 +909,20 @@ public class XiaoZhiUtil {
       redisUtil.set(code, deviceId, 60 * 5);
     }
 
-    session.getBasicRemote()
-        .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-            + registerMsg + "\"}");
-    session.getBasicRemote().sendText("""
-        {
-        "type": "tts",
-        "state": "start"
-        }""");
+    long generation = XiaoZhiWebsocket.nextGeneration(chatId);
+    sendText(chatId, registerMsg, generation);
+    sendTTSStart(chatId, generation);
 
     if (ttsServiceFactory != null) {
-      ttsServiceFactory.websocketAudioSync(registerMsg, session, chatId, productId);
+      ttsServiceFactory.websocketAudioSync(registerMsg, session, chatId, productId, generation);
     }
 
-    session.getBasicRemote()
-        .sendText("{\"type\":\"tts\",\"state\":\"stop\"}");
+    sendEndMsg(chatId, generation);
   }
 
   // 分割句子
-  private void splitSentences(String answer, String chatId, int productId) throws IOException {
+  private void splitSentences(String answer, String chatId, int productId, long generation)
+      throws IOException {
     if (answer == null || chatId == null) {
       log.error("splitSentences参数错误: answer={}, chatId={}", answer, chatId);
       return;
@@ -838,6 +930,9 @@ public class XiaoZhiUtil {
 
     String[] sentences = answer.split("(?<=[。？！；：])");
     for (String sentence : sentences) {
+      if (!XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
+        return;
+      }
       if (sentence == null)
         continue;
       sentence = sentence.trim();
@@ -855,11 +950,10 @@ public class XiaoZhiUtil {
 
       Session session = XiaoZhiWebsocket.clients.get(chatId);
       if (session != null && session.isOpen()) {
-        session.getBasicRemote()
-            .sendText(jsonObject.toJSONString());
-        if (!shouldSkipTts(sentence, skipToolPrefix)) {
+        sendBase(chatId, jsonObject.toJSONString(), generation);
+        if (!shouldSkipTts(sentence, skipToolPrefix) && hasSpeakableContent(sentence)) {
           if (ttsServiceFactory != null) {
-            ttsServiceFactory.websocketAudioSync(sentence, session, chatId, productId);
+            ttsServiceFactory.websocketAudioSync(sentence, session, chatId, productId, generation);
           }
         }
       }
@@ -872,6 +966,24 @@ public class XiaoZhiUtil {
     if (text == null)
       return false;
     return ToolPrefix.startsWithAnyPrefix(text);
+  }
+
+  private boolean hasSpeakableContent(String text) {
+    if (text == null) {
+      return false;
+    }
+    String normalized = removeEmoji(text).trim();
+    if (normalized.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < normalized.length(); i++) {
+      char ch = normalized.charAt(i);
+      if (Character.isLetterOrDigit(ch)
+          || Character.UnicodeScript.of(ch) == Character.UnicodeScript.HAN) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static String resolveFinalVoiceAnswer(String finalAnswer, String pendingStreamText,
@@ -916,7 +1028,7 @@ public class XiaoZhiUtil {
       log.error("从数据库获取产品ASR配置失败, productId: {}", productId, e);
     }
     // 数据库没有配置，返回null让AsrServiceFactory使用默认配置
-    log.info("产品 {} 没有数据库ASR配置，使用默认配置", productId);
+    log.debug("产品 {} 没有数据库ASR配置，使用默认配置", productId);
     return null;
   }
 }

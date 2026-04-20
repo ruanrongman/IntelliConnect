@@ -165,6 +165,8 @@ ai:
   asr:
     provider: funasr # dashscope 或 funasr
     wx_smart_robot_asr: dashscope
+    dashscope-max-concurrent: 20
+    dashscope-acquire-timeout-ms: 30000
   minimax:
     api-key: XXX
     group-id: XXX
@@ -192,7 +194,7 @@ ai:
   vision-model: silicon-Qwen/Qwen3-VL-8B-Instruct
   glm-key: XXX
   deepSeek-key: XXX
-  siliconFlow-Key: sk-dmsxtfzmrgqvqiypyvoeftzpsfbhnxrzqipjhndvfmdhhelu
+  siliconFlow-Key: XXX
   uniApi-Key: XXX
   dashscope-key: XXX
   robot-name: 小创

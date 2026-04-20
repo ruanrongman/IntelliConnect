@@ -26,7 +26,7 @@ import java.util.concurrent.BlockingQueue;
 
 public interface TtsService {
   void websocketAudioSync(String text, Float pitch, Float speed, Session session, String chatId,
-      String voice);
+      String voice, long generation);
 
   void asyncSynthesizeAndSaveAudio(String text, String chatId);
 

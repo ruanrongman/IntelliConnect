@@ -35,17 +35,12 @@ import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
-import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import jakarta.websocket.Session;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -64,6 +59,7 @@ public class Text2audio implements TtsService {
     public CountDownLatch latch = new CountDownLatch(1);
     private final String chatId;
     private final Session session;
+    private final long generation;
 
     // Only used for WebSocket audio sending.
     private final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
@@ -72,11 +68,12 @@ public class Text2audio implements TtsService {
     private final byte[] EOS = new byte[0];
     private final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
     private boolean sendAfterHandler = true;
-    private final ByteArrayOutputStream mp3Buffer = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream pcmBuffer = new ByteArrayOutputStream();
 
-    ReactCallback(String chatId, Session session) {
+    ReactCallback(String chatId, Session session, long generation) {
       this.chatId = chatId;
       this.session = session;
+      this.generation = generation;
       if (session == null) {
         bytes = new ArrayList<>();
         sendAfterHandler = false;
@@ -85,12 +82,9 @@ public class Text2audio implements TtsService {
 
     @Override
     public void onEvent(SpeechSynthesisResult message) {
-      // Write Audio to player
       if (message.getAudioFrame() != null) {
-        byte[] audio = message.getAudioFrame().array();
         try {
-          // Accumulate MP3 chunks - process all at once onComplete
-          mp3Buffer.write(audio);
+          pcmBuffer.write(readAllBytes(message.getAudioFrame()));
         } catch (Exception e) {
           log.error("sendBinary error{}", e.getMessage());
         }
@@ -101,18 +95,8 @@ public class Text2audio implements TtsService {
     public void onComplete() {
       log.debug("synthesis onComplete!");
       try {
-        if (mp3Buffer.size() > 0) {
-          // All MP3 data received - now convert to PCM
-          byte[] mp3Data = mp3Buffer.toByteArray();
-          String outputPath = System.getProperty("java.io.tmpdir");
-          String uuid = UUID.randomUUID().toString();
-          String tempFilePath = Paths.get(outputPath, uuid + ".mp3").toString();
-          Files.write(Paths.get(tempFilePath), mp3Data);
-
-          // Convert MP3 to PCM (16kHz mono)
-          byte[] pcmData = AudioUtils.convertMp3ToPcm(tempFilePath);
-
-          // Encode PCM to Opus
+        if (pcmBuffer.size() > 0) {
+          byte[] pcmData = pcmBuffer.toByteArray();
           List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
           if (!sendAfterHandler) {
             bytes.addAll(packets);
@@ -129,12 +113,9 @@ public class Text2audio implements TtsService {
           for (byte[] packet : packets) {
             audioQueue.offer(packet);
           }
-
-          // Cleanup temp file
-          Files.deleteIfExists(Paths.get(tempFilePath));
         }
       } catch (Exception e) {
-        log.error("MP3 processing error: {}", e.getMessage());
+        log.error("PCM processing error: {}", e.getMessage());
       }
 
       if (!sendAfterHandler) {
@@ -145,7 +126,7 @@ public class Text2audio implements TtsService {
       // Signal end-of-stream by adding an empty array.
       audioQueue.offer(EOS);
       // Asynchronously send the queued frames.
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue, generation);
       latch.countDown();
     }
 
@@ -162,6 +143,13 @@ public class Text2audio implements TtsService {
     public void waitForComplete() throws InterruptedException {
       latch.await();
     }
+
+    private byte[] readAllBytes(ByteBuffer buffer) {
+      ByteBuffer duplicate = buffer.asReadOnlyBuffer();
+      byte[] data = new byte[duplicate.remaining()];
+      duplicate.get(data);
+      return data;
+    }
   }
 
   @Value("${ai.dashscope-key}")
@@ -172,14 +160,19 @@ public class Text2audio implements TtsService {
             // 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
             .apiKey(apiKey)
             .model(model)
-            .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
+            .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
             .voice(voice)
             .build();
   }
 
   public static ByteBuffer synthesizeAndSaveAudio(String text) {
-
-    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, null);
+    SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
+        .apiKey(param.getApiKey())
+        .model(param.getModel())
+        .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
+        .voice(param.getVoice())
+        .build();
+    SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, null);
     ByteBuffer audio = synthesizer.call(text);
     log.debug("requestId{}", synthesizer.getLastRequestId());
     // log.info(Arrays.toString(audio.array()));
@@ -188,15 +181,15 @@ public class Text2audio implements TtsService {
 
   @Async("taskExecutor")
   public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
-    ReactCallback callback = new ReactCallback(chatId, null);
+    ReactCallback callback = new ReactCallback(chatId, null, 0L);
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
     synthesizer.call(text);
   }
 
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
-      String chatId, String voice) {
-    ReactCallback callback = new ReactCallback(chatId, session);
+      String chatId, String voice, long generation) {
+    ReactCallback callback = new ReactCallback(chatId, session, generation);
     try {
       String model = param.getModel();
       if (voice != null && voice.startsWith("cosy_v2_")) {
@@ -209,7 +202,7 @@ public class Text2audio implements TtsService {
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(model)
-          .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
+          .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
           .pitchRate(pitch)
           .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
@@ -229,7 +222,7 @@ public class Text2audio implements TtsService {
   @Override
   public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
       String voice) {
-    ReactCallback callback = new ReactCallback(chatId, null);
+    ReactCallback callback = new ReactCallback(chatId, null, 0L);
     try {
       String model = param.getModel();
       String voiceId = param.getVoice();
@@ -243,7 +236,7 @@ public class Text2audio implements TtsService {
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(model)
-          .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
+          .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
           .pitchRate(pitch)
           .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voiceId : param.getVoice())
@@ -251,6 +244,11 @@ public class Text2audio implements TtsService {
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
       synthesizer.call(text);
       callback.waitForComplete();
+      if (callback.bytes == null || callback.bytes.isEmpty()) {
+        log.warn("TTS未生成有效音频: chatId={}, textLength={}", chatId,
+            text == null ? 0 : text.length());
+        return null;
+      }
       return callback.bytes;
     } catch (Exception e) {
       log.error("getTextAudio error{}", e.getMessage());

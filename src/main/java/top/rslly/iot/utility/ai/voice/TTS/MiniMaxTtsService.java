@@ -70,8 +70,11 @@ public class MiniMaxTtsService implements TtsService {
 
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
-      String chatId, String voice) {
+      String chatId, String voice, long generation) {
     List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
+    if (audioList == null) {
+      return;
+    }
     // Only used for WebSocket audio sending.
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
     for (byte[] b : audioList) {
@@ -79,7 +82,7 @@ public class MiniMaxTtsService implements TtsService {
     }
     try {
       // 异步发送音频队列
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue, generation);
     } catch (Exception e) {
       log.error("MiniMax TTS error for chatId: {}", chatId, e);
     }

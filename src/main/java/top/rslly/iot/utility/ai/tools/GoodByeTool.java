@@ -23,11 +23,9 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
-import java.io.IOException;
 import java.util.*;
 
 @Component
@@ -81,22 +79,20 @@ public class GoodByeTool implements BaseTool<String> {
     int productId = (int) globalMessage.get("productId");
     String chatId = (String) globalMessage.get("chatId");
     if (XiaoZhiWebsocket.clients.containsKey(chatId)) {
-      try {
-        var session = XiaoZhiWebsocket.clients.get(chatId);
-        String message = getRandomGoodbyeMessage();
-        session.getBasicRemote().sendText("""
-            {
-              "type": "tts",
-              "state": "start"
-            }""");
-        session.getBasicRemote()
-            .sendText("{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \""
-                + message + "\"}");
-        ttsServiceFactory.websocketAudioSync(message, session, chatId, productId);
-        session.close();
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
+      var session = XiaoZhiWebsocket.clients.get(chatId);
+      String message = getRandomGoodbyeMessage();
+      long generation = XiaoZhiWebsocket.nextGeneration(chatId);
+      XiaoZhiWebsocket.enqueueText(chatId, """
+          {
+            "type": "tts",
+            "state": "start"
+          }""", generation);
+      XiaoZhiWebsocket.enqueueText(chatId,
+          "{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \"" + message + "\"}",
+          generation);
+      ttsServiceFactory.websocketAudioSync(message, session, chatId, productId, generation);
+      XiaoZhiWebsocket.enqueueTtsStop(chatId, generation);
+      XiaoZhiWebsocket.enqueueClose(chatId, generation);
     }
     return getRandomGoodbyeMessage();
   }

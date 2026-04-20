@@ -365,6 +365,7 @@ public class MusicPlayer {
     audioQueue.offer(new byte[0]);
 
     // 使用AudioUtils异步发送
-    AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+    AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue,
+        XiaoZhiWebsocket.currentGeneration(chatId));
   }
 }

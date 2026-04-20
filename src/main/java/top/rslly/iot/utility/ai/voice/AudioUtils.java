@@ -191,19 +191,15 @@ public class AudioUtils {
   /**
    * 发送二进制数据（带锁，防止并发发送导致BINARY_FULL_WRITING错误）
    */
-  public static void sendBinary(Session session, ByteBuffer data) {
-    if (session == null || !session.isOpen())
+  public static void sendBinary(String chatId, ByteBuffer data, long generation) {
+    if (chatId == null || data == null)
       return;
-    // 使用同一个发送锁，保证同一连接上的文本和二进制发送都串行执行
-    try {
-      session.getBasicRemote().sendBinary(data);
-    } catch (IOException e) {
-      log.error("发送二进制数据失败：{}", e.getMessage());
-    }
+    XiaoZhiWebsocket.enqueueBinary(chatId, data, generation);
   }
 
   public static void asyncSendAudioQueue(String chatId, Session session,
-      BlockingQueue<byte[]> queue) {
+      BlockingQueue<byte[]> queue, long generation) {
+    XiaoZhiWebsocket.PlaybackSession playbackSession = null;
     try {
       if (session == null || !session.isOpen()) {
         log.warn("WebSocket session is null or closed for chatId: {}", chatId);
@@ -215,8 +211,8 @@ public class AudioUtils {
       XiaoZhiWebsocket.cancelActivePlayback(chatId);
 
       // Register this playback as the active one
-      XiaoZhiWebsocket.PlaybackSession playbackSession = new XiaoZhiWebsocket.PlaybackSession(
-          Thread.currentThread(), queue);
+      playbackSession = new XiaoZhiWebsocket.PlaybackSession(
+          Thread.currentThread(), queue, generation);
       XiaoZhiWebsocket.activePlayback.put(chatId, playbackSession);
 
       final long startTime = System.nanoTime();
@@ -226,7 +222,8 @@ public class AudioUtils {
       List<byte[]> preBuffer = new ArrayList<>();
       for (int i = 0; i < PRE_BUFFER_COUNT; i++) {
         if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
-            || playbackSession.isCancelled.get()) {
+            || playbackSession.isCancelled.get()
+            || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
           queue.clear();
           return;
         }
@@ -242,11 +239,12 @@ public class AudioUtils {
       for (byte[] bytes : preBuffer) {
         if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
             || playbackSession.isCancelled.get()
-            || !session.isOpen()) {
+            || !session.isOpen()
+            || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
           queue.clear();
           return;
         }
-        sendBinary(session, AudioUtils.byte2Bytebuffer(bytes));
+        sendBinary(chatId, AudioUtils.byte2Bytebuffer(bytes), generation);
       }
 
       // Continue sending remaining frames with timing control.
@@ -254,7 +252,8 @@ public class AudioUtils {
         // 每次循环检查打断
         if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
             || playbackSession.isCancelled.get()
-            || !session.isOpen()) {
+            || !session.isOpen()
+            || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
           queue.clear();
           return;
         }
@@ -276,7 +275,8 @@ public class AudioUtils {
         // 修改：分段sleep，快速响应打断
         while (delayNs > 0) {
           if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
-              || playbackSession.isCancelled.get()) {
+              || playbackSession.isCancelled.get()
+              || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
             queue.clear();
             return;
           }
@@ -289,12 +289,13 @@ public class AudioUtils {
 
         if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
             || playbackSession.isCancelled.get()
-            || !session.isOpen()) {
+            || !session.isOpen()
+            || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
           queue.clear();
           return;
         }
 
-        sendBinary(session, AudioUtils.byte2Bytebuffer(opusPacket));
+        sendBinary(chatId, AudioUtils.byte2Bytebuffer(opusPacket), generation);
         playPosition += FRAME_DURATION;
       }
     } catch (InterruptedException e) {
@@ -303,7 +304,9 @@ public class AudioUtils {
       log.error("Error in asyncSendAudioQueue: {}", e.getMessage(), e);
     } finally {
       // Always remove this playback from active list
-      XiaoZhiWebsocket.activePlayback.remove(chatId);
+      if (playbackSession != null) {
+        XiaoZhiWebsocket.activePlayback.remove(chatId, playbackSession);
+      }
       queue.clear();
     }
   }

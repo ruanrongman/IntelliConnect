@@ -53,7 +53,8 @@ public class TtsServiceFactory {
   }
 
   @Deprecated
-  public void websocketAudioSync(String text, Session session, String chatId, int productId) {
+  public void websocketAudioSync(String text, Session session, String chatId, int productId,
+      long generation) {
     String provider = "dashscope";
     // 语音音调 (0.5-2.0)
     float pitch = 1.0f;
@@ -81,7 +82,7 @@ public class TtsServiceFactory {
     } catch (Exception ignored) {
     }
     TtsService ttsService = getTtsService(provider);
-    ttsService.websocketAudioSync(text, pitch, speed, session, chatId, voice);
+    ttsService.websocketAudioSync(text, pitch, speed, session, chatId, voice, generation);
   }
 
   public List<byte[]> getTextAudio(String chatId, String text, int productId) {

@@ -53,6 +53,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -213,7 +214,7 @@ public class DeepSeek implements LLM {
   @Override
   public String imageToWord(String question, String url) {
     try {
-      ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+      ChatCompletionCreateParams params = applyModelDefaults(ChatCompletionCreateParams.builder()
           .model(model)
           .addMessage(ChatCompletionUserMessageParam.builder()
               .contentOfArrayOfContentParts(List.of(
@@ -227,8 +228,8 @@ public class DeepSeek implements LLM {
                           .url(url)
                           .build())
                       .build())))
-              .build())
-          .build();
+              .build()))
+                  .build();
       String response = extractText(client.chat().completions().create(params));
       log.debug("model output:{} ", response);
       return response;
@@ -239,17 +240,18 @@ public class DeepSeek implements LLM {
   }
 
   private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages) {
-    return ChatCompletionCreateParams.builder()
+    return applyModelDefaults(ChatCompletionCreateParams.builder()
         .model(model)
-        .messages(toMessageParams(messages))
-        .build();
+        .messages(toMessageParams(messages)))
+            .build();
   }
 
   private ChatCompletionCreateParams buildFunctionParams(List<ModelMessage> messages,
       List<FunctionRouterToolSpec> toolSpecs) {
-    ChatCompletionCreateParams.Builder builder = ChatCompletionCreateParams.builder()
-        .model(model)
-        .messages(toMessageParams(messages));
+    ChatCompletionCreateParams.Builder builder = applyModelDefaults(
+        ChatCompletionCreateParams.builder()
+            .model(model)
+            .messages(toMessageParams(messages)));
     if (toolSpecs != null && !toolSpecs.isEmpty()) {
       builder.toolChoice(ChatCompletionToolChoiceOption.Auto.AUTO)
           .parallelToolCalls(false);
@@ -259,6 +261,26 @@ public class DeepSeek implements LLM {
     }
     return builder
         .build();
+  }
+
+  private ChatCompletionCreateParams.Builder applyModelDefaults(
+      ChatCompletionCreateParams.Builder builder) {
+    if (shouldDisableThinkingByDefault()) {
+      builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(false));
+    }
+    return builder;
+  }
+
+  private boolean shouldDisableThinkingByDefault() {
+    String normalizedModel = model == null ? "" : model.trim().toLowerCase(Locale.ROOT);
+    if (normalizedModel.isEmpty() || normalizedModel.contains("thinking")) {
+      return false;
+    }
+    // Align with Bailian mixed-thinking Qwen model families that support enable_thinking.
+    return normalizedModel.startsWith("qwen3")
+        || normalizedModel.startsWith("qwen-plus")
+        || normalizedModel.startsWith("qwen-flash")
+        || normalizedModel.startsWith("qwen-turbo");
   }
 
   private List<ChatCompletionMessageParam> toMessageParams(List<ModelMessage> messages) {

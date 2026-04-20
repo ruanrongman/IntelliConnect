@@ -27,6 +27,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -45,11 +46,16 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
 public class Audio2Text implements AsrService {
   private String apiKey;
+  private volatile Semaphore realtimeSemaphore = new Semaphore(20, true);
+  private int dashscopeMaxConcurrent = 20;
+  private long dashscopeAcquireTimeoutMs = 30000;
 
   @Value("${ai.audio-tmp-path}")
   private String audioPath;
@@ -58,6 +64,23 @@ public class Audio2Text implements AsrService {
   public void setApiKey(String apiKey) {
     // 填写自己的api key
     this.apiKey = apiKey;
+  }
+
+  @Value("${ai.asr.dashscope-max-concurrent:20}")
+  public void setDashscopeMaxConcurrent(int dashscopeMaxConcurrent) {
+    this.dashscopeMaxConcurrent = Math.max(1, dashscopeMaxConcurrent);
+    this.realtimeSemaphore = new Semaphore(this.dashscopeMaxConcurrent, true);
+  }
+
+  @Value("${ai.asr.dashscope-acquire-timeout-ms:30000}")
+  public void setDashscopeAcquireTimeoutMs(long dashscopeAcquireTimeoutMs) {
+    this.dashscopeAcquireTimeoutMs = Math.max(0L, dashscopeAcquireTimeoutMs);
+  }
+
+  @PostConstruct
+  public void logAsrConcurrencyConfig() {
+    log.info("DashScope ASR本地并发闸门已启用: maxConcurrent={}, acquireTimeoutMs={}",
+        dashscopeMaxConcurrent, dashscopeAcquireTimeoutMs);
   }
 
   public String getText(String url) {
@@ -110,6 +133,9 @@ public class Audio2Text implements AsrService {
   }
 
   public String getTextRealtime(File file, int sampleRate, String format) {
+    if (file == null || !file.exists() || file.length() == 0) {
+      return "";
+    }
     // 创建Recognition实例
     Recognition recognizer = new Recognition();
     // 创建RecognitionParam
@@ -124,7 +150,15 @@ public class Audio2Text implements AsrService {
             .parameter("language_hints", new String[] {"zh", "en"})
             .build();
 
+    boolean acquired = false;
     try {
+      acquired = realtimeSemaphore.tryAcquire(dashscopeAcquireTimeoutMs, TimeUnit.MILLISECONDS);
+      if (!acquired) {
+        log.warn("DashScope ASR本地并发闸门已满: maxConcurrent={}, acquireTimeoutMs={}, file={}",
+            dashscopeMaxConcurrent, dashscopeAcquireTimeoutMs,
+            file == null ? "null" : file.getName());
+        return "";
+      }
       // System.out.println("识别结果：" + recognizer.call(param, file));
       String text = recognizer.call(param, file);
       StringBuilder sentences = new StringBuilder();
@@ -135,12 +169,20 @@ public class Audio2Text implements AsrService {
           sentences.append(sentencesArray.getJSONObject(i).getString("text"));
         }
       } else {
-        sentences.append("识别结果为空");
+        return "";
       }
       return sentences.toString();
     } catch (Exception e) {
-      log.error("语音识别失败{}", e.getMessage());
-      return "语音识别失败";
+      if (isRateLimitError(e)) {
+        log.warn("DashScope ASR触发上游限流: {}", e.getMessage());
+      } else {
+        log.error("语音识别失败{}", e.getMessage());
+      }
+      return "";
+    } finally {
+      if (acquired) {
+        realtimeSemaphore.release();
+      }
     }
   }
 
@@ -162,6 +204,15 @@ public class Audio2Text implements AsrService {
         log.error("语音识别失败{}", e.getMessage());
       }
     }
+  }
+
+  private boolean isRateLimitError(Exception e) {
+    if (e == null || e.getMessage() == null) {
+      return false;
+    }
+    String message = e.getMessage();
+    return message.contains("Throttling.RateQuota")
+        || message.contains("Requests rate limit exceeded");
   }
 
 }

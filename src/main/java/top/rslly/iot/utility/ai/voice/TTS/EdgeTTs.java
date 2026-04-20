@@ -43,14 +43,17 @@ public class EdgeTTs implements TtsService {
 
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
-      String chatId, String voice) {
+      String chatId, String voice, long generation) {
     List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
+    if (audioList == null) {
+      return;
+    }
     final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
     for (byte[] b : audioList) {
       audioQueue.offer(b);
     }
     try {
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue);
+      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue, generation);
     } catch (Exception e) {
       log.error("websocketAudio error for chatId: {}", chatId, e);
     }
