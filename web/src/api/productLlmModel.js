@@ -10,6 +10,15 @@ export const getProductLlmModel = (data) =>
         'Authorization': token
       }
   })
+export const getProductLlmModelByProductId = (params) =>
+  request({
+    url: '/api/v2/productLlmModelByProductId',
+    method: 'get',
+    headers: {
+        'Authorization': token
+      },
+    params
+  })
   export const postProductLlmModel = (data) =>
     request({
       url: '/api/v2/productLlmModel',

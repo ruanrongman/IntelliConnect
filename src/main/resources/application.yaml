@@ -52,6 +52,8 @@ spring:
       test-while-idle: true
       test-on-borrow: false
       test-on-return: false
+      # 保持连接活跃，防止被MySQL服务端关闭
+      keep-alive: true
       # 打开PSCache，并且指定每个连接上PSCache的大小
       pool-prepared-statements: true
       max-pool-prepared-statement-per-connection-size: 20
@@ -206,7 +208,7 @@ ai:
   chatTool-speedUp: true
   emotionTool-llm: dashscope-qwen2.5-14b-instruct
   memoryTool-llm: dashscope-qwen2.5-32b-instruct
-  classifierTool-llm: dashscope-qwen3-next-80b-a3b-instruct
+  classifierTool-llm: dashscope-deepseek-v4-flash
   classifierTool-speedUp: true
   router:
     mode: function

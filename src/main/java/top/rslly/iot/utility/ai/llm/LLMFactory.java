@@ -122,33 +122,20 @@ public class LLMFactory {
     // 4. 根据前缀路由到不同供应商 (使用小写版本匹配，从原始版本提取)
     if (lowerCaseLlmName.startsWith("silicon-")) {
       String modelName = baseLlmName.substring("silicon-".length());
-      if (thinkMode) {
-        return new Qwen3(siliconFlowApiKey, modelName, enableThinking,
-            thinkingBudget, "https://api.siliconflow.cn/v1/chat/completions");
-      }
-      return new DeepSeek("https://api.siliconflow.cn", modelName, siliconFlowApiKey);
+      return new DeepSeek("https://api.siliconflow.cn", modelName, siliconFlowApiKey,
+          enableThinking, thinkingBudget);
     } else if (lowerCaseLlmName.startsWith("dashscope-")) {
       String modelName = baseLlmName.substring("dashscope-".length());
-      if (thinkMode) {
-        return new Qwen3(dashScopeApiKey, modelName, enableThinking,
-            thinkingBudget, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
-      }
       return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
-          dashScopeApiKey);
+          dashScopeApiKey, enableThinking, thinkingBudget);
     } else if (lowerCaseLlmName.startsWith("uniapi-")) {
       String modelName = baseLlmName.substring("uniapi-".length());
-      if (thinkMode) {
-        return new Qwen3(uniApiKey, modelName, enableThinking,
-            thinkingBudget, "https://hk.uniapi.io/v1/chat/completions");
-      }
-      return new DeepSeek("https://hk.uniapi.io", modelName, uniApiKey);
+      return new DeepSeek("https://hk.uniapi.io", modelName, uniApiKey,
+          enableThinking, thinkingBudget);
     } else if (lowerCaseLlmName.startsWith("custom-")) {
       String modelName = baseLlmName.substring("custom-".length());
-      if (thinkMode) {
-        return new Qwen3(customKey, modelName, enableThinking,
-            thinkingBudget, customLLMProviderUrl + "/v1/chat/completions");
-      }
-      return new DeepSeek(customLLMProviderUrl, modelName, customKey);
+      return new DeepSeek(customLLMProviderUrl, modelName, customKey,
+          enableThinking, thinkingBudget);
     }
 
     // 6. 兜底策略：如果以上都不匹配，返回默认的 DeepSeek

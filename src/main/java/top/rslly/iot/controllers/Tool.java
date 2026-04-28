@@ -662,6 +662,21 @@ public class Tool {
     return agentMemoryService.getMemory(header);
   }
 
+  @Operation(summary = "获取聊天记忆", description = "按照产品和昵称获取聊天记忆，昵称可选")
+  @RequestMapping(value = "/memoryByNickName", method = RequestMethod.GET)
+  public JsonResult<?> getMemoryByNickName(
+      @RequestParam("productId") int productId,
+      @RequestParam(value = "nickName", required = false) @Size(min = 1, max = 255) String nickName,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentMemoryService.getMemoryByNickName(productId, nickName);
+  }
+
   @Operation(summary = "修改聊天记忆", description = "修改聊天记忆")
   @RequestMapping(value = "/memory", method = RequestMethod.PUT)
   public JsonResult<?> updateMemory(

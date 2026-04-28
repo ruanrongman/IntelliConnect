@@ -74,19 +74,28 @@ public class DeepSeek implements LLM {
   private final OpenAIClient client;
   private final String baseUrl;
   private final String model;
+  private final boolean enableThinking;
+  private final int thinkingBudget;
 
   public DeepSeek(String apiKey) {
     this(DEFAULT_URL, DEFAULT_MODEL, apiKey);
   }
 
   public DeepSeek(String url, String model, String apiKey) {
+    this(url, model, apiKey, false, 128);
+  }
+
+  public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
+      int thinkingBudget) {
     this.baseUrl = normalizeBaseUrl(url);
     this.model = model;
+    this.enableThinking = enableThinking;
+    this.thinkingBudget = thinkingBudget;
     this.client = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .baseUrl(this.baseUrl)
-        .timeout(Duration.ofSeconds(3000))
-        .maxRetries(2)
+        .timeout(Duration.ofSeconds(60))
+        .maxRetries(3)
         .build();
   }
 
@@ -265,7 +274,10 @@ public class DeepSeek implements LLM {
 
   private ChatCompletionCreateParams.Builder applyModelDefaults(
       ChatCompletionCreateParams.Builder builder) {
-    if (shouldDisableThinkingByDefault()) {
+    if (enableThinking) {
+      builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(true));
+      builder.putAdditionalBodyProperty("thinking_budget", JsonValue.from(thinkingBudget));
+    } else if (shouldDisableThinkingByDefault()) {
       builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(false));
     }
     return builder;
@@ -276,11 +288,13 @@ public class DeepSeek implements LLM {
     if (normalizedModel.isEmpty() || normalizedModel.contains("thinking")) {
       return false;
     }
-    // Align with Bailian mixed-thinking Qwen model families that support enable_thinking.
     return normalizedModel.startsWith("qwen3")
         || normalizedModel.startsWith("qwen-plus")
         || normalizedModel.startsWith("qwen-flash")
-        || normalizedModel.startsWith("qwen-turbo");
+        || normalizedModel.startsWith("qwen-turbo")
+        || normalizedModel.startsWith("deepseek-v3.2")
+        || normalizedModel.startsWith("deepseek-v3.1")
+        || normalizedModel.startsWith("deepseek-v4");
   }
 
   private List<ChatCompletionMessageParam> toMessageParams(List<ModelMessage> messages) {
@@ -308,7 +322,17 @@ public class DeepSeek implements LLM {
   private String extractText(ChatCompletion completion) {
     return completion.choices().stream()
         .findFirst()
-        .map(choice -> choice.message().content().orElse(""))
+        .map(choice -> {
+          if (enableThinking) {
+            JsonValue reasoningValue = choice.message()._additionalProperties()
+                .get("reasoning_content");
+            String reasoning = reasoningValue == null ? null : reasoningValue.convert(String.class);
+            if (reasoning != null) {
+              log.info("model reasoningContent:{}", reasoning);
+            }
+          }
+          return choice.message().content().orElse("");
+        })
         .orElse("");
   }
 

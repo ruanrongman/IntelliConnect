@@ -34,6 +34,8 @@ public interface AgentMemoryService {
 
   JsonResult<?> getMemory(String token);
 
+  JsonResult<?> getMemoryByNickName(int productId, String nickName);
+
   JsonResult<?> updateMemory(AgentMemory agentMemory);
 
   JsonResult<?> deleteMemory(int id);

@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.AgentMemoryEntity;
+import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.models.ProductRouterSetEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.AgentMemory;
@@ -55,8 +56,12 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
+  @Resource
+  private OtaXiaozhiRepository otaXiaozhiRepository;
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private ProductRepository productRepository;
 
   @Override
   public List<AgentMemoryEntity> findAllById(int id) {
@@ -136,6 +141,44 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
       }
       return ResultTool.success(result1);
     }
+  }
+
+  @Override
+  public JsonResult<?> getMemoryByNickName(int productId, String nickName) {
+    if (productRepository.findAllById(productId).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    List<AgentMemoryResponse> agentMemoryResponses = new ArrayList<>();
+    List<OtaXiaozhiEntity> otaXiaozhiEntities;
+    if (nickName != null && !nickName.isBlank()) {
+      otaXiaozhiEntities =
+          otaXiaozhiRepository.findAllByProductIdAndNickName(productId, nickName);
+    } else {
+      otaXiaozhiEntities = otaXiaozhiRepository.findAllByProductId(productId);
+    }
+    if (otaXiaozhiEntities.isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    for (var s : otaXiaozhiEntities) {
+      String chatId = "chatProduct" + productId + s.getDeviceId();
+      List<AgentMemoryEntity> agentMemoryEntities = agentMemoryRepository.findAllByChatId(chatId);
+      if (agentMemoryEntities.isEmpty()) {
+        continue;
+      }
+      AgentMemoryResponse agentMemoryResponse = new AgentMemoryResponse();
+      agentMemoryResponse.setId(agentMemoryEntities.getFirst().getId());
+      agentMemoryResponse.setContent(agentMemoryEntities.getFirst().getContent());
+      agentMemoryResponse.setChatId(chatId);
+
+      // 提取MAC地址
+      String mac = extractMacFromChatId(chatId);
+      agentMemoryResponse.setDeviceName(Objects.requireNonNullElse(mac, "未知设备"));
+      agentMemoryResponses.add(agentMemoryResponse);
+    }
+    if (agentMemoryResponses.isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return ResultTool.success(agentMemoryResponses);
   }
 
   @Override

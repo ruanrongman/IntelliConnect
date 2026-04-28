@@ -10,6 +10,15 @@ export const getAgentMemory = (data) =>
         'Authorization': token
       }
   })
+export const getAgentMemoryByNickName = (params) =>
+  request({
+    url: '/api/v2/memoryByNickName',
+    method: 'get',
+    headers: {
+        'Authorization': token
+      },
+    params
+  })
   export const putAgentMemory = (data) =>
     request({
       url: '/api/v2/memory',

@@ -354,10 +354,10 @@ public class XiaoZhiUtil {
       if (punctuationSet.contains(c))
         return i;
     }
-    for (int i = 0; i < englishPunctuations.length; i++) {
-      String item = englishPunctuations[i];
-      if (str.contains(item)) {
-        return i;
+    for (String item : englishPunctuations) {
+      int idx = str.indexOf(item);
+      if (idx != -1) {
+        return idx;
       }
     }
     return -1;
@@ -663,7 +663,6 @@ public class XiaoZhiUtil {
           continue;
         }
         int pIdx = this.getPunctuationPos(element);
-        // 小于五个字符认为需要连读
         if (pIdx != -1) {
           String eBefore = element.substring(0, pIdx + 1);
           String eAfter = element.substring(pIdx + 1);

@@ -41,6 +41,8 @@ public interface OtaXiaozhiRepository extends JpaRepository<OtaXiaozhiEntity, Lo
   List<OtaXiaozhiEntity> findAllByDeviceIdAndUserNameAndRole(String deviceId, String userName,
       String role);
 
+  List<OtaXiaozhiEntity> findAllByProductIdAndNickName(int productId, String nickName);
+
   @Modifying
   @Transactional
   @Query("UPDATE OtaXiaozhiEntity e SET e.status = :setStatus WHERE e.deviceId = :deviceId")
