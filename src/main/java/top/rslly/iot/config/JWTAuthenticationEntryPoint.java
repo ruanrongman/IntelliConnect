@@ -38,6 +38,7 @@ public class JWTAuthenticationEntryPoint implements AuthenticationEntryPoint {
       AuthenticationException authException) throws IOException, ServletException {
     response.setCharacterEncoding("utf-8");
     response.setContentType("text/javascript;charset=utf-8");
+    response.setStatus(HttpServletResponse.SC_OK);
     response.getWriter().print(JSONObject.toJSONString(ResultTool.fail(ResultCode.USER_NOT_LOGIN)));
   }
 }

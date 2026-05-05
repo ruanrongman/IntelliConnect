@@ -228,6 +228,8 @@ defineExpose({
   showEditModal
 });
 
+const emit = defineEmits(['submitSuccess']);
+
 const handleSubmit = () => {
   postProductLlmModel(toRaw(formState))
     .then((res) => {
@@ -237,6 +239,7 @@ const handleSubmit = () => {
         console.log("error", data);
       } else {
         message.success(isEditing.value ? "更新成功!" : "创建成功!");
+        emit('submitSuccess');
         console.log(data);
       }
     })

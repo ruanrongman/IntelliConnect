@@ -179,10 +179,11 @@ public class Agent implements BaseTool<String> {
         }
         toolResult =
             manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
-        conversationPrompt.append(obj);
-        conversationPrompt.append(String.format("Observation: %s\n", toolResult));
+        conversationPrompt.append(String.format(
+            "\nThought: %s\nAction: %s(%s)\nObservation: %s\n",
+            res.get("thought"), res.get("action_name"), res.get("action_parameters"), toolResult));
         if (queue != null) {
-          queue.add(ToolPrefix.ToolCall.getPrefix());
+          queue.add(ToolPrefix.getToolCallPrefix(res.get("action_name")));
         }
         log.info("Thought:{}", res.get("thought"));
         log.info("Observation:{}", toolResult);

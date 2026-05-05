@@ -24,6 +24,10 @@ import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
 import com.alibaba.dashscope.common.ResultCallback;
+import com.alibaba.dashscope.protocol.ConnectionConfigurations;
+import com.alibaba.dashscope.protocol.ConnectionOptions;
+import com.alibaba.dashscope.utils.Constants;
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -39,11 +43,15 @@ import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import jakarta.websocket.Session;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
@@ -51,6 +59,17 @@ public class Text2audio implements TtsService {
   private static final String model = "cosyvoice-v1";
   private static final String voice = "longxiaochun";
   private static SpeechSynthesisParam param;
+  private static volatile ConnectionOptions connectionOptions;
+  private final ConcurrentHashMap<String, Object> inFlightTextLocks = new ConcurrentHashMap<>();
+  private volatile Semaphore ttsSemaphore = new Semaphore(64, true);
+  private int dashscopeMaxConcurrent = 64;
+  private long dashscopeAcquireTimeoutMs = 5000;
+  private int connectionPoolSize = 128;
+  private int maximumAsyncRequests = 128;
+  private int maximumAsyncRequestsPerHost = 128;
+  private long connectTimeoutSeconds = 10;
+  private long writeTimeoutSeconds = 20;
+  private long readTimeoutSeconds = 120;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
 
@@ -165,6 +184,71 @@ public class Text2audio implements TtsService {
             .build();
   }
 
+  @Value("${ai.tts.dashscope-max-concurrent:64}")
+  public void setDashscopeMaxConcurrent(int dashscopeMaxConcurrent) {
+    this.dashscopeMaxConcurrent = Math.max(1, dashscopeMaxConcurrent);
+    this.ttsSemaphore = new Semaphore(this.dashscopeMaxConcurrent, true);
+  }
+
+  @Value("${ai.tts.dashscope-acquire-timeout-ms:5000}")
+  public void setDashscopeAcquireTimeoutMs(long dashscopeAcquireTimeoutMs) {
+    this.dashscopeAcquireTimeoutMs = Math.max(0L, dashscopeAcquireTimeoutMs);
+  }
+
+  @Value("${ai.tts.dashscope-connection-pool-size:128}")
+  public void setConnectionPoolSize(int connectionPoolSize) {
+    this.connectionPoolSize = Math.max(1, connectionPoolSize);
+  }
+
+  @Value("${ai.tts.dashscope-max-async-requests:128}")
+  public void setMaximumAsyncRequests(int maximumAsyncRequests) {
+    this.maximumAsyncRequests = Math.max(1, maximumAsyncRequests);
+  }
+
+  @Value("${ai.tts.dashscope-max-async-requests-per-host:128}")
+  public void setMaximumAsyncRequestsPerHost(int maximumAsyncRequestsPerHost) {
+    this.maximumAsyncRequestsPerHost = Math.max(1, maximumAsyncRequestsPerHost);
+  }
+
+  @Value("${ai.tts.dashscope-connect-timeout-seconds:10}")
+  public void setConnectTimeoutSeconds(long connectTimeoutSeconds) {
+    this.connectTimeoutSeconds = Math.max(1L, connectTimeoutSeconds);
+  }
+
+  @Value("${ai.tts.dashscope-write-timeout-seconds:20}")
+  public void setWriteTimeoutSeconds(long writeTimeoutSeconds) {
+    this.writeTimeoutSeconds = Math.max(1L, writeTimeoutSeconds);
+  }
+
+  @Value("${ai.tts.dashscope-read-timeout-seconds:120}")
+  public void setReadTimeoutSeconds(long readTimeoutSeconds) {
+    this.readTimeoutSeconds = Math.max(1L, readTimeoutSeconds);
+  }
+
+  @PostConstruct
+  public void configureDashScopeConnectionPool() {
+    Constants.connectionConfigurations = ConnectionConfigurations.builder()
+        .connectionPoolSize(connectionPoolSize)
+        .maximumAsyncRequests(maximumAsyncRequests)
+        .maximumAsyncRequestsPerHost(maximumAsyncRequestsPerHost)
+        .connectTimeout(Duration.ofSeconds(connectTimeoutSeconds))
+        .writeTimeout(Duration.ofSeconds(writeTimeoutSeconds))
+        .readTimeout(Duration.ofSeconds(readTimeoutSeconds))
+        .build();
+    connectionOptions = ConnectionOptions.builder()
+        .connectTimeout(Duration.ofSeconds(connectTimeoutSeconds))
+        .writeTimeout(Duration.ofSeconds(writeTimeoutSeconds))
+        .readTimeout(Duration.ofSeconds(readTimeoutSeconds))
+        .build();
+    log.info(
+        "DashScope TTS连接池配置: poolSize={}, maxRequests={}, maxRequestsPerHost={}, "
+            + "connectTimeout={}s, writeTimeout={}s, readTimeout={}s, localMaxConcurrent={}, "
+            + "localAcquireTimeoutMs={}",
+        connectionPoolSize, maximumAsyncRequests, maximumAsyncRequestsPerHost,
+        connectTimeoutSeconds, writeTimeoutSeconds, readTimeoutSeconds, dashscopeMaxConcurrent,
+        dashscopeAcquireTimeoutMs);
+  }
+
   public static ByteBuffer synthesizeAndSaveAudio(String text) {
     SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
         .apiKey(param.getApiKey())
@@ -172,7 +256,8 @@ public class Text2audio implements TtsService {
         .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
         .voice(param.getVoice())
         .build();
-    SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, null);
+    SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, null, null,
+        connectionOptions);
     ByteBuffer audio = synthesizer.call(text);
     log.debug("requestId{}", synthesizer.getLastRequestId());
     // log.info(Arrays.toString(audio.array()));
@@ -182,7 +267,8 @@ public class Text2audio implements TtsService {
   @Async("taskExecutor")
   public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, null, 0L);
-    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback);
+    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback, null,
+        connectionOptions);
     synthesizer.call(text);
   }
 
@@ -207,12 +293,17 @@ public class Text2audio implements TtsService {
           .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
           .build();
-      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
-      synthesizer.call(text);
+      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
+          connectionOptions);
+      acquireDashScopeTts("websocketAudioSync", chatId, text);
       try {
+        synthesizer.call(text);
         callback.waitForComplete();
       } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
         log.error("waitForComplete error{}", e.getMessage());
+      } finally {
+        ttsSemaphore.release();
       }
     } catch (Exception e) {
       log.error("websocketAudio error{}", e.getMessage());
@@ -241,9 +332,22 @@ public class Text2audio implements TtsService {
           .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voiceId : param.getVoice())
           .build();
-      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback);
-      synthesizer.call(text);
-      callback.waitForComplete();
+      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
+          connectionOptions);
+      Object textLock = inFlightTextLocks.computeIfAbsent(text, ignored -> new Object());
+      try {
+        synchronized (textLock) {
+          acquireDashScopeTts("getTextAudio", chatId, text);
+          try {
+            synthesizer.call(text);
+            callback.waitForComplete();
+          } finally {
+            ttsSemaphore.release();
+          }
+        }
+      } finally {
+        inFlightTextLocks.remove(text, textLock);
+      }
       if (callback.bytes == null || callback.bytes.isEmpty()) {
         log.warn("TTS未生成有效音频: chatId={}, textLength={}", chatId,
             text == null ? 0 : text.length());
@@ -254,5 +358,28 @@ public class Text2audio implements TtsService {
       log.error("getTextAudio error{}", e.getMessage());
     }
     return null;
+  }
+
+  private void acquireDashScopeTts(String scene, String chatId, String text)
+      throws InterruptedException {
+    long waitStartNs = System.nanoTime();
+    boolean acquired = ttsSemaphore.tryAcquire(dashscopeAcquireTimeoutMs, TimeUnit.MILLISECONDS);
+    if (!acquired) {
+      long waitMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - waitStartNs);
+      log.warn(
+          "DashScope TTS本地并发闸门已满: scene={}, chatId={}, maxConcurrent={}, "
+              + "acquireTimeoutMs={}, waitedMs={}, textLength={}, text={}",
+          scene, chatId, dashscopeMaxConcurrent, dashscopeAcquireTimeoutMs, waitMs,
+          text == null ? 0 : text.length(), abbreviate(text));
+      throw new IllegalStateException("DashScope TTS local concurrency gate timeout");
+    }
+  }
+
+  private String abbreviate(String text) {
+    if (text == null) {
+      return "";
+    }
+    String normalized = text.replace("\r", " ").replace("\n", " ").trim();
+    return normalized.length() <= 40 ? normalized : normalized.substring(0, 40) + "...";
   }
 }

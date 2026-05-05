@@ -120,6 +120,7 @@ public class JWTAuthenticationFilter extends UsernamePasswordAuthenticationFilte
     // System.out.println(token);
     // 处理编码方式 防止中文乱码
     response.setContentType("text/json;charset=utf-8");
+    response.setStatus(HttpServletResponse.SC_OK);
     // 将反馈塞到HttpServletResponse中返回给前台
     JsonResult result = ResultTool.success(JwtTokenUtil.TOKEN_PREFIX + token);
     response.getWriter().write(JSON.toJSONString(result));
@@ -164,6 +165,7 @@ public class JWTAuthenticationFilter extends UsernamePasswordAuthenticationFilte
 
     // 处理编码方式 防止中文乱码
     response.setContentType("text/json;charset=utf-8");
+    response.setStatus(HttpServletResponse.SC_OK);
     // 将反馈塞到HttpServletResponse中返回给前台
     response.getWriter().write(returnData);
 

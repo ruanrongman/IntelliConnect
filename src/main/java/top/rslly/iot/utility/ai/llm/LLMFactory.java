@@ -22,6 +22,8 @@ package top.rslly.iot.utility.ai.llm;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,6 +37,7 @@ public class LLMFactory {
   private static String glmKey;
   private static String customLLMProviderUrl;
   private static String customKey;
+  private static final ConcurrentHashMap<String, LLM> LLM_CACHE = new ConcurrentHashMap<>();
 
   @Value("${ai.glm-key}")
   public void setGlmApiKey(String apiKey) {
@@ -73,7 +76,8 @@ public class LLMFactory {
 
   public static LLM getLLM(String llmName) {
     if (llmName == null || llmName.trim().isEmpty()) {
-      return new DeepSeek(deepSeekApiKey);
+      return cached("deepseek-default|" + deepSeekApiKey,
+          () -> new DeepSeek(deepSeekApiKey));
     }
 
     // 1. 规范化输入：只去除前后空格，保留原始大小写
@@ -83,7 +87,7 @@ public class LLMFactory {
 
     // 2. 处理特殊的 glm 供应商 (不区分大小写)
     if ("glm".equalsIgnoreCase(trimmedLlmName)) {
-      return new Glm(glmKey);
+      return cached("glm|" + glmKey, () -> new Glm(glmKey));
     }
 
     // 3. 解析 "think" 模式 (不区分大小写)
@@ -118,34 +122,60 @@ public class LLMFactory {
     if (baseLlmName.endsWith("-")) {
       baseLlmName = baseLlmName.substring(0, baseLlmName.length() - 1);
     }
+    final boolean finalEnableThinking = enableThinking;
+    final int finalThinkingBudget = thinkingBudget;
 
     // 4. 根据前缀路由到不同供应商 (使用小写版本匹配，从原始版本提取)
     if (lowerCaseLlmName.startsWith("silicon-")) {
       String modelName = baseLlmName.substring("silicon-".length());
-      return new DeepSeek("https://api.siliconflow.cn", modelName, siliconFlowApiKey,
-          enableThinking, thinkingBudget);
+      return cached(cacheKey("https://api.siliconflow.cn", modelName, siliconFlowApiKey,
+          finalEnableThinking, finalThinkingBudget),
+          () -> new DeepSeek("https://api.siliconflow.cn", modelName, siliconFlowApiKey,
+              finalEnableThinking, finalThinkingBudget));
     } else if (lowerCaseLlmName.startsWith("dashscope-")) {
       String modelName = baseLlmName.substring("dashscope-".length());
-      return new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
-          dashScopeApiKey, enableThinking, thinkingBudget);
+      return cached(cacheKey("https://dashscope.aliyuncs.com/compatible-mode", modelName,
+          dashScopeApiKey, finalEnableThinking, finalThinkingBudget),
+          () -> new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
+              dashScopeApiKey, finalEnableThinking, finalThinkingBudget));
     } else if (lowerCaseLlmName.startsWith("uniapi-")) {
       String modelName = baseLlmName.substring("uniapi-".length());
-      return new DeepSeek("https://hk.uniapi.io", modelName, uniApiKey,
-          enableThinking, thinkingBudget);
+      return cached(cacheKey("https://hk.uniapi.io", modelName, uniApiKey, finalEnableThinking,
+          finalThinkingBudget),
+          () -> new DeepSeek("https://hk.uniapi.io", modelName, uniApiKey,
+              finalEnableThinking, finalThinkingBudget));
     } else if (lowerCaseLlmName.startsWith("custom-")) {
       String modelName = baseLlmName.substring("custom-".length());
-      return new DeepSeek(customLLMProviderUrl, modelName, customKey,
-          enableThinking, thinkingBudget);
+      return cached(cacheKey(customLLMProviderUrl, modelName, customKey, finalEnableThinking,
+          finalThinkingBudget),
+          () -> new DeepSeek(customLLMProviderUrl, modelName, customKey,
+              finalEnableThinking, finalThinkingBudget));
     }
 
     // 6. 兜底策略：如果以上都不匹配，返回默认的 DeepSeek
-    return new DeepSeek(deepSeekApiKey);
+    return cached("deepseek-default|" + deepSeekApiKey,
+        () -> new DeepSeek(deepSeekApiKey));
   }
 
   public static LLM getLLM(String llmName, String baseUrl, String apiKey) {
     if (llmName == null || llmName.trim().isEmpty()) {
       return null;
     }
-    return new DeepSeek(baseUrl, llmName, apiKey);
+    return cached(cacheKey(baseUrl, llmName, apiKey, false, 128),
+        () -> new DeepSeek(baseUrl, llmName, apiKey));
+  }
+
+  private static LLM cached(String cacheKey, Supplier<LLM> supplier) {
+    return LLM_CACHE.computeIfAbsent(cacheKey, ignored -> supplier.get());
+  }
+
+  private static String cacheKey(String baseUrl, String modelName, String apiKey,
+      boolean enableThinking, int thinkingBudget) {
+    return String.join("|",
+        baseUrl == null ? "" : baseUrl,
+        modelName == null ? "" : modelName,
+        apiKey == null ? "" : apiKey,
+        Boolean.toString(enableThinking),
+        Integer.toString(thinkingBudget));
   }
 }

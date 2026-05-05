@@ -95,6 +95,7 @@ public class XiaoZhiUtil {
   @Value("${ai.tts.cache-expire-time}")
   private long ttsCacheExpireTime;
   private final ExecutorService routerExecutor = Executors.newVirtualThreadPerTaskExecutor();
+  private final ConcurrentHashMap<String, Object> ttsCacheLocks = new ConcurrentHashMap<>();
 
   private final String STREAM_AUDIO_HANDLER_FLAG = "<|SAH|>";
   private final String STREAM_RESULT_HANDLER_FLAG = "<|SRH|>";
@@ -340,6 +341,7 @@ public class XiaoZhiUtil {
     XiaoZhiWebsocket.isAbort.put(chatId, false);
     Router.queueMap.remove(chatId);
     this.sendEndMsg(chatId, generation);
+    XiaoZhiWebsocket.voiceContent.put(chatId, "");
   }
 
   private int getPunctuationPos(String str) {
@@ -438,15 +440,22 @@ public class XiaoZhiUtil {
       if (src.contains(EMOJI_FLAG)) {
         return;
       }
-      List<byte[]> audioBytes = ttsServiceFactory.getTextAudio(chatId, src, productId);
-      if (audioBytes == null || audioBytes.isEmpty()) {
-        log.warn("TTS结果为空，退化为文本输出: chatId={}, text={}", chatId, src);
-        return;
-      }
-      // Fix race: check again after generation - if another thread already wrote it, skip writing
-      if (!bytesRedisTemplate.hasKey(srcHash)) {
-        bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
-        bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
+      Object textLock = ttsCacheLocks.computeIfAbsent(srcHash, ignored -> new Object());
+      try {
+        synchronized (textLock) {
+          if (bytesRedisTemplate.hasKey(srcHash)) {
+            return;
+          }
+          List<byte[]> audioBytes = ttsServiceFactory.getTextAudio(chatId, src, productId);
+          if (audioBytes == null || audioBytes.isEmpty()) {
+            log.warn("TTS结果为空，退化为文本输出: chatId={}, text={}", chatId, src);
+            return;
+          }
+          bytesRedisTemplate.opsForList().leftPushAll(srcHash, audioBytes);
+          bytesRedisTemplate.expire(srcHash, ttsCacheExpireTime, TimeUnit.MILLISECONDS);
+        }
+      } finally {
+        ttsCacheLocks.remove(srcHash, textLock);
       }
     } catch (Exception e) {
       log.error("异步TTS缓存失败: chatId={}, text={}, error={}", chatId, src, e.getMessage(), e);

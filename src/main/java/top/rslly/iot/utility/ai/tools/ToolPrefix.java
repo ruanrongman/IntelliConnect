@@ -26,6 +26,8 @@ public enum ToolPrefix {
               "以下是产品角色插件的结果："), MCP_AGENT(
                   "以下是mcp智能体的结果："), GOODBYE("以下是byebye插件的结果："), ToolCall("%工具。");
 
+  private static final String TOOL_CALL_MARKER = "%工具";
+
   private final String prefix;
 
   ToolPrefix(String prefix) {
@@ -36,8 +38,21 @@ public enum ToolPrefix {
     return prefix;
   }
 
+  public static String getToolCallPrefix(String toolName) {
+    if (toolName == null || toolName.isBlank()) {
+      return ToolCall.getPrefix();
+    }
+    return TOOL_CALL_MARKER + "：" + toolName.replace("\r", " ").replace("\n", " ").trim() + "。";
+  }
+
   // 检查文本是否以任何插件前缀开头
   public static boolean startsWithAnyPrefix(String text) {
+    if (text == null) {
+      return false;
+    }
+    if (text.startsWith(TOOL_CALL_MARKER)) {
+      return true;
+    }
     for (ToolPrefix toolPrefix : values()) {
       if (text.startsWith(toolPrefix.getPrefix())) {
         return true;

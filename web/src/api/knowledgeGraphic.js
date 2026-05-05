@@ -1,132 +1,87 @@
-import request from '@/utils/request';
-import store from "@/store";
-
-const token = store.getters['auth/token']
+import request from '@/utils/request'
 
 export const queryKnowledgeGraphic = (params) => request({
-    url: "/api/v2/kg/graphic",
-    method: "get",
-    params: params,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/graphic",
+  method: "get",
+  params
 })
 
 export const addKnowledgeGraphicNode = (data) => request({
-    url: "/api/v2/kg/node",
-    method: "post",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/node",
+  method: "post",
+  data
 })
 
 export const deleteKnowledgeGraphicNode = (data) => request({
-    url: "/api/v2/kg/node",
-    method: "delete",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/node",
+  method: "delete",
+  data
 })
 
 export const updateKnowledgeGraphicNode = (data) => request({
-    url: "/api/v2/kg/node",
-    method: "put",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/node",
+  method: "put",
+  data
 })
 
 export const getProductNodes = (params) => request({
-    url: "/api/v2/kg/nodes",
-    method: "get",
-    params,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/nodes",
+  method: "get",
+  params
 })
 
 export const getNodeByName = (params) => request({
-    url: "/api/v2/kg/node",
-    method: "get",
-    params,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/node",
+  method: "get",
+  params
 })
 
 export const getNodeInfo = (params) => request({
-    url: "/api/v2/kg/node",
-    method: "get",
-    params,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/node",
+  method: "get",
+  params
 })
 
 export const getNodeAttributes = (params) => request({
-    url: "/api/v2/kg/attr",
-    method: "get",
-    params,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/attr",
+  method: "get",
+  params
 })
 
 export const addNodeAttribute = (data) => request({
-    url: "/api/v2/kg/attr",
-    method: "post",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/attr",
+  method: "post",
+  data
 })
 
 export const deleteNodeAttribute = (data) => request({
-    url: "/api/v2/kg/attr",
-    method: "delete",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/attr",
+  method: "delete",
+  data
 })
 
 export const addRelation = (data) => request({
-    url: "/api/v2/kg/relation",
-    method: "post",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/relation",
+  method: "post",
+  data
 })
 
 export const deleteRelation = (data) => request({
-    url: "/api/v2/kg/relation",
-    method: "delete",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/relation",
+  method: "delete",
+  data
 })
 
 export const updateRelation = (data) => request({
-    url: "/api/v2/kg/relation",
-    method: "put",
-    data,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/relation",
+  method: "put",
+  data
 })
 
 export const getRelationByNodes = (params) => request({
-    url: "/api/v2/kg/relationByNodes",
-    method: "get",
-    params,
-    headers: {
-        'Authorization': token
-    }
+  url: "/api/v2/kg/relationByNodes",
+  method: "get",
+  params
 })
 
 export const enableKnowledgeGraphic = (params) =>
@@ -141,9 +96,6 @@ export const enableKnowledgeGraphic = (params) =>
       defaultValue: 'false',
       required: true,
       des: 'Knowledge graph toggle',
-    },
-    headers: {
-      Authorization: token,
     },
   })
 
@@ -160,25 +112,19 @@ export const disabledKnowledgeGraphic = (params) =>
       required: true,
       des: 'Knowledge graph toggle',
     },
-    headers: {
-      Authorization: token,
-    },
   })
 
 export const getKnowledgeGraphicState = (params) =>
   request({
     url: '/api/v2/user/config/knowledge_graph.toggle',
     method: 'get',
-    params,
-    headers: {
-      Authorization: token,
-    },
+    params
   })
 
 export const addKnowledgeGraphicToggleConfig = (data) => request({
   url: '/api/v2/user/config',
   method: 'post',
-  data:{
+  data: {
     ...data,
     name: 'knowledge_graph.toggle',
     type: "boolean",
@@ -187,19 +133,13 @@ export const addKnowledgeGraphicToggleConfig = (data) => request({
     required: true,
     des: "Knowledge graph toggle"
   },
-  headers: {
-    Authorization: token
-  },
 })
 
 export const getKnowledgeGraphicForgetState = (params) =>
   request({
     url: '/api/v2/user/config/knowledge_graph.forget.toggle',
     method: 'get',
-    params,
-    headers: {
-      Authorization: token,
-    },
+    params
   })
 
 export const addKnowledgeGraphicForgetToggleConfig = (data) =>
@@ -215,9 +155,6 @@ export const addKnowledgeGraphicForgetToggleConfig = (data) =>
       required: true,
       des: 'Knowledge graph forget toggle',
     },
-    headers: {
-      Authorization: token,
-    },
   })
 
 export const knowledgeGraphicForgetToggle = (data) =>
@@ -232,19 +169,13 @@ export const knowledgeGraphicForgetToggle = (data) =>
       required: true,
       des: 'Knowledge graph forget toggle',
     },
-    headers: {
-      Authorization: token,
-    },
   })
 
 export const getKnowledgeGraphicForgetEpoch = (params) =>
   request({
     url: '/api/v2/user/config/knowledge_graph.forget.epoch',
     method: 'get',
-    params,
-    headers: {
-      Authorization: token,
-    },
+    params
   })
 
 export const updateKnowledgeGraphicForgetEpoch = (data) =>
@@ -258,8 +189,5 @@ export const updateKnowledgeGraphicForgetEpoch = (data) =>
       defaultValue: '10',
       required: false,
       des: 'Knowledge graph forget epoch',
-    },
-    headers: {
-      Authorization: token,
     },
   })

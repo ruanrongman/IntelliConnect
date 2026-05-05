@@ -111,7 +111,7 @@ public class ControlTool implements BaseTool<String> {
       conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
     }
     if (queue != null && !mcpIsTool) {
-      queue.add(ToolPrefix.ToolCall.getPrefix());
+      queue.add(ToolPrefix.getToolCallPrefix(name));
     }
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),

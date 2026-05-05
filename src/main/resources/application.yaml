@@ -161,6 +161,8 @@ ai:
   classifier:
     include:
       thought: true
+  agent:
+    showThinking: false
   vad:
     timeout: 60
     timeoutRealtime: 120

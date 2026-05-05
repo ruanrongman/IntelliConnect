@@ -370,6 +370,10 @@ const handleDelete = (record) => {
       });
   }
 };
+
+defineExpose({
+  fetchCurrentData
+});
 </script>
 
 <style lang="scss" scoped>

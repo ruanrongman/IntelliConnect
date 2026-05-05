@@ -3,9 +3,9 @@
     <HeaderCard :device="homeData"/>
     <div class="product-llm-model-content">
       <div class="action-bar">
-        <productLlmModelForm ref="productLlmModelFormRef" />
+        <productLlmModelForm ref="productLlmModelFormRef" @submit-success="handleFormSubmitSuccess" />
       </div>
-      <Mytable @edit-record="handleEdit" />
+      <Mytable ref="mytableRef" @edit-record="handleEdit" />
     </div>
   </div>
 </template>
@@ -21,6 +21,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const productLlmModelFormRef = ref()
+const mytableRef = ref()
 
 let homeData = reactive({
       num: 0,
@@ -53,6 +54,13 @@ let intervalId = setInterval(  //设置定时器，1s更新一次
 const handleEdit = (record) => {
   if (productLlmModelFormRef.value && productLlmModelFormRef.value.showEditModal) {
     productLlmModelFormRef.value.showEditModal(record)
+  }
+}
+
+// Handle form submit success - refresh table data
+const handleFormSubmitSuccess = () => {
+  if (mytableRef.value && mytableRef.value.fetchCurrentData) {
+    mytableRef.value.fetchCurrentData()
   }
 }
 

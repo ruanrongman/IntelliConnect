@@ -25,7 +25,6 @@ import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
-import jakarta.websocket.Session;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,8 +49,7 @@ public class MusicPlayer {
   private final String musicPath;
   private final TtsServiceFactory ttsServiceFactory;
 
-  // 播放中断标志
-  private volatile boolean interrupted = false;
+  private final long generation;
 
   public MusicPlayer(String chatId, int productId, String song, String artist,
       String musicPath, TtsServiceFactory ttsServiceFactory) {
@@ -61,28 +59,24 @@ public class MusicPlayer {
     this.artist = artist;
     this.musicPath = musicPath;
     this.ttsServiceFactory = ttsServiceFactory;
+    this.generation = XiaoZhiWebsocket.nextGeneration(chatId);
   }
 
   /**
-   * 检查会话是否有效
+   * 检查当前generation是否仍然有效
    */
-  private boolean isSessionValid(Session session) {
-    return session != null && session.isOpen() && !interrupted;
+  private boolean isGenerationValid() {
+    return XiaoZhiWebsocket.isCurrentGeneration(chatId, generation);
   }
 
   /**
-   * 安全发送文本消息
+   * 通过队列安全发送文本消息
    */
-  private void safeSendText(Session session, String message) {
-    if (!isSessionValid(session)) {
+  private void safeSendText(String message) {
+    if (!isGenerationValid()) {
       return;
     }
-    try {
-      session.getBasicRemote().sendText(message);
-    } catch (IllegalStateException | IOException e) {
-      log.debug("发送文本消息失败（客户端可能已断开）: {}", e.getMessage());
-      interrupted = true;
-    }
+    XiaoZhiWebsocket.enqueueText(chatId, message, generation);
   }
 
   /**
@@ -287,9 +281,8 @@ public class MusicPlayer {
       return;
     }
 
-    Session session = XiaoZhiWebsocket.clients.get(chatId);
-    if (!isSessionValid(session)) {
-      log.debug("WebSocket会话不存在或已关闭: {}", chatId);
+    if (!isGenerationValid()) {
+      log.debug("generation已过期，取消播放: {}", chatId);
       return;
     }
 
@@ -302,7 +295,7 @@ public class MusicPlayer {
       }
 
       // 发送开始播放消息
-      safeSendText(session, "{\"type\":\"tts\",\"state\":\"start\"}");
+      safeSendText("{\"type\":\"tts\",\"state\":\"start\"}");
 
       // 发送播放信息
       String fileName = audioPath.getFileName().toString().replace(".mp3", "").replace(".MP3", "");
@@ -312,44 +305,25 @@ public class MusicPlayer {
       } else {
         songInfo = "正在播放：" + fileName;
       }
-      safeSendText(session,
+      safeSendText(
           "{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \"" + songInfo + "\"}");
 
       // 直接播放音频
-      playAudioDirectly(audioData, session);
+      playAudioDirectly(audioData);
 
       // 发送停止消息
-      safeSendText(session, "{\"type\":\"tts\",\"state\":\"stop\"}");
+      XiaoZhiWebsocket.enqueueTtsStop(chatId, generation);
 
     } catch (Exception e) {
-      // 忽略客户端断开导致的异常
-      if (isClientDisconnectedException(e)) {
-        log.debug("客户端已断开连接: {}", chatId);
-      } else {
-        log.error("处理音频时发生错误 - chatId: {}", chatId, e);
-      }
+      log.error("处理音频时发生错误 - chatId: {}", chatId, e);
     }
-  }
-
-  /**
-   * 判断是否为客户端断开导致的异常
-   */
-  private boolean isClientDisconnectedException(Exception e) {
-    String message = e.getMessage();
-    if (message == null) {
-      message = "";
-    }
-    return message.contains("closed") ||
-        message.contains("CLOSED") ||
-        message.contains("invalid state") ||
-        e instanceof IllegalStateException;
   }
 
   /**
    * 直接播放音频
    */
-  private void playAudioDirectly(byte[] audioData, Session session) {
-    if (!isSessionValid(session)) {
+  private void playAudioDirectly(byte[] audioData) {
+    if (!isGenerationValid()) {
       return;
     }
 
@@ -365,7 +339,7 @@ public class MusicPlayer {
     audioQueue.offer(new byte[0]);
 
     // 使用AudioUtils异步发送
-    AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue,
-        XiaoZhiWebsocket.currentGeneration(chatId));
+    AudioUtils.asyncSendAudioQueue(chatId, XiaoZhiWebsocket.clients.get(chatId), audioQueue,
+        generation);
   }
 }

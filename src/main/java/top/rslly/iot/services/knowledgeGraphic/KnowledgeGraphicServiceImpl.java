@@ -113,7 +113,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     }
     if (forgetEpoch <= 3)
       return;
-    int limitThreshold = (int) Math.ceil(6 * Math.log(forgetEpoch + 2) - 5);
+    int limitThreshold = (int) Math.ceil(3 * Math.log(forgetEpoch + 2) - 5);
     if (searchCount.getCount() <= forgetEpoch)
       return;
     List<KnowledgeGraphicNodeEntity> nodes =
@@ -121,7 +121,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     // threshold_hits = 3 * log(Count + 2) - 5
     for (KnowledgeGraphicNodeEntity node : nodes) {
       int count = forgetEpoch - node.getCreateEpoch();
-      int threshold_hits = (int) Math.ceil(6 * Math.log(count + 2) - 5);
+      int threshold_hits = (int) Math.ceil(3 * Math.log(count + 2) - 5);
       if (node.getHitTimes() + node.getSearchTimes() < threshold_hits) {
         this.deleteNode(node.getId());
       } else {

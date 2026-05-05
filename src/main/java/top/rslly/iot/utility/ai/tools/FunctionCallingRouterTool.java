@@ -250,11 +250,10 @@ public class FunctionCallingRouterTool {
     String memoryMap = descriptionUtil.getAgentLongMemory(productId);
     String knowledgeGraphic = knowledgeGraphicService.queryKnowledgeGraphic(question, productId);
     String recentConversation = buildRecentConversationWindow(memory);
-    String availableRoutes = buildAvailableRoutesText(toolSpecs);
     String prompt = functionCallingRouterPrompt.build(assistantName, userName, role,
         roleIntroduction, currentMemory, information, memoryMap, knowledgeGraphic, voice,
         limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS),
-        availableRoutes, recentConversation);
+        recentConversation);
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     return ChatTool.buildConversationMessages(memory, systemMessage, userMessage);
@@ -301,23 +300,6 @@ public class FunctionCallingRouterTool {
           false));
     }
     return toolSpecs;
-  }
-
-  private String buildAvailableRoutesText(List<FunctionRouterToolSpec> toolSpecs) {
-    if (toolSpecs.isEmpty()) {
-      return "none";
-    }
-    StringBuilder builder = new StringBuilder();
-    for (FunctionRouterToolSpec toolSpec : toolSpecs) {
-      if (!builder.isEmpty()) {
-        builder.append("\n");
-      }
-      builder.append("- ")
-          .append(toolSpec.name())
-          .append(": ")
-          .append(toolSpec.description());
-    }
-    return builder.toString();
   }
 
   private String buildRecentConversationWindow(List<ModelMessage> memory) {

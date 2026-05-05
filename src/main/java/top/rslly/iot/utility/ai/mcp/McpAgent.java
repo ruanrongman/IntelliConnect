@@ -32,15 +32,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.ProductSkillsEntity;
-import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
-import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
 import top.rslly.iot.utility.ai.tools.BaseTool;
@@ -284,7 +281,9 @@ public class McpAgent implements BaseTool<String> {
         // 格式: serverKey:toolName
         if (!fullName.contains(":") && !fullName.equals("finish")) {
           toolResult = "Error calling tool, must use format 'serverKey:toolName'";
-          conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
+          conversationPrompt.append(String.format(
+              "\nThought: %s\nAction: %s\nObservation: %s\n",
+              thought, fullName, toolResult));
           if (queue != null) {
             queue.add("调用工具出现小错误");
           }
@@ -342,10 +341,11 @@ public class McpAgent implements BaseTool<String> {
           toolResult = "Error calling tool, please try again";
         }
         // 更新对话
-        conversationPrompt.append(obj.toJSONString());
-        conversationPrompt.append("\nObservation: ").append(toolResult).append("\n");
+        conversationPrompt.append(String.format(
+            "\nThought: %s\nAction: %s(%s)\nObservation: %s\n",
+            thought, fullName, args, toolResult));
         if (queue != null) {
-          queue.add(ToolPrefix.ToolCall.getPrefix());
+          queue.add(ToolPrefix.getToolCallPrefix(fullName));
         }
         log.info("Thought: {}", thought);
         log.info("Observation ({}): {}", fullName, toolResult);

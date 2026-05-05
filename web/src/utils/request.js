@@ -1,5 +1,7 @@
 import axios from 'axios'
 import qs from 'qs'
+import store from '@/store'
+import router from '@/router'
 // import { useAxiosCancel } from '@/hooks/useAxiosCancel'
 // const CancelToken = axios.CancelToken
 // const source = CancelToken.source()
@@ -15,6 +17,11 @@ request.interceptors.request.use(
     // removePendingRequest(config)
     // addPendingRequest(config)
     // const { removePendingRequest, addPendingRequest } = useAxiosCancel(config)
+    // 统一添加 Authorization header
+    const token = store.getters['auth/token']
+    if (token && !config.headers['Authorization']) {
+      config.headers['Authorization'] = token
+    }
     return config
   },
   (err) => {
@@ -24,6 +31,13 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => {
     removePendingRequest(response.config)
+    // 统一处理 2001 (token 过期/未登录)
+    const { errorCode } = response.data || {}
+    if (errorCode === 2001) {
+      store.commit('auth/CLEAR_AUTH')
+      router.push('/login')
+      return Promise.reject(new Error('用户未登录'))
+    }
     return response
   },
   (error) => {
@@ -31,7 +45,15 @@ request.interceptors.response.use(
     if (axios.isCancel(error)) {
       // 是取消请求的异常错误
     } else {
-      // 其他异常错误
+      // 处理 HTTP 错误响应中的 2001
+      if (error.response && error.response.data) {
+        const { errorCode } = error.response.data
+        if (errorCode === 2001) {
+          store.commit('auth/CLEAR_AUTH')
+          router.push('/login')
+          return Promise.reject(new Error('用户未登录'))
+        }
+      }
     }
     return Promise.reject(error)
   }

@@ -62,8 +62,6 @@ public class FunctionCallingRouterPrompt {
           Lunar date: {lunar_date}
           {information}
           {router_rules}
-          Available routes:
-          {available_routes}
           Recent conversation:
           {recent_conversation}
           Memory categories: {memory_map}
@@ -74,7 +72,7 @@ public class FunctionCallingRouterPrompt {
 
   public String build(String assistantName, String userName, String role, String roleIntroduction,
       String currentMemory, String information, String memoryMap, String knowledgeGraphic,
-      String voice, String routerRules, String availableRoutes, String recentConversation) {
+      String voice, String routerRules, String recentConversation) {
     Date date = new Date();
     Map<String, String> params = new HashMap<>();
     params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
@@ -87,7 +85,6 @@ public class FunctionCallingRouterPrompt {
     params.put("lunar_date", getLunarDateString(date));
     params.put("information", formatInformation(information));
     params.put("router_rules", formatRouterRules(routerRules));
-    params.put("available_routes", defaultText(availableRoutes, "none"));
     params.put("recent_conversation", defaultText(recentConversation, "none"));
     params.put("memory_map", defaultText(memoryMap, "none"));
     params.put("current_memory", defaultText(currentMemory, "none"));

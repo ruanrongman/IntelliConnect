@@ -97,6 +97,8 @@ public class ReactPrompt {
           2. If `current_step == max_steps`, you **MUST** call `finish` regardless.
           3. If a tool returns an error or empty result, either retry with different arguments or call `finish` with an explanation.
           4. Choose exactly ONE tool per step.
+          5. If the Observation shows the task was executed successfully (e.g. success, ok, done, value set), you MUST call `finish` immediately — do NOT call the same tool again or call another tool for the same intent.
+          6. Do NOT re-attempt a tool call with the same arguments. Only retry with genuinely different arguments if the previous result was clearly wrong or incomplete.
 
           ## Constraints
           - Output ONLY the JSON object. No markdown fences, no comments, no extra text.
