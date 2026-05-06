@@ -31,7 +31,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.models.ProductSkillsEntity;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
@@ -66,6 +68,8 @@ public class McpAgent implements BaseTool<String> {
   private boolean speedUp;
   @Value("${ai.agent.showThinking:true}")
   private boolean showThinking;
+  @Value("${ai.mcp.agent-include-thought:false}")
+  private boolean includeThought;
   private String name = "mcpAgent";
 
   @Autowired
@@ -80,6 +84,8 @@ public class McpAgent implements BaseTool<String> {
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private JsExecuteTool jsExecuteTool;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -210,6 +216,7 @@ public class McpAgent implements BaseTool<String> {
 
     // 构建 system prompt，包括所有服务器的工具描述
     String system;
+    boolean includeThoughtEnabled = getIncludeThoughtConfig();
     try {
       String toolDescriptions = combineToolDescriptions(clientMap);
       if (mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)) {
@@ -223,7 +230,8 @@ public class McpAgent implements BaseTool<String> {
       if (!productSkillsService.findAllByProductId(productId).isEmpty()) {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
-      system = reactPrompt.getReact(toolDescriptions, question, productId, 1, epochLimit);
+      system = reactPrompt.getReact(toolDescriptions, question, productId, 1, epochLimit,
+          includeThoughtEnabled);
     } catch (Exception e) {
       return "获取工具描述失败";
     }
@@ -257,7 +265,8 @@ public class McpAgent implements BaseTool<String> {
           .add(new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt.toString()));
       messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
 
-      var obj = callLLMForThought(question, messages, queueMap, chatId, productId);
+      var obj =
+          callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled);
       if (obj == null) {
         cleanupResources(clientMap, chatId);
         return "小主人抱歉哦，服务器现在繁忙。";
@@ -282,8 +291,8 @@ public class McpAgent implements BaseTool<String> {
         if (!fullName.contains(":") && !fullName.equals("finish")) {
           toolResult = "Error calling tool, must use format 'serverKey:toolName'";
           conversationPrompt.append(String.format(
-              "\nThought: %s\nAction: %s\nObservation: %s\n",
-              thought, fullName, toolResult));
+              "%s\nAction: %s\nObservation: %s\n",
+              buildThoughtLine(thought), fullName, toolResult));
           if (queue != null) {
             queue.add("调用工具出现小错误");
           }
@@ -342,8 +351,8 @@ public class McpAgent implements BaseTool<String> {
         }
         // 更新对话
         conversationPrompt.append(String.format(
-            "\nThought: %s\nAction: %s(%s)\nObservation: %s\n",
-            thought, fullName, args, toolResult));
+            "%s\nAction: %s(%s)\nObservation: %s\n",
+            buildThoughtLine(thought), fullName, args, toolResult));
         if (queue != null) {
           queue.add(ToolPrefix.getToolCallPrefix(fullName));
         }
@@ -408,7 +417,8 @@ public class McpAgent implements BaseTool<String> {
    * 调用LLM获取thought，支持流式和非流式
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId, int productId) {
+      Map<String, Queue<String>> queueMap, String chatId, int productId,
+      boolean includeThoughtEnabled) {
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "10");
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
@@ -416,7 +426,8 @@ public class McpAgent implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this, "thought", showThinking));
+            new AgentEventSourceListener(queueMap, chatId, this, "thought",
+                showThinking && includeThoughtEnabled));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);
@@ -499,5 +510,25 @@ public class McpAgent implements BaseTool<String> {
       }
     }
     return sb.toString();
+  }
+
+  private String buildThoughtLine(String thought) {
+    if (thought == null || thought.isBlank()) {
+      return "";
+    }
+    return "\nThought: " + thought;
+  }
+
+  private boolean getIncludeThoughtConfig() {
+    try {
+      List<AdminConfigEntity> configs =
+          adminConfigService.findAllBySetKey("ai_mcp_agent_include_thought");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return Boolean.parseBoolean(configs.get(0).getSetValue());
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取MCP Agent thought配置失败", e);
+    }
+    return includeThought;
   }
 }

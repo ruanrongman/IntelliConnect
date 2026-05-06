@@ -27,6 +27,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.AdminConfigEntity;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.*;
@@ -67,6 +69,10 @@ public class Agent implements BaseTool<String> {
   private int epochLimit = 8;
   @Value("${ai.agent.showThinking:true}")
   private boolean showThinking;
+  @Value("${ai.agent.include-thought:false}")
+  private boolean includeThought;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
@@ -127,9 +133,10 @@ public class Agent implements BaseTool<String> {
       queue.add(ToolPrefix.AGENT.getPrefix());
       queue.add(getRandomComfortPhrase());
     }
+    boolean includeThoughtEnabled = getIncludeThoughtConfig();
     String system =
         reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId, 1,
-            epochLimit);
+            epochLimit, includeThoughtEnabled);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);
@@ -152,7 +159,8 @@ public class Agent implements BaseTool<String> {
       ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
       messages.add(systemMessage);
       messages.add(userMessage);
-      var obj = callLLMForThought(question, messages, queueMap, chatId, productId);
+      var obj =
+          callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled);
       if (obj == null) {
         cleanupResources(chatId);
         return "小主人抱歉哦，服务器现在繁忙。";
@@ -180,8 +188,9 @@ public class Agent implements BaseTool<String> {
         toolResult =
             manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
         conversationPrompt.append(String.format(
-            "\nThought: %s\nAction: %s(%s)\nObservation: %s\n",
-            res.get("thought"), res.get("action_name"), res.get("action_parameters"), toolResult));
+            "%s\nAction: %s(%s)\nObservation: %s\n",
+            buildThoughtLine(res.get("thought")), res.get("action_name"),
+            res.get("action_parameters"), toolResult));
         if (queue != null) {
           queue.add(ToolPrefix.getToolCallPrefix(res.get("action_name")));
         }
@@ -236,7 +245,8 @@ public class Agent implements BaseTool<String> {
    * 调用LLM获取thought，支持流式和非流式
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId, int productId) {
+      Map<String, Queue<String>> queueMap, String chatId, int productId,
+      boolean includeThoughtEnabled) {
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4");
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
@@ -244,7 +254,8 @@ public class Agent implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this, "thought", showThinking));
+            new AgentEventSourceListener(queueMap, chatId, this, "thought",
+                showThinking && includeThoughtEnabled));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);
@@ -307,6 +318,26 @@ public class Agent implements BaseTool<String> {
     resultMap.put("action_name", obj.getJSONObject("action").getString("name"));
     resultMap.put("action_parameters", obj.getJSONObject("action").getString("args"));
     return resultMap;
+  }
+
+  private String buildThoughtLine(String thought) {
+    if (thought == null || thought.isBlank()) {
+      return "";
+    }
+    return "\nThought: " + thought;
+  }
+
+  private boolean getIncludeThoughtConfig() {
+    try {
+      List<AdminConfigEntity> configs =
+          adminConfigService.findAllBySetKey("ai_agent_include_thought");
+      if (!configs.isEmpty() && configs.get(0).getSetValue() != null) {
+        return Boolean.parseBoolean(configs.get(0).getSetValue());
+      }
+    } catch (Exception e) {
+      log.error("从数据库获取Agent thought配置失败", e);
+    }
+    return includeThought;
   }
 
 }

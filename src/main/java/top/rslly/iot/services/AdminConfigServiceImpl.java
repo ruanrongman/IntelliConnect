@@ -96,7 +96,8 @@ public class AdminConfigServiceImpl implements AdminConfigService {
 
   private JsonResult<?> validateAdminConfig(AdminConfig adminConfig) {
     Set<String> allowed = Set.of("wx_default_product", "wx_trigger-keyword", "wx_success-message",
-        "wx_unregistered-message", "ai_classifier_include_thought", "ai_detect_random");
+        "wx_unregistered-message", "ai_classifier_include_thought", "ai_agent_include_thought",
+        "ai_mcp_agent_include_thought", "ai_detect_random");
     if (!allowed.contains(adminConfig.getSetKey())) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -133,7 +134,9 @@ public class AdminConfigServiceImpl implements AdminConfigService {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }
     }
-    if (adminConfig.getSetKey().equals("ai_classifier_include_thought")) {
+    if (adminConfig.getSetKey().equals("ai_classifier_include_thought")
+        || adminConfig.getSetKey().equals("ai_agent_include_thought")
+        || adminConfig.getSetKey().equals("ai_mcp_agent_include_thought")) {
       if (adminConfig.getSetValue() == null || adminConfig.getSetValue().trim().isEmpty()) {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }

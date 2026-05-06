@@ -381,7 +381,7 @@ public class Router {
       }
       case "8" -> {
         if (dataArgs.length > 0 && dataArgs[0].equals("false")) {
-          toolResult = "瀹氭椂浠诲姟绂佹閫掑綊璋冪敤!!!";
+          toolResult = "定时任务禁止递归调用!!!";
         } else {
           toolResult = scheduleTool.run(args, globalMessage);
         }

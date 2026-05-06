@@ -163,6 +163,7 @@ ai:
       thought: true
   agent:
     showThinking: false
+    include-thought: false
   vad:
     timeout: 60
     timeoutRealtime: 120
@@ -242,6 +243,7 @@ ai:
     agent-llm: dashscope-qwen3-max
     agent-speedUp: true
     agent-epoch-limit: 5
+    agent-include-thought: false
 jwt:
   # JWT 密钥
   secret: tF6mG3dJ0uD5uL6yW2wH5mO2pA1oH9JWTTokenGenerationThatIsAtLeast32CharactersLong

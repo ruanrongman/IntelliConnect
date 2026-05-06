@@ -168,11 +168,15 @@ const allowedKeys = [
   { value: 'wx_success-message', label: '注册成功消息', buttonText: '保存设置' },  
   { value: 'wx_unregistered-message', label: '未注册提示消息', buttonText: '保存设置' },
   { value: 'ai_classifier_include_thought', label: '语义路由深度思考', buttonText: '保存设置' },
+  { value: 'ai_agent_include_thought', label: 'Agent 深度思考', buttonText: '保存设置' },
+  { value: 'ai_mcp_agent_include_thought', label: 'MCP Agent 深度思考', buttonText: '保存设置' },
   { value: 'ai_detect_random', label: '小智唤醒词随机问候', buttonText: '保存设置' },
 ];
 // 布尔类型配置的 key 列表
 const booleanConfigKeys = [
   'ai_classifier_include_thought',
+  'ai_agent_include_thought',
+  'ai_mcp_agent_include_thought',
   'ai_detect_random',
 ];
 
@@ -188,6 +192,8 @@ const defaultConfigValues = {
   'wx_success-message': '注册成功，感谢您对我们的支持',  
   'wx_unregistered-message': '您尚未注册，请先完成注册流程',
   'ai_classifier_include_thought': 'true',
+  'ai_agent_include_thought': 'false',
+  'ai_mcp_agent_include_thought': 'false',
   'ai_detect_random': 'false',
 };
 
@@ -199,6 +205,8 @@ const getIconForKey = (key) => {
     'wx_success-message': '✅',
     'wx_unregistered-message': '⚠️',
     'ai_classifier_include_thought': '🧠',
+    'ai_agent_include_thought': '🤖',
+    'ai_mcp_agent_include_thought': '🔌',
     'ai_detect_random': '🎲',
   };
   return iconMap[key] || '⚙️';
@@ -221,6 +229,8 @@ const getDescriptionForKey = (key) => {
     'wx_success-message': '用户注册成功后显示的欢迎消息',
     'wx_unregistered-message': '未注册用户访问时的提示信息',
     'ai_classifier_include_thought': '控制语义路由是否启用深度思考',
+    'ai_agent_include_thought': '控制 ai.agent.include-thought，关闭可减少 Agent 简单任务延时',
+    'ai_mcp_agent_include_thought': '控制 ai.mcp.agent-include-thought，关闭可减少 MCP Agent 简单任务延时',
     'ai_detect_random': '小智唤醒词随机问候',
   };
   return descMap[key] || '系统配置项';
@@ -276,6 +286,7 @@ const fetchConfigs = () => {
           id: null,  
           setKey: key.value,  
           setValue: defaultConfigValues[key.value],  
+          boolValue: isBooleanConfig(key.value) ? (defaultConfigValues[key.value] === 'true') : false,
           label: key.label,  
           buttonText: key.buttonText,
           saving: false,
@@ -289,6 +300,7 @@ const fetchConfigs = () => {
         id: null,  
         setKey: key.value,  
         setValue: defaultConfigValues[key.value],  
+        boolValue: isBooleanConfig(key.value) ? (defaultConfigValues[key.value] === 'true') : false,
         label: key.label,  
         buttonText: key.buttonText,
         saving: false,

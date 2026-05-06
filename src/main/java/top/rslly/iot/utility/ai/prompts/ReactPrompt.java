@@ -64,7 +64,7 @@ public class ReactPrompt {
 
           ```json
           {
-            "thought": "<your reasoning in the user's language>",
+            {thought_field}
             "action": {
               "name": "<tool_name>",
               "args": {}
@@ -84,7 +84,7 @@ public class ReactPrompt {
 
           ```json
           {
-            "thought": "<brief summary of reasoning>",
+            {finish_thought_field}
             "action": {
               "name": "finish",
               "args": {"content": "<your final answer>"}
@@ -102,8 +102,7 @@ public class ReactPrompt {
 
           ## Constraints
           - Output ONLY the JSON object. No markdown fences, no comments, no extra text.
-          - The "thought" field and final answer language must match the user's language.
-          - "thought" is visible to the user — stay in character.
+          {thought_constraints}
           - Final answer should be ≤ 100 words and match your role's style.
           - No emojis in output.
 
@@ -116,6 +115,11 @@ public class ReactPrompt {
 
   public String getReact(String toolDescriptions, String question, int productId,
       int currentStep, int maxSteps) {
+    return getReact(toolDescriptions, question, productId, currentStep, maxSteps, true);
+  }
+
+  public String getReact(String toolDescriptions, String question, int productId,
+      int currentStep, int maxSteps, boolean includeThought) {
     Map<String, String> params = new HashMap<>();
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date = new Date();
@@ -129,6 +133,19 @@ public class ReactPrompt {
     params.put("question", question);
     params.put("current_step", String.valueOf(currentStep));
     params.put("max_steps", String.valueOf(maxSteps));
+    if (includeThought) {
+      params.put("thought_field", "\"thought\": \"<your reasoning in the user's language>\",");
+      params.put("finish_thought_field", "\"thought\": \"<brief summary of reasoning>\",");
+      params.put("thought_constraints",
+          """
+              - The "thought" field and final answer language must match the user's language.
+              - "thought" is visible to the user — stay in character.""");
+    } else {
+      params.put("thought_field", "");
+      params.put("finish_thought_field", "");
+      params.put("thought_constraints",
+          "- Final answer language must match the user's language.");
+    }
     List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
     String assistantName = null;
     String userName = null;
