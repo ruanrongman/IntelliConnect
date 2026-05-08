@@ -21,7 +21,6 @@ package top.rslly.iot.utility.ai.toolAgent;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import io.modelcontextprotocol.client.McpSyncClient;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +33,9 @@ import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.*;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.llm.FunctionResult;
+import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
+import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.tools.BaseTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
@@ -44,6 +46,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Data
@@ -73,11 +76,18 @@ public class Agent implements BaseTool<String> {
   private boolean includeThought;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Value("${ai.router.mode:prompt}")
+  private String routerMode;
+  @Value("${ai.agent.mode:prompt}")
+  private String agentMode;
+  @Value("${ai.agent.function-timeout-seconds:60}")
+  private long functionTimeoutSeconds;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
   private final Map<String, String> dataMap = new ConcurrentHashMap<>();
+  private final Map<String, FunctionResult> functionDataMap = new ConcurrentHashMap<>();
 
   private static final List<String> COMFORT_PHRASES = Arrays.asList(
       "嗯～",
@@ -117,6 +127,13 @@ public class Agent implements BaseTool<String> {
   }
 
   public String run(String question, Map<String, Object> globalMessage) {
+    if (isFunctionAgentMode()) {
+      String functionResult = runFunctionCalling(question, globalMessage);
+      if (functionResult != null) {
+        return functionResult;
+      }
+      log.info("Agent function calling unavailable, fallback to ReAct prompt mode");
+    }
     StringBuilder conversationPrompt = new StringBuilder();
     int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
@@ -131,7 +148,9 @@ public class Agent implements BaseTool<String> {
     var queue = queueMap.get(chatId);
     if (queue != null) {
       queue.add(ToolPrefix.AGENT.getPrefix());
-      queue.add(getRandomComfortPhrase());
+      if (!isFunctionRouterMode()) {
+        queue.add(getRandomComfortPhrase());
+      }
     }
     boolean includeThoughtEnabled = getIncludeThoughtConfig();
     String system =
@@ -338,6 +357,257 @@ public class Agent implements BaseTool<String> {
       log.error("从数据库获取Agent thought配置失败", e);
     }
     return includeThought;
+  }
+
+  private boolean isFunctionRouterMode() {
+    return "function".equalsIgnoreCase(routerMode);
+  }
+
+  private boolean isFunctionAgentMode() {
+    return "function".equalsIgnoreCase(agentMode);
+  }
+
+  private String runFunctionCalling(String question, Map<String, Object> globalMessage) {
+    int productId = (int) globalMessage.get("productId");
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    String chatId = (String) globalMessage.get("chatId");
+    Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4");
+    if (!llm.supportsFunctionCalling()) {
+      return null;
+    }
+    globalMessage.put("mcpIsTool", true);
+    if (queue != null) {
+      queue.add(ToolPrefix.AGENT.getPrefix());
+    }
+
+    List<FunctionToolSpec> toolSpecs = buildFunctionToolSpecs(productId, chatId);
+    List<ModelMessage> messages = new ArrayList<>();
+    messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
+        reactPrompt.getFunctionCalling(question, productId)));
+    messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
+
+    String finalAnswer = null;
+    for (int iteration = 0; iteration < epochLimit; iteration++) {
+      if (isQueueRemoved(chatId, queueMap)) {
+        return "操作已取消";
+      }
+      FunctionResult result = callFunctionLlm(question, messages, toolSpecs, queueMap, chatId, llm);
+      if (result == null || result.isUnsupported() || result.isError()) {
+        return null;
+      }
+      if (result.isDirectReply()) {
+        finalAnswer = result.getReply();
+        if (queue != null) {
+          if (!speedUp) {
+            queue.add(finalAnswer);
+          }
+          queue.add("[DONE]");
+        }
+        return finalAnswer;
+      }
+      if (!result.isToolCall()) {
+        return null;
+      }
+      String functionName = result.getFunctionName();
+      String assistantText = extractAssistantText(result.getArguments());
+      String toolArgs = extractFunctionArgs(result.getArguments());
+      if (!isKnownAgentFunction(functionName, toolSpecs)) {
+        log.warn("Unknown Agent function call: {}", functionName);
+        return null;
+      }
+      if (queue != null) {
+        queue.add(ToolPrefix.getToolCallPrefix(functionName));
+      }
+      String observation = manage.runTool(functionName, toolArgs, globalMessage);
+      messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
+          (assistantText.isBlank() ? "" : assistantText + "\n")
+              + "Called function " + functionName + " with arguments: " + toolArgs));
+      messages.add(new ModelMessage(ModelMessageRole.USER.value(),
+          "Observation: " + observation));
+      finalAnswer = observation;
+    }
+
+    String summary = summarizeFunctionConversation(question, productId, messages, finalAnswer);
+    if (queue != null) {
+      queue.add(summary);
+      queue.add("[DONE]");
+    }
+    return summary;
+  }
+
+  private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
+      LLM llm) {
+    if (!speedUp) {
+      return llm.functionChat(question, messages, toolSpecs);
+    }
+    lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
+    conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
+    functionDataMap.remove(chatId);
+    Lock lock = lockMap.get(chatId);
+    Condition condition = conditionMap.get(chatId);
+    StringBuilder replyBuffer = new StringBuilder();
+
+    llm.streamFunctionChat(question, messages, toolSpecs, new FunctionStreamHandler() {
+      @Override
+      public void onTextDelta(String text) {
+        if (text == null || text.isBlank()) {
+          return;
+        }
+        replyBuffer.append(text);
+        Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
+        if (queue != null) {
+          queue.add(text.replace("\n", "").replace("\r", ""));
+        }
+      }
+
+      @Override
+      public void onDirectReplyComplete(String reply) {
+        finish(FunctionResult.directReply(reply == null || reply.isBlank()
+            ? replyBuffer.toString()
+            : reply));
+      }
+
+      @Override
+      public void onToolCall(String functionName, String arguments) {
+        FunctionResult result = FunctionResult.toolCall(functionName, arguments);
+        if (!replyBuffer.isEmpty()) {
+          result = FunctionResult.toolCall(functionName,
+              mergeAssistantText(arguments, replyBuffer.toString()));
+        }
+        finish(result);
+      }
+
+      @Override
+      public void onFailure(Throwable throwable) {
+        log.error("Agent function calling stream failed, chatId={}", chatId, throwable);
+        if (!replyBuffer.isEmpty()) {
+          finish(FunctionResult.directReply(replyBuffer.toString()));
+          return;
+        }
+        finish(FunctionResult.error("function calling stream failed"));
+      }
+
+      @Override
+      public void onUnsupported() {
+        finish(FunctionResult.unsupported());
+      }
+
+      private void finish(FunctionResult result) {
+        lock.lock();
+        try {
+          if (!functionDataMap.containsKey(chatId)) {
+            functionDataMap.put(chatId, result);
+            condition.signalAll();
+          }
+        } finally {
+          lock.unlock();
+        }
+      }
+    });
+
+    lock.lock();
+    try {
+      while (!functionDataMap.containsKey(chatId)) {
+        if (!condition.await(functionTimeoutSeconds, TimeUnit.SECONDS)) {
+          functionDataMap.put(chatId, FunctionResult.error("function calling timeout"));
+          break;
+        }
+      }
+      return functionDataMap.get(chatId);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return FunctionResult.error("function calling interrupted");
+    } finally {
+      lock.unlock();
+      functionDataMap.remove(chatId);
+    }
+  }
+
+  private List<FunctionToolSpec> buildFunctionToolSpecs(int productId, String chatId) {
+    List<FunctionToolSpec> toolSpecs = new ArrayList<>();
+    JSONObject tools = JSON.parseObject(descriptionUtil.getTools(productId, chatId));
+    for (Map.Entry<String, Object> entry : tools.entrySet()) {
+      String toolName = entry.getKey();
+      String description = Objects.toString(entry.getValue(), "");
+      if (toolName == null || toolName.isBlank()) {
+        continue;
+      }
+      toolSpecs.add(new FunctionToolSpec(toolName,
+          description.isBlank() ? toolName : description,
+          FunctionToolSpec.defaultStringArgsSchema()));
+    }
+    return toolSpecs;
+  }
+
+  private boolean isKnownAgentFunction(String functionName, List<FunctionToolSpec> toolSpecs) {
+    if (functionName == null || toolSpecs == null) {
+      return false;
+    }
+    return toolSpecs.stream().anyMatch(toolSpec -> functionName.equals(toolSpec.name()));
+  }
+
+  private String extractFunctionArgs(String arguments) {
+    if (arguments == null || arguments.isBlank()) {
+      return "";
+    }
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      object.remove("_assistant_text");
+      String args = object.getString("args");
+      if (args != null) {
+        return args;
+      }
+    } catch (Exception ignored) {
+      // Raw arguments are still accepted for compatibility with older tool prompts.
+    }
+    return arguments;
+  }
+
+  private String extractAssistantText(String arguments) {
+    if (arguments == null || arguments.isBlank()) {
+      return "";
+    }
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      return Objects.toString(object.getString("_assistant_text"), "");
+    } catch (Exception ignored) {
+      return "";
+    }
+  }
+
+  private String mergeAssistantText(String arguments, String assistantText) {
+    try {
+      JSONObject object = arguments == null || arguments.isBlank()
+          ? new JSONObject()
+          : JSON.parseObject(arguments);
+      object.put("_assistant_text", assistantText);
+      return object.toJSONString();
+    } catch (Exception e) {
+      JSONObject object = new JSONObject();
+      object.put("args", arguments == null ? "" : arguments);
+      object.put("_assistant_text", assistantText);
+      return object.toJSONString();
+    }
+  }
+
+  private String summarizeFunctionConversation(String question, int productId,
+      List<ModelMessage> messages, String fallback) {
+    String summaryPrompt = "请根据以上工具调用过程和最终观察结果，总结回答最初的问题: " + question;
+    List<ModelMessage> summaryMessages = new ArrayList<>();
+    summaryMessages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
+    summaryMessages.add(new ModelMessage(ModelMessageRole.USER.value(), messages.toString()));
+    try {
+      return llmDiyUtility.getDiyLlm(productId, llmName, "4")
+          .commonChat(summaryPrompt, summaryMessages, false);
+    } catch (Exception e) {
+      log.error("Agent function calling summary failed", e);
+      return fallback == null || fallback.isBlank()
+          ? "经过多次尝试仍未找到完整答案，请重新提问或提供更多细节。"
+          : fallback;
+    }
   }
 
 }

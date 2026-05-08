@@ -19,7 +19,7 @@
  */
 package top.rslly.iot.utility.ai.llm;
 
-public interface FunctionRouterStreamHandler {
+public interface FunctionStreamHandler {
   default void onOpen() {}
 
   default void onTextDelta(String text) {}

@@ -76,21 +76,30 @@ public class DeepSeek implements LLM {
   private final String model;
   private final boolean enableThinking;
   private final int thinkingBudget;
+  private final double temperature;
+  private final double topP;
 
   public DeepSeek(String apiKey) {
     this(DEFAULT_URL, DEFAULT_MODEL, apiKey);
   }
 
   public DeepSeek(String url, String model, String apiKey) {
-    this(url, model, apiKey, false, 128);
+    this(url, model, apiKey, false, 128, 0.6, 0.85);
   }
 
   public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
       int thinkingBudget) {
+    this(url, model, apiKey, enableThinking, thinkingBudget, 0.6, 0.85);
+  }
+
+  public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
+      int thinkingBudget, double temperature, double topP) {
     this.baseUrl = normalizeBaseUrl(url);
     this.model = model;
     this.enableThinking = enableThinking;
     this.thinkingBudget = thinkingBudget;
+    this.temperature = temperature;
+    this.topP = topP;
     this.client = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .baseUrl(this.baseUrl)
@@ -133,26 +142,26 @@ public class DeepSeek implements LLM {
   }
 
   @Override
-  public boolean supportsFunctionRouting() {
+  public boolean supportsFunctionCalling() {
     return true;
   }
 
   @Override
-  public FunctionRouterResult functionRouterChat(String content, List<ModelMessage> messages,
-      List<FunctionRouterToolSpec> toolSpecs) {
+  public FunctionResult functionChat(String content, List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs) {
     try {
       ChatCompletion completion = client.chat().completions()
           .create(buildFunctionParams(messages, toolSpecs));
-      return toFunctionRouterResult(completion);
+      return toFunctionResult(completion);
     } catch (Exception e) {
-      log.error("function router error", e);
-      return FunctionRouterResult.error(FALLBACK_MESSAGE);
+      log.error("function calling error", e);
+      return FunctionResult.error(FALLBACK_MESSAGE);
     }
   }
 
   @Override
-  public void streamFunctionRouterChat(String content, List<ModelMessage> messages,
-      List<FunctionRouterToolSpec> toolSpecs, FunctionRouterStreamHandler handler) {
+  public void streamFunctionChat(String content, List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs, FunctionStreamHandler handler) {
     if (handler == null) {
       return;
     }
@@ -182,7 +191,7 @@ public class DeepSeek implements LLM {
           handler.onDirectReplyComplete(replyBuilder.toString());
         }
       } catch (Exception e) {
-        log.error("stream function router error", e);
+        log.error("stream function calling error", e);
         handler.onFailure(e);
       }
     });
@@ -251,20 +260,24 @@ public class DeepSeek implements LLM {
   private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages) {
     return applyModelDefaults(ChatCompletionCreateParams.builder()
         .model(model)
+        .temperature(temperature)
+        .topP(topP)
         .messages(toMessageParams(messages)))
             .build();
   }
 
   private ChatCompletionCreateParams buildFunctionParams(List<ModelMessage> messages,
-      List<FunctionRouterToolSpec> toolSpecs) {
+      List<FunctionToolSpec> toolSpecs) {
     ChatCompletionCreateParams.Builder builder = applyModelDefaults(
         ChatCompletionCreateParams.builder()
             .model(model)
+            .temperature(temperature)
+            .topP(topP)
             .messages(toMessageParams(messages)));
     if (toolSpecs != null && !toolSpecs.isEmpty()) {
       builder.toolChoice(ChatCompletionToolChoiceOption.Auto.AUTO)
           .parallelToolCalls(false);
-      for (FunctionRouterToolSpec toolSpec : toolSpecs) {
+      for (FunctionToolSpec toolSpec : toolSpecs) {
         builder.addTool(buildFunctionTool(toolSpec));
       }
     }
@@ -336,7 +349,7 @@ public class DeepSeek implements LLM {
         .orElse("");
   }
 
-  private FunctionRouterResult toFunctionRouterResult(ChatCompletion completion) {
+  private FunctionResult toFunctionResult(ChatCompletion completion) {
     return completion.choices().stream()
         .findFirst()
         .map(choice -> {
@@ -344,24 +357,24 @@ public class DeepSeek implements LLM {
           if (!toolCalls.isEmpty()) {
             return toToolCallResult(toolCalls.get(0));
           }
-          return FunctionRouterResult.directReply(choice.message().content().orElse(""));
+          return FunctionResult.directReply(choice.message().content().orElse(""));
         })
-        .orElse(FunctionRouterResult.error(FALLBACK_MESSAGE));
+        .orElse(FunctionResult.error(FALLBACK_MESSAGE));
   }
 
-  private FunctionRouterResult toToolCallResult(ChatCompletionMessageToolCall toolCall) {
+  private FunctionResult toToolCallResult(ChatCompletionMessageToolCall toolCall) {
     if (toolCall == null || !toolCall.isFunction()) {
-      return FunctionRouterResult.error(FALLBACK_MESSAGE);
+      return FunctionResult.error(FALLBACK_MESSAGE);
     }
     var functionToolCall = toolCall.asFunction();
-    return FunctionRouterResult.toolCall(functionToolCall.function().name(),
+    return FunctionResult.toolCall(functionToolCall.function().name(),
         functionToolCall.function().arguments());
   }
 
-  private ChatCompletionTool buildFunctionTool(FunctionRouterToolSpec toolSpec) {
+  private ChatCompletionTool buildFunctionTool(FunctionToolSpec toolSpec) {
     Map<String, Object> parameters =
         toolSpec.parameters() == null || toolSpec.parameters().isEmpty()
-            ? FunctionRouterToolSpec.defaultArgsSchema()
+            ? FunctionToolSpec.defaultStringArgsSchema()
             : toolSpec.parameters();
     return ChatCompletionTool.ofFunction(ChatCompletionFunctionTool.builder()
         .type(JsonValue.from("function"))

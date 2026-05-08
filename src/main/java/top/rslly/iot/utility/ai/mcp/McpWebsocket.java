@@ -30,6 +30,9 @@ import jakarta.websocket.Session;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Component
 @Slf4j
@@ -44,6 +47,7 @@ public class McpWebsocket {
   private static final String TOOL_CALL_LOCK_PREFIX = "mcp:tool:call:";
   // 锁的过期时间（秒） - 比实际等待时间稍长
   private static final long LOCK_EXPIRE_TIME = 15L;
+  private static final Map<String, Lock> SESSION_SEND_LOCKS = new ConcurrentHashMap<>();
 
   public String combineToolDescription(String serverName, String chatId) {
     List<Map<String, Object>> toolDescriptionMap =
@@ -60,6 +64,12 @@ public class McpWebsocket {
     }
     // log.info("getTools: " + sb);
     return sb.toString();
+  }
+
+  public List<Map<String, Object>> getToolDescriptions(String serverName, String chatId) {
+    List<Map<String, Object>> toolDescriptionMap =
+        (List<Map<String, Object>>) redisUtil.get(serverName + chatId);
+    return toolDescriptionMap == null ? List.of() : toolDescriptionMap;
   }
 
   public String getIntention(String serverName, String chatId) {
@@ -97,7 +107,7 @@ public class McpWebsocket {
           jsonArguments,
           new TypeReference<>() {});
       String jsonStr = McpProtocolSend.callTool(toolName, params, endpoint);
-      session.getBasicRemote().sendText(jsonStr);
+      sendTextSerially(serverName, chatId, session, jsonStr);
       for (int i = 0; i < 120; i++) {
         try {
           if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
@@ -128,5 +138,23 @@ public class McpWebsocket {
   public boolean isRunning(String serverName, String chatId) {
     String key = serverName + chatId;
     return redisUtil.hasKey(key);
+  }
+
+  private void sendTextSerially(String serverName, String chatId, Session session, String text)
+      throws java.io.IOException {
+    if (session == null || !session.isOpen()) {
+      throw new java.io.IOException("websocket session is not open");
+    }
+    String sessionKey = serverName + ":" + chatId + ":" + session.getId();
+    Lock lock = SESSION_SEND_LOCKS.computeIfAbsent(sessionKey, ignored -> new ReentrantLock());
+    lock.lock();
+    try {
+      session.getBasicRemote().sendText(text);
+    } finally {
+      lock.unlock();
+      if (!session.isOpen()) {
+        SESSION_SEND_LOCKS.remove(sessionKey, lock);
+      }
+    }
   }
 }

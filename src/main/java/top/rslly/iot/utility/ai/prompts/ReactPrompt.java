@@ -46,20 +46,7 @@ public class ReactPrompt {
   private ProductRoleServiceImpl productRoleService;
   private static final String ReactSystem =
       """
-          ## Identity
-          You are {agent_name}, developed by the {team_name} team.
-          Your role: {role}. {role_introduction}
-          The user's name: {user_name}.
-          Current time: {time} (Lunar: {lunar_date}).
-          Long-term memory: {memory_map}
-
-          ## Tools
-          You have access to the following tools:
-          {tool_descriptions}
-
           ## ReAct Protocol
-          You are on step **{current_step}** of **{max_steps}**.
-
           On every step, output exactly ONE JSON object (no extra text):
 
           ```json
@@ -94,23 +81,63 @@ public class ReactPrompt {
 
           ## Termination Rules
           1. Default: complete the task in **1 step**. Use additional steps only when the first result is genuinely insufficient.
-          2. If `current_step == max_steps`, you **MUST** call `finish` regardless.
-          3. If a tool returns an error or empty result, either retry with different arguments or call `finish` with an explanation.
-          4. Choose exactly ONE tool per step.
-          5. If the Observation shows the task was executed successfully (e.g. success, ok, done, value set), you MUST call `finish` immediately — do NOT call the same tool again or call another tool for the same intent.
-          6. Do NOT re-attempt a tool call with the same arguments. Only retry with genuinely different arguments if the previous result was clearly wrong or incomplete.
+          2. Use `current_step` and `max_steps` from Runtime Context.
+          3. If `current_step == max_steps`, you **MUST** call `finish` regardless.
+          4. If a tool returns an error or empty result, either retry with different arguments or call `finish` with an explanation.
+          5. Choose exactly ONE tool per step.
+          6. If the Observation shows the task was executed successfully (e.g. success, ok, done, value set), you MUST call `finish` immediately — do NOT call the same tool again or call another tool for the same intent.
+          7. Do NOT re-attempt a tool call with the same arguments. Only retry with genuinely different arguments if the previous result was clearly wrong or incomplete.
 
           ## Constraints
           - Output ONLY the JSON object. No markdown fences, no comments, no extra text.
-          {thought_constraints}
           - Final answer should be ≤ 100 words and match your role's style.
           - No emojis in output.
+
+          ## Tools
+          You have access to the following tools:
+          {tool_descriptions}
+
+          ## Runtime Context
+          You are {agent_name}, developed by the {team_name} team.
+          Your role: {role}. {role_introduction}
+          The user's name: {user_name}.
+          Current time: {time} (Lunar: {lunar_date}).
+          Long-term memory: {memory_map}
+          Current step: {current_step}
+          Max steps: {max_steps}
+          {thought_constraints}
 
           ## User Question
           {question}
 
           ## Current Conversation
           Below is the current conversation consisting of interleaving human and assistant messages.
+          """;
+
+  private static final String FunctionCallingSystem =
+      """
+          ## Tool Use
+          You can either answer directly or call exactly one function when external action or data is needed.
+          Available tools are provided by the function calling API.
+
+          ## Rules
+          - Before calling a function, you may output a brief natural-language progress message.
+          - Use a function only when it helps complete the user's request.
+          - Do not call the same function with the same arguments repeatedly.
+          - After an Observation is provided, use it to decide whether another function is needed or whether to answer.
+          - When enough information is available, answer directly in the user's language.
+          - Final answer should be <= 100 words and match your role's style.
+          - No emojis in output.
+
+          ## Runtime Context
+          You are {agent_name}, developed by the {team_name} team.
+          Your role: {role}. {role_introduction}
+          The user's name: {user_name}.
+          Current time: {time} (Lunar: {lunar_date}).
+          Long-term memory: {memory_map}
+
+          ## User Question
+          {question}
           """;
 
   public String getReact(String toolDescriptions, String question, int productId,
@@ -120,17 +147,8 @@ public class ReactPrompt {
 
   public String getReact(String toolDescriptions, String question, int productId,
       int currentStep, int maxSteps, boolean includeThought) {
-    Map<String, String> params = new HashMap<>();
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
-    params.put("time", formattedDate);
-    // ========== 农历时间 ==========
-    String lunarDate = getLunarDateString(date);
-    params.put("lunar_date", lunarDate);
-    params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
+    Map<String, String> params = buildCommonParams(question, productId);
     params.put("tool_descriptions", toolDescriptions);
-    params.put("question", question);
     params.put("current_step", String.valueOf(currentStep));
     params.put("max_steps", String.valueOf(maxSteps));
     if (includeThought) {
@@ -146,6 +164,24 @@ public class ReactPrompt {
       params.put("thought_constraints",
           "- Final answer language must match the user's language.");
     }
+    return StringUtils.formatString(ReactSystem, params);
+  }
+
+  public String getFunctionCalling(String question, int productId) {
+    return StringUtils.formatString(FunctionCallingSystem, buildCommonParams(question, productId));
+  }
+
+  private Map<String, String> buildCommonParams(String question, int productId) {
+    Map<String, String> params = new HashMap<>();
+    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    Date date = new Date();
+    String formattedDate = formatter.format(date);
+    params.put("time", formattedDate);
+    // ========== 农历时间 ==========
+    String lunarDate = getLunarDateString(date);
+    params.put("lunar_date", lunarDate);
+    params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
+    params.put("question", question);
     List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
     String assistantName = null;
     String userName = null;
@@ -166,7 +202,7 @@ public class ReactPrompt {
     params.put("role", Objects.requireNonNullElse(role, "smart speaker"));
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
         "你可以回答新闻内容和用户的各种合法请求，你回答的每句话都尽量口语化、简短"));
-    return StringUtils.formatString(ReactSystem, params);
+    return params;
   }
 
   /**

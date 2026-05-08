@@ -37,6 +37,8 @@ public class LLMFactory {
   private static String glmKey;
   private static String customLLMProviderUrl;
   private static String customKey;
+  private static double temperature;
+  private static double topP;
   private static final ConcurrentHashMap<String, LLM> LLM_CACHE = new ConcurrentHashMap<>();
 
   @Value("${ai.glm-key}")
@@ -72,6 +74,16 @@ public class LLMFactory {
   @Value("${ai.custom-llm-provider-url}")
   public void setCustomLLMProviderUrl(String url) {
     customLLMProviderUrl = url;
+  }
+
+  @Value("${ai.temperature:0.6}")
+  public void setTemperature(double temperature) {
+    LLMFactory.temperature = temperature;
+  }
+
+  @Value("${ai.top-p:0.85}")
+  public void setTopP(double topP) {
+    LLMFactory.topP = topP;
   }
 
   public static LLM getLLM(String llmName) {
@@ -131,25 +143,25 @@ public class LLMFactory {
       return cached(cacheKey("https://api.siliconflow.cn", modelName, siliconFlowApiKey,
           finalEnableThinking, finalThinkingBudget),
           () -> new DeepSeek("https://api.siliconflow.cn", modelName, siliconFlowApiKey,
-              finalEnableThinking, finalThinkingBudget));
+              finalEnableThinking, finalThinkingBudget, temperature, topP));
     } else if (lowerCaseLlmName.startsWith("dashscope-")) {
       String modelName = baseLlmName.substring("dashscope-".length());
       return cached(cacheKey("https://dashscope.aliyuncs.com/compatible-mode", modelName,
           dashScopeApiKey, finalEnableThinking, finalThinkingBudget),
           () -> new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
-              dashScopeApiKey, finalEnableThinking, finalThinkingBudget));
+              dashScopeApiKey, finalEnableThinking, finalThinkingBudget, temperature, topP));
     } else if (lowerCaseLlmName.startsWith("uniapi-")) {
       String modelName = baseLlmName.substring("uniapi-".length());
       return cached(cacheKey("https://hk.uniapi.io", modelName, uniApiKey, finalEnableThinking,
           finalThinkingBudget),
           () -> new DeepSeek("https://hk.uniapi.io", modelName, uniApiKey,
-              finalEnableThinking, finalThinkingBudget));
+              finalEnableThinking, finalThinkingBudget, temperature, topP));
     } else if (lowerCaseLlmName.startsWith("custom-")) {
       String modelName = baseLlmName.substring("custom-".length());
       return cached(cacheKey(customLLMProviderUrl, modelName, customKey, finalEnableThinking,
           finalThinkingBudget),
           () -> new DeepSeek(customLLMProviderUrl, modelName, customKey,
-              finalEnableThinking, finalThinkingBudget));
+              finalEnableThinking, finalThinkingBudget, temperature, topP));
     }
 
     // 6. 兜底策略：如果以上都不匹配，返回默认的 DeepSeek

@@ -26,14 +26,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.UserConfigServiceImpl;
-import top.rslly.iot.services.agent.ProductToolsBanService;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
-import top.rslly.iot.utility.ai.llm.FunctionRouterResult;
+import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
@@ -320,7 +319,7 @@ public class Router {
   private RouteExecutionResult resolveFunctionRoute(String content,
       Map<String, Object> globalMessage,
       int productId, String chatId, String... dataArgs) {
-    FunctionRouterResult result = functionCallingRouterTool.run(content, globalMessage);
+    FunctionResult result = functionCallingRouterTool.run(content, globalMessage);
     if (result.isToolCall()) {
       Optional<FunctionRouterRoute> route =
           FunctionRouterRoute.fromFunctionName(result.getFunctionName());

@@ -156,12 +156,15 @@ weather:
     # Ed25519私钥 (PKCS8格式，Base64编码，不含-----BEGIN PRIVATE KEY-----等标记)
     private-key: XXX
 ai:
+  temperature: 0.6
+  top-p: 0.85
   detectRandom: false
   showThinking: false
   classifier:
     include:
       thought: true
   agent:
+    mode: function
     showThinking: false
     include-thought: false
   vad:
@@ -191,6 +194,14 @@ ai:
     skip-tool-prefix: true
     # TTS缓存保留时间，单位是毫秒。默认是一天
     cache-expire-time: 86400000
+    dashscope-max-concurrent: 64
+    dashscope-acquire-timeout-ms: 5000
+    dashscope-connection-pool-size: 128
+    dashscope-max-async-requests: 128
+    dashscope-max-async-requests-per-host: 128
+    dashscope-connect-timeout-seconds: 10
+    dashscope-write-timeout-seconds: 20
+    dashscope-read-timeout-seconds: 120
   chromeDrive-path: XXX
   chrome-path: XXX
   audio-tmp-path: D://temp-music//
@@ -230,7 +241,7 @@ ai:
   scheduleTool-llm: dashscope-qwen3-next-80b-a3b-instruct
   scheduleTool-llm-speed: true
   searchTool-llm: silicon-Qwen3-30B-A3B-think-64
-  agent-llm: dashscope-qwen3-max
+  agent-llm: dashscope-deepseek-v4-flash
   agent-speedUp: true
   longMemoryTool-llm: dashscope-qwen2.5-14b-instruct
   wx_smart_robot_llm: glm
@@ -240,7 +251,8 @@ ai:
   branch-prediction:
     enabled: true
   mcp:
-    agent-llm: dashscope-qwen3-max
+    agent-mode: function
+    agent-llm: dashscope-deepseek-v4-flash
     agent-speedUp: true
     agent-epoch-limit: 5
     agent-include-thought: false

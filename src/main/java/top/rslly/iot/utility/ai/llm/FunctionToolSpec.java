@@ -23,21 +23,38 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public record FunctionRouterToolSpec(
+public record FunctionToolSpec(
     String name,
     String description,
     Map<String, Object> parameters,
     boolean strict) {
 
-  public FunctionRouterToolSpec(String name, String description) {
-    this(name, description, defaultArgsSchema(), false);
+  public FunctionToolSpec(String name, String description, Map<String, Object> parameters) {
+    this(name, description, parameters, false);
   }
 
-  public static Map<String, Object> defaultArgsSchema() {
+  public static Map<String, Object> defaultRouterArgsSchema() {
     Map<String, Object> argsProperty = new LinkedHashMap<>();
     argsProperty.put("type", "string");
     argsProperty.put("description",
         "Normalized arguments for the selected route. Use empty string when no args are needed.");
+
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("args", argsProperty);
+
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "object");
+    schema.put("properties", properties);
+    schema.put("required", List.of("args"));
+    schema.put("additionalProperties", false);
+    return schema;
+  }
+
+  public static Map<String, Object> defaultStringArgsSchema() {
+    Map<String, Object> argsProperty = new LinkedHashMap<>();
+    argsProperty.put("type", "string");
+    argsProperty.put("description",
+        "Input argument for the function. Use empty string when no args are needed.");
 
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("args", argsProperty);

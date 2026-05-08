@@ -38,9 +38,9 @@ import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.chain.FunctionRouterRoute;
-import top.rslly.iot.utility.ai.llm.FunctionRouterResult;
-import top.rslly.iot.utility.ai.llm.FunctionRouterStreamHandler;
-import top.rslly.iot.utility.ai.llm.FunctionRouterToolSpec;
+import top.rslly.iot.utility.ai.llm.FunctionResult;
+import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
+import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.prompts.FunctionCallingRouterPrompt;
@@ -102,7 +102,7 @@ public class FunctionCallingRouterTool {
 
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
-  private final Map<String, FunctionRouterResult> dataMap = new ConcurrentHashMap<>();
+  private final Map<String, FunctionResult> dataMap = new ConcurrentHashMap<>();
 
   @Value("${ai.classifierTool-llm}")
   private String llmName;
@@ -111,26 +111,26 @@ public class FunctionCallingRouterTool {
   @Value("${ai.classifierTool-timeout-seconds:60}")
   private long responseTimeoutSeconds;
 
-  public FunctionRouterResult run(String question, Map<String, Object> globalMessage) {
+  public FunctionResult run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
     String chatId = (String) globalMessage.get("chatId");
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "classifier");
-    if (!llm.supportsFunctionRouting()) {
-      return FunctionRouterResult.unsupported();
+    if (!llm.supportsFunctionCalling()) {
+      return FunctionResult.unsupported();
     }
 
-    List<FunctionRouterToolSpec> toolSpecs = buildToolSpecs(productId, chatId);
+    List<FunctionToolSpec> toolSpecs = buildToolSpecs(productId, chatId);
     List<ModelMessage> messages =
         buildPromptMessages(question, productId, chatId, globalMessage, toolSpecs);
     if (!speedUp) {
-      return normalizeResult(llm.functionRouterChat(question, messages, toolSpecs));
+      return normalizeResult(llm.functionChat(question, messages, toolSpecs));
     }
     return runWithStreaming(question, chatId, llm, messages, toolSpecs,
         (Map<String, Queue<String>>) globalMessage.get("queueMap"));
   }
 
-  private FunctionRouterResult runWithStreaming(String question, String chatId, LLM llm,
-      List<ModelMessage> messages, List<FunctionRouterToolSpec> toolSpecs,
+  private FunctionResult runWithStreaming(String question, String chatId, LLM llm,
+      List<ModelMessage> messages, List<FunctionToolSpec> toolSpecs,
       Map<String, Queue<String>> queueMap) {
     lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
     conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
@@ -140,7 +140,7 @@ public class FunctionCallingRouterTool {
     AtomicBoolean responseStarted = new AtomicBoolean(false);
     StringBuilder replyBuffer = new StringBuilder();
 
-    FunctionRouterStreamHandler handler = new FunctionRouterStreamHandler() {
+    FunctionStreamHandler handler = new FunctionStreamHandler() {
       @Override
       public void onTextDelta(String text) {
         responseStarted.set(true);
@@ -156,7 +156,7 @@ public class FunctionCallingRouterTool {
 
       @Override
       public void onDirectReplyComplete(String reply) {
-        finish(FunctionRouterResult.directReply(reply == null || reply.isBlank()
+        finish(FunctionResult.directReply(reply == null || reply.isBlank()
             ? replyBuffer.toString()
             : reply), true);
       }
@@ -164,25 +164,25 @@ public class FunctionCallingRouterTool {
       @Override
       public void onToolCall(String functionName, String arguments) {
         responseStarted.set(true);
-        finish(FunctionRouterResult.toolCall(functionName, arguments), false);
+        finish(FunctionResult.toolCall(functionName, arguments), false);
       }
 
       @Override
       public void onFailure(Throwable throwable) {
         log.error("Function router streaming failed, chatId={}", chatId, throwable);
         if (responseStarted.get() && replyBuffer.length() > 0) {
-          finish(FunctionRouterResult.directReply(replyBuffer.toString()), true);
+          finish(FunctionResult.directReply(replyBuffer.toString()), true);
           return;
         }
-        finish(FunctionRouterResult.error(ERROR_MESSAGE), false);
+        finish(FunctionResult.error(ERROR_MESSAGE), false);
       }
 
       @Override
       public void onUnsupported() {
-        finish(FunctionRouterResult.unsupported(), false);
+        finish(FunctionResult.unsupported(), false);
       }
 
-      private void finish(FunctionRouterResult result, boolean signalDone) {
+      private void finish(FunctionResult result, boolean signalDone) {
         lock.lock();
         try {
           if (!dataMap.containsKey(chatId)) {
@@ -198,20 +198,20 @@ public class FunctionCallingRouterTool {
       }
     };
 
-    llm.streamFunctionRouterChat(question, messages, toolSpecs, handler);
+    llm.streamFunctionChat(question, messages, toolSpecs, handler);
     lock.lock();
     try {
       while (!dataMap.containsKey(chatId)) {
         if (!condition.await(responseTimeoutSeconds, TimeUnit.SECONDS)) {
-          dataMap.put(chatId, FunctionRouterResult.error(ERROR_MESSAGE));
+          dataMap.put(chatId, FunctionResult.error(ERROR_MESSAGE));
           break;
         }
       }
       return normalizeResult(
-          dataMap.getOrDefault(chatId, FunctionRouterResult.error(ERROR_MESSAGE)));
+          dataMap.getOrDefault(chatId, FunctionResult.error(ERROR_MESSAGE)));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      return FunctionRouterResult.error(ERROR_MESSAGE);
+      return FunctionResult.error(ERROR_MESSAGE);
     } finally {
       lock.unlock();
       cleanup(chatId);
@@ -219,7 +219,7 @@ public class FunctionCallingRouterTool {
   }
 
   private List<ModelMessage> buildPromptMessages(String question, int productId, String chatId,
-      Map<String, Object> globalMessage, List<FunctionRouterToolSpec> toolSpecs) {
+      Map<String, Object> globalMessage, List<FunctionToolSpec> toolSpecs) {
     String memoryChatId = chatId.endsWith("_prediction")
         ? chatId.substring(0, chatId.length() - "_prediction".length())
         : chatId;
@@ -259,7 +259,7 @@ public class FunctionCallingRouterTool {
     return ChatTool.buildConversationMessages(memory, systemMessage, userMessage);
   }
 
-  private List<FunctionRouterToolSpec> buildToolSpecs(int productId, String chatId) {
+  private List<FunctionToolSpec> buildToolSpecs(int productId, String chatId) {
     List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
     Map<FunctionRouterRoute, String> availableRoutes = new LinkedHashMap<>();
     availableRoutes.put(FunctionRouterRoute.WEATHER,
@@ -291,12 +291,12 @@ public class FunctionCallingRouterTool {
     banTools.forEach(banTool -> availableRoutes.entrySet()
         .removeIf(entry -> Objects.equals(entry.getKey().getTaskId(), banTool)));
 
-    List<FunctionRouterToolSpec> toolSpecs = new ArrayList<>();
+    List<FunctionToolSpec> toolSpecs = new ArrayList<>();
     for (Map.Entry<FunctionRouterRoute, String> entry : availableRoutes.entrySet()) {
-      toolSpecs.add(new FunctionRouterToolSpec(
+      toolSpecs.add(new FunctionToolSpec(
           entry.getKey().getFunctionName(),
           entry.getValue(),
-          FunctionRouterToolSpec.defaultArgsSchema(),
+          FunctionToolSpec.defaultRouterArgsSchema(),
           false));
     }
     return toolSpecs;
@@ -398,12 +398,12 @@ public class FunctionCallingRouterTool {
     return normalized.substring(0, maxChars) + "...";
   }
 
-  private FunctionRouterResult normalizeResult(FunctionRouterResult result) {
+  private FunctionResult normalizeResult(FunctionResult result) {
     if (result == null) {
-      return FunctionRouterResult.error(ERROR_MESSAGE);
+      return FunctionResult.error(ERROR_MESSAGE);
     }
     if (result.isDirectReply() && (result.getReply() == null || result.getReply().isBlank())) {
-      return FunctionRouterResult.error(ERROR_MESSAGE);
+      return FunctionResult.error(ERROR_MESSAGE);
     }
     return result;
   }

@@ -40,6 +40,9 @@ import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.FunctionResult;
+import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
+import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
 import top.rslly.iot.utility.ai.tools.BaseTool;
@@ -48,12 +51,15 @@ import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Slf4j
@@ -86,11 +92,18 @@ public class McpAgent implements BaseTool<String> {
   private JsExecuteTool jsExecuteTool;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Value("${ai.router.mode:prompt}")
+  private String routerMode;
+  @Value("${ai.mcp.agent-mode:prompt}")
+  private String mcpAgentMode;
+  @Value("${ai.mcp.agent-function-timeout-seconds:60}")
+  private long functionTimeoutSeconds;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
   private final Map<String, String> dataMap = new ConcurrentHashMap<>();
+  private final Map<String, FunctionResult> functionDataMap = new ConcurrentHashMap<>();
 
   private static final List<String> COMFORT_PHRASES = Arrays.asList(
       "嗯～",
@@ -208,6 +221,14 @@ public class McpAgent implements BaseTool<String> {
       }
     }
 
+    if (isFunctionMcpAgentMode()) {
+      String functionResult = runFunctionCalling(question, globalMessage, clientMap, mcpIsTool);
+      if (functionResult != null) {
+        return functionResult;
+      }
+      log.info("MCP Agent function calling unavailable, fallback to ReAct prompt mode");
+    }
+
     // 仅在 speedUp 模式下初始化同步资源
     if (speedUp) {
       lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
@@ -240,7 +261,9 @@ public class McpAgent implements BaseTool<String> {
     var queue = queueMap.get(chatId);
     if (queue != null) {
       queue.add(ToolPrefix.MCP_AGENT.getPrefix());
-      queue.add(getRandomComfortPhrase());
+      if (!isFunctionRouterMode()) {
+        queue.add(getRandomComfortPhrase());
+      }
     }
     // log.info("system: {}", system);
 
@@ -530,5 +553,417 @@ public class McpAgent implements BaseTool<String> {
       log.error("从数据库获取MCP Agent thought配置失败", e);
     }
     return includeThought;
+  }
+
+  private boolean isFunctionRouterMode() {
+    return "function".equalsIgnoreCase(routerMode);
+  }
+
+  private boolean isFunctionMcpAgentMode() {
+    return "function".equalsIgnoreCase(mcpAgentMode);
+  }
+
+  private String runFunctionCalling(String question, Map<String, Object> globalMessage,
+      Map<String, McpSyncClient> clientMap, boolean mcpIsTool) {
+    String chatId = (String) globalMessage.get("chatId");
+    int productId = (int) globalMessage.get("productId");
+    Map<String, Queue<String>> queueMap =
+        (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "10");
+    if (!llm.supportsFunctionCalling()) {
+      return null;
+    }
+    if (queue != null) {
+      queue.add(ToolPrefix.MCP_AGENT.getPrefix());
+    }
+
+    FunctionToolRegistry registry = buildMcpFunctionToolRegistry(productId, chatId, clientMap);
+    if (registry.toolSpecs().isEmpty()) {
+      cleanupResources(clientMap, chatId);
+      return "产品下面没有任何可调用的mcp工具或者skills";
+    }
+    List<ModelMessage> messages = new ArrayList<>();
+    messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
+        reactPrompt.getFunctionCalling(question, productId)));
+    messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
+
+    String finalAnswer = null;
+    for (int iteration = 0; iteration < epochLimit; iteration++) {
+      if (isQueueRemoved(chatId, queueMap)) {
+        cleanupResources(clientMap, chatId);
+        return "操作已取消";
+      }
+      FunctionResult result =
+          callFunctionLlm(question, messages, registry.toolSpecs(), queueMap, chatId, llm);
+      if (result == null || result.isUnsupported() || result.isError()) {
+        return null;
+      }
+      if (result.isDirectReply()) {
+        cleanupResources(clientMap, chatId);
+        if (queue != null) {
+          if (!speedUp) {
+            queue.add(result.getReply());
+          }
+          if (!mcpIsTool) {
+            queue.add("[DONE]");
+          }
+        }
+        return result.getReply();
+      }
+      if (!result.isToolCall()) {
+        return null;
+      }
+      McpFunctionRef functionRef = registry.refMap().get(result.getFunctionName());
+      if (functionRef == null) {
+        log.warn("Unknown MCP function call: {}", result.getFunctionName());
+        return null;
+      }
+      String assistantText = extractAssistantText(result.getArguments());
+      String arguments = normalizeToolArguments(result.getArguments());
+      if (queue != null) {
+        queue.add(ToolPrefix.getToolCallPrefix(functionRef.fullName()));
+      }
+      String observation = callMcpFunction(functionRef, arguments, globalMessage, clientMap);
+      messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
+          (assistantText.isBlank() ? "" : assistantText + "\n")
+              + "Called function " + result.getFunctionName() + " for " + functionRef.fullName()
+              + " with arguments: " + arguments));
+      messages.add(new ModelMessage(ModelMessageRole.USER.value(),
+          "Observation: " + observation));
+      finalAnswer = observation;
+    }
+
+    cleanupResources(clientMap, chatId);
+    String summary = summarizeFunctionConversation(question, productId, messages, finalAnswer);
+    if (queue != null) {
+      queue.add(summary);
+      if (!mcpIsTool) {
+        queue.add("[DONE]");
+      }
+    }
+    return summary;
+  }
+
+  private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
+      LLM llm) {
+    if (!speedUp) {
+      return llm.functionChat(question, messages, toolSpecs);
+    }
+    lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
+    conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
+    functionDataMap.remove(chatId);
+    Lock lock = lockMap.get(chatId);
+    Condition condition = conditionMap.get(chatId);
+    StringBuilder replyBuffer = new StringBuilder();
+
+    llm.streamFunctionChat(question, messages, toolSpecs, new FunctionStreamHandler() {
+      @Override
+      public void onTextDelta(String text) {
+        if (text == null || text.isBlank()) {
+          return;
+        }
+        replyBuffer.append(text);
+        Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
+        if (queue != null) {
+          queue.add(text.replace("\n", "").replace("\r", ""));
+        }
+      }
+
+      @Override
+      public void onDirectReplyComplete(String reply) {
+        finish(FunctionResult.directReply(reply == null || reply.isBlank()
+            ? replyBuffer.toString()
+            : reply));
+      }
+
+      @Override
+      public void onToolCall(String functionName, String arguments) {
+        FunctionResult result = FunctionResult.toolCall(functionName, arguments);
+        if (!replyBuffer.isEmpty()) {
+          result = FunctionResult.toolCall(functionName,
+              mergeAssistantText(arguments, replyBuffer.toString()));
+        }
+        finish(result);
+      }
+
+      @Override
+      public void onFailure(Throwable throwable) {
+        log.error("MCP Agent function calling stream failed, chatId={}", chatId, throwable);
+        if (!replyBuffer.isEmpty()) {
+          finish(FunctionResult.directReply(replyBuffer.toString()));
+          return;
+        }
+        finish(FunctionResult.error("function calling stream failed"));
+      }
+
+      @Override
+      public void onUnsupported() {
+        finish(FunctionResult.unsupported());
+      }
+
+      private void finish(FunctionResult result) {
+        lock.lock();
+        try {
+          if (!functionDataMap.containsKey(chatId)) {
+            functionDataMap.put(chatId, result);
+            condition.signalAll();
+          }
+        } finally {
+          lock.unlock();
+        }
+      }
+    });
+
+    lock.lock();
+    try {
+      while (!functionDataMap.containsKey(chatId)) {
+        if (!condition.await(functionTimeoutSeconds, TimeUnit.SECONDS)) {
+          functionDataMap.put(chatId, FunctionResult.error("function calling timeout"));
+          break;
+        }
+      }
+      return functionDataMap.get(chatId);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return FunctionResult.error("function calling interrupted");
+    } finally {
+      lock.unlock();
+      functionDataMap.remove(chatId);
+    }
+  }
+
+  private FunctionToolRegistry buildMcpFunctionToolRegistry(int productId, String chatId,
+      Map<String, McpSyncClient> clientMap) {
+    List<FunctionToolSpec> toolSpecs = new ArrayList<>();
+    Map<String, McpFunctionRef> refMap = new LinkedHashMap<>();
+    Set<String> usedNames = new HashSet<>();
+    for (var entry : clientMap.entrySet()) {
+      String serverKey = entry.getKey();
+      McpSchema.ListToolsResult tools = entry.getValue().listTools();
+      for (McpSchema.Tool tool : tools.tools()) {
+        addMcpFunctionTool(toolSpecs, refMap, usedNames, serverKey, tool.name(),
+            tool.description(), normalizeSchema(tool.inputSchema()));
+      }
+    }
+    addWebsocketFunctionTools(toolSpecs, refMap, usedNames, McpWebsocket.DEVICE_SERVER_NAME,
+        chatId);
+    addWebsocketFunctionTools(toolSpecs, refMap, usedNames, McpWebsocket.ENDPOINT_SERVER_NAME,
+        "mcp" + productId);
+    for (ProductSkillsEntity skill : productSkillsService.findAllByProductId(productId)) {
+      addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", skill.getName(),
+          skill.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+    }
+    addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", jsExecuteTool.getName(),
+        jsExecuteTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+    return new FunctionToolRegistry(toolSpecs, refMap);
+  }
+
+  private void addWebsocketFunctionTools(List<FunctionToolSpec> toolSpecs,
+      Map<String, McpFunctionRef> refMap, Set<String> usedNames, String serverName,
+      String chatId) {
+    for (Map<String, Object> tool : mcpWebsocket.getToolDescriptions(serverName, chatId)) {
+      String toolName = Objects.toString(tool.get("name"), "");
+      if (toolName.isBlank()) {
+        continue;
+      }
+      addMcpFunctionTool(toolSpecs, refMap, usedNames, serverName, toolName,
+          Objects.toString(tool.get("description"), ""),
+          normalizeSchema(tool.get("inputSchema")));
+    }
+  }
+
+  private void addMcpFunctionTool(List<FunctionToolSpec> toolSpecs,
+      Map<String, McpFunctionRef> refMap, Set<String> usedNames, String serverKey,
+      String toolName, String description, Map<String, Object> parameters) {
+    String functionName = toFunctionName(serverKey, toolName, usedNames);
+    McpFunctionRef functionRef = new McpFunctionRef(serverKey, toolName);
+    refMap.put(functionName, functionRef);
+    toolSpecs.add(new FunctionToolSpec(functionName,
+        (description == null || description.isBlank() ? functionRef.fullName() : description),
+        parameters == null || parameters.isEmpty()
+            ? FunctionToolSpec.defaultStringArgsSchema()
+            : parameters));
+  }
+
+  private Map<String, Object> normalizeSchema(Object inputSchema) {
+    if (inputSchema instanceof McpSchema.JsonSchema jsonSchema) {
+      Map<String, Object> schema = new LinkedHashMap<>();
+      schema.put("type", jsonSchema.type() == null ? "object" : jsonSchema.type());
+      schema.put("properties",
+          jsonSchema.properties() == null ? Map.of() : jsonSchema.properties());
+      if (jsonSchema.required() != null) {
+        schema.put("required", jsonSchema.required());
+      }
+      if (jsonSchema.additionalProperties() != null) {
+        schema.put("additionalProperties", jsonSchema.additionalProperties());
+      }
+      return schema;
+    }
+    if (inputSchema instanceof Map<?, ?> inputMap) {
+      Map<String, Object> schema = new LinkedHashMap<>();
+      inputMap.forEach((key, value) -> {
+        if (key != null) {
+          schema.put(String.valueOf(key), value);
+        }
+      });
+      return schema;
+    }
+    if (inputSchema instanceof String schemaText && !schemaText.isBlank()) {
+      try {
+        JSONObject jsonObject = JSON.parseObject(schemaText);
+        if (jsonObject != null && !jsonObject.isEmpty()) {
+          Map<String, Object> schema = new LinkedHashMap<>();
+          jsonObject.forEach(schema::put);
+          return schema;
+        }
+      } catch (Exception ignored) {
+        // Some websocket clients send display-only schema strings.
+      }
+    }
+    return FunctionToolSpec.defaultStringArgsSchema();
+  }
+
+  private String toFunctionName(String serverKey, String toolName, Set<String> usedNames) {
+    String raw = "mcp_" + serverKey + "_" + toolName;
+    String normalized = raw.replaceAll("[^a-zA-Z0-9_]", "_");
+    if (normalized.isBlank() || !Character.isLetter(normalized.charAt(0))) {
+      normalized = "mcp_" + normalized;
+    }
+    if (normalized.length() > 58) {
+      normalized = normalized.substring(0, 58);
+    }
+    String candidate = normalized;
+    if (usedNames.contains(candidate)) {
+      candidate = normalized + "_" + shortHash(serverKey + ":" + toolName);
+    }
+    int suffix = 1;
+    while (usedNames.contains(candidate)) {
+      candidate = normalized + "_" + shortHash(serverKey + ":" + toolName) + "_" + suffix++;
+    }
+    usedNames.add(candidate);
+    return candidate;
+  }
+
+  private String shortHash(String value) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+      StringBuilder builder = new StringBuilder();
+      for (int i = 0; i < 3; i++) {
+        builder.append(String.format("%02x", bytes[i]));
+      }
+      return builder.toString();
+    } catch (Exception e) {
+      return Integer.toHexString(value.hashCode()).replace("-", "");
+    }
+  }
+
+  private String normalizeToolArguments(String arguments) {
+    if (arguments == null || arguments.isBlank()) {
+      return "{}";
+    }
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      object.remove("_assistant_text");
+      String args = object.getString("args");
+      if (args != null && object.size() == 1) {
+        return args;
+      }
+      return object.toJSONString();
+    } catch (Exception ignored) {
+      return arguments;
+    }
+  }
+
+  private String extractAssistantText(String arguments) {
+    if (arguments == null || arguments.isBlank()) {
+      return "";
+    }
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      return Objects.toString(object.getString("_assistant_text"), "");
+    } catch (Exception ignored) {
+      return "";
+    }
+  }
+
+  private String mergeAssistantText(String arguments, String assistantText) {
+    try {
+      JSONObject object = arguments == null || arguments.isBlank()
+          ? new JSONObject()
+          : JSON.parseObject(arguments);
+      object.put("_assistant_text", assistantText);
+      return object.toJSONString();
+    } catch (Exception e) {
+      JSONObject object = new JSONObject();
+      object.put("args", arguments == null ? "" : arguments);
+      object.put("_assistant_text", assistantText);
+      return object.toJSONString();
+    }
+  }
+
+  private String callMcpFunction(McpFunctionRef functionRef, String args,
+      Map<String, Object> globalMessage, Map<String, McpSyncClient> clientMap) {
+    String chatId = (String) globalMessage.get("chatId");
+    int productId = (int) globalMessage.get("productId");
+    String serverKey = functionRef.serverKey();
+    String toolName = functionRef.toolName();
+    try {
+      if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
+        return mcpWebsocket.sendToolCall(McpWebsocket.DEVICE_SERVER_NAME, chatId,
+            toolName, args, XiaoZhiWebsocket.clients.get(chatId), false);
+      } else if (serverKey.equals(McpWebsocket.ENDPOINT_SERVER_NAME)) {
+        return mcpWebsocket.sendToolCall(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId,
+            toolName, args, McpWebsocketEndpoint.clients.get("mcp" + productId), true);
+      } else if (serverKey.equals("skills")) {
+        if (toolName.equals(jsExecuteTool.getName())) {
+          return jsExecuteTool.run(args, globalMessage);
+        }
+        List<ProductSkillsEntity> skillsEntity =
+            productSkillsService.findAllByProductIdAndName(productId, toolName);
+        if (skillsEntity.isEmpty()) {
+          return "调用skills失败";
+        }
+        return productSkillsService.readSkills(skillsEntity.get(0).getFilePath());
+      }
+      McpSyncClient client = clientMap.get(serverKey);
+      if (client == null) {
+        return "Unknown server key: " + serverKey;
+      }
+      McpSchema.CallToolResult result =
+          client.callTool(new McpSchema.CallToolRequest(toolName, args));
+      return result.content().isEmpty() ? "" : result.content().get(0).toString();
+    } catch (Exception e) {
+      log.error("MCP function tool call failed: {}", functionRef.fullName(), e);
+      return "Error calling tool, please try again";
+    }
+  }
+
+  private String summarizeFunctionConversation(String question, int productId,
+      List<ModelMessage> messages, String fallback) {
+    String summaryPrompt = "请根据以上工具调用过程和最终观察结果，总结回答最初的问题: " + question;
+    List<ModelMessage> summaryMessages = new ArrayList<>();
+    summaryMessages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
+    summaryMessages.add(new ModelMessage(ModelMessageRole.USER.value(), messages.toString()));
+    try {
+      return llmDiyUtility.getDiyLlm(productId, llmName, "10")
+          .commonChat(summaryPrompt, summaryMessages, false);
+    } catch (Exception e) {
+      log.error("MCP Agent function calling summary failed", e);
+      return fallback == null || fallback.isBlank()
+          ? "经过多次尝试仍未找到完整答案，请重新提问或提供更多细节。"
+          : fallback;
+    }
+  }
+
+  private record FunctionToolRegistry(List<FunctionToolSpec> toolSpecs,
+      Map<String, McpFunctionRef> refMap) {}
+
+  private record McpFunctionRef(String serverKey, String toolName) {
+    private String fullName() {
+      return serverKey + ":" + toolName;
+    }
   }
 }

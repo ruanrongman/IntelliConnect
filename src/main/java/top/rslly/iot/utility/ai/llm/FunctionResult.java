@@ -22,7 +22,7 @@ package top.rslly.iot.utility.ai.llm;
 import lombok.Getter;
 
 @Getter
-public final class FunctionRouterResult {
+public final class FunctionResult {
   public enum Type {
     UNSUPPORTED, DIRECT_REPLY, TOOL_CALL, ERROR
   }
@@ -33,7 +33,7 @@ public final class FunctionRouterResult {
   private final String reply;
   private final String errorMessage;
 
-  private FunctionRouterResult(Type type, String functionName, String arguments, String reply,
+  private FunctionResult(Type type, String functionName, String arguments, String reply,
       String errorMessage) {
     this.type = type;
     this.functionName = functionName;
@@ -42,24 +42,24 @@ public final class FunctionRouterResult {
     this.errorMessage = errorMessage;
   }
 
-  public static FunctionRouterResult unsupported() {
-    return new FunctionRouterResult(Type.UNSUPPORTED, "", "", "", "");
+  public static FunctionResult unsupported() {
+    return new FunctionResult(Type.UNSUPPORTED, "", "", "", "");
   }
 
-  public static FunctionRouterResult directReply(String reply) {
-    return new FunctionRouterResult(Type.DIRECT_REPLY, "", "", reply == null ? "" : reply, "");
+  public static FunctionResult directReply(String reply) {
+    return new FunctionResult(Type.DIRECT_REPLY, "", "", reply == null ? "" : reply, "");
   }
 
-  public static FunctionRouterResult toolCall(String functionName, String arguments) {
-    return new FunctionRouterResult(Type.TOOL_CALL,
+  public static FunctionResult toolCall(String functionName, String arguments) {
+    return new FunctionResult(Type.TOOL_CALL,
         functionName == null ? "" : functionName,
         arguments == null ? "" : arguments,
         "",
         "");
   }
 
-  public static FunctionRouterResult error(String errorMessage) {
-    return new FunctionRouterResult(Type.ERROR, "", "", "",
+  public static FunctionResult error(String errorMessage) {
+    return new FunctionResult(Type.ERROR, "", "", "",
         errorMessage == null ? "" : errorMessage);
   }
 

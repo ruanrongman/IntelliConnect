@@ -20,7 +20,6 @@
 package top.rslly.iot.utility.ai.llm;
 
 import com.alibaba.fastjson.JSONObject;
-import com.zhipu.oapi.service.v4.model.ChatMessage;
 import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.ModelMessage;
 
@@ -36,17 +35,17 @@ public interface LLM {
 
   String imageToWord(String question, String url);
 
-  default boolean supportsFunctionRouting() {
+  default boolean supportsFunctionCalling() {
     return false;
   }
 
-  default FunctionRouterResult functionRouterChat(String content, List<ModelMessage> messages,
-      List<FunctionRouterToolSpec> toolSpecs) {
-    return FunctionRouterResult.unsupported();
+  default FunctionResult functionChat(String content, List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs) {
+    return FunctionResult.unsupported();
   }
 
-  default void streamFunctionRouterChat(String content, List<ModelMessage> messages,
-      List<FunctionRouterToolSpec> toolSpecs, FunctionRouterStreamHandler handler) {
+  default void streamFunctionChat(String content, List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs, FunctionStreamHandler handler) {
     if (handler != null) {
       handler.onUnsupported();
     }
