@@ -91,6 +91,8 @@ public class Tool {
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
+  private HistoryMessageEntityServiceImpl historyMessageEntityService;
+  @Autowired
   private LlmProviderInformationServiceImpl llmProviderInformationService;
   @Autowired
   private ProductLlmModelServiceImpl productLlmModelService;
@@ -702,6 +704,29 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return agentMemoryService.deleteMemory(id);
+  }
+
+  @Operation(summary = "获取历史消息", description = "分页获取历史消息")
+  @RequestMapping(value = "/historyMessage", method = RequestMethod.GET)
+  public JsonResult<?> getHistoryMessage(
+      @RequestParam("pageNum") @Min(value = 1, message = "pageNum 必须大于等于 1") int pageNum,
+      @RequestParam("pageSize") @Min(value = 1, message = "pageSize 必须大于等于 1") int pageSize,
+      @RequestParam(value = "chatId", required = false) String chatId,
+      @RequestHeader("Authorization") String header) {
+    return historyMessageEntityService.getHistoryMessage(header, pageNum, pageSize, chatId);
+  }
+
+  @Operation(summary = "删除历史消息", description = "根据ID删除历史消息")
+  @RequestMapping(value = "/historyMessage", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteHistoryMessage(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeHistoryMessage(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return historyMessageEntityService.deleteHistoryMessage(id);
   }
 
   @Operation(summary = "获取LLM提供商信息", description = "获取LLM提供商信息，管理员可查看所有，普通用户只能查看自己的")

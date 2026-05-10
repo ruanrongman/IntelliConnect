@@ -24,6 +24,10 @@
       <a-button @click="handleReset">
         重置
       </a-button>
+      <a-button class="history-button" @click="openHistoryModal()">
+        <template #icon><HistoryOutlined /></template>
+        查看消息历史
+      </a-button>
     </div>
     <a-table
       :columns="columns"
@@ -44,6 +48,13 @@
           >
             <template #icon><EyeOutlined /></template>
             查看
+          </a-button>
+          <a-button
+            type="link"
+            @click="openHistoryModal(record.chatId)"
+          >
+            <template #icon><HistoryOutlined /></template>
+            历史
           </a-button>
           <a-button
             type="link"
@@ -120,22 +131,91 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 消息历史弹窗 -->
+    <a-modal
+      :visible="historyModalVisible"
+      @update:visible="val => historyModalVisible = val"
+      @cancel="handleHistoryCancel"
+      :footer="null"
+      width="80vw"
+      wrapClassName="history-modal"
+    >
+      <template #title>
+        <span class="history-modal-title">{{ historyModalTitle }}</span>
+      </template>
+      <a-table
+        :columns="historyColumns"
+        :data-source="historyDataSource"
+        :pagination="historyPagination"
+        :loading="historyLoading"
+        row-key="id"
+        class="history-table"
+        :scroll="{ x: 900 }"
+        @change="handleHistoryTableChange"
+      >
+        <template #messageType="{ record }">
+          <a-tag :color="record.messageType === 'user' ? 'blue' : 'green'">
+            {{ formatMessageType(record.messageType) }}
+          </a-tag>
+        </template>
+        <template #historyContent="{ record }">
+          <div class="history-content-cell">
+            {{ record.content }}
+          </div>
+        </template>
+        <template #time="{ record }">
+          {{ formatTime(record.time) }}
+        </template>
+        <template #historyAction="{ record }">
+          <a-button
+            type="link"
+            danger
+            @click="handleDeleteHistory(record)"
+          >
+            <template #icon><DeleteOutlined /></template>
+            删除
+          </a-button>
+        </template>
+      </a-table>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, reactive } from 'vue';
+import { computed, ref, onMounted, onUnmounted, reactive } from 'vue';
 import { message, Modal } from 'ant-design-vue';
-import { getAgentMemory, getAgentMemoryByNickName, putAgentMemory, deleteAgentMemory } from '@/api/agentMemory';
+import {
+  getAgentMemory,
+  getAgentMemoryByNickName,
+  putAgentMemory,
+  deleteAgentMemory,
+  getHistoryMessage,
+  deleteHistoryMessage
+} from '@/api/agentMemory';
 import { getProduct } from '@/api/product';
 import { useRouter } from 'vue-router';
-import { DeleteOutlined, EyeOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import {
+  DeleteOutlined,
+  EyeOutlined,
+  EditOutlined,
+  SearchOutlined,
+  HistoryOutlined
+} from '@ant-design/icons-vue';
 
 const router = useRouter();
 
 const pagination = {
   pageSize: 5,
 };
+
+const historyPagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 条`,
+});
 
 interface MemoryRecord {
   key: number | string;
@@ -145,9 +225,23 @@ interface MemoryRecord {
   content: string;
 }
 
+interface HistoryRecord {
+  id: number | string;
+  chatId: string;
+  requestId: string;
+  sequenceNum: number;
+  messageType: string;
+  content: string;
+  time: number;
+}
+
 const dataSource = ref<MemoryRecord[]>([]);
 const viewModalVisible = ref(false);
 const editModalVisible = ref(false);
+const historyModalVisible = ref(false);
+const historyLoading = ref(false);
+const historyDataSource = ref<HistoryRecord[]>([]);
+const selectedHistoryChatId = ref('');
 const currentRecord = ref<MemoryRecord>({
   key: '',
   id: '',
@@ -198,9 +292,51 @@ const columns = [
   {
     title: '操作',
     key: 'action',
-    width: 240,
+    width: 300,
     fixed: 'right',
     slots: { customRender: 'action' },
+  },
+];
+
+const historyColumns = [
+  {
+    title: 'ID',
+    dataIndex: 'id',
+    key: 'id',
+    width: 80,
+  },
+  {
+    title: 'Chat ID',
+    dataIndex: 'chatId',
+    key: 'chatId',
+    width: 240,
+  },
+  {
+    title: '角色',
+    dataIndex: 'messageType',
+    key: 'messageType',
+    width: 90,
+    slots: { customRender: 'messageType' },
+  },
+  {
+    title: '内容',
+    dataIndex: 'content',
+    key: 'content',
+    slots: { customRender: 'historyContent' },
+  },
+  {
+    title: '时间',
+    dataIndex: 'time',
+    key: 'time',
+    width: 180,
+    slots: { customRender: 'time' },
+  },
+  {
+    title: '操作',
+    key: 'historyAction',
+    width: 90,
+    fixed: 'right',
+    slots: { customRender: 'historyAction' },
   },
 ];
 
@@ -392,6 +528,122 @@ const handleDelete = (record: MemoryRecord) => {
     }
   });
 };
+
+const historyModalTitle = computed(() => {
+  return selectedHistoryChatId.value
+    ? `消息历史 - ${selectedHistoryChatId.value}`
+    : '消息历史';
+});
+
+const openHistoryModal = (chatId = '') => {
+  selectedHistoryChatId.value = chatId;
+  historyModalVisible.value = true;
+  historyPagination.current = 1;
+  fetchHistoryMessages();
+};
+
+const handleHistoryCancel = () => {
+  historyModalVisible.value = false;
+  selectedHistoryChatId.value = '';
+};
+
+const fetchHistoryMessages = () => {
+  historyLoading.value = true;
+  const params: Record<string, any> = {
+    pageNum: historyPagination.current,
+    pageSize: historyPagination.pageSize
+  };
+  if (selectedHistoryChatId.value) {
+    params.chatId = selectedHistoryChatId.value;
+  }
+  getHistoryMessage(params)
+    .then((res) => {
+      const { data, errorCode } = res.data;
+      if (errorCode == 2001) {
+        router.push('/login');
+        return;
+      }
+      if (errorCode == 200 && data) {
+        const content = Array.isArray(data.content) ? data.content : [];
+        historyDataSource.value = content.map((item: any) => ({
+          id: item.id,
+          chatId: item.chatId,
+          requestId: item.requestId,
+          sequenceNum: item.sequenceNum,
+          messageType: item.messageType,
+          content: item.content,
+          time: item.time
+        }));
+        historyPagination.total = Number(data.totalElements || 0);
+        historyPagination.current = Number(data.number || 0) + 1;
+        historyPagination.pageSize = Number(data.size || historyPagination.pageSize);
+      } else {
+        historyDataSource.value = [];
+        historyPagination.total = 0;
+      }
+    })
+    .catch((err) => {
+      console.error('获取消息历史失败:', err);
+      message.error('获取消息历史失败');
+    })
+    .finally(() => {
+      historyLoading.value = false;
+    });
+};
+
+const handleHistoryTableChange = (paginationInfo: any) => {
+  historyPagination.current = paginationInfo.current;
+  historyPagination.pageSize = paginationInfo.pageSize;
+  fetchHistoryMessages();
+};
+
+const handleDeleteHistory = (record: HistoryRecord) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: '确定要删除这条消息历史吗？此操作不可恢复。',
+    okText: '确认',
+    cancelText: '取消',
+    okType: 'danger',
+    onOk() {
+      deleteHistoryMessage({ id: record.id })
+        .then((res) => {
+          const { errorCode } = res.data;
+          if (errorCode == 200) {
+            message.success('删除成功');
+            fetchHistoryMessages();
+          } else if (errorCode == 2001) {
+            router.push('/login');
+          } else {
+            message.error('删除失败');
+          }
+        })
+        .catch((err) => {
+          console.error('删除消息历史失败:', err);
+          message.error('删除消息历史失败');
+        });
+    }
+  });
+};
+
+const formatMessageType = (messageType: string) => {
+  if (messageType === 'user') {
+    return '用户';
+  }
+  if (messageType === 'assistant') {
+    return '助手';
+  }
+  return messageType || '-';
+};
+
+const formatTime = (time: number) => {
+  if (!time) {
+    return '-';
+  }
+  const date = new Date(time);
+  const pad = (value: number) => `${value}`.padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
 </script>
 
 <style lang="scss" scoped>
@@ -399,9 +651,15 @@ const handleDelete = (record: MemoryRecord) => {
   .search-bar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 16px;
     padding-bottom: 16px;
     border-bottom: 1px solid #f0f0f0;
+
+    .history-button {
+      margin-left: auto;
+    }
   }
 
   .custom-table {
@@ -434,6 +692,32 @@ const handleDelete = (record: MemoryRecord) => {
       white-space: nowrap;
     }
   }
+
+  .history-table {
+    .history-content-cell {
+      min-width: 320px;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+    }
+  }
+}
+
+.history-modal-title {
+  display: inline-block;
+  max-width: calc(80vw - 120px);
+  white-space: normal;
+  word-break: break-word;
+}
+
+:deep(.history-modal .ant-modal) {
+  max-width: 1120px;
+}
+
+:deep(.history-modal .ant-table-cell) {
+  vertical-align: top;
 }
 
 .memory-detail {

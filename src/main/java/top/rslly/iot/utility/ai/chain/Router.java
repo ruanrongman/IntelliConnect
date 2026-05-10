@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.UserConfigServiceImpl;
+import top.rslly.iot.services.agent.HistoryMessageEntityService;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
@@ -90,6 +91,8 @@ public class Router {
   private UserConfigServiceImpl userConfigService;
   @Autowired
   private FunctionCallingRouterTool functionCallingRouterTool;
+  @Autowired
+  private HistoryMessageEntityService historyMessageEntityService;
   @Value("${ai.branch-prediction.enabled:true}")
   private boolean branchPredictionEnabled;
   @Value("${ai.router.mode:prompt}")
@@ -305,6 +308,7 @@ public class Router {
       }
     }
     redisUtil.set("memory" + chatId, memory, 24 * 3600);
+    recordHistoryMessage(chatId, content, answer);
     return answer;
   }
 
@@ -472,4 +476,13 @@ public class Router {
   }
 
   private record RouteExecutionResult(String answer, String toolResult) {}
+
+  private void recordHistoryMessage(String chatId, String content, String answer) {
+    try {
+      historyMessageEntityService.recordHistoryMessage(chatId, UUID.randomUUID().toString(),
+          content, answer);
+    } catch (Exception e) {
+      log.warn("record history message failed, chatId={}", chatId, e);
+    }
+  }
 }

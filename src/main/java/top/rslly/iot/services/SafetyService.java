@@ -75,4 +75,6 @@ public interface SafetyService {
   boolean controlAuthorizeTimeSchedule(String token, int timeScheduleId);
 
   boolean controlAuthorizeProductAsr(String token, int id);
+
+  boolean controlAuthorizeHistoryMessage(String token, int id);
 }

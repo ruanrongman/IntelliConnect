@@ -52,7 +52,7 @@ const product ={
   productPage: 'productPage',
   productXiaoZhi:'productXiaoZhi',
   productRole:'productRole',
-  agentMemory:'agentMemory',
+  agentMemory:'Conversation Data',
   agentLongMemory:'agentLongMemory',
   productRouterSet:'productRouterSet',
   productKnowledge:'productKnowledge',

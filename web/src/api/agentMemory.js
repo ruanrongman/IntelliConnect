@@ -23,3 +23,17 @@ export const getAgentMemoryByNickName = (params) =>
         method: 'delete',
     params
     })
+
+export const getHistoryMessage = (params) =>
+  request({
+    url: '/api/v2/historyMessage',
+    method: 'get',
+    params
+  })
+
+export const deleteHistoryMessage = (params) =>
+  request({
+    url: '/api/v2/historyMessage',
+    method: 'delete',
+    params
+  })
