@@ -89,6 +89,8 @@ src/main/java/top/rslly/iot/
 
 ### 环境要求
 - Java 21+
+- Windows 本机 JDK 21 路径：`C:\Users\Lenovo\.jdks\ms-21.0.9`。如果 `java -version` 显示 Java 17，编译前先在 PowerShell 设置：
+  `$env:JAVA_HOME='C:\Users\Lenovo\.jdks\ms-21.0.9'; $env:Path="$env:JAVA_HOME\bin;$env:Path"`
 - Maven 3.6+
 - MySQL 8.0+
 - Redis 6.0+
@@ -115,6 +117,10 @@ docker-compose up -d
 ```bash
 # 编译项目
 mvn clean package -DskipTests
+
+# Windows 本机如默认 Java 不是 21，使用项目 Maven Wrapper 前先指定 JAVA_HOME
+$env:JAVA_HOME='C:\Users\Lenovo\.jdks\ms-21.0.9'; $env:Path="$env:JAVA_HOME\bin;$env:Path"
+.\mvnw.cmd clean package -DskipTests
 
 # 运行（首次启动请将 application.yaml 中的 ddl-auto 设置为 update）
 java -jar target/IntelliConnect-1.8-SNAPSHOT.jar

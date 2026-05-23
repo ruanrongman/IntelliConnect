@@ -29,6 +29,7 @@ import top.rslly.iot.config.WebSocketConfig;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.agent.OtaXiaozhiServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
+import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.SlieroVadListener;
 import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
@@ -59,6 +60,11 @@ public class XiaoZhiWebsocket {
   public static final Map<String, String> voiceContent = new ConcurrentHashMap<>();
   private static final Map<String, ByteArrayOutputStream> pcmVadBuffer = new ConcurrentHashMap<>();
   private static final Map<String, OpusDecoder> opusDecoderMap = new ConcurrentHashMap<>();
+  private static final Map<String, OpusDecoder> vadOpusDecoderMap = new ConcurrentHashMap<>();
+  private static final Map<String, Integer> inboundFrameDurationMap = new ConcurrentHashMap<>();
+  private static final Map<String, Integer> inboundSampleRateMap = new ConcurrentHashMap<>();
+  private static final Map<String, Integer> outboundFrameDurationMap = new ConcurrentHashMap<>();
+  private static final Map<String, Integer> outboundSampleRateMap = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> isAbort = new ConcurrentHashMap<>();
   public static final Map<String, Boolean> haveVoice = new ConcurrentHashMap<>();
   private static final ConcurrentHashMap<String, SendContext> sendContexts =
@@ -324,6 +330,44 @@ public class XiaoZhiWebsocket {
         OutboundMessage.priorityText("{\"type\":\"tts\",\"state\":\"stop\"}", generation));
   }
 
+  public static void setOutboundFrameDurationMs(String chatId, int frameDurationMs) {
+    if (chatId != null) {
+      outboundFrameDurationMap.put(chatId, frameDurationMs);
+    }
+  }
+
+  public static Integer getOutboundFrameDurationMs(String chatId) {
+    return chatId == null ? null : outboundFrameDurationMap.get(chatId);
+  }
+
+  public static void setOutboundSampleRate(String chatId, int sampleRate) {
+    if (chatId != null) {
+      outboundSampleRateMap.put(chatId, sampleRate);
+    }
+  }
+
+  public static Integer getOutboundSampleRate(String chatId) {
+    return chatId == null ? null : outboundSampleRateMap.get(chatId);
+  }
+
+  public static void setInboundAudioParams(String chatId, int sampleRate, int frameDurationMs) {
+    if (chatId != null) {
+      inboundSampleRateMap.put(chatId, sampleRate);
+      inboundFrameDurationMap.put(chatId, frameDurationMs);
+      opusDecoderMap.remove(chatId);
+      vadOpusDecoderMap.remove(chatId);
+      pcmVadBuffer.remove(chatId);
+    }
+  }
+
+  public static Integer getInboundSampleRate(String chatId) {
+    return chatId == null ? null : inboundSampleRateMap.get(chatId);
+  }
+
+  public static Integer getInboundFrameDurationMs(String chatId) {
+    return chatId == null ? null : inboundFrameDurationMap.get(chatId);
+  }
+
   public static long abortCurrentOutput(String chatId) {
     if (chatId == null) {
       return 0L;
@@ -466,7 +510,9 @@ public class XiaoZhiWebsocket {
           return;
         }
         vadListenerMap.put(this.chatId, listener);
-        opusDecoderMap.put(this.chatId, new OpusDecoder(16000, 1));
+        opusDecoderMap.put(this.chatId,
+            new OpusDecoder(AudioFrameDuration.resolveInboundSampleRate(this.chatId), 1));
+        vadOpusDecoderMap.put(this.chatId, new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1));
         return;
       } catch (Exception e) {
         log.info("发送失败");
@@ -528,7 +574,9 @@ public class XiaoZhiWebsocket {
           return;
         }
         vadListenerMap.put(this.chatId, listener);
-        opusDecoderMap.put(this.chatId, new OpusDecoder(16000, 1));
+        opusDecoderMap.put(this.chatId,
+            new OpusDecoder(AudioFrameDuration.resolveInboundSampleRate(this.chatId), 1));
+        vadOpusDecoderMap.put(this.chatId, new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1));
       } catch (Exception e) {
         log.error("初始化VAD会话失败, chatId={}", this.chatId, e);
         try {
@@ -590,6 +638,11 @@ public class XiaoZhiWebsocket {
       haveVoice.remove(chatId);
       pcmVadBuffer.remove(chatId); // 清理缓冲区
       opusDecoderMap.remove(chatId);
+      vadOpusDecoderMap.remove(chatId);
+      inboundFrameDurationMap.remove(chatId);
+      inboundSampleRateMap.remove(chatId);
+      outboundFrameDurationMap.remove(chatId);
+      outboundSampleRateMap.remove(chatId);
       voiceContent.remove(chatId); // 清理语音内容
       lastInteractionTimeMap.remove(chatId); // 清理时间记录
       closeSendContext(chatId);
@@ -677,16 +730,23 @@ public class XiaoZhiWebsocket {
         byte[] bytes = message.clone();
         OpusDecoder decoder = opusDecoderMap.get(chatId);
         if (decoder == null) {
-          decoder = new OpusDecoder(16000, 1);
+          decoder = new OpusDecoder(AudioFrameDuration.resolveInboundSampleRate(chatId), 1);
           opusDecoderMap.put(chatId, decoder);
         }
-        byte[] data_packet = new byte[16000];
+        OpusDecoder vadDecoder = vadOpusDecoderMap.get(chatId);
+        if (vadDecoder == null) {
+          vadDecoder = new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1);
+          vadOpusDecoderMap.put(chatId, vadDecoder);
+        }
+        int frameSize = AudioFrameDuration.resolveInboundFrameSizeSamples(chatId);
+        int vadFrameSize = AudioFrameDuration.resolveVadFrameSizeSamples(chatId);
+        byte[] vadDataPacket = new byte[vadFrameSize * 2];
         boolean interactionDetected = Boolean.TRUE.equals(haveVoice.get(chatId));
 
-        // 解码音频数据
-        int pcm_frame = decoder.decode(bytes, 0, bytes.length,
-            data_packet, 0, 960, false);
-        int decodedBytes = pcm_frame * 2;
+        decoder.decode(bytes, 0, bytes.length, new byte[frameSize * 2], 0, frameSize, false);
+        int vadPcmFrame = vadDecoder.decode(bytes, 0, bytes.length,
+            vadDataPacket, 0, vadFrameSize, false);
+        int vadDecodedBytes = vadPcmFrame * 2;
 
         // 初始化缓冲区
         if (!pcmVadBuffer.containsKey(chatId)) {
@@ -696,7 +756,7 @@ public class XiaoZhiWebsocket {
 
         // 将解码数据写入缓冲区
         if (buffer != null) {
-          buffer.write(data_packet, 0, decodedBytes);
+          buffer.write(vadDataPacket, 0, vadDecodedBytes);
           byte[] bufferArray = buffer.toByteArray();
           int bufferLength = bufferArray.length;
           int processed = 0;
@@ -822,6 +882,11 @@ public class XiaoZhiWebsocket {
     new ArrayList<>(voiceContent.keySet()).forEach(voiceContent::remove);
     pcmVadBuffer.clear();
     opusDecoderMap.clear();
+    vadOpusDecoderMap.clear();
+    inboundFrameDurationMap.clear();
+    inboundSampleRateMap.clear();
+    outboundFrameDurationMap.clear();
+    outboundSampleRateMap.clear();
     isAbort.clear();
     haveVoice.clear();
     lastInteractionTimeMap.clear();

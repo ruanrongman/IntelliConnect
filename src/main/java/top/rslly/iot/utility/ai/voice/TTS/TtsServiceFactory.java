@@ -28,7 +28,6 @@ import top.rslly.iot.services.agent.ProductVoiceDiyServiceImpl;
 import jakarta.websocket.Session;
 
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
 
 @Component
 public class TtsServiceFactory {
@@ -52,40 +51,27 @@ public class TtsServiceFactory {
     return text2audio;
   }
 
+  public String getCacheFingerprint(int productId) {
+    TtsOptions options = resolveTtsOptions(productId);
+    return options.provider + "|" + options.voice + "|" + options.pitch + "|" + options.speed;
+  }
+
   @Deprecated
   public void websocketAudioSync(String text, Session session, String chatId, int productId,
       long generation) {
-    String provider = "dashscope";
-    // 语音音调 (0.5-2.0)
-    float pitch = 1.0f;
-
-    // 语音语速 (0.5-2.0)
-    float speed = 1.0f;
-    String voice = null;
-    try {
-      var roles = productRoleService.findAllByProductId(productId);
-      if (!roles.isEmpty() && roles.get(0).getVoice() != null) {
-        voice = roles.get(0).getVoice();
-        if (voice.startsWith("edge-")) {
-          provider = "edge";
-          voice = voice.substring(5);
-        } else if (voice.startsWith("minimax-")) {
-          provider = "minimax";
-          voice = voice.substring(8);
-        }
-      }
-      var voiceDiyEntityList = productVoiceDiyService.findAllByProductId(productId);
-      if (!voiceDiyEntityList.isEmpty()) {
-        pitch = Float.parseFloat(voiceDiyEntityList.get(0).getPitch());
-        speed = Float.parseFloat(voiceDiyEntityList.get(0).getSpeed());
-      }
-    } catch (Exception ignored) {
-    }
-    TtsService ttsService = getTtsService(provider);
-    ttsService.websocketAudioSync(text, pitch, speed, session, chatId, voice, generation);
+    TtsOptions options = resolveTtsOptions(productId);
+    TtsService ttsService = getTtsService(options.provider);
+    ttsService.websocketAudioSync(text, options.pitch, options.speed, session, chatId,
+        options.voice, generation);
   }
 
   public List<byte[]> getTextAudio(String chatId, String text, int productId) {
+    TtsOptions options = resolveTtsOptions(productId);
+    TtsService ttsService = getTtsService(options.provider);
+    return ttsService.getTextAudio(chatId, text, options.pitch, options.speed, options.voice);
+  }
+
+  private TtsOptions resolveTtsOptions(int productId) {
     String provider = "dashscope";
     // 语音音调 (0.5-2.0)
     float pitch = 1.0f;
@@ -112,7 +98,8 @@ public class TtsServiceFactory {
       }
     } catch (Exception ignored) {
     }
-    TtsService ttsService = getTtsService(provider);
-    return ttsService.getTextAudio(chatId, text, pitch, speed, voice);
+    return new TtsOptions(provider, voice, pitch, speed);
   }
+
+  private record TtsOptions(String provider, String voice, float pitch, float speed) {}
 }

@@ -38,12 +38,14 @@ import java.util.concurrent.BlockingQueue;
 
 @Slf4j
 public class AudioUtils {
-  // Frame duration in milliseconds (matching Opus encoding)
-  private static final int FRAME_DURATION = 60;
   // Number of frames for pre-buffering
   private static final int PRE_BUFFER_COUNT = 5;
 
   public static byte[] convertMp3ToPcm(String mp3FilePath) {
+    return convertMp3ToPcm(mp3FilePath, AudioFrameDuration.DEFAULT_SAMPLE_RATE);
+  }
+
+  public static byte[] convertMp3ToPcm(String mp3FilePath, int sampleRate) {
     if (mp3FilePath == null || mp3FilePath.trim().isEmpty()) {
       throw new IllegalArgumentException("Input file path cannot be null or empty");
     }
@@ -62,7 +64,7 @@ public class AudioUtils {
       AudioAttributes audio = new AudioAttributes();
       audio.setCodec("pcm_s16le"); // 16位, 小端序
       audio.setChannels(1); // 单声道
-      audio.setSamplingRate(16000); // 16kHz采样率
+      audio.setSamplingRate(AudioFrameDuration.normalizeSampleRate(sampleRate));
 
       EncodingAttributes attrs = new EncodingAttributes();
       attrs.setOutputFormat("wav"); // 先转成 wav
@@ -217,6 +219,7 @@ public class AudioUtils {
 
       final long startTime = System.nanoTime();
       int playPosition = 0;
+      int frameDurationMs = AudioFrameDuration.resolveOutboundFrameDurationMs(chatId);
 
       // Pre-buffer: collect up to PRE_BUFFER_COUNT frames.
       List<byte[]> preBuffer = new ArrayList<>();
@@ -296,7 +299,7 @@ public class AudioUtils {
         }
 
         sendBinary(chatId, AudioUtils.byte2Bytebuffer(opusPacket), generation);
-        playPosition += FRAME_DURATION;
+        playPosition += frameDurationMs;
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();

@@ -24,6 +24,7 @@ import io.github.whitemagic2014.tts.TTSVoice;
 import io.github.whitemagic2014.tts.bean.Voice;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 
@@ -71,7 +72,9 @@ public class EdgeTTs implements TtsService {
     List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
     final byte[] EOS = new byte[0];
-    final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
+    final OpusEncoderUtils encoder =
+        new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
+            AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
     String fullPath = null;
     // 计算Edge TTS的rate参数 (将0.5-2.0映射到-50%到+100%)
     // speed=0.5 -> rate=-50%, speed=1.0 -> rate=+0%, speed=2.0 -> rate=+100%
@@ -108,7 +111,8 @@ public class EdgeTTs implements TtsService {
       fullPath = Paths.get(outputPath, audioFilePath).toString();
 
       // 1. 将MP3转换为PCM (已经设置为16kHz采样率和单声道)
-      byte[] pcmData = AudioUtils.convertMp3ToPcm(fullPath);
+      byte[] pcmData = AudioUtils.convertMp3ToPcm(fullPath,
+          AudioFrameDuration.resolveOutboundSampleRate(chatId));
       List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
       audioList.addAll(packets);
       packets = encoder.encodePcmToOpus(new byte[0], true);

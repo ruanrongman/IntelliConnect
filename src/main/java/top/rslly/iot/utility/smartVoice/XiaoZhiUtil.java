@@ -41,6 +41,7 @@ import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
+import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
@@ -127,8 +128,23 @@ public class XiaoZhiUtil {
       return;
     }
 
-    sendBase(chatId,
-        "{\"type\":\"hello\",\"transport\":\"websocket\",\"audio_params\":{\"sample_rate\":16000}}");
+    if (!configureAudioParams(chatId, helloObject, session)) {
+      return;
+    }
+    int frameDurationMs = AudioFrameDuration.resolveOutboundFrameDurationMs(chatId);
+    int inboundSampleRate = AudioFrameDuration.resolveInboundSampleRate(chatId);
+    int outboundSampleRate = AudioFrameDuration.resolveOutboundSampleRate(chatId);
+    JSONObject audioParams = new JSONObject();
+    audioParams.put("format", "opus");
+    audioParams.put("sample_rate", inboundSampleRate);
+    audioParams.put("download_sample_rate", outboundSampleRate);
+    audioParams.put("channels", 1);
+    audioParams.put("frame_duration", frameDurationMs);
+    JSONObject hello = new JSONObject();
+    hello.put("type", "hello");
+    hello.put("transport", "websocket");
+    hello.put("audio_params", audioParams);
+    sendBase(chatId, hello.toJSONString());
     log.debug("mcp...{}", mcpCanUse);
     if (mcpCanUse && !chatId.startsWith("register")) {
       if (visionExplainUrl != null && token != null) {
@@ -161,6 +177,51 @@ public class XiaoZhiUtil {
     }
   }
 
+  private boolean configureAudioParams(String chatId, JSONObject helloObject, Session session) {
+    JSONObject audioParams = helloObject.getJSONObject("audio_params");
+    int inboundSampleRate = readAudioParam(audioParams, "sample_rate",
+        AudioFrameDuration.DEFAULT_SAMPLE_RATE);
+    int outboundSampleRate = readAudioParam(audioParams, "download_sample_rate", inboundSampleRate);
+    int frameDurationMs = readAudioParam(audioParams, "frame_duration",
+        AudioFrameDuration.DEFAULT_FRAME_DURATION_MS);
+    if (!AudioFrameDuration.isSupportedAudioParams(inboundSampleRate, frameDurationMs)
+        || !AudioFrameDuration.isSupportedAudioParams(outboundSampleRate, frameDurationMs)) {
+      closeForInvalidAudioParams(chatId, session,
+          "不支持的音频参数 sample_rate=" + inboundSampleRate + ", download_sample_rate="
+              + outboundSampleRate + ", frame_duration=" + frameDurationMs);
+      return false;
+    }
+    XiaoZhiWebsocket.setInboundAudioParams(chatId, inboundSampleRate, frameDurationMs);
+    XiaoZhiWebsocket.setOutboundSampleRate(chatId, outboundSampleRate);
+    XiaoZhiWebsocket.setOutboundFrameDurationMs(chatId, frameDurationMs);
+    return true;
+  }
+
+  private int readAudioParam(JSONObject audioParams, String key, int defaultValue) {
+    if (audioParams == null || !audioParams.containsKey(key)) {
+      return defaultValue;
+    }
+    try {
+      Integer value = audioParams.getInteger(key);
+      return value == null ? defaultValue : value;
+    } catch (Exception e) {
+      return Integer.MIN_VALUE;
+    }
+  }
+
+  private void closeForInvalidAudioParams(String chatId, Session session, String reason) {
+    log.warn("小智音频参数校验失败: chatId={}, reason={}", chatId, reason);
+    try {
+      if (session != null && session.isOpen()) {
+        session.getBasicRemote().sendText(
+            "{\"type\":\"error\",\"message\":\"" + reason + "\"}");
+        session.close();
+      }
+    } catch (IOException e) {
+      log.warn("关闭音频参数非法的小智会话失败: chatId={}, error={}", chatId, e.getMessage());
+    }
+  }
+
   public void destroyMcp(String chatId) {
     mcpProtocolDeal.destroyMcp(McpWebsocket.DEVICE_SERVER_NAME, chatId);
   }
@@ -173,7 +234,7 @@ public class XiaoZhiUtil {
    * @return 解码后的数据或Null
    * @throws OpusException Opus异常
    */
-  public String ASRHandler(List<byte[]> audioList, int productId, String... detect)
+  public String ASRHandler(List<byte[]> audioList, String chatId, int productId, String... detect)
       throws OpusException, IOException {
     // 数据太短
     if (audioList.size() <= 20 && detect.length == 0)
@@ -189,15 +250,17 @@ public class XiaoZhiUtil {
     if (asrService == null)
       return null;
     // 构造解码器
-    OpusDecoder decoder = new OpusDecoder(16000, 1);
+    int sampleRate = AudioFrameDuration.resolveInboundSampleRate(chatId);
+    OpusDecoder decoder = new OpusDecoder(sampleRate, 1);
     // 通过字节列表输出流构造字节列表并写入文件，完成WAV->PCM的转换
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     for (byte[] bytes : audioList) {
       if (bytes == null)
         continue;
-      byte[] data_packet = new byte[16000];
+      int frameSize = AudioFrameDuration.resolveInboundFrameSizeSamples(chatId);
+      byte[] data_packet = new byte[frameSize * 2];
       int pcm_frame = decoder.decode(bytes, 0, bytes.length,
-          data_packet, 0, 960, false);
+          data_packet, 0, frameSize, false);
       bos.write(data_packet, 0, pcm_frame * 2);
     }
     // 生成WAV文件
@@ -207,7 +270,7 @@ public class XiaoZhiUtil {
       Files.write(tempFile, bos.toByteArray());
       bos.close();
       // 读取WAV文件并使用ASR服务提取文本返回
-      String ret = asrService.getTextRealtime(tempFile.toFile(), 16000, "pcm");
+      String ret = asrService.getTextRealtime(tempFile.toFile(), sampleRate, "pcm");
       if (StringUtils.isNotBlank(ret)) {
         return ret;
       }
@@ -413,6 +476,15 @@ public class XiaoZhiUtil {
     }
   }
 
+  private String getTtsCacheKey(String chatId, String text, int productId) {
+    String voiceFingerprint = ttsServiceFactory == null
+        ? "default"
+        : ttsServiceFactory.getCacheFingerprint(productId);
+    return getShortHash(text + "|sr=" + AudioFrameDuration.resolveOutboundSampleRate(chatId)
+        + "|fd=" + AudioFrameDuration.resolveOutboundFrameDurationMs(chatId)
+        + "|voice=" + voiceFingerprint, 16);
+  }
+
   /**
    * 异步TTS
    * 
@@ -428,7 +500,7 @@ public class XiaoZhiUtil {
       return;
     redisStateTemplate.opsForHash().put(chatId + "_state", src, false);
     try {
-      String srcHash = getShortHash(src, 16);
+      String srcHash = getTtsCacheKey(chatId, src, productId);
       if (!hasSpeakableContent(src)) {
         log.debug("跳过无效TTS文本: chatId={}, text={}", chatId, src);
         return;
@@ -469,7 +541,7 @@ public class XiaoZhiUtil {
    * 
    * @param chatId 对话ID
    */
-  private void streamRspResultHandler(String chatId, long generation) {
+  private void streamRspResultHandler(String chatId, int productId, long generation) {
     // 设置结果处理线程状态为工作中
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_RESULT_HANDLER_FLAG, true);
     try {
@@ -539,7 +611,7 @@ public class XiaoZhiUtil {
           continue;
         }
         BlockingQueue<byte[]> sendQueue = new LinkedBlockingQueue<>();
-        String srcHash = getShortHash(crtS, 16);
+        String srcHash = getTtsCacheKey(chatId, crtS, productId);
         Long audioBytesSize = bytesRedisTemplate.opsForList().size(srcHash);
         // TTS失败或返回空音频时，退化成只发文本，避免整轮卡死在当前句子
         if (audioBytesSize == null || audioBytesSize == 0) {
@@ -591,7 +663,7 @@ public class XiaoZhiUtil {
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, true);
     // 逻辑是这样的：将收取到的句子放入Redis队列中，结果处理线程查询队列并以此处理
     Thread.ofVirtual().start(() -> {
-      streamRspResultHandler(chatId, generation);
+      streamRspResultHandler(chatId, productId, generation);
     });
     while (res != null && !res.isDone() ||
         Router.queueMap.containsKey(chatId) && !Router.queueMap.get(chatId).isEmpty()) {
@@ -769,7 +841,7 @@ public class XiaoZhiUtil {
     long generation = XiaoZhiWebsocket.nextGeneration(chatId);
     String text = "";
     try {
-      text = ASRHandler(audioSnapshot, productId, detect);
+      text = ASRHandler(audioSnapshot, chatId, productId, detect);
     } catch (OpusException e) {
       log.error("Opus音频解码错误: {}", e.getMessage());
       return;

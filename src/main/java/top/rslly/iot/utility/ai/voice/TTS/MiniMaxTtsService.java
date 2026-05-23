@@ -25,6 +25,7 @@ import jakarta.websocket.Session;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 
@@ -53,6 +54,8 @@ public class MiniMaxTtsService implements TtsService {
   private static final String API_URL = "https://api.minimaxi.com/v1/t2a_v2";
   private static final String DEFAULT_MODEL = "speech-02-hd";
   private static final String DEFAULT_VOICE = "Chinese (Mandarin)_Warm_Bestie";
+  private static final int DEFAULT_MINIMAX_SAMPLE_RATE = 32000;
+  private static final List<Integer> MINIMAX_SAMPLE_RATES = List.of(16000, 24000, 32000, 44100);
 
   @Value("${ai.minimax.api-key:}")
   private String apiKey;
@@ -105,7 +108,9 @@ public class MiniMaxTtsService implements TtsService {
     List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
     final byte[] EOS = new byte[0];
-    final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
+    final OpusEncoderUtils encoder =
+        new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
+            AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
     String tempFilePath = null;
 
     try {
@@ -113,7 +118,8 @@ public class MiniMaxTtsService implements TtsService {
       String url = API_URL + "?GroupId=" + URLEncoder.encode(groupId, StandardCharsets.UTF_8);
 
       // 构建 JSON 请求体
-      String requestBody = buildRequestBody(text, pitch, speed, voice, true);
+      int outboundSampleRate = AudioFrameDuration.resolveOutboundSampleRate(chatId);
+      String requestBody = buildRequestBody(text, pitch, speed, voice, true, outboundSampleRate);
 
       // 发送请求
       URL apiUrl = new URL(url);
@@ -204,8 +210,8 @@ public class MiniMaxTtsService implements TtsService {
       tempFilePath = Paths.get(outputPath, uuid + ".mp3").toString();
       Files.write(Paths.get(tempFilePath), mp3Data);
 
-      // 将 MP3 转换为 PCM (16kHz 单声道)
-      byte[] pcmData = AudioUtils.convertMp3ToPcm(tempFilePath);
+      byte[] pcmData = AudioUtils.convertMp3ToPcm(tempFilePath,
+          AudioFrameDuration.resolveOutboundSampleRate(chatId));
 
       // 编码为 Opus 并发送到队列
       List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
@@ -245,7 +251,7 @@ public class MiniMaxTtsService implements TtsService {
    * 构建 MiniMax TTS API 请求体
    */
   private String buildRequestBody(String text, Float pitch, Float speed, String voice,
-      boolean stream) {
+      boolean stream, int targetSampleRate) {
     try {
       StringBuilder json = new StringBuilder();
       json.append("{");
@@ -266,9 +272,14 @@ public class MiniMaxTtsService implements TtsService {
       }
       json.append("\"language_boost\":\"").append(languageBoost).append("\",");
 
-      // 音频设置 - 指定 mp3 格式
+      int minimaxSampleRate = resolveMiniMaxSampleRate(targetSampleRate);
+      int bitrate = resolveMiniMaxBitrate(minimaxSampleRate);
+      // 音频设置 - 源头按下行链路请求更高规格，避免只在本地重采样
       json.append("\"audio_setting\":{");
-      json.append("\"format\":\"mp3\"");
+      json.append("\"sample_rate\":").append(minimaxSampleRate).append(",");
+      json.append("\"bitrate\":").append(bitrate).append(",");
+      json.append("\"format\":\"mp3\",");
+      json.append("\"channel\":1");
       json.append("},");
 
       if (stream) {
@@ -295,6 +306,23 @@ public class MiniMaxTtsService implements TtsService {
       log.error("Failed to build request body", e);
       return "{}";
     }
+  }
+
+  private int resolveMiniMaxSampleRate(int targetSampleRate) {
+    if (MINIMAX_SAMPLE_RATES.contains(targetSampleRate)) {
+      return targetSampleRate;
+    }
+    int resolved = DEFAULT_MINIMAX_SAMPLE_RATE;
+    for (int sampleRate : MINIMAX_SAMPLE_RATES) {
+      if (sampleRate <= targetSampleRate) {
+        resolved = sampleRate;
+      }
+    }
+    return resolved;
+  }
+
+  private int resolveMiniMaxBitrate(int sampleRate) {
+    return sampleRate >= 32000 ? 256000 : 128000;
   }
 
   /**

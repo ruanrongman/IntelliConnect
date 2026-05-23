@@ -71,6 +71,8 @@ public class AiServiceImpl implements AiService {
   @Autowired
   private ProductServiceImpl productService;
   @Autowired
+  private ProductRoleServiceImpl productRoleService;
+  @Autowired
   private SafetyServiceImpl safetyService;
   @Autowired
   private RedisUtil redisUtil;
@@ -129,7 +131,7 @@ public class AiServiceImpl implements AiService {
       String answer = router.response(result, chatId, productId);
       aiResponse.put("text", answer);
       if (tts) {
-        var audio = Text2audio.synthesizeAndSaveAudio(answer).array();
+        var audio = Text2audio.synthesizeAndSaveAudio(answer, getProductVoice(productId)).array();
         audio = AudioUtils.VoiceBitChange(audio);
         if (!stream)
           aiResponse.put("audio", Base64.getEncoder().encodeToString(audio));
@@ -147,6 +149,17 @@ public class AiServiceImpl implements AiService {
       }
     }
     return ResultTool.success(aiResponse);
+  }
+
+  private String getProductVoice(int productId) {
+    try {
+      var roles = productRoleService.findAllByProductId(productId);
+      if (!roles.isEmpty()) {
+        return roles.get(0).getVoice();
+      }
+    } catch (Exception ignored) {
+    }
+    return null;
   }
 
   @Override

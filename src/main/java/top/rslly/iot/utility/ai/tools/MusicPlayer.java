@@ -20,6 +20,7 @@
 package top.rslly.iot.utility.ai.tools;
 
 import lombok.extern.slf4j.Slf4j;
+import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
@@ -38,9 +39,6 @@ import java.util.stream.Stream;
  */
 @Slf4j
 public class MusicPlayer {
-
-  // Opus帧时长（毫秒）
-  private static final int FRAME_DURATION_MS = 60;
 
   private final String chatId;
   private final int productId;
@@ -288,7 +286,8 @@ public class MusicPlayer {
 
     try {
       // 读取音频文件并转换为PCM格式
-      byte[] audioData = AudioUtils.convertMp3ToPcm(audioPath.toAbsolutePath().toString());
+      byte[] audioData = AudioUtils.convertMp3ToPcm(audioPath.toAbsolutePath().toString(),
+          AudioFrameDuration.resolveOutboundSampleRate(chatId));
       if (audioData == null || audioData.length == 0) {
         log.warn("音频数据为空");
         return;
@@ -328,7 +327,9 @@ public class MusicPlayer {
     }
 
     BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
-    OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, FRAME_DURATION_MS);
+    OpusEncoderUtils encoder =
+        new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
+            AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
 
     // 将PCM数据编码为Opus并放入队列
     List<byte[]> opusPackets = encoder.encodePcmToOpus(audioData, true);

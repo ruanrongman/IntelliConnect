@@ -21,6 +21,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend (Maven)
 
 ```bash
+# Windows local JDK 21 is at:
+# C:\Users\Lenovo\.jdks\ms-21.0.9
+# If java -version shows Java 17, set JAVA_HOME before using Maven Wrapper:
+# $env:JAVA_HOME='C:\Users\Lenovo\.jdks\ms-21.0.9'; $env:Path="$env:JAVA_HOME\bin;$env:Path"
+
 # Clean and compile
 ./mvnw clean compile
 

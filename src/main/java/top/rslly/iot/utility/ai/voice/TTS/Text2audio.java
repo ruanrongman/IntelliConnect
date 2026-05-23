@@ -37,6 +37,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.SseEmitterUtil;
+import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 
@@ -85,7 +86,7 @@ public class Text2audio implements TtsService {
     private List<byte[]> bytes;
     // End-of-stream marker: an empty byte array.
     private final byte[] EOS = new byte[0];
-    private final OpusEncoderUtils encoder = new OpusEncoderUtils(16000, 1, 60);
+    private final OpusEncoderUtils encoder;
     private boolean sendAfterHandler = true;
     private final ByteArrayOutputStream pcmBuffer = new ByteArrayOutputStream();
 
@@ -93,6 +94,9 @@ public class Text2audio implements TtsService {
       this.chatId = chatId;
       this.session = session;
       this.generation = generation;
+      this.encoder =
+          new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
+              AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
       if (session == null) {
         bytes = new ArrayList<>();
         sendAfterHandler = false;
@@ -250,11 +254,21 @@ public class Text2audio implements TtsService {
   }
 
   public static ByteBuffer synthesizeAndSaveAudio(String text) {
+    return synthesizeAndSaveAudio(text, null);
+  }
+
+  public static ByteBuffer synthesizeAndSaveAudio(String text, String voice) {
+    String model = param.getModel();
+    String voiceId = StringUtils.isNotBlank(voice) ? voice : param.getVoice();
+    if (voiceId.startsWith("cosy_v2_")) {
+      model = "cosyvoice-v2";
+      voiceId = voiceId.substring(8);
+    }
     SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
         .apiKey(param.getApiKey())
-        .model(param.getModel())
+        .model(model)
         .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
-        .voice(param.getVoice())
+        .voice(voiceId)
         .build();
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, null, null,
         connectionOptions);
@@ -262,6 +276,14 @@ public class Text2audio implements TtsService {
     log.debug("requestId{}", synthesizer.getLastRequestId());
     // log.info(Arrays.toString(audio.array()));
     return audio;
+  }
+
+  private static SpeechSynthesisAudioFormat getPcmFormat(String chatId) {
+    return switch (AudioFrameDuration.resolveOutboundSampleRate(chatId)) {
+      case 24000 -> SpeechSynthesisAudioFormat.PCM_24000HZ_MONO_16BIT;
+      case 48000 -> SpeechSynthesisAudioFormat.PCM_48000HZ_MONO_16BIT;
+      default -> SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT;
+    };
   }
 
   @Async("taskExecutor")
@@ -288,7 +310,7 @@ public class Text2audio implements TtsService {
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(model)
-          .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
+          .format(getPcmFormat(chatId))
           .pitchRate(pitch)
           .speechRate(speed)
           .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
@@ -316,10 +338,10 @@ public class Text2audio implements TtsService {
     ReactCallback callback = new ReactCallback(chatId, null, 0L);
     try {
       String model = param.getModel();
-      String voiceId = param.getVoice();
-      if (voice != null && voice.startsWith("cosy_v2_")) {
+      String voiceId = StringUtils.isNotBlank(voice) ? voice : param.getVoice();
+      if (voiceId.startsWith("cosy_v2_")) {
         model = "cosyvoice-v2";
-        voiceId = voice.substring(8);
+        voiceId = voiceId.substring(8);
         log.debug(model);
         log.debug(voiceId);
       }
@@ -327,10 +349,10 @@ public class Text2audio implements TtsService {
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(model)
-          .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
+          .format(getPcmFormat(chatId))
           .pitchRate(pitch)
           .speechRate(speed)
-          .voice(StringUtils.isNotBlank(voice) ? voiceId : param.getVoice())
+          .voice(voiceId)
           .build();
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
           connectionOptions);
