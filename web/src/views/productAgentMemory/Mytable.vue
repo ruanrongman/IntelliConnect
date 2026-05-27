@@ -565,6 +565,7 @@ const fetchHistoryMessages = () => {
       }
       if (errorCode == 200 && data) {
         const content = Array.isArray(data.content) ? data.content : [];
+        const page = data.page || {};
         historyDataSource.value = content.map((item: any) => ({
           id: item.id,
           chatId: item.chatId,
@@ -574,9 +575,9 @@ const fetchHistoryMessages = () => {
           content: item.content,
           time: item.time
         }));
-        historyPagination.total = Number(data.totalElements || 0);
-        historyPagination.current = Number(data.number || 0) + 1;
-        historyPagination.pageSize = Number(data.size || historyPagination.pageSize);
+        historyPagination.total = Number(data.totalElements ?? page.totalElements ?? 0);
+        historyPagination.current = Number(data.number ?? page.number ?? 0) + 1;
+        historyPagination.pageSize = Number(data.size ?? page.size ?? historyPagination.pageSize);
       } else {
         historyDataSource.value = [];
         historyPagination.total = 0;

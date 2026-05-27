@@ -266,7 +266,9 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
       firmware.put("url", "");
       var otaXiaozhiEntityList = otaXiaozhiRepository.findAllByDeviceId(deviceId);
       // websocket
-      Map<String, Object> websocket = new HashMap<>();
+      Map<String, String> websocket = new HashMap<>();
+      // nickname
+      String nickname = "";
       if (otaXiaozhiEntityList.isEmpty()) {
         websocket.put("url", otaUrl + "/xiaozhi/v1/register");
         String token = JwtTokenUtil.createToken(deviceId, "xiaozhi_ota");
@@ -285,10 +287,12 @@ public class OtaXiaozhiServiceImpl implements OtaXiaozhiService {
           log.error(e.getMessage());
         }
         response.put("firmware", firmware);
+        nickname = res.getFirst().getNickName();
         websocket.put("url", otaUrl + "/xiaozhi/v1/" + res.get(0).getProductId());
         String token = JwtTokenUtil.createToken(res.get(0).getUserName(), res.get(0).getRole());
         websocket.put("token", token);
       }
+      response.put("nickname", nickname);
       response.put("websocket", websocket);
 
       // activation info if not yet activated

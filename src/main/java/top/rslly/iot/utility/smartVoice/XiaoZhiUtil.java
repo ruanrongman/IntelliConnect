@@ -334,7 +334,7 @@ public class XiaoZhiUtil {
   }
 
   private void sendForUnclearMsg(String chatId, long generation) {
-    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + "没听清楚，说太快了" + "\"}", generation);
+    sendBase(chatId, XiaoZhiWebsocket.buildSttMessage("没听清楚，说太快了"), generation);
   }
 
   /**
@@ -348,8 +348,7 @@ public class XiaoZhiUtil {
   }
 
   private void sendText(String chatId, String text, long generation) {
-    sendBase(chatId, "{\"type\": \"tts\", \"state\": \"sentence_start\","
-        + "\"text\": \"" + text + "\"}", generation);
+    sendBase(chatId, XiaoZhiWebsocket.buildTtsSentenceStartMessage(text), generation);
   }
 
   /**
@@ -383,7 +382,7 @@ public class XiaoZhiUtil {
   }
 
   private void sendSTT(String chatId, String text, long generation) {
-    sendBase(chatId, "{\"type\":\"stt\",\"text\":\"" + text + "\"}", generation);
+    sendBase(chatId, XiaoZhiWebsocket.buildSttMessage(text), generation);
   }
 
   /**

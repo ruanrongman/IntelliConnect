@@ -87,8 +87,7 @@ public class GoodByeTool implements BaseTool<String> {
             "type": "tts",
             "state": "start"
           }""", generation);
-      XiaoZhiWebsocket.enqueueText(chatId,
-          "{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \"" + message + "\"}",
+      XiaoZhiWebsocket.enqueueText(chatId, XiaoZhiWebsocket.buildTtsSentenceStartMessage(message),
           generation);
       ttsServiceFactory.websocketAudioSync(message, session, chatId, productId, generation);
       XiaoZhiWebsocket.enqueueTtsStop(chatId, generation);

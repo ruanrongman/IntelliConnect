@@ -304,8 +304,7 @@ public class MusicPlayer {
       } else {
         songInfo = "正在播放：" + fileName;
       }
-      safeSendText(
-          "{\"type\": \"tts\", \"state\": \"sentence_start\", \"text\": \"" + songInfo + "\"}");
+      safeSendText(XiaoZhiWebsocket.buildTtsSentenceStartMessage(songInfo));
 
       // 直接播放音频
       playAudioDirectly(audioData);

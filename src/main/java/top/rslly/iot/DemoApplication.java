@@ -23,13 +23,16 @@ import net.devh.boot.grpc.server.autoconfigure.GrpcServerSecurityAutoConfigurati
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import top.rslly.iot.utility.SpringBeanUtils;
 
+import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
 
 @SpringBootApplication(exclude = {GrpcServerSecurityAutoConfiguration.class})
+@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
 @EnableAsync
 @EnableWebSocket
 @EnableScheduling

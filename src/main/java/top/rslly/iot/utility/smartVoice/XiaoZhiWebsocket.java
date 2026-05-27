@@ -21,6 +21,7 @@ package top.rslly.iot.utility.smartVoice;
 
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -287,6 +288,21 @@ public class XiaoZhiWebsocket {
       return;
     }
     enqueue(chatId, OutboundMessage.text(message, generation));
+  }
+
+  public static String buildTtsSentenceStartMessage(String text) {
+    JSONObject jsonObject = new JSONObject();
+    jsonObject.put("type", "tts");
+    jsonObject.put("state", "sentence_start");
+    jsonObject.put("text", text);
+    return jsonObject.toJSONString();
+  }
+
+  public static String buildSttMessage(String text) {
+    JSONObject jsonObject = new JSONObject();
+    jsonObject.put("type", "stt");
+    jsonObject.put("text", text);
+    return jsonObject.toJSONString();
   }
 
   public static void enqueueBinary(String chatId, ByteBuffer data, long generation) {

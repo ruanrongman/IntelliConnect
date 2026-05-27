@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class McpWebsocketEndpoint {
   public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   private String username;
+  private Session session;
   private static volatile McpProtocolDeal mcpProtocolDeal;
 
   @Autowired
@@ -121,38 +122,29 @@ public class McpWebsocketEndpoint {
       }
     }
     log.info("username {}", username);
-    if (clients.get(username) == null) {
-      this.username = username;
-      clients.put(username, session);
-      try {
-        session.getBasicRemote().sendText(McpProtocolSend.sendInitialize("", "", true));
-      } catch (IOException e) {
-        e.printStackTrace();
-        log.error("发送失败{}", e.getMessage());
+    this.username = username;
+    this.session = session;
+    Session oldSession = clients.put(username, session);
+    if (oldSession != null && oldSession != session) {
+      closeSession(oldSession, "Replaced by new MCP endpoint connection");
+      if (mcpProtocolDeal != null) {
+        mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, username);
       }
-      log.info("token {}", token);
-    } else {
-      log.info("冲突，无法连接");
-      try {
-        session.getBasicRemote().sendText("冲突，无法连接");
-      } catch (IOException e) {
-        log.info("发送失败");
-      }
-      try {
-        session.close();
-      } catch (IOException e) {
-        log.error("关闭失败{}", e.getMessage());
-      }
+      log.info("MCP endpoint reconnect replaced old session, username={}", username);
     }
+    try {
+      session.getBasicRemote().sendText(McpProtocolSend.sendInitialize("", "", true));
+    } catch (IOException e) {
+      cleanupSession(session);
+      log.error("发送失败{}", e.getMessage());
+    }
+    log.info("token {}", token);
   }
 
   @OnClose
-  public void onClose() {
+  public void onClose(Session session) {
     log.info("close");
-    if (this.username != null) {
-      clients.remove(this.username);
-      mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, this.username);
-    }
+    cleanupSession(session);
   }
 
   /**
@@ -164,20 +156,21 @@ public class McpWebsocketEndpoint {
     try {
       var payloadObject = JSON.parseObject(message);
       if (!payloadObject.containsKey("jsonrpc")) {
-        onClose();
+        cleanupSession(session);
+        return;
       }
       if (payloadObject.containsKey("result")) {
         String result = payloadObject.getString("result");
         var resultJson = JSON.parseObject(result);
         if (resultJson.containsKey("serverInfo")) {
           // log.info(McpProtocolSend.sendToolList("", true));
-          clients.get(username).getBasicRemote().sendText("""
+          session.getBasicRemote().sendText("""
               {"jsonrpc": "2.0","method": "notifications/initialized"}
               """);
-          clients.get(username).getBasicRemote().sendText(McpProtocolSend.sendToolList("", true));
+          session.getBasicRemote().sendText(McpProtocolSend.sendToolList("", true));
         }
         mcpProtocolDeal.dealMcp(resultJson, McpWebsocket.ENDPOINT_SERVER_NAME, username,
-            clients.get(username), true);
+            session, true);
       }
     } catch (Exception e) {
       log.error("解析失败{}", e.getMessage());
@@ -187,7 +180,29 @@ public class McpWebsocketEndpoint {
 
   @OnError
   public void onError(Session session, Throwable error) {
-    onClose();
+    cleanupSession(session);
     log.error("Error in onError: {}", error.getMessage());
+  }
+
+  private void cleanupSession(Session closedSession) {
+    if (this.username == null) {
+      return;
+    }
+    Session sessionToRemove = closedSession != null ? closedSession : this.session;
+    boolean removed = clients.remove(this.username, sessionToRemove);
+    if (removed && mcpProtocolDeal != null) {
+      mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, this.username);
+    }
+  }
+
+  private void closeSession(Session session, String reason) {
+    if (session == null || !session.isOpen()) {
+      return;
+    }
+    try {
+      session.close(new CloseReason(CloseReason.CloseCodes.NORMAL_CLOSURE, reason));
+    } catch (IOException e) {
+      log.error("关闭旧MCP endpoint会话失败: {}", e.getMessage());
+    }
   }
 }
