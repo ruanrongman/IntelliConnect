@@ -445,6 +445,8 @@ public class Tool {
   @Operation(summary = "mcp接入点url获取", description = "获取mcp接入点url")
   @RequestMapping(value = "/mcpEndpoint", method = RequestMethod.GET)
   public JsonResult<?> getMcpPointUrl(@RequestParam("productId") int productId,
+      @RequestParam(value = "endpointIndex", required = false,
+          defaultValue = "1") int endpointIndex,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, productId))
@@ -452,12 +454,14 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return aiService.getMcpPointUrl(productId);
+    return aiService.getMcpPointUrl(productId, endpointIndex);
   }
 
   @Operation(summary = "mcp接入点工具获取", description = "获取mcp接入点工具详情")
   @RequestMapping(value = "/mcpEndpoint/tools", method = RequestMethod.GET)
   public JsonResult<?> getMcpPointTools(@RequestParam("productId") int productId,
+      @RequestParam(value = "endpointIndex", required = false,
+          defaultValue = "1") int endpointIndex,
       @RequestHeader("Authorization") String header) {
     try {
       if (!safetyService.controlAuthorizeProduct(header, productId))
@@ -465,7 +469,7 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return aiService.getMcpPointTools(productId);
+    return aiService.getMcpPointTools(productId, endpointIndex);
   }
 
   @Operation(summary = "ota小智升级", description = "获取ota小智升级包详情")

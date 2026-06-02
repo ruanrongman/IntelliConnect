@@ -34,6 +34,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.models.ProductSkillsEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
+import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
@@ -92,6 +93,8 @@ public class McpAgent implements BaseTool<String> {
   private JsExecuteTool jsExecuteTool;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Autowired
+  private McpEndpointConfigService mcpEndpointConfigService;
   @Value("${ai.router.mode:prompt}")
   private String routerMode;
   @Value("${ai.mcp.agent-mode:prompt}")
@@ -129,8 +132,7 @@ public class McpAgent implements BaseTool<String> {
   public String getDescription(int productId, String chatId) {
     var mcpServerEntities = mcpServerService.findAllByProductId(productId);
     var mcpWebSocketRunning = mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId);
-    var mcpEndpointRunning =
-        mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId);
+    var mcpEndpointRunning = hasRunningEndpoint(productId);
     var productSkillsEntities = productSkillsService.findAllByProductId(productId);
     if (mcpServerEntities.isEmpty() && productSkillsEntities.isEmpty() && !mcpWebSocketRunning
         && !mcpEndpointRunning) {
@@ -144,8 +146,7 @@ public class McpAgent implements BaseTool<String> {
       toolDescriptions.append(productSkillsEntity.getName()).append("|");
     }
     toolDescriptions.append(mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
-    toolDescriptions
-        .append(mcpWebsocket.getIntention(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId));
+    appendEndpointIntentions(toolDescriptions, productId);
     return toolDescriptions.toString();
   }
 
@@ -211,7 +212,7 @@ public class McpAgent implements BaseTool<String> {
     if (mcpServerService.findAllByProductId(productId).isEmpty()
         && productSkillsService.findAllByProductId(productId).isEmpty()
         && !mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
-        && !mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId))
+        && !hasRunningEndpoint(productId))
       return "产品下面没有任何mcp服务器或者skills，请先绑定mcp服务器或者skills";
     if (!mcpServerService.findAllByProductId(productId).isEmpty()) {
       try {
@@ -244,10 +245,7 @@ public class McpAgent implements BaseTool<String> {
         toolDescriptions +=
             mcpWebsocket.combineToolDescription(McpWebsocket.DEVICE_SERVER_NAME, chatId);
       }
-      if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
-        toolDescriptions += mcpWebsocket.combineToolDescription(McpWebsocket.ENDPOINT_SERVER_NAME,
-            "mcp" + productId);
-      }
+      toolDescriptions += combineEndpointToolDescriptions(productId);
       if (!productSkillsService.findAllByProductId(productId).isEmpty()) {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
@@ -343,10 +341,11 @@ public class McpAgent implements BaseTool<String> {
           if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
             toolResult = mcpWebsocket.sendToolCall(McpWebsocket.DEVICE_SERVER_NAME, chatId,
                 toolName, args, XiaoZhiWebsocket.clients.get(chatId), false);
-          } else if (serverKey.equals(McpWebsocket.ENDPOINT_SERVER_NAME)) {
-            toolResult =
-                mcpWebsocket.sendToolCall(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId,
-                    toolName, args, McpWebsocketEndpoint.clients.get("mcp" + productId), true);
+          } else if (McpWebsocket.isEndpointServerName(serverKey)) {
+            int endpointIndex = McpWebsocket.parseEndpointIndexFromServerName(serverKey);
+            String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+            toolResult = mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
+                McpWebsocketEndpoint.clients.get(endpointChatId), true);
           } else if (serverKey.equals("skills")) {
             if (toolName.equals(jsExecuteTool.getName())) {
               toolResult = jsExecuteTool.run(args, globalMessage);
@@ -749,8 +748,12 @@ public class McpAgent implements BaseTool<String> {
     }
     addWebsocketFunctionTools(toolSpecs, refMap, usedNames, McpWebsocket.DEVICE_SERVER_NAME,
         chatId);
-    addWebsocketFunctionTools(toolSpecs, refMap, usedNames, McpWebsocket.ENDPOINT_SERVER_NAME,
-        "mcp" + productId);
+    for (int endpointIndex = 1; endpointIndex <= mcpEndpointConfigService
+        .getEndpointCount(); endpointIndex++) {
+      addWebsocketFunctionTools(toolSpecs, refMap, usedNames,
+          McpWebsocket.getEndpointServerName(endpointIndex),
+          McpWebsocket.getEndpointChatId(productId, endpointIndex));
+    }
     for (ProductSkillsEntity skill : productSkillsService.findAllByProductId(productId)) {
       addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", skill.getName(),
           skill.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
@@ -914,9 +917,11 @@ public class McpAgent implements BaseTool<String> {
       if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
         return mcpWebsocket.sendToolCall(McpWebsocket.DEVICE_SERVER_NAME, chatId,
             toolName, args, XiaoZhiWebsocket.clients.get(chatId), false);
-      } else if (serverKey.equals(McpWebsocket.ENDPOINT_SERVER_NAME)) {
-        return mcpWebsocket.sendToolCall(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId,
-            toolName, args, McpWebsocketEndpoint.clients.get("mcp" + productId), true);
+      } else if (McpWebsocket.isEndpointServerName(serverKey)) {
+        int endpointIndex = McpWebsocket.parseEndpointIndexFromServerName(serverKey);
+        String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+        return mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
+            McpWebsocketEndpoint.clients.get(endpointChatId), true);
       } else if (serverKey.equals("skills")) {
         if (toolName.equals(jsExecuteTool.getName())) {
           return jsExecuteTool.run(args, globalMessage);
@@ -956,6 +961,42 @@ public class McpAgent implements BaseTool<String> {
           ? "经过多次尝试仍未找到完整答案，请重新提问或提供更多细节。"
           : fallback;
     }
+  }
+
+  private boolean hasRunningEndpoint(int productId) {
+    for (int endpointIndex = 1; endpointIndex <= mcpEndpointConfigService
+        .getEndpointCount(); endpointIndex++) {
+      String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+      String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+      if (mcpWebsocket.isRunning(serverName, endpointChatId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void appendEndpointIntentions(StringBuilder builder, int productId) {
+    for (int endpointIndex = 1; endpointIndex <= mcpEndpointConfigService
+        .getEndpointCount(); endpointIndex++) {
+      String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+      String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+      if (mcpWebsocket.isRunning(serverName, endpointChatId)) {
+        builder.append(mcpWebsocket.getIntention(serverName, endpointChatId));
+      }
+    }
+  }
+
+  private String combineEndpointToolDescriptions(int productId) {
+    StringBuilder builder = new StringBuilder();
+    for (int endpointIndex = 1; endpointIndex <= mcpEndpointConfigService
+        .getEndpointCount(); endpointIndex++) {
+      String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+      String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+      if (mcpWebsocket.isRunning(serverName, endpointChatId)) {
+        builder.append(mcpWebsocket.combineToolDescription(serverName, endpointChatId));
+      }
+    }
+    return builder.toString();
   }
 
   private record FunctionToolRegistry(List<FunctionToolSpec> toolSpecs,

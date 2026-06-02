@@ -25,6 +25,9 @@ import top.rslly.iot.dao.AdminConfigRepository;
 import top.rslly.iot.dao.ProductRepository;
 import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.param.request.AdminConfig;
+import top.rslly.iot.utility.ai.mcp.McpProtocolDeal;
+import top.rslly.iot.utility.ai.mcp.McpWebsocket;
+import top.rslly.iot.utility.ai.mcp.McpWebsocketEndpoint;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -39,6 +42,8 @@ public class AdminConfigServiceImpl implements AdminConfigService {
   private AdminConfigRepository adminConfigRepository;
   @Resource
   private ProductRepository productRepository;
+  @Resource
+  private McpProtocolDeal mcpProtocolDeal;
 
   @Override
   public List<AdminConfigEntity> findAllBySetKey(String setKey) {
@@ -66,6 +71,7 @@ public class AdminConfigServiceImpl implements AdminConfigService {
     adminConfigEntity.setSetKey(adminConfig.getSetKey());
     adminConfigEntity.setSetValue(adminConfig.getSetValue());
     var result = adminConfigRepository.save(adminConfigEntity);
+    closeInvalidMcpEndpoints(adminConfig);
     return ResultTool.success(result);
   }
 
@@ -80,6 +86,7 @@ public class AdminConfigServiceImpl implements AdminConfigService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     adminConfigRepository.updateConfig(adminConfig.getSetKey(), adminConfig.getSetValue());
+    closeInvalidMcpEndpoints(adminConfig);
     return ResultTool.success();
   }
 
@@ -89,7 +96,12 @@ public class AdminConfigServiceImpl implements AdminConfigService {
     if (adminConfigRepository.findAllById(id).isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     } else {
+      AdminConfigEntity config = adminConfigRepository.findAllById(id).get(0);
       var result = adminConfigRepository.deleteAllById(id);
+      if (McpEndpointConfigService.CONFIG_KEY.equals(config.getSetKey())) {
+        McpWebsocketEndpoint.closeEndpointsAbove(5);
+        cleanupMcpEndpointCachesAbove(5);
+      }
       return ResultTool.success(result);
     }
   }
@@ -97,7 +109,8 @@ public class AdminConfigServiceImpl implements AdminConfigService {
   private JsonResult<?> validateAdminConfig(AdminConfig adminConfig) {
     Set<String> allowed = Set.of("wx_default_product", "wx_trigger-keyword", "wx_success-message",
         "wx_unregistered-message", "ai_classifier_include_thought", "ai_agent_include_thought",
-        "ai_mcp_agent_include_thought", "ai_detect_random");
+        "ai_mcp_agent_include_thought", "ai_detect_random",
+        McpEndpointConfigService.CONFIG_KEY, "mcp_tools_limit");
     if (!allowed.contains(adminConfig.getSetKey())) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -154,7 +167,44 @@ public class AdminConfigServiceImpl implements AdminConfigService {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }
     }
+    if (McpEndpointConfigService.CONFIG_KEY.equals(adminConfig.getSetKey())) {
+      if (McpEndpointConfigService.parseEndpointCount(adminConfig.getSetValue()) == null) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+    }
+    if (adminConfig.getSetKey().equals("mcp_tools_limit")) {
+      try {
+        var value = Integer.parseInt(adminConfig.getSetValue());
+        if (value <= 0 || value > 100) {
+          return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+        }
+      } catch (NumberFormatException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+    }
     return null;
+  }
+
+  private void closeInvalidMcpEndpoints(AdminConfig adminConfig) {
+    if (!McpEndpointConfigService.CONFIG_KEY.equals(adminConfig.getSetKey())) {
+      return;
+    }
+    Integer endpointCount = McpEndpointConfigService.parseEndpointCount(adminConfig.getSetValue());
+    if (endpointCount != null) {
+      McpWebsocketEndpoint.closeEndpointsAbove(endpointCount);
+      cleanupMcpEndpointCachesAbove(endpointCount);
+    }
+  }
+
+  private void cleanupMcpEndpointCachesAbove(int endpointCount) {
+    for (var product : productRepository.findAll()) {
+      for (int endpointIndex = endpointCount
+          + 1; endpointIndex <= McpEndpointConfigService.MAX_ENDPOINT_COUNT; endpointIndex++) {
+        String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+        String endpointChatId = McpWebsocket.getEndpointChatId(product.getId(), endpointIndex);
+        mcpProtocolDeal.destroyMcp(serverName, endpointChatId);
+      }
+    }
   }
 
 }

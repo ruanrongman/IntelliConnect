@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.config.WebSocketConfig;
+import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.utility.JwtTokenUtil;
 
 import jakarta.annotation.PreDestroy;
@@ -39,13 +40,39 @@ import java.util.concurrent.ConcurrentHashMap;
 public class McpWebsocketEndpoint {
   public static final Map<String, Session> clients = new ConcurrentHashMap<>();
   private String username;
+  private String serverName;
   private Session session;
   private static volatile McpProtocolDeal mcpProtocolDeal;
+  private static volatile McpEndpointConfigService mcpEndpointConfigService;
 
   @Autowired
   public void setMcpProtocalDeal(McpProtocolDeal mcpProtocolDeal) {
     if (McpWebsocketEndpoint.mcpProtocolDeal == null) {
       McpWebsocketEndpoint.mcpProtocolDeal = mcpProtocolDeal;
+    }
+  }
+
+  @Autowired
+  public void setMcpEndpointConfigService(McpEndpointConfigService mcpEndpointConfigService) {
+    if (McpWebsocketEndpoint.mcpEndpointConfigService == null) {
+      McpWebsocketEndpoint.mcpEndpointConfigService = mcpEndpointConfigService;
+    }
+  }
+
+  public static void closeEndpointsAbove(int maxEndpointIndex) {
+    if (mcpProtocolDeal == null) {
+      return;
+    }
+    for (Map.Entry<String, Session> entry : new HashMap<>(clients).entrySet()) {
+      String username = entry.getKey();
+      int endpointIndex = parseEndpointIndex(username);
+      if (endpointIndex <= maxEndpointIndex) {
+        continue;
+      }
+      Session session = entry.getValue();
+      clients.remove(username, session);
+      closeSession(session, "MCP endpoint count was reduced");
+      mcpProtocolDeal.destroyMcp(McpWebsocket.getEndpointServerName(endpointIndex), username);
     }
   }
 
@@ -65,7 +92,7 @@ public class McpWebsocketEndpoint {
             log.error("关闭会话失败: {}", e.getMessage());
           }
         }
-        mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, username);
+        mcpProtocolDeal.destroyMcp(resolveServerName(username), username);
       }
     }
 
@@ -100,8 +127,8 @@ public class McpWebsocketEndpoint {
         return;
       }
     }
-    String username = JwtTokenUtil.getUsername(token);
-    if (username == null) {
+    String rawUsername = JwtTokenUtil.getUsername(token);
+    if (rawUsername == null) {
       try {
         session.getBasicRemote().sendText("用户不存在");
         session.close();
@@ -111,7 +138,9 @@ public class McpWebsocketEndpoint {
         return;
       }
     }
-    if (!username.startsWith("mcp")) {
+    String username = normalizeUsername(rawUsername);
+    int endpointIndex = parseEndpointIndex(username);
+    if (username == null || endpointIndex < 1) {
       try {
         session.getBasicRemote().sendText("产品不存在");
         session.close();
@@ -121,14 +150,26 @@ public class McpWebsocketEndpoint {
         return;
       }
     }
+    if (mcpEndpointConfigService != null
+        && !mcpEndpointConfigService.isValidEndpointIndex(endpointIndex)) {
+      try {
+        session.getBasicRemote().sendText("MCP端点不存在");
+        session.close();
+        return;
+      } catch (IOException e) {
+        log.info("发送失败");
+        return;
+      }
+    }
     log.info("username {}", username);
     this.username = username;
+    this.serverName = McpWebsocket.getEndpointServerName(endpointIndex);
     this.session = session;
     Session oldSession = clients.put(username, session);
     if (oldSession != null && oldSession != session) {
       closeSession(oldSession, "Replaced by new MCP endpoint connection");
       if (mcpProtocolDeal != null) {
-        mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, username);
+        mcpProtocolDeal.destroyMcp(this.serverName, username);
       }
       log.info("MCP endpoint reconnect replaced old session, username={}", username);
     }
@@ -169,8 +210,7 @@ public class McpWebsocketEndpoint {
               """);
           session.getBasicRemote().sendText(McpProtocolSend.sendToolList("", true));
         }
-        mcpProtocolDeal.dealMcp(resultJson, McpWebsocket.ENDPOINT_SERVER_NAME, username,
-            session, true);
+        mcpProtocolDeal.dealMcp(resultJson, serverName, username, session, true);
       }
     } catch (Exception e) {
       log.error("解析失败{}", e.getMessage());
@@ -191,11 +231,11 @@ public class McpWebsocketEndpoint {
     Session sessionToRemove = closedSession != null ? closedSession : this.session;
     boolean removed = clients.remove(this.username, sessionToRemove);
     if (removed && mcpProtocolDeal != null) {
-      mcpProtocolDeal.destroyMcp(McpWebsocket.ENDPOINT_SERVER_NAME, this.username);
+      mcpProtocolDeal.destroyMcp(this.serverName, this.username);
     }
   }
 
-  private void closeSession(Session session, String reason) {
+  private static void closeSession(Session session, String reason) {
     if (session == null || !session.isOpen()) {
       return;
     }
@@ -204,5 +244,38 @@ public class McpWebsocketEndpoint {
     } catch (IOException e) {
       log.error("关闭旧MCP endpoint会话失败: {}", e.getMessage());
     }
+  }
+
+  private static String normalizeUsername(String username) {
+    if (username == null) {
+      return null;
+    }
+    if (username.matches("mcp\\d+")) {
+      return username + "_endpoint1";
+    }
+    if (username.matches("mcp\\d+_endpoint\\d+")) {
+      return username;
+    }
+    return null;
+  }
+
+  private static int parseEndpointIndex(String username) {
+    String normalized = normalizeUsername(username);
+    if (normalized == null) {
+      return -1;
+    }
+    try {
+      return Integer.parseInt(normalized.substring(normalized.lastIndexOf("_endpoint") + 9));
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
+
+  private static String resolveServerName(String username) {
+    int endpointIndex = parseEndpointIndex(username);
+    if (endpointIndex < 1) {
+      return McpWebsocket.getEndpointServerName(1);
+    }
+    return McpWebsocket.getEndpointServerName(endpointIndex);
   }
 }

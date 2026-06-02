@@ -24,7 +24,9 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.utility.RedisUtil;
 
 import jakarta.websocket.Session;
@@ -40,6 +42,10 @@ import java.util.UUID;
 public class McpProtocolDeal {
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private McpEndpointConfigService mcpEndpointConfigService;
+  @Value("${ai.mcp.tools-limit}")
+  private int toolsLimit;
 
   // 锁的前缀
   private static final String LOCK_PREFIX = "mcp:lock:";
@@ -105,11 +111,13 @@ public class McpProtocolDeal {
           toolList.add(tool);
         }
         // 限制工具数量
-        if (toolList.size() > 50) {
-          toolList = new ArrayList<>(toolList.subList(0, 50));
+        int toolsLimit = getToolsLimit();
+        if (toolList.size() > toolsLimit) {
+          toolList = new ArrayList<>(toolList.subList(0, toolsLimit));
         }
         redisUtil.set(serverName + chatId, toolList);
-        if (nextCursor != null && !nextCursor.equals("")) {
+        // 已达到工具数量上限时不再请求更多工具
+        if (nextCursor != null && !nextCursor.equals("") && toolList.size() < toolsLimit) {
           session.getBasicRemote().sendText(McpProtocolSend.sendToolList(nextCursor, endpoint));
         }
       }
@@ -121,6 +129,10 @@ public class McpProtocolDeal {
             serverName, chatId, requestId);
       }
     }
+  }
+
+  private int getToolsLimit() {
+    return mcpEndpointConfigService.getToolsLimit(toolsLimit);
   }
 
   public void destroyMcp(String serverName, String chatId) {

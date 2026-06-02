@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.param.request.AiControl;
+import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
@@ -76,6 +77,8 @@ public class AiServiceImpl implements AiService {
   private SafetyServiceImpl safetyService;
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private McpEndpointConfigService mcpEndpointConfigService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
 
   @Override
@@ -163,23 +166,36 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
-  public JsonResult<?> getMcpPointUrl(int productId) {
-    String token = JwtTokenUtil.createNoExpireToken("mcp" + productId, "mcp_endpoint");
+  public JsonResult<?> getMcpPointUrl(int productId, int endpointIndex) {
+    int endpointCount = mcpEndpointConfigService.getEndpointCount();
+    if (endpointIndex < 1 || endpointIndex > endpointCount) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    String token = JwtTokenUtil.createNoExpireToken(
+        McpWebsocket.getEndpointChatId(productId, endpointIndex), "mcp_endpoint");
     String url = otaUrl + "/mcp?" + "token=" + token;
-    return ResultTool.success(url);
+    Map<String, Object> result = new HashMap<>();
+    result.put("url", url);
+    result.put("endpointIndex", endpointIndex);
+    result.put("endpointCount", endpointCount);
+    return ResultTool.success(result);
   }
 
   @Override
-  public JsonResult<?> getMcpPointTools(int productId) {
+  public JsonResult<?> getMcpPointTools(int productId, int endpointIndex) {
+    int endpointCount = mcpEndpointConfigService.getEndpointCount();
+    if (endpointIndex < 1 || endpointIndex > endpointCount) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     List<Map<String, Object>> toolList = new ArrayList<>();
-    if (redisUtil.hasKey(McpWebsocket.ENDPOINT_SERVER_NAME + "mcp" + productId)) {
+    String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+    String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+    if (redisUtil.hasKey(serverName + endpointChatId)) {
       toolList = (List<Map<String, Object>>) redisUtil
-          .get(McpWebsocket.ENDPOINT_SERVER_NAME + "mcp" + productId);
-      if (toolList == null) {
-        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-      }
-    } else
-      ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+          .get(serverName + endpointChatId);
+      if (toolList == null)
+        toolList = new ArrayList<>();
+    }
     return ResultTool.success(toolList);
   }
 

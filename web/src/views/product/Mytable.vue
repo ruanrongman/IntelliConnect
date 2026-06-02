@@ -41,46 +41,69 @@
       :footer="null"  
       width="800px"  
     >  
-      <div v-if="mcpUrlData && !mcpUrlLoading">  
+      <div v-if="currentProductId">  
+        <a-card
+          title="MCP端点选择"
+          size="small"
+          style="margin-bottom: 16px;"
+        >
+          <a-radio-group
+            v-model:value="currentEndpointIndex"
+            button-style="solid"
+            @change="handleEndpointChange"
+          >
+            <a-radio-button
+              v-for="endpoint in endpointOptions"
+              :key="endpoint"
+              :value="endpoint"
+            >
+              端点 {{ endpoint }}
+            </a-radio-button>
+          </a-radio-group>
+        </a-card>
         <!-- MCP端点URL部分 -->  
         <a-card 
-          title="MCP端点URL" 
+          :title="`MCP端点URL（端点 ${currentEndpointIndex}）`"
           size="small" 
           style="margin-bottom: 16px;"
         >  
-          <div style="display: flex; align-items: center; gap: 8px;">  
-            <a-input   
-              :value="mcpUrlData.url"   
-              readonly   
-              style="font-family: monospace; flex: 1;"  
-            />  
-            <a-button   
-              type="primary"   
-              @click="copyToClipboard(mcpUrlData.url)"  
-            >  
-              <template #icon><CopyOutlined /></template>  
-              复制  
-            </a-button>  
-          </div>  
+          <a-spin :spinning="mcpUrlLoading">
+            <div style="display: flex; align-items: center; gap: 8px;">  
+              <a-input   
+                :value="mcpUrlData && mcpUrlData.url ? mcpUrlData.url : ''"   
+                readonly   
+                style="font-family: monospace; flex: 1;"  
+              />  
+              <a-button   
+                type="primary"
+                :disabled="!mcpUrlData || !mcpUrlData.url"
+                @click="copyToClipboard(mcpUrlData.url)"  
+              >  
+                <template #icon><CopyOutlined /></template>  
+                复制  
+              </a-button>  
+            </div>
+          </a-spin>
         </a-card>  
           
         <!-- MCP工具列表部分 -->  
         <a-card   
           v-if="mcpToolsData && mcpToolsData.length > 0"   
-          title="可用MCP工具"   
+          :title="`可用MCP工具（端点 ${currentEndpointIndex}）`"
           size="small"  
         >  
           <template #extra>
             <a-button 
               size="small" 
               type="text" 
-              :loading="mcpToolsRefreshing"
+              :loading="mcpToolsLoading || mcpToolsRefreshing"
               @click="refreshMcpTools"
             >
               <template #icon><ReloadOutlined /></template>
               刷新工具
             </a-button>
           </template>
+          <a-spin :spinning="mcpToolsLoading">
           <div class="tools-container">  
             <a-collapse v-model:activeKey="activeToolKeys" ghost>  
               <a-collapse-panel  
@@ -157,29 +180,26 @@
               </a-collapse-panel>  
             </a-collapse>  
           </div>  
+          </a-spin>
         </a-card>  
           
         <!-- 无工具提示 -->  
-        <a-card v-else title="MCP工具" size="small">  
+        <a-card v-else :title="`MCP工具（端点 ${currentEndpointIndex}）`" size="small">  
           <template #extra>
             <a-button 
               size="small" 
               type="text" 
-              :loading="mcpToolsRefreshing"
+              :loading="mcpToolsLoading || mcpToolsRefreshing"
               @click="refreshMcpTools"
             >
               <template #icon><ReloadOutlined /></template>
               刷新工具
             </a-button>
           </template>
-          <a-empty description="该产品暂无可用的MCP工具" />  
+          <a-spin :spinning="mcpToolsLoading">
+            <a-empty :description="`端点 ${currentEndpointIndex} 暂无可用的MCP工具`" />
+          </a-spin>
         </a-card>  
-      </div>  
-        
-      <!-- 加载状态 -->  
-      <div v-if="mcpUrlLoading" style="text-align: center; padding: 40px;">  
-        <a-spin size="large" />  
-        <div style="margin-top: 16px; color: #666;">正在获取MCP端点信息...</div>  
       </div>  
     </a-modal>  
 
@@ -293,10 +313,13 @@ const mcpUrlModalVisible = ref(false)
 const mcpUrlData = ref(null)  
 const mcpToolsData = ref([])  
 const mcpUrlLoading = ref(false)  
-const mcpUrlRefreshing = ref(false) // 新增：刷新端点URL的loading状态
+const mcpToolsLoading = ref(false)
 const mcpToolsRefreshing = ref(false) // 新增：刷新工具的loading状态
 const activeToolKeys = ref([]) // 控制工具面板展开状态  
 const currentProductId = ref(null) // 新增：保存当前产品ID用于刷新
+const currentEndpointIndex = ref(1)
+const endpointCount = ref(5)
+const endpointOptions = computed(() => Array.from({ length: endpointCount.value }, (_, index) => index + 1))
 
 // 工具管理相关状态
 const toolManageModalVisible = ref(false)
@@ -403,30 +426,39 @@ const fetchProduct = () => {
 };    
   
   
-// 获取MCP端点URL  
-const handleGetMcpUrl = async (record) => {  
+const normalizeMcpUrlData = (urlData) => {
+  if (urlData && typeof urlData === 'object') {
+    endpointCount.value = Number(urlData.endpointCount) || endpointCount.value
+    currentEndpointIndex.value = Number(urlData.endpointIndex) || currentEndpointIndex.value
+    return {
+      url: urlData.url || ''
+    }
+  }
+  return {
+    url: urlData || ''
+  }
+}
+
+const loadMcpEndpoint = async (productId, endpointIndex) => {
   try {  
-    mcpUrlModalVisible.value = true  
+    currentEndpointIndex.value = endpointIndex
     mcpUrlLoading.value = true  
+    mcpToolsLoading.value = true
     mcpUrlData.value = null  
     mcpToolsData.value = []  
     activeToolKeys.value = []  
-    currentProductId.value = record.id // 保存当前产品ID
-  
   
     // 获取MCP端点URL  
-    const urlResponse = await getMcpPointUrl({ productId: record.id })  
+    const urlResponse = await getMcpPointUrl({ productId, endpointIndex })  
     const { data: urlData, errorCode: urlErrorCode } = urlResponse.data  
   
   
     if (urlErrorCode === 200) {  
-      mcpUrlData.value = {  
-        url: urlData.url || urlData // 根据实际返回数据结构调整  
-      }  
+      mcpUrlData.value = normalizeMcpUrlData(urlData)
         
       // 同时获取工具列表  
       try {  
-        const toolsResponse = await getMcpPointTools({ productId: record.id })  
+        const toolsResponse = await getMcpPointTools({ productId, endpointIndex })  
         const { data: toolsData, errorCode: toolsErrorCode } = toolsResponse.data  
           
         if (toolsErrorCode === 200 && toolsData && Array.isArray(toolsData)) {  
@@ -439,6 +471,8 @@ const handleGetMcpUrl = async (record) => {
       } catch (toolsError) {  
         console.log('获取工具列表失败:', toolsError)  
         message.warning('获取MCP工具列表失败，但端点URL获取成功')  
+      } finally {
+        mcpToolsLoading.value = false
       }  
         
     } else if (urlErrorCode === 2001) {  
@@ -452,8 +486,25 @@ const handleGetMcpUrl = async (record) => {
     message.error('获取MCP端点失败')  
   } finally {  
     mcpUrlLoading.value = false  
+    mcpToolsLoading.value = false
   }  
+}
+
+// 获取MCP端点URL  
+const handleGetMcpUrl = async (record) => {  
+  mcpUrlModalVisible.value = true  
+  currentProductId.value = record.id // 保存当前产品ID
+  currentEndpointIndex.value = 1
+  endpointCount.value = 5
+  await loadMcpEndpoint(record.id, 1)
 }  
+
+const handleEndpointChange = async (event) => {
+  if (!currentProductId.value) {
+    return
+  }
+  await loadMcpEndpoint(currentProductId.value, event.target.value)
+}
 
 
 // 新增：刷新MCP工具列表
@@ -466,7 +517,10 @@ const refreshMcpTools = async () => {
   try {
     mcpToolsRefreshing.value = true
     
-    const toolsResponse = await getMcpPointTools({ productId: currentProductId.value })
+    const toolsResponse = await getMcpPointTools({
+      productId: currentProductId.value,
+      endpointIndex: currentEndpointIndex.value
+    })
     const { data: toolsData, errorCode: toolsErrorCode } = toolsResponse.data
     
     if (toolsErrorCode === 200 && toolsData && Array.isArray(toolsData)) {
@@ -475,7 +529,7 @@ const refreshMcpTools = async () => {
       if (toolsData.length > 0 && activeToolKeys.value.length === 0) {
         activeToolKeys.value = ['0']
       }
-      message.success(`已刷新，共获取到 ${toolsData.length} 个MCP工具`)
+      message.success(`端点 ${currentEndpointIndex.value} 已刷新，共获取到 ${toolsData.length} 个MCP工具`)
     } else if (toolsErrorCode === 2001) {
       router.push('/login')
       return

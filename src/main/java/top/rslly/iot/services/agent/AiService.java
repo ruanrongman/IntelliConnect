@@ -34,9 +34,9 @@ public interface AiService {
 
   void getAiResponseStream(AiControl aiControl, String token);
 
-  JsonResult<?> getMcpPointUrl(int productId);
+  JsonResult<?> getMcpPointUrl(int productId, int endpointIndex);
 
-  JsonResult<?> getMcpPointTools(int productId);
+  JsonResult<?> getMcpPointTools(int productId, int endpointIndex);
 
   String getAiVisionIntent(String question, MultipartFile imageFile);
 

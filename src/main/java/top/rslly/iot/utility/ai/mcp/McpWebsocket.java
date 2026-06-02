@@ -39,6 +39,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class McpWebsocket {
   public static final String DEVICE_SERVER_NAME = "xiaozhi_device";
   public static final String ENDPOINT_SERVER_NAME = "xiaozhi_endpoint";
+  public static final String ENDPOINT_SERVER_NAME_PREFIX = "xiaozhi_endpoint_";
   @Autowired
   private RedisUtil redisUtil;
 
@@ -48,6 +49,29 @@ public class McpWebsocket {
   // 锁的过期时间（秒） - 比实际等待时间稍长
   private static final long LOCK_EXPIRE_TIME = 15L;
   private static final Map<String, Lock> SESSION_SEND_LOCKS = new ConcurrentHashMap<>();
+
+  public static String getEndpointServerName(int endpointIndex) {
+    return ENDPOINT_SERVER_NAME_PREFIX + endpointIndex;
+  }
+
+  public static String getEndpointChatId(int productId, int endpointIndex) {
+    return "mcp" + productId + "_endpoint" + endpointIndex;
+  }
+
+  public static boolean isEndpointServerName(String serverName) {
+    return serverName != null && serverName.startsWith(ENDPOINT_SERVER_NAME_PREFIX);
+  }
+
+  public static int parseEndpointIndexFromServerName(String serverName) {
+    if (!isEndpointServerName(serverName)) {
+      return -1;
+    }
+    try {
+      return Integer.parseInt(serverName.substring(ENDPOINT_SERVER_NAME_PREFIX.length()));
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
 
   public String combineToolDescription(String serverName, String chatId) {
     List<Map<String, Object>> toolDescriptionMap =

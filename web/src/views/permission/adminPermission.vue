@@ -85,6 +85,23 @@
                   </span>
                 </div>
               </template>
+              <template v-else-if="isNumberConfig(item.setKey)">
+                <div class="number-container">
+                  <a-input-number
+                    v-model:value="item.numberValue"
+                    :min="getNumberConfig(item.setKey).min"
+                    :max="getNumberConfig(item.setKey).max"
+                    :precision="0"
+                    :disabled="loading"
+                    size="large"
+                    class="number-input"
+                    @change="(value) => handleNumberChange(item, value)"
+                  />
+                  <span class="number-status">
+                    范围 {{ getNumberConfig(item.setKey).min }}-{{ getNumberConfig(item.setKey).max }}
+                  </span>
+                </div>
+              </template>
               <template v-else>  
                 <a-textarea  
                   v-model:value="item.setValue"  
@@ -171,6 +188,8 @@ const allowedKeys = [
   { value: 'ai_agent_include_thought', label: 'Agent 深度思考', buttonText: '保存设置' },
   { value: 'ai_mcp_agent_include_thought', label: 'MCP Agent 深度思考', buttonText: '保存设置' },
   { value: 'ai_detect_random', label: '小智唤醒词随机问候', buttonText: '保存设置' },
+  { value: 'ai_mcp_endpoint_count', label: '每产品 MCP 端点数量', buttonText: '保存设置' },
+  { value: 'mcp_tools_limit', label: '每端点 MCP 工具数量上限', buttonText: '保存设置' },
 ];
 // 布尔类型配置的 key 列表
 const booleanConfigKeys = [
@@ -184,6 +203,34 @@ const booleanConfigKeys = [
 const isBooleanConfig = (key) => {
   return booleanConfigKeys.includes(key);
 };
+
+const numberConfigMap = {
+  'ai_mcp_endpoint_count': { min: 1, max: 20, defaultValue: 5 },
+  'mcp_tools_limit': { min: 1, max: 100, defaultValue: 50 },
+};
+
+const isNumberConfig = (key) => {
+  return Object.prototype.hasOwnProperty.call(numberConfigMap, key);
+};
+
+const getNumberConfig = (key) => {
+  return numberConfigMap[key] || { min: 1, max: 20, defaultValue: 5 };
+};
+
+const normalizeNumberConfigValue = (key, value) => {
+  const config = getNumberConfig(key);
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue)) {
+    return config.defaultValue;
+  }
+  return Math.min(config.max, Math.max(config.min, numberValue));
+};
+
+const handleNumberChange = (item, value) => {
+  const normalizedValue = normalizeNumberConfigValue(item.setKey, value);
+  item.numberValue = normalizedValue;
+  item.setValue = String(normalizedValue);
+};
   
 // 默认配置值  
 const defaultConfigValues = {  
@@ -195,6 +242,8 @@ const defaultConfigValues = {
   'ai_agent_include_thought': 'false',
   'ai_mcp_agent_include_thought': 'false',
   'ai_detect_random': 'false',
+  'ai_mcp_endpoint_count': '5',
+  'mcp_tools_limit': '50',
 };
 
 // 获取配置项图标
@@ -208,6 +257,8 @@ const getIconForKey = (key) => {
     'ai_agent_include_thought': '🤖',
     'ai_mcp_agent_include_thought': '🔌',
     'ai_detect_random': '🎲',
+    'ai_mcp_endpoint_count': '🔢',
+    'mcp_tools_limit': '🔧',
   };
   return iconMap[key] || '⚙️';
 };
@@ -215,6 +266,7 @@ const getIconForKey = (key) => {
 // 获取配置项类型文本
 const getTypeText = (key) => {
   if (key === 'wx_default_product') return '产品配置';
+  if (key === 'ai_mcp_endpoint_count' || key === 'mcp_tools_limit') return 'MCP配置';
   if (key.includes('keyword')) return '关键词配置';
   if (key.includes('message')) return '消息模板';
   if (key.startsWith('ai_')) return 'AI配置';
@@ -232,6 +284,8 @@ const getDescriptionForKey = (key) => {
     'ai_agent_include_thought': '控制 ai.agent.include-thought，关闭可减少 Agent 简单任务延时',
     'ai_mcp_agent_include_thought': '控制 ai.mcp.agent-include-thought，关闭可减少 MCP Agent 简单任务延时',
     'ai_detect_random': '小智唤醒词随机问候',
+    'ai_mcp_endpoint_count': '设置每个产品可用的 MCP endpoint 数量，保存后立即生效',
+    'mcp_tools_limit': '设置每个 MCP 端点允许注册的最大工具数量，超出部分将被截断',
   };
   return descMap[key] || '系统配置项';
 };
@@ -248,11 +302,13 @@ const fetchConfigs = () => {
         const fetchedConfigs = data.map((item) => {  
           const configDef = allowedKeys.find(k => k.value === item.setKey);
           const isBool = isBooleanConfig(item.setKey);
+          const isNumber = isNumberConfig(item.setKey);
           return {  
             id: item.id,  
             setKey: item.setKey,  
             setValue: item.setValue,
             boolValue: isBool ? (item.setValue === 'true') : false,
+            numberValue: isNumber ? normalizeNumberConfigValue(item.setKey, item.setValue) : null,
             label: configDef ? configDef.label : item.setKey,  
             buttonText: configDef ? configDef.buttonText : '保存',
             saving: false,
@@ -266,12 +322,14 @@ const fetchConfigs = () => {
             return existingConfig;
           }
           const isBool = isBooleanConfig(key.value);
+          const isNumber = isNumberConfig(key.value);
           const defaultVal = defaultConfigValues[key.value];
           return {  
             id: null,  
             setKey: key.value,  
             setValue: defaultConfigValues[key.value],
             boolValue: isBool ? (defaultVal === 'true') : false,
+            numberValue: isNumber ? normalizeNumberConfigValue(key.value, defaultVal) : null,
             label: key.label,  
             buttonText: key.buttonText,
             saving: false,
@@ -287,6 +345,7 @@ const fetchConfigs = () => {
           setKey: key.value,  
           setValue: defaultConfigValues[key.value],  
           boolValue: isBooleanConfig(key.value) ? (defaultConfigValues[key.value] === 'true') : false,
+          numberValue: isNumberConfig(key.value) ? normalizeNumberConfigValue(key.value, defaultConfigValues[key.value]) : null,
           label: key.label,  
           buttonText: key.buttonText,
           saving: false,
@@ -301,6 +360,7 @@ const fetchConfigs = () => {
         setKey: key.value,  
         setValue: defaultConfigValues[key.value],  
         boolValue: isBooleanConfig(key.value) ? (defaultConfigValues[key.value] === 'true') : false,
+        numberValue: isNumberConfig(key.value) ? normalizeNumberConfigValue(key.value, defaultConfigValues[key.value]) : null,
         label: key.label,  
         buttonText: key.buttonText,
         saving: false,
@@ -335,6 +395,9 @@ const fetchProducts = () => {
   
 // 保存单个配置项  
 const handleSave = (item) => {
+  if (isNumberConfig(item.setKey)) {
+    handleNumberChange(item, item.numberValue);
+  }
   item.saving = true;
   const data = {  
     setKey: item.setKey,  
@@ -359,6 +422,9 @@ const handleSave = (item) => {
           const updatedItem = configList.value.find(i => i.setKey === item.setKey);
           if (updatedItem) {
             updatedItem.setValue = currentValue;
+            if (isNumberConfig(updatedItem.setKey)) {
+              updatedItem.numberValue = normalizeNumberConfigValue(updatedItem.setKey, currentValue);
+            }
           }
         }, 100);
       } else if (res.data.errorCode === 2001) {  
@@ -396,6 +462,9 @@ const restoreDefault = (item) => {
           if (isBooleanConfig(item.setKey)) {
             item.boolValue = defaultValue === 'true';
           }
+          if (isNumberConfig(item.setKey)) {
+            item.numberValue = normalizeNumberConfigValue(item.setKey, defaultValue);
+          }
           item.id = null;
         } else if (res.data.errorCode === 2001) {  
           message.error('登录已过期，请重新登录');  
@@ -416,6 +485,9 @@ const restoreDefault = (item) => {
     // 新增：同步布尔值
     if (isBooleanConfig(item.setKey)) {
       item.boolValue = defaultValue === 'true';
+    }
+    if (isNumberConfig(item.setKey)) {
+      item.numberValue = normalizeNumberConfigValue(item.setKey, defaultValue);
     }
     message.success({
       content: `已恢复${item.label}的默认值`,

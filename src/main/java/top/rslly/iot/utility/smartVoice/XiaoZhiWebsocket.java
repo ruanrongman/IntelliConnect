@@ -547,122 +547,74 @@ public class XiaoZhiWebsocket {
         return;
       }
     }
-    if (clients.get("chatProduct" + chatId + deviceId) == null) {
-      this.chatId = "chatProduct" + chatId + deviceId;
-      this.productId = Integer.parseInt(chatId);
-      if (safetyService != null && !safetyService.controlAuthorizeProduct(token, productId)) {
-        try {
-          session.getBasicRemote().sendText("没有权限");
-          session.close();
-          return;
-        } catch (IOException e) {
-          log.info("发送失败");
-        }
-      }
-      if (productService != null && productService.findAllById(productId).isEmpty()) {
-        try {
-          session.getBasicRemote().sendText("产品不存在");
-          session.close();
-          return;
-        } catch (IOException e) {
-          log.info("发送失败");
-        }
-      }
-      if (otaXiaozhiService != null && !otaXiaozhiService.findAllByDeviceId(deviceId).isEmpty()) {
-        otaXiaozhiService.updateStatus(deviceId, "connected");
-      }
-      clients.put(this.chatId, session);
-      initSendContext(this.chatId);
-      isAbort.put(this.chatId, false);
-      haveVoice.put(this.chatId, false);
-      refreshInteractionTime(this.chatId);
+    this.chatId = "chatProduct" + chatId + deviceId;
+    this.productId = Integer.parseInt(chatId);
+    if (safetyService != null && !safetyService.controlAuthorizeProduct(token, productId)) {
       try {
-        // 为该会话创建独立的VAD监听器实例
-        SlieroVadListener listener = new SlieroVadListener();
-        listener.init();
-        if (!listener.isReady()) {
-          session.getBasicRemote().sendText("VAD初始化失败");
-          session.close();
-          clients.remove(this.chatId);
-          isAbort.remove(this.chatId);
-          haveVoice.remove(this.chatId);
-          lastInteractionTimeMap.remove(this.chatId);
-          return;
-        }
-        vadListenerMap.put(this.chatId, listener);
-        opusDecoderMap.put(this.chatId,
-            new OpusDecoder(AudioFrameDuration.resolveInboundSampleRate(this.chatId), 1));
-        vadOpusDecoderMap.put(this.chatId, new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1));
-      } catch (Exception e) {
-        log.error("初始化VAD会话失败, chatId={}", this.chatId, e);
-        try {
-          session.getBasicRemote().sendText("VAD初始化失败");
-          session.close();
-        } catch (IOException ex) {
-          log.error("关闭初始化失败会话失败, chatId={}", this.chatId, ex);
-        }
-        clients.remove(this.chatId);
-        isAbort.remove(this.chatId);
-        haveVoice.remove(this.chatId);
-        lastInteractionTimeMap.remove(this.chatId);
-        return;
-      }
-      log.info("header{}", token);
-    } else {
-      log.info("冲突，无法连接");
-      try {
-        session.getBasicRemote().sendText("冲突，无法连接");
+        session.getBasicRemote().sendText("没有权限");
         session.close();
+        return;
       } catch (IOException e) {
         log.info("发送失败");
       }
+    }
+    if (productService != null && productService.findAllById(productId).isEmpty()) {
       try {
+        session.getBasicRemote().sendText("产品不存在");
         session.close();
+        return;
       } catch (IOException e) {
-        log.error("关闭失败{}", e.getMessage());
+        log.info("发送失败");
       }
     }
+    if (otaXiaozhiService != null && !otaXiaozhiService.findAllByDeviceId(deviceId).isEmpty()) {
+      otaXiaozhiService.updateStatus(deviceId, "connected");
+    }
+    Session oldSession = clients.put(this.chatId, session);
+    if (oldSession != null && oldSession != session) {
+      closeSession(oldSession, "Replaced by new xiaozhi connection");
+      cleanupSessionResources(this.chatId);
+      log.info("xiaozhi reconnect replaced old session, chatId={}", this.chatId);
+    }
+    initSendContext(this.chatId);
+    isAbort.put(this.chatId, false);
+    haveVoice.put(this.chatId, false);
+    refreshInteractionTime(this.chatId);
+    try {
+      // 为该会话创建独立的VAD监听器实例
+      SlieroVadListener listener = new SlieroVadListener();
+      listener.init();
+      if (!listener.isReady()) {
+        session.getBasicRemote().sendText("VAD初始化失败");
+        session.close();
+        cleanupCurrentSession(session);
+        return;
+      }
+      vadListenerMap.put(this.chatId, listener);
+      opusDecoderMap.put(this.chatId,
+          new OpusDecoder(AudioFrameDuration.resolveInboundSampleRate(this.chatId), 1));
+      vadOpusDecoderMap.put(this.chatId, new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1));
+    } catch (Exception e) {
+      log.error("初始化VAD会话失败, chatId={}", this.chatId, e);
+      try {
+        session.getBasicRemote().sendText("VAD初始化失败");
+        session.close();
+      } catch (IOException ex) {
+        log.error("关闭初始化失败会话失败, chatId={}", this.chatId, ex);
+      }
+      cleanupCurrentSession(session);
+      return;
+    }
+    log.info("header{}", token);
   }
 
   /**
    * socket stop
    */
   @OnClose
-  public void onClose() {
+  public void onClose(Session session) {
     log.info("close");
-    // 销毁该会话对应的VAD监听器
-    SlieroVadListener listener = vadListenerMap.remove(chatId);
-    if (listener != null) {
-      listener.destroy();
-    }
-    if (chatId != null) {
-      Session session = clients.get(chatId);
-      if (session != null) {
-        String deviceId = getDeviceId(session);
-        if (otaXiaozhiService != null && deviceId != null
-            && !otaXiaozhiService.findAllByDeviceId(deviceId).isEmpty()) {
-          otaXiaozhiService.updateStatus(deviceId, "disconnected");
-        }
-      }
-      if (xiaoZhiUtil != null) {
-        xiaoZhiUtil.destroyMcp(chatId);
-      }
-      // 取消正在播放的音频
-      cancelActivePlayback(chatId);
-      clients.remove(chatId);
-      isAbort.remove(chatId);
-      haveVoice.remove(chatId);
-      pcmVadBuffer.remove(chatId); // 清理缓冲区
-      opusDecoderMap.remove(chatId);
-      vadOpusDecoderMap.remove(chatId);
-      inboundFrameDurationMap.remove(chatId);
-      inboundSampleRateMap.remove(chatId);
-      outboundFrameDurationMap.remove(chatId);
-      outboundSampleRateMap.remove(chatId);
-      voiceContent.remove(chatId); // 清理语音内容
-      lastInteractionTimeMap.remove(chatId); // 清理时间记录
-      closeSendContext(chatId);
-    }
+    cleanupCurrentSession(session);
   }
 
   /**
@@ -862,8 +814,64 @@ public class XiaoZhiWebsocket {
 
   @OnError
   public void onError(Session session, Throwable error) {
-    // onClose();
+    cleanupCurrentSession(session);
     log.error("Error in onError: {}", error.getMessage());
+  }
+
+  private void cleanupCurrentSession(Session closedSession) {
+    if (chatId == null) {
+      return;
+    }
+    Session sessionToRemove = closedSession != null ? closedSession : clients.get(chatId);
+    boolean removed = clients.remove(chatId, sessionToRemove);
+    if (!removed) {
+      return;
+    }
+    if (sessionToRemove != null) {
+      String deviceId = getDeviceId(sessionToRemove);
+      if (otaXiaozhiService != null && deviceId != null
+          && !otaXiaozhiService.findAllByDeviceId(deviceId).isEmpty()) {
+        otaXiaozhiService.updateStatus(deviceId, "disconnected");
+      }
+    }
+    cleanupSessionResources(chatId);
+  }
+
+  private static void cleanupSessionResources(String chatId) {
+    if (chatId == null) {
+      return;
+    }
+    SlieroVadListener listener = vadListenerMap.remove(chatId);
+    if (listener != null) {
+      listener.destroy();
+    }
+    if (xiaoZhiUtil != null) {
+      xiaoZhiUtil.destroyMcp(chatId);
+    }
+    cancelActivePlayback(chatId);
+    isAbort.remove(chatId);
+    haveVoice.remove(chatId);
+    pcmVadBuffer.remove(chatId);
+    opusDecoderMap.remove(chatId);
+    vadOpusDecoderMap.remove(chatId);
+    inboundFrameDurationMap.remove(chatId);
+    inboundSampleRateMap.remove(chatId);
+    outboundFrameDurationMap.remove(chatId);
+    outboundSampleRateMap.remove(chatId);
+    voiceContent.remove(chatId);
+    lastInteractionTimeMap.remove(chatId);
+    closeSendContext(chatId);
+  }
+
+  private void closeSession(Session session, String reason) {
+    if (session == null || !session.isOpen()) {
+      return;
+    }
+    try {
+      session.close(new CloseReason(CloseReason.CloseCodes.NORMAL_CLOSURE, reason));
+    } catch (IOException e) {
+      log.error("关闭旧 xiaozhi 会话失败: {}", e.getMessage());
+    }
   }
 
   @PreDestroy

@@ -28,6 +28,7 @@ import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
+import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
 import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
@@ -99,6 +100,8 @@ public class FunctionCallingRouterTool {
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private McpWebsocket mcpWebsocket;
+  @Autowired
+  private McpEndpointConfigService mcpEndpointConfigService;
 
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
@@ -350,7 +353,7 @@ public class FunctionCallingRouterTool {
         !productSkillsEntities.isEmpty()
             || !mcpServerList.isEmpty()
             || mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
-            || mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId);
+            || hasRunningEndpoint(productId);
     if (!hasMcp) {
       return "";
     }
@@ -362,11 +365,31 @@ public class FunctionCallingRouterTool {
       appendWithSeparator(builder,
           mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
     }
-    if (mcpWebsocket.isRunning(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId)) {
-      appendWithSeparator(builder,
-          mcpWebsocket.getIntention(McpWebsocket.ENDPOINT_SERVER_NAME, "mcp" + productId));
-    }
+    appendEndpointIntentions(builder, productId);
     return limitText(builder.toString(), MAX_MCP_DESCRIPTION_CHARS);
+  }
+
+  private boolean hasRunningEndpoint(int productId) {
+    for (int endpointIndex = 1; endpointIndex <= mcpEndpointConfigService
+        .getEndpointCount(); endpointIndex++) {
+      String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+      String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+      if (mcpWebsocket.isRunning(serverName, endpointChatId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void appendEndpointIntentions(StringBuilder builder, int productId) {
+    for (int endpointIndex = 1; endpointIndex <= mcpEndpointConfigService
+        .getEndpointCount(); endpointIndex++) {
+      String serverName = McpWebsocket.getEndpointServerName(endpointIndex);
+      String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
+      if (mcpWebsocket.isRunning(serverName, endpointChatId)) {
+        appendWithSeparator(builder, mcpWebsocket.getIntention(serverName, endpointChatId));
+      }
+    }
   }
 
   private void appendWithSeparator(StringBuilder builder, String text) {
