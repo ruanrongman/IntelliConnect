@@ -130,7 +130,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       if (chatId == null || chatId.isBlank()) {
         result = historyMessageEntityRepository.findAll(pageable);
       } else {
-        result = historyMessageEntityRepository.findAll(buildExactChatIdSpec(chatId), pageable);
+        result = historyMessageEntityRepository.findAllByChatId(chatId, pageable);
       }
     }
     if (result.isEmpty()) {
@@ -158,10 +158,6 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       return criteriaBuilder.and(permissionPredicate,
           criteriaBuilder.equal(root.get("chatId"), chatId));
     };
-  }
-
-  private Specification<HistoryMessageEntity> buildExactChatIdSpec(String chatId) {
-    return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("chatId"), chatId);
   }
 
   private HistoryMessageEntity buildHistoryMessage(String chatId, String requestId,

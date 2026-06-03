@@ -67,6 +67,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
     if (queueMap == null || !queueMap.containsKey(chatId)) {
       log.warn("queueMap已被释放，切断连接: chatId={}", chatId);
       eventSource.cancel();
+      finishStream(jsonBuffer.toString(), false);
       return;
     }
     if (data == null) {
@@ -149,6 +150,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
       log.warn("资源已被释放，直接关闭连接");
       if (eventSource != null)
         eventSource.cancel();
+      finishStream(jsonBuffer.toString(), false);
       return;
     }
     failStream(ERROR_MESSAGE);
@@ -162,6 +164,10 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   }
 
   private void failStream(String message) {
+    finishStream(message, true);
+  }
+
+  private void finishStream(String message, boolean addDoneSignal) {
     Lock lock = chatTool.getLockMap().get(chatId);
     Condition condition = chatTool.getConditionMap().get(chatId);
     if (lock == null || condition == null) {
@@ -172,7 +178,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
     try {
       cancelCurrentStream();
       Queue<String> queue = queueMap.get(chatId);
-      if (queue != null) {
+      if (addDoneSignal && queue != null) {
         queue.add(DONE_SIGNAL);
       }
       chatTool.getDataMap().put(chatId, message);

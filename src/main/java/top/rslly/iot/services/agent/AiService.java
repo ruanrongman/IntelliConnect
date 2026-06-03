@@ -20,6 +20,7 @@
 package top.rslly.iot.services.agent;
 
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.utility.result.JsonResult;
 
@@ -32,7 +33,9 @@ public interface AiService {
   JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token);
 
-  void getAiResponseStream(AiControl aiControl, String token);
+  SseEmitter getAiResponseStream(AiControl aiControl, String token);
+
+  JsonResult<?> stopAiResponseStream(int productId, String token);
 
   JsonResult<?> getMcpPointUrl(int productId, int endpointIndex);
 

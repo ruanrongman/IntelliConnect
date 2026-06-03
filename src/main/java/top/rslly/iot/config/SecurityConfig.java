@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.config;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
@@ -103,6 +104,7 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         // 授权请求配置
         .authorizeHttpRequests(authz -> authz
+            .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
             .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
             // 添加 WebSocket 路径
             .requestMatchers("/xiaozhi/v1/**").permitAll()

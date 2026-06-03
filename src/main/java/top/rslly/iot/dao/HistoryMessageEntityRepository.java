@@ -36,6 +36,8 @@ public interface HistoryMessageEntityRepository
   Page<HistoryMessageEntity> findAllByChatIdStartingWithOrderByTimeDesc(String chatId,
       Pageable pageable);
 
+  Page<HistoryMessageEntity> findAllByChatId(String chatId, Pageable pageable);
+
   @Transactional
   List<HistoryMessageEntity> deleteAllById(int id);
 }

@@ -149,29 +149,35 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     List<AgentMemoryResponse> agentMemoryResponses = new ArrayList<>();
+    List<AgentMemoryEntity> agentMemoryEntities = new ArrayList<>();
     List<OtaXiaozhiEntity> otaXiaozhiEntities;
     if (nickName != null && !nickName.isBlank()) {
       otaXiaozhiEntities =
           otaXiaozhiRepository.findAllByProductIdAndNickName(productId, nickName);
     } else {
       otaXiaozhiEntities = otaXiaozhiRepository.findAllByProductId(productId);
-    }
-    if (otaXiaozhiEntities.isEmpty()) {
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      // only text conversation
+      List<AgentMemoryEntity> agentMemoryByTextConv =
+          agentMemoryRepository.findAllByChatId("chatProduct" + productId);
+      if (!agentMemoryByTextConv.isEmpty()) {
+        agentMemoryEntities.addAll(agentMemoryByTextConv);
+      }
     }
     for (var s : otaXiaozhiEntities) {
       String chatId = "chatProduct" + productId + s.getDeviceId();
-      List<AgentMemoryEntity> agentMemoryEntities = agentMemoryRepository.findAllByChatId(chatId);
-      if (agentMemoryEntities.isEmpty()) {
-        continue;
-      }
+      agentMemoryEntities.addAll(agentMemoryRepository.findAllByChatId(chatId));
+    }
+    if (agentMemoryEntities.isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    for (var s : agentMemoryEntities) {
       AgentMemoryResponse agentMemoryResponse = new AgentMemoryResponse();
-      agentMemoryResponse.setId(agentMemoryEntities.getFirst().getId());
-      agentMemoryResponse.setContent(agentMemoryEntities.getFirst().getContent());
-      agentMemoryResponse.setChatId(chatId);
+      agentMemoryResponse.setId(s.getId());
+      agentMemoryResponse.setContent(s.getContent());
+      agentMemoryResponse.setChatId(s.getChatId());
 
       // 提取MAC地址
-      String mac = extractMacFromChatId(chatId);
+      String mac = extractMacFromChatId(s.getChatId());
       agentMemoryResponse.setDeviceName(Objects.requireNonNullElse(mac, "未知设备"));
       agentMemoryResponses.add(agentMemoryResponse);
     }

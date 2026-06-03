@@ -22,7 +22,9 @@ package top.rslly.iot.controllers;
 import io.swagger.v3.oas.annotations.Operation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -175,6 +177,25 @@ public class Tool {
   public JsonResult<?> aiControl(@Valid @RequestBody AiControl aiControl,
       @RequestHeader("Authorization") String header) {
     return aiService.getAiResponse(aiControl, header);
+  }
+
+  @Operation(summary = "使用大模型控制设备(文字流式)", description = "响应速度取决于大模型速度")
+  @RequestMapping(value = "/aiControl/stream", method = RequestMethod.POST,
+      produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public ResponseEntity<SseEmitter> aiControlStream(@Valid @RequestBody AiControl aiControl,
+      @RequestHeader("Authorization") String header) {
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+        .header("X-Accel-Buffering", "no")
+        .contentType(MediaType.TEXT_EVENT_STREAM)
+        .body(aiService.getAiResponseStream(aiControl, header));
+  }
+
+  @Operation(summary = "停止大模型文字流式生成")
+  @RequestMapping(value = "/aiControl/stream/stop", method = RequestMethod.POST)
+  public JsonResult<?> stopAiControlStream(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    return aiService.stopAiResponseStream(productId, header);
   }
 
   @Operation(summary = "请求Agent")

@@ -31,6 +31,15 @@ export default [
           },
         },
         {
+          path: '/aiChat',
+          name: 'aiChat',
+          component: () => import('@/views/aiChat/index.vue'),
+          meta: {
+            title: 'aiChat',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productRole',
           name: 'productRole',
           component: () => import('@/views/productRole/index.vue'),

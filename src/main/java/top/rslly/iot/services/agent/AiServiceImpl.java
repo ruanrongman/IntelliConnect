@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.services.SafetyServiceImpl;
@@ -51,6 +52,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -80,6 +84,9 @@ public class AiServiceImpl implements AiService {
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
+  private static final String SSE_DONE_SIGNAL = "[DONE]";
+  private static final long STREAM_POLL_INTERVAL_MS = 10L;
+  private final Set<String> stoppedStreamChatIds = ConcurrentHashMap.newKeySet();
 
   @Override
   public JsonResult<?> getAiResponse(AiControl aiControl, String token) {
@@ -96,8 +103,95 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
-  public void getAiResponseStream(AiControl aiControl, String token) {
+  public SseEmitter getAiResponseStream(AiControl aiControl, String token) {
+    SseEmitter emitter = new SseEmitter(0L);
+    Thread.ofVirtual().start(() -> handleAiResponseStream(aiControl, token, emitter));
+    return emitter;
+  }
 
+  @Override
+  public JsonResult<?> stopAiResponseStream(int productId, String token) {
+    if (!safetyService.controlAuthorizeProduct(token, productId)) {
+      return ResultTool.fail(ResultCode.NO_PERMISSION);
+    }
+    String chatId = buildChatId(productId);
+    stoppedStreamChatIds.add(chatId);
+    Router.queueMap.remove(chatId);
+    return ResultTool.success("已停止");
+  }
+
+  private void handleAiResponseStream(AiControl aiControl, String token, SseEmitter emitter) {
+    String chatId = buildChatId(aiControl.getProductId());
+    boolean sentFromQueue = false;
+    stoppedStreamChatIds.remove(chatId);
+    try {
+      if (!safetyService.controlAuthorizeProduct(token, aiControl.getProductId())) {
+        sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.NO_PERMISSION));
+        return;
+      }
+      if (productService.findAllById(aiControl.getProductId()).isEmpty()) {
+        sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.PARAM_NOT_VALID));
+        return;
+      }
+
+      CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(
+          () -> router.response(aiControl.getContent(), chatId, aiControl.getProductId()));
+      while (!responseFuture.isDone() || hasPendingQueueData(chatId)) {
+        if (stoppedStreamChatIds.contains(chatId)) {
+          return;
+        }
+        Queue<String> queue = Router.queueMap.get(chatId);
+        if (queue == null) {
+          TimeUnit.MILLISECONDS.sleep(STREAM_POLL_INTERVAL_MS);
+          continue;
+        }
+        if (queue.isEmpty()) {
+          TimeUnit.MILLISECONDS.sleep(STREAM_POLL_INTERVAL_MS);
+          continue;
+        }
+        String message = queue.poll();
+        if (message == null) {
+          TimeUnit.MILLISECONDS.sleep(STREAM_POLL_INTERVAL_MS);
+          continue;
+        }
+        if (SSE_DONE_SIGNAL.equals(message)) {
+          break;
+        }
+        sendSseEvent(emitter, "message", message);
+        sentFromQueue = true;
+      }
+
+      if (stoppedStreamChatIds.contains(chatId)) {
+        return;
+      }
+      String finalAnswer = responseFuture.get();
+      if (!sentFromQueue && finalAnswer != null && !finalAnswer.isBlank()) {
+        sendSseEvent(emitter, "message", finalAnswer);
+      }
+    } catch (Exception e) {
+      log.error("AI text stream failed, chatId={}", chatId, e);
+      try {
+        sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.PARAM_NOT_VALID));
+      } catch (Exception ignored) {
+      }
+    } finally {
+      stoppedStreamChatIds.remove(chatId);
+      Router.queueMap.remove(chatId);
+      emitter.complete();
+    }
+  }
+
+  private boolean hasPendingQueueData(String chatId) {
+    Queue<String> queue = Router.queueMap.get(chatId);
+    return queue != null && !queue.isEmpty();
+  }
+
+  private String buildChatId(int productId) {
+    return "chatProduct" + productId;
+  }
+
+  private void sendSseEvent(SseEmitter emitter, String eventName, Object data) throws IOException {
+    emitter.send(SseEmitter.event().name(eventName).data(data));
   }
 
   @Override
