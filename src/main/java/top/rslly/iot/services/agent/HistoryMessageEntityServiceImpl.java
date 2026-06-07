@@ -28,7 +28,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.dao.HistoryMessageEntityRepository;
+import top.rslly.iot.dao.HistoryMessageRepository;
 import top.rslly.iot.dao.UserProductBindRepository;
 import top.rslly.iot.dao.UserRepository;
 import top.rslly.iot.dao.WxProductBindRepository;
@@ -50,7 +50,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   private static final int MAX_CONTENT_LENGTH = 6144;
 
   @Resource
-  private HistoryMessageEntityRepository historyMessageEntityRepository;
+  private HistoryMessageRepository historyMessageRepository;
   @Resource
   private WxProductBindRepository wxProductBindRepository;
   @Resource
@@ -62,7 +62,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
 
   @Override
   public List<HistoryMessageEntity> findAllById(int id) {
-    return historyMessageEntityRepository.findAllById(id);
+    return historyMessageRepository.findAllById(id);
   }
 
   @Override
@@ -74,7 +74,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
     historyMessageEntities.add(buildHistoryMessage(chatId, requestId, 1, "user", userContent, now));
     historyMessageEntities.add(
         buildHistoryMessage(chatId, requestId, 2, "assistant", assistantContent, now + 1));
-    historyMessageEntityRepository.saveAll(historyMessageEntities);
+    historyMessageRepository.saveAll(historyMessageEntities);
   }
 
   @Override
@@ -108,7 +108,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
         chatIdPrefixes.add("chatProduct" + s.getProductId());
         chatIds.add(s.getAppid() + s.getOpenid());
       }
-      result = historyMessageEntityRepository
+      result = historyMessageRepository
           .findAll(buildChatIdSpec(chatIdPrefixes, chatIds, chatId), pageable);
     } else if (!role.equals("[ROLE_admin]")) {
       var userList = userRepository.findAllByUsername(username);
@@ -124,13 +124,13 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       for (var s : userProductBindEntityList) {
         chatIdPrefixes.add("chatProduct" + s.getProductId());
       }
-      result = historyMessageEntityRepository
+      result = historyMessageRepository
           .findAll(buildChatIdSpec(chatIdPrefixes, Set.of(), chatId), pageable);
     } else {
       if (chatId == null || chatId.isBlank()) {
-        result = historyMessageEntityRepository.findAll(pageable);
+        result = historyMessageRepository.findAll(pageable);
       } else {
-        result = historyMessageEntityRepository.findAllByChatId(chatId, pageable);
+        result = historyMessageRepository.findAllByChatId(chatId, pageable);
       }
     }
     if (result.isEmpty()) {
@@ -185,11 +185,11 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteHistoryMessage(int id) {
-    if (historyMessageEntityRepository.findAllById(id).isEmpty()) {
+    if (historyMessageRepository.findAllById(id).isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     } else {
       List<HistoryMessageEntity> historyMessageEntityList =
-          historyMessageEntityRepository.deleteAllById(id);
+          historyMessageRepository.deleteAllById(id);
       if (historyMessageEntityList.isEmpty()) {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       } else {

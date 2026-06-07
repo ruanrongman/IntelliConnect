@@ -37,6 +37,7 @@ import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
+import top.rslly.iot.utility.ai.rag.RagUtility;
 import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.TTS.Text2audio;
@@ -67,6 +68,8 @@ public class AiServiceImpl implements AiService {
   private String visionModel;
   @Value("${ota.xiaozhi.url}")
   private String otaUrl;
+  @Value("${ai.stream.max-input-chars:60000}")
+  private int streamMaxInputChars;
   @Autowired
   private Router router;
   @Autowired
@@ -103,28 +106,40 @@ public class AiServiceImpl implements AiService {
   }
 
   @Override
-  public SseEmitter getAiResponseStream(AiControl aiControl, String token) {
+  public SseEmitter getAiResponseStream(AiControl aiControl, String streamId,
+      MultipartFile[] multipartFiles, String token) {
     SseEmitter emitter = new SseEmitter(0L);
-    Thread.ofVirtual().start(() -> handleAiResponseStream(aiControl, token, emitter));
+    Thread.ofVirtual()
+        .start(() -> handleAiResponseStream(aiControl, streamId, multipartFiles, token, emitter));
     return emitter;
   }
 
   @Override
-  public JsonResult<?> stopAiResponseStream(int productId, String token) {
+  public JsonResult<?> stopAiResponseStream(int productId, String streamId, String token) {
     if (!safetyService.controlAuthorizeProduct(token, productId)) {
       return ResultTool.fail(ResultCode.NO_PERMISSION);
     }
-    String chatId = buildChatId(productId);
-    stoppedStreamChatIds.add(chatId);
-    Router.queueMap.remove(chatId);
+    if (streamId == null || streamId.isBlank()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    String streamChatId = buildStreamChatId(productId, streamId);
+    stoppedStreamChatIds.add(streamChatId);
+    Router.queueMap.remove(streamChatId);
     return ResultTool.success("已停止");
   }
 
-  private void handleAiResponseStream(AiControl aiControl, String token, SseEmitter emitter) {
-    String chatId = buildChatId(aiControl.getProductId());
+  private void handleAiResponseStream(AiControl aiControl, String streamId,
+      MultipartFile[] multipartFiles, String token,
+      SseEmitter emitter) {
+    String conversationChatId = buildChatId(aiControl.getProductId());
+    String streamChatId = buildStreamChatId(aiControl.getProductId(), streamId);
     boolean sentFromQueue = false;
-    stoppedStreamChatIds.remove(chatId);
+    stoppedStreamChatIds.remove(streamChatId);
     try {
+      if (streamId == null || streamId.isBlank()) {
+        sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.PARAM_NOT_VALID));
+        return;
+      }
       if (!safetyService.controlAuthorizeProduct(token, aiControl.getProductId())) {
         sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.NO_PERMISSION));
         return;
@@ -134,13 +149,20 @@ public class AiServiceImpl implements AiService {
         return;
       }
 
+      DocumentPrompt documentPrompt = buildDocumentPrompt(aiControl.getContent(), multipartFiles);
+      if (isStreamInputTooLong(documentPrompt.modelContent())) {
+        sendSseEvent(emitter, "error",
+            streamInputTooLongResult(documentPrompt.modelContent().length()));
+        return;
+      }
       CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(
-          () -> router.response(aiControl.getContent(), chatId, aiControl.getProductId()));
-      while (!responseFuture.isDone() || hasPendingQueueData(chatId)) {
-        if (stoppedStreamChatIds.contains(chatId)) {
+          () -> router.response(documentPrompt.modelContent(), documentPrompt.historyContent(),
+              streamChatId, conversationChatId, aiControl.getProductId()));
+      while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)) {
+        if (stoppedStreamChatIds.contains(streamChatId)) {
           return;
         }
-        Queue<String> queue = Router.queueMap.get(chatId);
+        Queue<String> queue = Router.queueMap.get(streamChatId);
         if (queue == null) {
           TimeUnit.MILLISECONDS.sleep(STREAM_POLL_INTERVAL_MS);
           continue;
@@ -161,7 +183,7 @@ public class AiServiceImpl implements AiService {
         sentFromQueue = true;
       }
 
-      if (stoppedStreamChatIds.contains(chatId)) {
+      if (stoppedStreamChatIds.contains(streamChatId)) {
         return;
       }
       String finalAnswer = responseFuture.get();
@@ -169,16 +191,61 @@ public class AiServiceImpl implements AiService {
         sendSseEvent(emitter, "message", finalAnswer);
       }
     } catch (Exception e) {
-      log.error("AI text stream failed, chatId={}", chatId, e);
+      log.error("AI text stream failed, streamChatId={}", streamChatId, e);
       try {
         sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.PARAM_NOT_VALID));
       } catch (Exception ignored) {
       }
     } finally {
-      stoppedStreamChatIds.remove(chatId);
-      Router.queueMap.remove(chatId);
+      stoppedStreamChatIds.remove(streamChatId);
+      Router.queueMap.remove(streamChatId);
       emitter.complete();
     }
+  }
+
+  private DocumentPrompt buildDocumentPrompt(String content, MultipartFile[] multipartFiles)
+      throws IOException {
+    if (multipartFiles == null || multipartFiles.length == 0) {
+      return new DocumentPrompt(content, content);
+    }
+    List<String> fileNames = new ArrayList<>();
+    StringBuilder modelContent = new StringBuilder(content);
+    for (MultipartFile multipartFile : multipartFiles) {
+      if (multipartFile == null || multipartFile.isEmpty()) {
+        continue;
+      }
+      String fileName = getUploadedFileName(multipartFile);
+      fileNames.add(fileName);
+      String fileText = RagUtility.parseMultipartFile(multipartFile);
+      if (fileText != null && !fileText.isBlank()) {
+        modelContent.append("\n\n上传文件 ").append(fileName).append(" 内容：\n").append(fileText);
+      }
+    }
+    if (fileNames.isEmpty()) {
+      return new DocumentPrompt(content, content);
+    }
+    return new DocumentPrompt(modelContent.toString(), appendFileNames(content, fileNames));
+  }
+
+  private String appendFileNames(String content, List<String> fileNames) {
+    return content + "\n\n上传文件：\n" + String.join("\n", fileNames);
+  }
+
+  private String getUploadedFileName(MultipartFile multipartFile) {
+    return Optional.ofNullable(multipartFile.getOriginalFilename()).orElse("uploaded-file");
+  }
+
+  private record DocumentPrompt(String modelContent, String historyContent) {}
+
+  private boolean isStreamInputTooLong(String content) {
+    return streamMaxInputChars > 0 && content.length() > streamMaxInputChars;
+  }
+
+  private JsonResult<?> streamInputTooLongResult(int inputChars) {
+    JsonResult<?> result = ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    result.setErrorMsg(
+        "发送内容总字数超过限制，当前 " + inputChars + "，最大 " + streamMaxInputChars);
+    return result;
   }
 
   private boolean hasPendingQueueData(String chatId) {
@@ -188,6 +255,10 @@ public class AiServiceImpl implements AiService {
 
   private String buildChatId(int productId) {
     return "chatProduct" + productId;
+  }
+
+  private String buildStreamChatId(int productId, String streamId) {
+    return buildChatId(productId) + ":stream:" + streamId;
   }
 
   private void sendSseEvent(SseEmitter emitter, String eventName, Object data) throws IOException {

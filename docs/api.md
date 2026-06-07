@@ -2688,6 +2688,153 @@ Authorization: Bearer {token}
 }
 ```
 
+## AI 文本调试
+
+### SSE流式文本对话
+
+```
+POST /aiControl/stream
+```
+
+通过SSE（Server-Sent Events）进行流式文本对话，支持实时获取AI回复。
+
+**请求参数:**
+```json
+{
+  "productId": 0,
+  "message": "string",
+  "chatId": "string"
+}
+```
+
+**请求头:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+Accept: text/event-stream
+```
+
+**响应示例:**
+SSE事件流，每个事件包含AI生成的文本片段。
+
+### 停止SSE流式对话
+
+```
+POST /aiControl/stream/stop
+```
+
+**请求参数:**
+```json
+{
+  "chatId": "string"
+}
+```
+
+**请求头:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "errorCode": 200,
+  "errorMsg": "成功",
+  "data": {}
+}
+```
+
+## 历史消息
+
+### 获取历史消息
+
+```
+GET /historyMessage
+```
+
+分页获取对话历史消息，按用户权限过滤。
+
+**查询参数:**
+- `productId`: 产品ID
+- `page`: 页码（默认0）
+- `size`: 每页大小（默认20）
+
+**请求头:**
+```
+Authorization: Bearer {token}
+```
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "errorCode": 200,
+  "errorMsg": "成功",
+  "data": {
+    "content": [],
+    "totalElements": 0,
+    "totalPages": 0,
+    "size": 20,
+    "number": 0
+  }
+}
+```
+
+### 删除历史消息
+
+```
+DELETE /historyMessage
+```
+
+**查询参数:**
+- `chatId`: 对话ID
+
+**请求头:**
+```
+Authorization: Bearer {token}
+```
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "errorCode": 200,
+  "errorMsg": "成功",
+  "data": {}
+}
+```
+
+## 按昵称查询记忆
+
+### 获取设备记忆（按昵称）
+
+```
+GET /memoryByNickName
+```
+
+按产品ID和可选的设备昵称查询记忆。
+
+**查询参数:**
+- `productId`: 产品ID（必填）
+- `nickName`: 设备昵称（可选）
+
+**请求头:**
+```
+Authorization: Bearer {token}
+```
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "errorCode": 200,
+  "errorMsg": "成功",
+  "data": []
+}
+```
+
 ## 错误码说明
 
 | 错误码 | 说明 |

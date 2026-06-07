@@ -163,6 +163,9 @@ ai:
   classifier:
     include:
       thought: true
+  stream:
+    # /api/v2/aiControl/stream 最终发送给模型的最大字符数，包含用户输入和上传文件解析内容
+    max-input-chars: 60000
   agent:
     mode: function
     showThinking: false

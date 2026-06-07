@@ -17,3 +17,9 @@ export const getLlmProviderInformation = (data) =>
         method: 'delete',
     params
     })
+  export const getLlmProviderModelList = (params) =>
+    request({
+      url: '/api/v2/llmProviderInformation/modelList',
+      method: 'get',
+      params
+    })

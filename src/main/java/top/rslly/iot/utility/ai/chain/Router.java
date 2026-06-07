@@ -21,6 +21,7 @@ package top.rslly.iot.utility.ai.chain;
 
 
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
+import jakarta.websocket.Session;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +38,7 @@ import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
+import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,33 +103,44 @@ public class Router {
 
   // chatId in WeChat module need to use openid
   public String response(String content, String chatId, int productId, String... dataArgs) {
+    return response(content, content, chatId, productId, dataArgs);
+  }
+
+  public String response(String content, String historyContent, String chatId, int productId,
+      String... dataArgs) {
+    return response(content, historyContent, chatId, chatId, productId, dataArgs);
+  }
+
+  public String response(String content, String historyContent, String streamChatId,
+      String conversationChatId, int productId, String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
     Map<String, Object> globalMessage = new HashMap<>();
     globalMessage.put("productId", productId);
-    globalMessage.put("chatId", chatId);
+    globalMessage.put("chatId", streamChatId);
     globalMessage.put("queueMap", queueMap);
     // 从 WebSocket session 获取客户端 IP
-    jakarta.websocket.Session session = top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket.clients
-        .get(chatId);
+    Session session = XiaoZhiWebsocket.clients
+        .get(streamChatId);
     if (session != null) {
-      String clientIp = top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket.getClientIp(session);
+      String clientIp = XiaoZhiWebsocket.getClientIp(session);
       if (clientIp != null && !clientIp.equals("unknown")) {
         globalMessage.put("clientIp", clientIp);
       }
     }
     Queue<String> queue = createResponseQueue();
-    queueMap.put(chatId, queue);
+    queueMap.put(streamChatId, queue);
     Object memory_cache;
     if (dataArgs.length > 0 && !dataArgs[0].equals("false")) {
-      globalMessage.put("openId", chatId);
+      globalMessage.put("openId", conversationChatId);
       globalMessage.put("microappid", dataArgs[0]);
-      chatId = dataArgs[0] + chatId;
-      queueMap.put(chatId, queue);
-      globalMessage.put("chatId", chatId);
+      streamChatId = dataArgs[0] + streamChatId;
+      conversationChatId = dataArgs[0] + conversationChatId;
+      queueMap.put(streamChatId, queue);
+      globalMessage.put("chatId", streamChatId);
     }
-    memory_cache = redisUtil.get("memory" + chatId);
+    memory_cache = redisUtil.get("memory" + conversationChatId);
     if (memory_cache != null)
       try {
         memory = Cast.castList(memory_cache, ModelMessage.class);
@@ -140,7 +153,7 @@ public class Router {
     globalMessage.put("memory", memory);
     if (isFunctionRouterMode()) {
       RouteExecutionResult routeExecutionResult =
-          resolveFunctionRoute(content, globalMessage, productId, chatId, dataArgs);
+          resolveFunctionRoute(content, globalMessage, productId, streamChatId, dataArgs);
       answer = routeExecutionResult.answer();
       toolResult = routeExecutionResult.toolResult();
     } else {
@@ -155,7 +168,7 @@ public class Router {
         final String predictionContent = content;
         final Map<String, Object> predictionGlobalMessage = new HashMap<>(globalMessage);
         final Map<String, Queue<String>> predictionQueueMap = new ConcurrentHashMap<>();
-        final String predictionChatId = chatId + "_prediction";
+        final String predictionChatId = streamChatId + "_prediction";
         predictionQueueMap.put(predictionChatId, predictionQueue);
         predictionGlobalMessage.put("queueMap", predictionQueueMap);
         predictionGlobalMessage.put("chatId", predictionChatId);
@@ -222,7 +235,7 @@ public class Router {
             case "5" -> {
               answer = resolveChatToolAnswer(content, globalMessage,
                   predictionThread, predictionResult, predictionCancelled,
-                  predictionLatch, queue, predictionQueue, chatId);
+                  predictionLatch, queue, predictionQueue, streamChatId);
             }
             case "6" -> {
               predictionCancelled.set(true);
@@ -267,18 +280,18 @@ public class Router {
             default -> {
               answer = resolveChatToolAnswer(content, globalMessage,
                   predictionThread, predictionResult, predictionCancelled,
-                  predictionLatch, queue, predictionQueue, chatId);
+                  predictionLatch, queue, predictionQueue, streamChatId);
             }
           }
         } else {
           answer = resolveChatToolAnswer(content, globalMessage,
               predictionThread, predictionResult, predictionCancelled,
-              predictionLatch, queue, predictionQueue, chatId);
+              predictionLatch, queue, predictionQueue, streamChatId);
         }
       } else {
         answer = resolveChatToolAnswer(content, globalMessage,
             predictionThread, predictionResult, predictionCancelled,
-            predictionLatch, queue, predictionQueue, chatId);
+            predictionLatch, queue, predictionQueue, streamChatId);
       }
     }
     if (toolResult == null || toolResult.equals(""))
@@ -307,8 +320,8 @@ public class Router {
         knowledgeGraphicService.clearNode(productId);
       }
     }
-    redisUtil.set("memory" + chatId, memory, 24 * 3600);
-    recordHistoryMessage(chatId, content, answer);
+    redisUtil.set("memory" + conversationChatId, memory, 24 * 3600);
+    recordHistoryMessage(conversationChatId, historyContent, answer);
     return answer;
   }
 

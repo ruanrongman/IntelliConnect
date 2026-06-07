@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Backend**: Java 21, Spring Boot 3.5.7, Spring Security, JWT, Maven
 - **Frontend**: Vue 3 (in `/web` directory)
-- **AI/LLM**: LangChain4j, Dashscope/Qwen3, GLM/Zhipu, DeepSeek, SiliconFlow, UniApi
+- **AI/LLM**: LangChain4j, Dashscope/Qwen3, GLM/Zhipu, DeepSeek v4, SiliconFlow, UniApi
 - **Voice**: ASR (Dashscope/Funasr), TTS (MiniMax, Edge TTS, Xunfei), VAD (ONNX Runtime), Opus codec
 - **Databases**: MySQL 8.0 (JPA/Hibernate), Redis, InfluxDB (time-series), ChromaDB (vector)
 - **IoT**: EMQX 5.8.4 MQTT broker with gRPC ExHook integration
@@ -119,8 +119,8 @@ The application starts on port `8080` by default. gRPC server for EMQX ExHook li
 
 - **MVC Layered Architecture** - Clear separation between controller, service, and data access layers
 - **Thing Model Abstraction** - Standard abstraction for IoT devices with properties, functions, and events
-- **Multi-Agent Architecture** - Different AI agents for different capabilities with role-based configuration
-- **MCP Integration** - Extensible tool calling via Model Context Protocol
+- **Multi-Agent Architecture** - Different AI agents for different capabilities with role-based configuration; supports both ReAct prompt mode and native function calling mode
+- **MCP Integration** - Extensible tool calling via Model Context Protocol; supports multi-endpoint WebSocket connections with configurable endpoint count and tools limit
 - **RAG Knowledge Bases** - Document processing and vector search with ChromaDB
 
 ## Configuration
@@ -138,7 +138,16 @@ Key configuration sections:
 - `wx` - WeChat AppID/AppSecret configuration
 - `ota` - OTA firmware storage paths
 - `rag` - Embedding model and ChromaDB settings
-- `ai` - LLM API keys, ASR/TTS provider selection, voice settings
+- `ai` - LLM API keys, ASR/TTS provider selection, voice settings, agent mode configuration
+  - `ai.agent.mode` - Agent mode: `react` (default) or `function` (native function calling)
+  - `ai.agent.include-thought` - Whether to include AI reasoning/thinking in output
+  - `ai.mcp.agent-mode` - MCP Agent mode: `react` or `function`
+  - `ai.mcp.agent-include-thought` - Whether to include MCP Agent reasoning in output
+  - `ai.mcp.endpoint-count` - Number of MCP WebSocket endpoints (1-20)
+  - `ai.mcp.tools-limit` - Maximum tools per MCP endpoint
+  - `ai.temperature` / `ai.top-p` - LLM generation parameters
+  - `ai.asr.dashscope-max-concurrent` - ASR concurrent request limit
+  - `ai.tts.*` - TTS pool configuration (concurrency, timeouts, cache)
 - `jwt` - JWT secret key for authentication
 - `jasypt` - Encrypted configuration password
 

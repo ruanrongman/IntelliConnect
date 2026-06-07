@@ -29,6 +29,8 @@ public interface LlmProviderInformationService {
 
   List<LlmProviderInformationEntity> findAllById(int id);
 
+  JsonResult<?> getLLmProviderModelList(int id);
+
   JsonResult<?> getLLmProviderInformation(String token);
 
   JsonResult<?> postLLmProviderInformation(String token,

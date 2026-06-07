@@ -27,11 +27,13 @@ import top.rslly.iot.models.LlmProviderInformationEntity;
 import top.rslly.iot.models.ProductLlmModelEntity;
 import top.rslly.iot.param.request.LlmProviderInformation;
 import top.rslly.iot.utility.JwtTokenUtil;
+import top.rslly.iot.utility.ai.llm.DeepSeek;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import jakarta.annotation.Resource;
+import java.net.URI;
 import java.util.List;
 
 @Service
@@ -45,6 +47,39 @@ public class LlmProviderInformationServiceImpl implements LlmProviderInformation
   @Override
   public List<LlmProviderInformationEntity> findAllById(int id) {
     return llmProviderInformationRepository.findAllById(id);
+  }
+
+  @Override
+  public JsonResult<?> getLLmProviderModelList(int id) {
+    List<LlmProviderInformationEntity> result =
+        llmProviderInformationRepository.findAllById(id);
+    if (result.isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    LlmProviderInformationEntity provider = result.getFirst();
+    if (!"openai".equals(provider.getType()) || !isValidBaseUrl(provider.getBaseUrl())
+        || provider.getAppKey() == null || provider.getAppKey().isBlank()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    try {
+      DeepSeek deepSeek =
+          new DeepSeek(provider.getBaseUrl(), "", provider.getAppKey());
+      return ResultTool.success(deepSeek.modelList());
+    } catch (Exception e) {
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+  }
+
+  private boolean isValidBaseUrl(String baseUrl) {
+    if (baseUrl == null || baseUrl.isBlank()) {
+      return false;
+    }
+    try {
+      URI uri = URI.create(baseUrl.trim());
+      return uri.getScheme() != null && uri.getHost() != null;
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
   }
 
   @Override

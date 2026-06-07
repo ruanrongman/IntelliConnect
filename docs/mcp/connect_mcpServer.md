@@ -36,6 +36,31 @@ curl -X GET "http://localhost:8080/api/v2/mcpEndpoint/tools?productId={your prod
 -H "Content-Type: application/json"
  ```
 
+### 多端点支持
+>平台支持配置多个WebSocket MCP端点，适用于需要同时连接多个设备的场景。
+
+**配置项**（在 `application.yaml` 中设置）：
+- `ai.mcp.endpoint-count` - MCP WebSocket端点数量（1-20，默认5）
+- `ai.mcp.tools-limit` - 每个端点最大允许的工具数量（默认50）
+
+**指定端点索引**：获取特定端点时可通过 `endpointIndex` 参数指定：
+
+```bash
+curl -X GET "http://localhost:8080/api/v2/mcpEndpoint?productId={your productId}&endpointIndex=0" 
+-H "accept: */*"
+-H "Authorization: {token}"
+-H "Content-Type: application/json"
+```
+
+```bash
+curl -X GET "http://localhost:8080/api/v2/mcpEndpoint/tools?productId={your productId}&endpointIndex=0"
+-H "accept: */*"
+-H "Authorization: {token}"
+-H "Content-Type: application/json"
+```
+
+不指定 `endpointIndex` 时默认使用端点 0。
+
 * 3：使用小智上下文MCP
 
 若您正在使用本平台的小智接入服务，可直接在小智上下文中注册MCP服务器，本平台将自动发现这些服务器，无需额外配置。

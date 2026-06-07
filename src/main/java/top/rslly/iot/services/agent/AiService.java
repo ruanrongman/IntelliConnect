@@ -33,9 +33,10 @@ public interface AiService {
   JsonResult<?> getAiResponse(boolean tts, boolean stream, int productId,
       MultipartFile multipartFile, String token);
 
-  SseEmitter getAiResponseStream(AiControl aiControl, String token);
+  SseEmitter getAiResponseStream(AiControl aiControl, String streamId,
+      MultipartFile[] multipartFiles, String token);
 
-  JsonResult<?> stopAiResponseStream(int productId, String token);
+  JsonResult<?> stopAiResponseStream(int productId, String streamId, String token);
 
   JsonResult<?> getMcpPointUrl(int productId, int endpointIndex);
 

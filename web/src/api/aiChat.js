@@ -3,15 +3,30 @@ import store from '@/store'
 const { VITE_BASE_URL } = import.meta.env
 const DONE_SEPARATOR = /\r?\n\r?\n/
 
-export const streamAiControl = async ({ productId, content, signal, onMessage, onError }) => {
+export const streamAiControl = async ({
+  productId,
+  streamId,
+  content,
+  files = [],
+  signal,
+  onMessage,
+  onError,
+}) => {
+  const headers = {
+    Authorization: store.getters['auth/token'],
+    Accept: 'text/event-stream',
+  }
+  const body = new FormData()
+  body.append('productId', productId)
+  body.append('streamId', streamId)
+  body.append('content', content)
+  files.forEach((file) => {
+    body.append('file', file)
+  })
   const response = await fetch(`${VITE_BASE_URL}/api/v2/aiControl/stream`, {
     method: 'POST',
-    headers: {
-      Authorization: store.getters['auth/token'],
-      Accept: 'text/event-stream',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ productId, content }),
+    headers,
+    body,
     signal,
   })
   if (!response.ok || !response.body) {
@@ -34,8 +49,12 @@ export const streamAiControl = async ({ productId, content, signal, onMessage, o
   }
 }
 
-export const stopAiControlStream = async (productId) => {
-  const response = await fetch(`${VITE_BASE_URL}/api/v2/aiControl/stream/stop?productId=${productId}`, {
+export const stopAiControlStream = async (productId, streamId) => {
+  const params = new URLSearchParams({
+    productId: String(productId),
+    streamId,
+  })
+  const response = await fetch(`${VITE_BASE_URL}/api/v2/aiControl/stream/stop?${params.toString()}`, {
     method: 'POST',
     headers: {
       Authorization: store.getters['auth/token'],

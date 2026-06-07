@@ -42,6 +42,8 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartImage;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
+import com.openai.models.models.Model;
+import com.openai.models.models.ModelListPage;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Request;
 import okhttp3.sse.EventSource;
@@ -255,6 +257,18 @@ public class DeepSeek implements LLM {
       log.error("model error", e);
       return FALLBACK_MESSAGE;
     }
+  }
+
+  @Override
+  public List<String> modelList() {
+    var modelListPage = this.client.models().list();
+
+    log.debug("model list: {}", modelListPage);
+
+    return modelListPage.data()
+        .stream()
+        .map(Model::id)
+        .toList();
   }
 
   private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages) {

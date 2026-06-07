@@ -8,6 +8,8 @@
   - [:warning: 故障排除](troubleshooting.md#故障排除与常见问题)
   - [:busts_in_silhouette: 贡献指南](contributing.md#贡献指南)
   - [:bookmark_tabs: 创建物模型和设备接入](get_started/create_thingsmodel.md#创建物模型和设备接入)
+- AI 调试
+  - [:speech_balloon: AI文本调试](ai_chat/ai_chat.md#AI文本调试)
 - 接入小智
   - [:bookmark_tabs: 小智接入](xiaozhi/xiaozhi.md#小智接入)
 - Ota

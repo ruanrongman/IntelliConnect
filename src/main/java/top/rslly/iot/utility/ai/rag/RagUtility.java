@@ -36,10 +36,13 @@ import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.filter.Filter;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
@@ -56,15 +59,8 @@ public class RagUtility {
       throw new IllegalArgumentException("File not found: " + filePath);
     }
 
-    String extension = getFileExtension(file.getName()).toLowerCase();
-    DocumentParser parser = switch (extension) {
-      case "pdf" -> new ApachePdfBoxDocumentParser();
-      case "txt" -> new TextDocumentParser();
-      case "md", "markdown" -> new MarkdownDocumentParser();
-      case "doc", "docx", "ppt", "pptx", "xls", "xlsx" -> new ApachePoiDocumentParser();
-      // Tika 自动处理 Office 文档
-      default -> throw new UnsupportedOperationException("Unsupported file type: " + extension);
-    };
+    String extension = getFileExtension(file.getName()).toLowerCase(Locale.ROOT);
+    DocumentParser parser = documentParser(extension);
 
     // 根据扩展名自动选择解析器
     Document document = FileSystemDocumentLoader.loadDocument(file.getAbsolutePath(), parser);
@@ -80,6 +76,22 @@ public class RagUtility {
       TextSegment segmentWithMetadata = TextSegment.from(segment.text(), metadata);
       Embedding embedding = embeddingModel.embed(segmentWithMetadata).content();
       embeddingStore.add(embedding, segmentWithMetadata);
+    }
+  }
+
+  public static String parseMultipartFile(MultipartFile multipartFile) throws IOException {
+    if (multipartFile == null || multipartFile.isEmpty()) {
+      throw new IllegalArgumentException("File is empty");
+    }
+    String fileName = multipartFile.getOriginalFilename();
+    if (fileName == null || fileName.isBlank()) {
+      throw new IllegalArgumentException("File name is empty");
+    }
+    String extension = getFileExtension(fileName).toLowerCase(Locale.ROOT);
+    DocumentParser parser = documentParser(extension);
+    try (var inputStream = multipartFile.getInputStream()) {
+      Document document = parser.parse(inputStream);
+      return document.text();
     }
   }
 
@@ -121,5 +133,15 @@ public class RagUtility {
     return (dotIndex != -1 && dotIndex < fileName.length() - 1)
         ? fileName.substring(dotIndex + 1)
         : "";
+  }
+
+  private static DocumentParser documentParser(String extension) {
+    return switch (extension) {
+      case "pdf" -> new ApachePdfBoxDocumentParser();
+      case "txt" -> new TextDocumentParser();
+      case "md", "markdown" -> new MarkdownDocumentParser();
+      case "doc", "docx", "ppt", "pptx", "xls", "xlsx" -> new ApachePoiDocumentParser();
+      default -> throw new UnsupportedOperationException("Unsupported file type: " + extension);
+    };
   }
 }

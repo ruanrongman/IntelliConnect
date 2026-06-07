@@ -42,6 +42,7 @@
             :options="providerOptions"
             placeholder="请选择模型服务商"
             allowClear
+            @change="handleProviderChange"
           />
         </a-form-item>
 
@@ -50,7 +51,29 @@
           name="modelName"
           :rules="[{ required: true, message: '请输入模型名称!' }]"
         >
-          <a-input v-model:value="formState.modelName" placeholder="请输入模型名称"/>
+          <div class="model-name-field">
+            <a-input
+              v-model:value="formState.modelName"
+              placeholder="请输入模型名称"
+              @focus="showModelSuggestions = true"
+              @blur="hideModelSuggestions"
+            />
+            <div
+              v-if="showModelSuggestions && filteredModelOptions.length > 0"
+              class="model-suggestions"
+              @mousedown.prevent
+            >
+              <button
+                v-for="item in filteredModelOptions"
+                :key="item.value"
+                type="button"
+                class="model-suggestion-item"
+                @click="selectModelName(item.value)"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
         </a-form-item>
 
         <a-form-item
@@ -75,11 +98,11 @@
 </template>
 
 <script setup>
-import { reactive, ref, toRaw } from 'vue';
+import { computed, reactive, ref, toRaw } from 'vue';
 import { message } from 'ant-design-vue'
 import { postProductLlmModel } from '@/api/productLlmModel';
 import { getProduct, getProductName } from '@/api/product';
-import { getLlmProviderInformation } from '@/api/llmProviderInformation';
+import { getLlmProviderInformation, getLlmProviderModelList } from '@/api/llmProviderInformation';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
@@ -87,6 +110,9 @@ const visible = ref(false);
 const isEditing = ref(false);
 const productOptions = ref([]);
 const providerOptions = ref([]);
+const modelOptions = ref([]);
+const showModelSuggestions = ref(false);
+let latestModelListRequestId = 0;
 const toolsOptions = ref([
   { value: '1', label: '天气工具' },
   { value: '2', label: '控制工具' },
@@ -118,7 +144,29 @@ const resetForm = () => {
   formState.providerId = null;
   formState.modelName = "";
   formState.toolsId = "";
+  modelOptions.value = [];
+  showModelSuggestions.value = false;
   isEditing.value = false;
+};
+
+const filteredModelOptions = computed(() => {
+  const keyword = formState.modelName.trim().toLowerCase();
+  if (!keyword) {
+    return modelOptions.value;
+  }
+  return modelOptions.value
+    .filter((item) => item.value.toLowerCase().includes(keyword));
+});
+
+const selectModelName = (modelName) => {
+  formState.modelName = modelName;
+  showModelSuggestions.value = false;
+};
+
+const hideModelSuggestions = () => {
+  window.setTimeout(() => {
+    showModelSuggestions.value = false;
+  }, 120);
 };
 
 // 获取产品数据
@@ -197,7 +245,68 @@ const fetchLlmProviders = async () => {
   }
 };
 
+const extractModelIds = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) {
+    return data
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') return item.id || item.model || item.name || '';
+        return String(item);
+      })
+      .filter((item) => item);
+  }
+  if (data.data && Array.isArray(data.data)) {
+    return extractModelIds(data.data);
+  }
+  return [];
+};
+
+const fetchProviderModelList = async (providerId, showWarning = false) => {
+  const requestId = ++latestModelListRequestId;
+  modelOptions.value = [];
+  if (!providerId) {
+    return;
+  }
+  try {
+    const res = await getLlmProviderModelList({ id: providerId });
+    if (requestId !== latestModelListRequestId) {
+      return;
+    }
+    const { data, errorCode } = res.data;
+    if (errorCode === 2001) {
+      router.push('/login');
+      return;
+    }
+    if (errorCode === 200) {
+      const models = extractModelIds(data);
+      modelOptions.value = models.map((item) => ({
+        value: item,
+        label: item
+      }));
+      if (showWarning && models.length === 0) {
+        message.warning('未获取到模型列表，请手动输入模型名称');
+      }
+      return;
+    }
+    if (showWarning) {
+      message.warning('获取模型列表失败，请手动输入模型名称');
+    }
+  } catch (err) {
+    console.error('获取模型列表失败:', err);
+    if (showWarning) {
+      message.warning('获取模型列表失败，请手动输入模型名称');
+    }
+  }
+};
+
+const handleProviderChange = (providerId) => {
+  formState.modelName = "";
+  fetchProviderModelList(providerId, true);
+};
+
 const showModal = () => {
+  resetForm();
   isEditing.value = false;
   fetchProducts(); // 显示模态框时获取产品数据
   fetchLlmProviders(); // 显示模态框时获取LLM提供者数据
@@ -219,6 +328,7 @@ const showEditModal = (record) => {
   isEditing.value = true;
   fetchProducts(); // 确保下拉框数据加载
   fetchLlmProviders();
+  fetchProviderModelList(formState.providerId, false);
   visible.value = true;
 };
 
@@ -260,3 +370,41 @@ const onFinishFailed = errorInfo => {
   console.log('Failed:', errorInfo);
 };
 </script>
+
+<style lang="scss" scoped>
+.model-name-field {
+  position: relative;
+}
+
+.model-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.model-suggestion-item {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  color: rgba(0, 0, 0, 0.88);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+}
+</style>

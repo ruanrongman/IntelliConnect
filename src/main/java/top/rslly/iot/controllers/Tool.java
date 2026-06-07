@@ -181,21 +181,30 @@ public class Tool {
 
   @Operation(summary = "使用大模型控制设备(文字流式)", description = "响应速度取决于大模型速度")
   @RequestMapping(value = "/aiControl/stream", method = RequestMethod.POST,
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
       produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public ResponseEntity<SseEmitter> aiControlStream(@Valid @RequestBody AiControl aiControl,
+  public ResponseEntity<SseEmitter> aiControlStream(
+      @RequestParam("productId") int productId,
+      @RequestParam("streamId") @NotBlank(message = "streamId 不能为空") String streamId,
+      @RequestParam("content") @NotBlank(message = "content 不能为空") String content,
+      @RequestPart(value = "file", required = false) MultipartFile[] multipartFiles,
       @RequestHeader("Authorization") String header) {
+    AiControl aiControl = new AiControl();
+    aiControl.setProductId(productId);
+    aiControl.setContent(content);
     return ResponseEntity.ok()
         .header(HttpHeaders.CACHE_CONTROL, "no-cache")
         .header("X-Accel-Buffering", "no")
         .contentType(MediaType.TEXT_EVENT_STREAM)
-        .body(aiService.getAiResponseStream(aiControl, header));
+        .body(aiService.getAiResponseStream(aiControl, streamId, multipartFiles, header));
   }
 
   @Operation(summary = "停止大模型文字流式生成")
   @RequestMapping(value = "/aiControl/stream/stop", method = RequestMethod.POST)
   public JsonResult<?> stopAiControlStream(@RequestParam("productId") int productId,
+      @RequestParam("streamId") @NotBlank(message = "streamId 不能为空") String streamId,
       @RequestHeader("Authorization") String header) {
-    return aiService.stopAiResponseStream(productId, header);
+    return aiService.stopAiResponseStream(productId, streamId, header);
   }
 
   @Operation(summary = "请求Agent")
@@ -758,6 +767,20 @@ public class Tool {
   @RequestMapping(value = "/llmProviderInformation", method = RequestMethod.GET)
   public JsonResult<?> getLlmProviderInformation(@RequestHeader("Authorization") String header) {
     return llmProviderInformationService.getLLmProviderInformation(header);
+  }
+
+  @Operation(summary = "获取LLM模型供应商的模型列表", description = "获取LLM模型供应商的模型列表")
+  @RequestMapping(value = "/llmProviderInformation/modelList", method = RequestMethod.GET)
+  public JsonResult<?> getLlmProviderInformationModelList(
+      @RequestHeader("Authorization") String header,
+      @RequestParam("id") int id) {
+    try {
+      if (!safetyService.controlAuthorizeLlmProviderInformation(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return llmProviderInformationService.getLLmProviderModelList(id);
   }
 
   @Operation(summary = "创建或更新LLM提供商信息", description = "创建或更新LLM提供商信息")

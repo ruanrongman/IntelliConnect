@@ -35,6 +35,8 @@ public interface LLM {
 
   String imageToWord(String question, String url);
 
+  List<String> modelList();
+
   default boolean supportsFunctionCalling() {
     return false;
   }

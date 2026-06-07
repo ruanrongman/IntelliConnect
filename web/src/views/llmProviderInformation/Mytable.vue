@@ -50,6 +50,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { EditOutlined, DeleteOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons-vue';
 import { getLlmProviderInformation, deleteLlmProviderInformation } from '@/api/llmProviderInformation';
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'

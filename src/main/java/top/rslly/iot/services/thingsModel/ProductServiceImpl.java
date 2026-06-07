@@ -92,6 +92,8 @@ public class ProductServiceImpl implements ProductService {
   private TimeScheduleRepository timeScheduleRepository;
   @Resource
   private ProductAsrRepository productAsrRepository;
+  @Resource
+  private HistoryMessageRepository historyMessageRepository;
   @Value("${product-limit}")
   private int productLimit;
 
@@ -278,6 +280,8 @@ public class ProductServiceImpl implements ProductService {
     List<ProductRoleEntity> productRoleEntityList = productRoleRepository.findAllByProductId(id);
     List<AgentMemoryEntity> agentMemoryEntityList =
         agentMemoryRepository.findAllByChatIdStartingWith("chatProduct" + id);
+    List<HistoryMessageEntity> historyMessageEntityList =
+        historyMessageRepository.findAllByChatIdStartingWith("chatProduct" + id);
     List<KnowledgeChatEntity> knowledgeChatEntityList =
         knowledgeChatRepository.findAllByProductId(id);
     List<ProductRouterSetEntity> productRouterSetEntityList =
@@ -331,6 +335,9 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!agentMemoryEntityList.isEmpty()) {
           agentMemoryRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
+        }
+        if (!historyMessageEntityList.isEmpty()) {
+          historyMessageRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
         }
         if (!productLlmModelEntityList.isEmpty()) {
           productLlmModelRepository.deleteAllByProductId(id);

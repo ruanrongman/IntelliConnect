@@ -23,12 +23,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.HistoryMessageEntity;
 
 import java.util.List;
 
-public interface HistoryMessageEntityRepository
+public interface HistoryMessageRepository
     extends JpaRepository<HistoryMessageEntity, Long>,
     JpaSpecificationExecutor<HistoryMessageEntity> {
   List<HistoryMessageEntity> findAllById(int id);
@@ -38,6 +39,13 @@ public interface HistoryMessageEntityRepository
 
   Page<HistoryMessageEntity> findAllByChatId(String chatId, Pageable pageable);
 
+  List<HistoryMessageEntity> findAllByChatIdStartingWith(String chatId);
+
   @Transactional
   List<HistoryMessageEntity> deleteAllById(int id);
+
+  // 以chatId开头的记录
+  @Modifying
+  @Transactional
+  List<HistoryMessageEntity> deleteAllByChatIdStartingWith(String chatId);
 }

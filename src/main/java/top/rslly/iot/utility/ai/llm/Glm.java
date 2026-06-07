@@ -272,4 +272,9 @@ public class Glm implements LLM {
 
   }
 
+  @Override
+  public List<String> modelList() {
+    return new ArrayList<>();
+  }
+
 }
