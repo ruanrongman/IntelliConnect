@@ -1,14 +1,12 @@
 import router, { constantRoutes, asyncRoutes } from '@/router'
 import { jwtDecode } from "jwt-decode";
-import { loginIn } from '@/api/user'
-import { start } from 'nprogress'
 
 const state = {
   auth: localStorage.getItem('access-token') || '',
   menuList: [],
 }
 const getters = {
-  token: () => {
+  token: (state) => {
     // localStorage.setItem('access-token', state.auth)
     return state.auth
   },

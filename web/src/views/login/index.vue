@@ -222,18 +222,15 @@ const handleSubmit = (values) => {
   loginIn(values)
     .then((res) => {
       const { data, errorCode } = res.data
-      console.log('auth', data)
-      if (errorCode == 200) {
+      if (errorCode === 200) {
         store.commit('auth/GENERATE_ROUTES', data)
         store.commit('auth/SET_AUTH', data)
-        console.log("__________________****")
-        console.log(store.getters['auth/token'])
         router.push('/dashboard')
-      } else if(errorCode == 2007){
+      } else if(errorCode === 2007){
         message.warn('账号不存在')
-      }else if(errorCode == 2003){
+      } else if(errorCode === 2003){
         message.warn('密码错误')
-      }else{
+      } else{
         message.warn('系统错误，请重新登录')
       }
     })
