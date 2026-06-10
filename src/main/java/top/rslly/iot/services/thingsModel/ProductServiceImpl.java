@@ -94,6 +94,10 @@ public class ProductServiceImpl implements ProductService {
   private ProductAsrRepository productAsrRepository;
   @Resource
   private HistoryMessageRepository historyMessageRepository;
+  @Resource
+  private CodingAgentDeviceRepository codingAgentDeviceRepository;
+  @Resource
+  private CodingAgentSessionRepository codingAgentSessionRepository;
   @Value("${product-limit}")
   private int productLimit;
 
@@ -306,6 +310,13 @@ public class ProductServiceImpl implements ProductService {
         timeScheduleRepository.findAllByProductId(id);
     List<ProductAsrEntity> productAsrEntityList =
         productAsrRepository.findAllByProductId(id);
+    List<CodingAgentDevice> codingAgentDeviceList =
+        codingAgentDeviceRepository.findAllByProductId(id);
+    List<CodingAgentSession> codingAgentSessionList = new ArrayList<>();
+    for (var codingAgentDevice : codingAgentDeviceList) {
+      codingAgentSessionList.addAll(
+          codingAgentSessionRepository.findAllByAgentId(codingAgentDevice.getId()));
+    }
     productToolsBanEntityList.removeIf(productToolsBanEntity -> {
       productToolsBanRepository.delete(productToolsBanEntity);
       return true;
@@ -322,6 +333,7 @@ public class ProductServiceImpl implements ProductService {
     condition &= productVoiceDiyEntityList.isEmpty();
     condition &= productLlmModelEntityList.isEmpty();
     condition &= productSkillsEntityList.isEmpty();
+    condition &= codingAgentSessionList.isEmpty();
     if (condition) {
       List<ProductEntity> result = productRepository.deleteById(id);
       if (result.isEmpty())
@@ -376,6 +388,9 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!productAsrEntityList.isEmpty()) {
           productAsrRepository.deleteAllByProductId(id);
+        }
+        if (!codingAgentDeviceList.isEmpty()) {
+          codingAgentDeviceRepository.deleteAllByProductId(id);
         }
         return ResultTool.success(result);
       }

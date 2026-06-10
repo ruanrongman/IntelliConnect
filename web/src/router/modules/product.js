@@ -112,6 +112,24 @@ export default [
           },
         },
         {
+          path: '/codingAgentDevice',
+          name: 'codingAgentDevice',
+          component: () => import('@/views/codingAgentDevice/index.vue'),
+          meta: {
+            title: 'codingAgentDevice',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
+          path: '/codingAgentSession',
+          name: 'codingAgentSession',
+          component: () => import('@/views/codingAgentSession/index.vue'),
+          meta: {
+            title: 'codingAgentSession',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productModel',
           name: 'productModel',
           component: () => import('@/views/productModel/index.vue'),

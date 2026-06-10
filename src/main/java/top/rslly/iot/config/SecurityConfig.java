@@ -82,6 +82,8 @@ public class SecurityConfig {
         "/api/v2/newUser",
         "/api/v2/forgotPassword",
         "/api/v2/getUserCode",
+        "/api/v2/codingAgentSession/upload",
+        "/api/v2/codingAgentSession/device",
         "/api/v2/ai/tmp_voice/**",
         "/wxLogin",
         "/wxRegister",

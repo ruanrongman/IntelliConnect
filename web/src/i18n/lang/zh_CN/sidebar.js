@@ -81,6 +81,8 @@ const product ={
   productLlmModel: '产品LLM模型配置',
   productSkills: '产品技能配置',
   productAsr: 'ASR语音识别配置',
+  codingAgentDevice: '编码代理设备',
+  codingAgentSession: '编码代理会话',
   timeSchedule: '定时任务'
 }
 const deviceData = {

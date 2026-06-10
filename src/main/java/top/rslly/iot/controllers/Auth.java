@@ -27,6 +27,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import top.rslly.iot.param.request.*;
 import top.rslly.iot.services.*;
+import top.rslly.iot.services.agent.CodingAgentDeviceServiceImpl;
+import top.rslly.iot.services.agent.CodingAgentSessionServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.agent.ProductRouterSetServiceImpl;
@@ -73,6 +75,10 @@ public class Auth {
   private ProductRouterSetServiceImpl productRouterSetService;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Autowired
+  private CodingAgentDeviceServiceImpl codingAgentDeviceService;
+  @Autowired
+  private CodingAgentSessionServiceImpl codingAgentSessionService;
 
 
   @Operation(summary = "创建新用户", description = "暂不支持创建管理员用户")
@@ -429,6 +435,117 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productRouterSetService.deleteProductRouterSet(id);
+  }
+
+  @Operation(summary = "获取编码代理设备", description = "获取当前用户可见的编码代理设备")
+  @RequestMapping(value = "/codingAgentDevice", method = RequestMethod.GET)
+  public JsonResult<?> getCodingAgentDevice(@RequestHeader("Authorization") String header) {
+    return codingAgentDeviceService.getCodingAgentDevice(header);
+  }
+
+  @Operation(summary = "添加编码代理设备", description = "添加编码代理设备")
+  @RequestMapping(value = "/codingAgentDevice", method = RequestMethod.POST)
+  public JsonResult<?> postCodingAgentDevice(
+      @Valid @RequestBody CodingAgentDeviceParam codingAgentDeviceParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, codingAgentDeviceParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return codingAgentDeviceService.postCodingAgentDevice(codingAgentDeviceParam);
+  }
+
+  @Operation(summary = "更新编码代理设备", description = "更新编码代理设备")
+  @RequestMapping(value = "/codingAgentDevice", method = RequestMethod.PUT)
+  public JsonResult<?> updateCodingAgentDevice(
+      @Valid @RequestBody CodingAgentDeviceParam codingAgentDeviceParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, codingAgentDeviceParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return codingAgentDeviceService.updateCodingAgentDevice(codingAgentDeviceParam);
+  }
+
+  @Operation(summary = "删除编码代理设备", description = "根据ID删除编码代理设备")
+  @RequestMapping(value = "/codingAgentDevice", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteCodingAgentDevice(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeCodingAgentDevice(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return codingAgentDeviceService.deleteCodingAgentDevice(id);
+  }
+
+  @Operation(summary = "获取编码代理会话", description = "获取当前用户可见的编码代理会话")
+  @RequestMapping(value = "/codingAgentSession", method = RequestMethod.GET)
+  public JsonResult<?> getCodingAgentSession(@RequestHeader("Authorization") String header) {
+    return codingAgentSessionService.getCodingAgentSession(header);
+  }
+
+  @Operation(summary = "添加编码代理会话", description = "添加编码代理会话")
+  @RequestMapping(value = "/codingAgentSession", method = RequestMethod.POST)
+  public JsonResult<?> postCodingAgentSession(
+      @Valid @RequestBody CodingAgentSessionParam codingAgentSessionParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeCodingAgentDevice(header,
+          codingAgentSessionParam.getAgentId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return codingAgentSessionService.postCodingAgentSession(codingAgentSessionParam);
+  }
+
+  @Operation(summary = "更新编码代理会话", description = "更新编码代理会话")
+  @RequestMapping(value = "/codingAgentSession", method = RequestMethod.PUT)
+  public JsonResult<?> updateCodingAgentSession(
+      @Valid @RequestBody CodingAgentSessionParam codingAgentSessionParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeCodingAgentSession(header, codingAgentSessionParam.getId())
+          || !safetyService.controlAuthorizeCodingAgentDevice(header,
+              codingAgentSessionParam.getAgentId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return codingAgentSessionService.updateCodingAgentSession(codingAgentSessionParam);
+  }
+
+  @Operation(summary = "删除编码代理会话", description = "根据ID删除编码代理会话")
+  @RequestMapping(value = "/codingAgentSession", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteCodingAgentSession(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeCodingAgentSession(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return codingAgentSessionService.deleteCodingAgentSession(id);
+  }
+
+  @Operation(summary = "上传编码代理会话", description = "硬件设备上传或更新编码代理会话")
+  @RequestMapping(value = "/codingAgentSession/upload", method = RequestMethod.POST)
+  public JsonResult<?> uploadCodingAgentSession(
+      @Valid @RequestBody CodingAgentSessionUploadParam codingAgentSessionUploadParam) {
+    return codingAgentSessionService.uploadCodingAgentSession(codingAgentSessionUploadParam);
+  }
+
+  @Operation(summary = "获取编码代理会话", description = "硬件设备获取全部关联的编码代理会话")
+  @RequestMapping(value = "/codingAgentSession/device", method = RequestMethod.GET)
+  public JsonResult<?> getCodingAgentSessionByDevice(@RequestParam("agentId") int agentId,
+      @RequestParam("pairCode") String pairCode) {
+    return codingAgentSessionService.getCodingAgentSessionByDevice(agentId, pairCode);
   }
 
   @Operation(summary = "获取mcp服务器列表", description = "仅获取当前用户产品mcp服务器列表")

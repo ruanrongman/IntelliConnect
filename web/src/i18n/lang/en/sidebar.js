@@ -74,6 +74,8 @@ const product ={
   knowledgeGraphic: "knowledgeGraphic",
   productSkills: 'Product Skills',
   productAsr: 'ASR Config',
+  codingAgentDevice: 'Coding Agent Device',
+  codingAgentSession: 'Coding Agent Session',
   timeSchedule: 'Time Schedule'
 }
 const permission = {

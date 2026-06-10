@@ -1,0 +1,82 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/codex_sound_hook.sh ready",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\codex_sound_hook.ps1 ready",
+            "timeoutSec": 5,
+            "statusMessage": "Uploading coding agent ready status"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/codex_sound_hook.sh thinking",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\codex_sound_hook.ps1 thinking",
+            "timeoutSec": 5,
+            "statusMessage": "Uploading coding agent thinking status"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/codex_sound_hook.sh working",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\codex_sound_hook.ps1 working",
+            "timeoutSec": 5,
+            "statusMessage": "Uploading coding agent working status"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/codex_sound_hook.sh processing",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\codex_sound_hook.ps1 processing",
+            "timeoutSec": 5,
+            "statusMessage": "Uploading coding agent processing status"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/codex_sound_hook.sh warning",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\codex_sound_hook.ps1 warning",
+            "timeoutSec": 5,
+            "statusMessage": "Playing approval warning sound and uploading warning status"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .codex/hooks/codex_sound_hook.sh finished",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\codex_sound_hook.ps1 finished",
+            "timeoutSec": 5,
+            "statusMessage": "Playing completion sound and uploading finished status"
+          }
+        ]
+      }
+    ]
+  }
+}

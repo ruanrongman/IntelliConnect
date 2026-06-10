@@ -83,6 +83,10 @@ public class SafetyServiceImpl implements SafetyService {
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
+  private CodingAgentDeviceServiceImpl codingAgentDeviceService;
+  @Autowired
+  private CodingAgentSessionServiceImpl codingAgentSessionService;
+  @Autowired
   private KnowledgeGraphicService knowledgeGraphicService;
   @Autowired
   private LlmProviderInformationServiceImpl llmProviderInformationService;
@@ -339,6 +343,24 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("chatId not found!");
     return this.controlAuthorizeAgentMemory(token,
         agentMemoryEntityList.get(0).getId());
+  }
+
+  @Override
+  public boolean controlAuthorizeCodingAgentDevice(String token, int id) {
+    List<CodingAgentDevice> codingAgentDeviceList = codingAgentDeviceService.findAllById(id);
+    if (codingAgentDeviceList.isEmpty())
+      throw new NullPointerException("codingAgentDeviceId not found!");
+    return this.controlAuthorizeProduct(token,
+        codingAgentDeviceList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeCodingAgentSession(String token, int id) {
+    List<CodingAgentSession> codingAgentSessionList = codingAgentSessionService.findAllById(id);
+    if (codingAgentSessionList.isEmpty())
+      throw new NullPointerException("codingAgentSessionId not found!");
+    return this.controlAuthorizeCodingAgentDevice(token,
+        codingAgentSessionList.get(0).getAgentId());
   }
 
   @Override

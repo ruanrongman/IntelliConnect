@@ -1,0 +1,10 @@
+# Coding agent session upload config.
+# Leave backendUrl/pairCode/agentId empty to disable upload without changing hooks.
+enabled: true
+backendUrl: https://api-ic.atdak.com
+agentId:  X
+pairCode: XXX
+
+# Optional overrides. When omitted, hooks derive sessionId from hook input/env and cwd from pwd.
+# sessionId:
+# cwd:
