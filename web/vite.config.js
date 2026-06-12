@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import fs from 'fs'
 import styleImport from 'vite-plugin-style-import' //按需加载样式
 
 import SvgIconsPlugin from 'vite-plugin-svg-icons' // 打包生成svg雪碧图
@@ -11,6 +12,73 @@ import DC from '@dvgis/vite-plugin-dc'
 //  import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vitejs.dev/config/
+const vditorPackagePath = path.resolve(__dirname, 'node_modules/vditor')
+
+function vditorStaticAssets() {
+  return {
+    name: 'vditor-static-assets',
+    configureServer(server) {
+      server.middlewares.use('/vditor', (req, res, next) => {
+        const requestPath = decodeURIComponent((req.url || '').split('?')[0])
+        const filePath = path.resolve(vditorPackagePath, `.${requestPath}`)
+        if (!filePath.startsWith(vditorPackagePath)) {
+          res.statusCode = 403
+          res.end('Forbidden')
+          return
+        }
+        fs.stat(filePath, (error, stats) => {
+          if (error || !stats.isFile()) {
+            next()
+            return
+          }
+          res.setHeader('Content-Type', getStaticContentType(filePath))
+          fs.createReadStream(filePath).pipe(res)
+        })
+      })
+    },
+    closeBundle() {
+      const targetPath = path.resolve(__dirname, 'dist/vditor')
+      copyDirectory(vditorPackagePath, targetPath)
+    },
+  }
+}
+
+function copyDirectory(source, target) {
+  if (!fs.existsSync(source)) {
+    return
+  }
+  fs.mkdirSync(target, { recursive: true })
+  fs.readdirSync(source, { withFileTypes: true }).forEach((entry) => {
+    const sourcePath = path.join(source, entry.name)
+    const targetPath = path.join(target, entry.name)
+    if (entry.isDirectory()) {
+      copyDirectory(sourcePath, targetPath)
+      return
+    }
+    if (entry.isFile()) {
+      fs.copyFileSync(sourcePath, targetPath)
+    }
+  })
+}
+
+function getStaticContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase()
+  const contentTypes = {
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+  }
+  return contentTypes[ext] || 'application/octet-stream'
+}
+
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, __dirname); // 获取全局变量
   const isBuild = command === 'build';
@@ -46,6 +114,7 @@ export default defineConfig(({ command, mode }) => {
         symbolId: 'icon-[dir]-[name]',
       }),
       DC(),
+      vditorStaticAssets(),
     ],
     build: {
       rollupOptions: {

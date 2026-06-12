@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.utility.EmotionManager;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -61,7 +62,7 @@ public class EmotionTool implements BaseTool<Map<String, String>> {
   public Map<String, String> run(String question, Map<String, Object> globalMessage) {
     LLM llm = LLMFactory.getLLM(llmName);
     Map<String, String> responseMap = new HashMap<>();
-    String chatId = (String) globalMessage.get("chatId");
+    String chatId = GlobalMessageContext.memoryChatId(globalMessage);
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);
     String currentMemory = "";
     if (!agentMemoryEntities.isEmpty()) {

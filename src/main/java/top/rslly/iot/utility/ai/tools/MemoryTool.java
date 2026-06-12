@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -59,8 +60,9 @@ public class MemoryTool {
     int productId = (int) globalMessage.get("productId");
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "memory");
     List<ModelMessage> messages = new ArrayList<>();
-    String chatId = (String) globalMessage.get("chatId");
-    List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);
+    String memoryChatId = GlobalMessageContext.memoryChatId(globalMessage);
+    List<AgentMemoryEntity> agentMemoryEntities =
+        agentMemoryService.findAllByChatId(memoryChatId);
     String currentMemory = "";
     if (!agentMemoryEntities.isEmpty()) {
       currentMemory = agentMemoryEntities.get(0).getContent();
@@ -86,7 +88,7 @@ public class MemoryTool {
     String answer = llm.commonChat(question, messages, true);
     if (answer.length() > 1000)
       answer = answer.substring(0, 1000);
-    AgentMemory agentMemory = new AgentMemory(chatId, answer);
+    AgentMemory agentMemory = new AgentMemory(memoryChatId, answer);
     agentMemoryService.insertAndUpdate(agentMemory);
     // log.info("chatTool: " + messages);
   }

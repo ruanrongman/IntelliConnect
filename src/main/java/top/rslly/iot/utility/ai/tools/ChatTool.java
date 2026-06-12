@@ -30,6 +30,7 @@ import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.DescriptionUtil;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -101,10 +102,7 @@ public class ChatTool implements BaseTool<String> {
       lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
       conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
     }
-    String memoryChatId = chatId;
-    if (chatId.endsWith("_prediction")) {
-      memoryChatId = chatId.substring(0, chatId.length() - "_prediction".length());
-    }
+    String memoryChatId = GlobalMessageContext.memoryChatId(globalMessage);
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(memoryChatId);
     String currentMemory = "";
     if (!agentMemoryEntities.isEmpty()) {

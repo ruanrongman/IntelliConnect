@@ -33,6 +33,7 @@ import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
@@ -117,9 +118,9 @@ public class Router {
     String answer;
     String toolResult = "";
     Map<String, Object> globalMessage = new HashMap<>();
-    globalMessage.put("productId", productId);
-    globalMessage.put("chatId", streamChatId);
-    globalMessage.put("queueMap", queueMap);
+    globalMessage.put(GlobalMessageContext.PRODUCT_ID, productId);
+    GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
+    globalMessage.put(GlobalMessageContext.QUEUE_MAP, queueMap);
     // 从 WebSocket session 获取客户端 IP
     Session session = XiaoZhiWebsocket.clients
         .get(streamChatId);
@@ -138,7 +139,7 @@ public class Router {
       streamChatId = dataArgs[0] + streamChatId;
       conversationChatId = dataArgs[0] + conversationChatId;
       queueMap.put(streamChatId, queue);
-      globalMessage.put("chatId", streamChatId);
+      GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
     }
     memory_cache = redisUtil.get("memory" + conversationChatId);
     if (memory_cache != null)
@@ -150,7 +151,7 @@ public class Router {
       }
     else
       memory = new ArrayList<>();
-    globalMessage.put("memory", memory);
+    globalMessage.put(GlobalMessageContext.MEMORY, memory);
     if (isFunctionRouterMode()) {
       RouteExecutionResult routeExecutionResult =
           resolveFunctionRoute(content, globalMessage, productId, streamChatId, dataArgs);

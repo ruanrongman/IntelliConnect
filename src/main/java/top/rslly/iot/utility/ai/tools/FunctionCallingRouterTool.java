@@ -35,6 +35,7 @@ import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -223,9 +224,7 @@ public class FunctionCallingRouterTool {
 
   private List<ModelMessage> buildPromptMessages(String question, int productId, String chatId,
       Map<String, Object> globalMessage, List<FunctionToolSpec> toolSpecs) {
-    String memoryChatId = chatId.endsWith("_prediction")
-        ? chatId.substring(0, chatId.length() - "_prediction".length())
-        : chatId;
+    String memoryChatId = GlobalMessageContext.memoryChatId(globalMessage);
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(memoryChatId);
     String currentMemory =
         agentMemoryEntities.isEmpty() ? "" : agentMemoryEntities.get(0).getContent();
