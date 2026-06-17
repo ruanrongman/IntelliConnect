@@ -60,6 +60,11 @@ public class ProductEventServiceImpl implements ProductEventService {
   }
 
   @Override
+  public List<ProductEventEntity> findAllByModelId(int modelId) {
+    return productEventRepository.findAllByModelId(modelId);
+  }
+
+  @Override
   public List<ProductEventEntity> findAllByModelIdAndName(int modelId, String name) {
     return productEventRepository.findAllByModelIdAndName(modelId, name);
   }
@@ -122,6 +127,14 @@ public class ProductEventServiceImpl implements ProductEventService {
   }
 
   @Override
+  public JsonResult<?> getProductEventByModelId(int modelId) {
+    List<ProductEventEntity> result = productEventRepository.findAllByModelId(modelId);
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    return ResultTool.success(result);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductEvent(ProductEvent productEvent) {
     ProductEventEntity productEventEntity = new ProductEventEntity();
@@ -135,6 +148,27 @@ public class ProductEventServiceImpl implements ProductEventService {
       ProductEventEntity productEventEntity1 = productEventRepository.save(productEventEntity);
       return ResultTool.success(productEventEntity1);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putProductEvent(ProductEvent productEvent) {
+    List<ProductEventEntity> currentList = productEventRepository.findAllById(productEvent.getId());
+    List<ProductModelEntity> modelList = productModelRepository.findAllById(productEvent.getModelId());
+    if (currentList.isEmpty() || modelList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<ProductEventEntity> duplicates =
+        productEventRepository.findAllByModelIdAndName(productEvent.getModelId(),
+            productEvent.getName());
+    for (var duplicate : duplicates) {
+      if (duplicate.getId() != productEvent.getId())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    ProductEventEntity current = currentList.get(0);
+    current.setName(productEvent.getName());
+    current.setDescription(productEvent.getDescription());
+    current.setModelId(productEvent.getModelId());
+    return ResultTool.success(productEventRepository.save(current));
   }
 
   @Override

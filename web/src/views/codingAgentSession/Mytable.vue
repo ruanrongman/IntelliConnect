@@ -1,6 +1,13 @@
 <template>
   <div class="table-container">
     <a-table :columns="columns" :data-source="dataSource" :pagination="pagination">
+      <template #status="{ record }">
+        <a-tag :color="getStatusMeta(record.finalStatus).color" class="status-tag">
+          <span class="status-dot" :class="`status-dot-${getStatusMeta(record.finalStatus).tone}`"></span>
+          {{ getStatusMeta(record.finalStatus).label }}
+        </a-tag>
+      </template>
+
       <template #action="{ record }">
         <a-space>
           <a-button type="link" @click="handleEdit(record)">
@@ -107,10 +114,24 @@ const columns = [
   { title: '代理设备ID', dataIndex: 'agentId', key: 'agentId' },
   { title: 'sessionId', dataIndex: 'sessionId', key: 'sessionId' },
   { title: 'cwd', dataIndex: 'cwd', key: 'cwd' },
-  { title: '状态', dataIndex: 'finalStatus', key: 'finalStatus' },
+  { title: '状态', dataIndex: 'finalStatus', key: 'finalStatus', slots: { customRender: 'status' } },
   { title: '更新时间', dataIndex: 'lastUpdate', key: 'lastUpdate' },
   { title: '操作', key: 'action', slots: { customRender: 'action' } },
 ]
+
+const statusMetaMap = {
+  READY: { label: 'READY', color: 'default', tone: 'default' },
+  THINKING: { label: 'THINKING', color: 'processing', tone: 'processing' },
+  WORKING: { label: 'WORKING', color: 'processing', tone: 'processing' },
+  PROCESSING: { label: 'PROCESSING', color: 'processing', tone: 'processing' },
+  WARNING: { label: 'WARNING', color: 'warning', tone: 'warning' },
+  FINISHED: { label: 'FINISHED', color: 'success', tone: 'success' },
+  ERROR: { label: 'ERROR', color: 'error', tone: 'error' },
+  OFFLINE: { label: 'OFFLINE', color: 'default', tone: 'offline' },
+}
+
+const getStatusMeta = (status) =>
+  statusMetaMap[status] || { label: status || 'UNKNOWN', color: 'default', tone: 'default' }
 
 const formatLocalDateTime = (value) => {
   if (!value) {
@@ -254,3 +275,45 @@ defineExpose({
   fetchCodingAgentSession,
 })
 </script>
+
+<style lang="scss" scoped>
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 92px;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8c8c8c;
+}
+
+.status-dot-success {
+  background: #52c41a;
+}
+
+.status-dot-processing {
+  background: #1890ff;
+}
+
+.status-dot-warning {
+  background: #faad14;
+}
+
+.status-dot-error {
+  background: #ff4d4f;
+}
+
+.status-dot-offline {
+  background: #8c8c8c;
+}
+</style>

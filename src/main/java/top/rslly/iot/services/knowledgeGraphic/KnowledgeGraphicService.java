@@ -36,6 +36,8 @@ public interface KnowledgeGraphicService {
 
   String getKnowledgeGraphicJSON(int productId);
 
+  JsonResult<?> queryKnowledgeGraphicJsonResult(String query, int productId);
+
   JsonResult<?> getKnowledgeGraphicByNodeId(long id, int maxDepth);
 
   JsonResult<?> getKnowledgeGraphicByProductId(int productId);

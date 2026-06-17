@@ -38,6 +38,8 @@ const SubMenu = {
             <component :is="menuList.meta.icon"></component>
       </template>
      <template v-for="item in menuList.children" :key="item.path">
+        <template v-if="item.meta && item.meta.isHidden"></template>
+        <template v-else>
         <template v-if="!item.children">
           <a-menu-item :key="item.path">
           
@@ -46,6 +48,7 @@ const SubMenu = {
         </template>
         <template v-else>
           <sub-menu :menu-list="item" :key="item.path" />
+        </template>
         </template>
       </template>
   </a-sub-menu>`,

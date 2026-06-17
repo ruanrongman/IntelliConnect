@@ -210,6 +210,14 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   }
 
   @Override
+  public JsonResult<?> getProductDeviceByModelId(int modelId) {
+    List<ProductDeviceEntity> result = productDeviceRepository.findAllByModelId(modelId);
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    return ResultTool.success(result);
+  }
+
+  @Override
   public JsonResult<?> getProductDeviceConnectedNum(String token) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
@@ -311,6 +319,18 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
       mqttAclRepository.save(mqttAclEntity);
       return ResultTool.success(productDeviceEntity1);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putProductDevice(ProductDevice productDevice) {
+    List<ProductDeviceEntity> currentList = productDeviceRepository.findAllById(productDevice.getId());
+    if (currentList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    ProductDeviceEntity current = currentList.get(0);
+    current.setAllow(productDevice.getAllow());
+    current.setDescription(productDevice.getDescription());
+    return ResultTool.success(productDeviceRepository.save(current));
   }
 
   @Override

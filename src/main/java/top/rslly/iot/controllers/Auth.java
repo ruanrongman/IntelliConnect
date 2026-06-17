@@ -39,6 +39,7 @@ import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 
 @RestController
 @RequestMapping(value = "/api/v2")
@@ -142,6 +143,14 @@ public class Auth {
     return productService.getProduct(header);
   }
 
+  @Operation(summary = "分页获取产品信息", description = "分页获取产品密钥和注册状态")
+  @RequestMapping(value = "/ProductPage", method = RequestMethod.GET)
+  public JsonResult<?> ProductPage(@RequestHeader("Authorization") String header,
+      @RequestParam("pageNum") @Min(value = 1, message = "pageNum 必须大于等于 1") int pageNum,
+      @RequestParam("pageSize") @Min(value = 1, message = "pageSize 必须大于等于 1") int pageSize) {
+    return productService.getProductPage(header, pageNum, pageSize);
+  }
+
   // 添加产品信息，如产品密钥这些，后续版本将会添加更多细节。
   @Operation(summary = "提交产品信息", description = "比如产品密钥和注册状态")
   @RequestMapping(value = "/Product", method = RequestMethod.POST)
@@ -188,6 +197,26 @@ public class Auth {
     return productModelService.postProductModel(productModel);
   }
 
+  @Operation(summary = "更新物模型", description = "更新产品的物模型")
+  @RequestMapping(value = "/ProductModel", method = RequestMethod.PUT)
+  public JsonResult<?> putProductModel(
+      @Validated(UpdateGroup.class) @RequestBody ProductModel productModel,
+      @RequestHeader("Authorization") String header) {
+    try {
+      var current = productModelService.findAllById(productModel.getId());
+      if (current.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      if (!safetyService.controlAuthorizeProduct(header, current.get(0).getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (current.get(0).getProductId() != productModel.getProductId()
+          && !safetyService.controlAuthorizeProduct(header, productModel.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productModelService.putProductModel(productModel);
+  }
+
   @Operation(summary = "删除物模型", description = "删除产品的物模型")
   @RequestMapping(value = "/ProductModel", method = RequestMethod.DELETE)
   public JsonResult<?> ProductModel(@RequestParam("id") int id,
@@ -204,7 +233,17 @@ public class Auth {
 
   @Operation(summary = "获取事件", description = "获取所有物模型的事件")
   @RequestMapping(value = "/ProductEvent", method = RequestMethod.GET)
-  public JsonResult<?> ProductEvent(@RequestHeader("Authorization") String header) {
+  public JsonResult<?> ProductEvent(@RequestHeader("Authorization") String header,
+      @RequestParam(value = "modelId", required = false) Integer modelId) {
+    if (modelId != null) {
+      try {
+        if (!safetyService.controlAuthorizeModel(header, modelId))
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return productEventService.getProductEventByModelId(modelId);
+    }
     return productEventService.getProductEvent(header);
   }
 
@@ -219,6 +258,26 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productEventService.postProductEvent(productEvent);
+  }
+
+  @Operation(summary = "更新事件", description = "更新物模型的事件")
+  @RequestMapping(value = "/ProductEvent", method = RequestMethod.PUT)
+  public JsonResult<?> putProductEvent(
+      @Validated(UpdateGroup.class) @RequestBody ProductEvent productEvent,
+      @RequestHeader("Authorization") String header) {
+    try {
+      var current = productEventService.findAllById(productEvent.getId());
+      if (current.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      if (!safetyService.controlAuthorizeModel(header, current.get(0).getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (current.get(0).getModelId() != productEvent.getModelId()
+          && !safetyService.controlAuthorizeModel(header, productEvent.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productEventService.putProductEvent(productEvent);
   }
 
   @Operation(summary = "删除事件", description = "删除物模型的事件")
@@ -237,7 +296,17 @@ public class Auth {
 
   @Operation(summary = "获取设备", description = "获取所有物模型的设备")
   @RequestMapping(value = "/ProductDevice", method = RequestMethod.GET)
-  public JsonResult<?> ProductDevice(@RequestHeader("Authorization") String header) {
+  public JsonResult<?> ProductDevice(@RequestHeader("Authorization") String header,
+      @RequestParam(value = "modelId", required = false) Integer modelId) {
+    if (modelId != null) {
+      try {
+        if (!safetyService.controlAuthorizeModel(header, modelId))
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return productDeviceService.getProductDeviceByModelId(modelId);
+    }
     return productDeviceService.getProductDevice(header);
   }
 
@@ -252,6 +321,20 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productDeviceService.postProductDevice(productDevice);
+  }
+
+  @Operation(summary = "更新设备", description = "仅更新设备描述和使能状态")
+  @RequestMapping(value = "/ProductDevice", method = RequestMethod.PUT)
+  public JsonResult<?> putProductDevice(
+      @Validated(UpdateGroup.class) @RequestBody ProductDevice productDevice,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeDevice(header, productDevice.getId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productDeviceService.putProductDevice(productDevice);
   }
 
   @Operation(summary = "删除设备", description = "删除物模型的设备")
@@ -269,7 +352,17 @@ public class Auth {
 
   @Operation(summary = "获取属性", description = "获取所有物模型的属性")
   @RequestMapping(value = "/ProductData", method = RequestMethod.GET)
-  public JsonResult<?> ProductData(@RequestHeader("Authorization") String header) {
+  public JsonResult<?> ProductData(@RequestHeader("Authorization") String header,
+      @RequestParam(value = "modelId", required = false) Integer modelId) {
+    if (modelId != null) {
+      try {
+        if (!safetyService.controlAuthorizeModel(header, modelId))
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return productDataService.getProductDataByModelId(modelId);
+    }
     return productDataService.getProductData(header);
   }
 
@@ -284,6 +377,26 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productDataService.postProductData(productData);
+  }
+
+  @Operation(summary = "更新属性", description = "更新物模型的属性")
+  @RequestMapping(value = "/ProductData", method = RequestMethod.PUT)
+  public JsonResult<?> putProductData(
+      @Validated(UpdateGroup.class) @RequestBody ProductData productData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      var current = productDataService.findAllById(productData.getId());
+      if (current.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      if (!safetyService.controlAuthorizeModel(header, current.get(0).getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (current.get(0).getModelId() != productData.getModelId()
+          && !safetyService.controlAuthorizeModel(header, productData.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productDataService.putProductData(productData);
   }
 
   @Operation(summary = "删除属性", description = "删除物模型的属性")
@@ -302,7 +415,17 @@ public class Auth {
 
   @Operation(summary = "获取功能", description = "获取所有物模型的功能")
   @RequestMapping(value = "/ProductFunction", method = RequestMethod.GET)
-  public JsonResult<?> ProductFunction(@RequestHeader("Authorization") String header) {
+  public JsonResult<?> ProductFunction(@RequestHeader("Authorization") String header,
+      @RequestParam(value = "modelId", required = false) Integer modelId) {
+    if (modelId != null) {
+      try {
+        if (!safetyService.controlAuthorizeModel(header, modelId))
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return productFunctionService.getProductFunctionByModelId(modelId);
+    }
     return productFunctionService.getProductFunction(header);
   }
 
@@ -317,6 +440,26 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productFunctionService.postProductFunction(productFunction);
+  }
+
+  @Operation(summary = "更新功能", description = "更新物模型的功能")
+  @RequestMapping(value = "/ProductFunction", method = RequestMethod.PUT)
+  public JsonResult<?> putProductFunction(
+      @Validated(UpdateGroup.class) @RequestBody ProductFunction productFunction,
+      @RequestHeader("Authorization") String header) {
+    try {
+      var current = productFunctionService.findAllById(productFunction.getId());
+      if (current.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      if (!safetyService.controlAuthorizeModel(header, current.get(0).getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (current.get(0).getModelId() != productFunction.getModelId()
+          && !safetyService.controlAuthorizeModel(header, productFunction.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productFunctionService.putProductFunction(productFunction);
   }
 
   @Operation(summary = "删除功能", description = "删除物模型的功能")
@@ -334,7 +477,17 @@ public class Auth {
 
   @Operation(summary = "获取事件入参", description = "获取所有事件入参")
   @RequestMapping(value = "/EventData", method = RequestMethod.GET)
-  public JsonResult<?> EventData(@RequestHeader("Authorization") String header) {
+  public JsonResult<?> EventData(@RequestHeader("Authorization") String header,
+      @RequestParam(value = "modelId", required = false) Integer modelId) {
+    if (modelId != null) {
+      try {
+        if (!safetyService.controlAuthorizeModel(header, modelId))
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return eventDataService.getEventDataByModelId(modelId);
+    }
     return eventDataService.getEventData(header);
   }
 
@@ -349,6 +502,26 @@ public class Auth {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return eventDataService.postEventData(eventData);
+  }
+
+  @Operation(summary = "更新事件入参", description = "更新事件入参")
+  @RequestMapping(value = "/EventData", method = RequestMethod.PUT)
+  public JsonResult<?> putEventData(
+      @Validated(UpdateGroup.class) @RequestBody EventData eventData,
+      @RequestHeader("Authorization") String header) {
+    try {
+      var current = eventDataService.findAllById(eventData.getId());
+      if (current.isEmpty())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      if (!safetyService.controlAuthorizeModel(header, current.get(0).getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (current.get(0).getModelId() != eventData.getModelId()
+          && !safetyService.controlAuthorizeModel(header, eventData.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return eventDataService.putEventData(eventData);
   }
 
   @Operation(summary = "删除事件入参", description = "删除事件入参")

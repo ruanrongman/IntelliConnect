@@ -33,6 +33,8 @@ public interface ProductService {
 
   JsonResult<?> getProduct(String token);
 
+  JsonResult<?> getProductPage(String token, int pageNum, int pageSize);
+
   JsonResult<?> postProduct(Product product, String token);
 
   JsonResult<?> quickCreateProductAndRole(QuickProduct quickProduct, String token);

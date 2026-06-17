@@ -77,6 +77,17 @@ public class AlarmEventServiceImpl implements AlarmEventService {
   }
 
   @Override
+  public JsonResult<?> getAlarmEventByModelId(int modelId) {
+    List<AlarmEventEntity> result = new ArrayList<>();
+    for (var event : productEventRepository.findAllByModelId(modelId)) {
+      result.addAll(alarmEventRepository.findAllByEventId(event.getId()));
+    }
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    return ResultTool.success(result);
+  }
+
+  @Override
   public JsonResult<?> getAlarmEvent(String token) {
     String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
@@ -148,15 +159,37 @@ public class AlarmEventServiceImpl implements AlarmEventService {
     List<ProductEventEntity> productEventEntityList =
         productEventRepository.findAllByModelIdAndName(alarmEvent.getModelId(),
             alarmEvent.getName());
+    if (productEventEntityList.isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
     List<AlarmEventEntity> alarmEventEntityList =
         alarmEventRepository.findAllByEventId(productEventEntityList.get(0).getId());
-    if (productEventEntityList.isEmpty() || !alarmEventEntityList.isEmpty()) {
+    if (!alarmEventEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     } else {
       alarmEventEntity.setEventId(productEventEntityList.get(0).getId());
       AlarmEventEntity alarmEventEntity1 = alarmEventRepository.save(alarmEventEntity);
       return ResultTool.success(alarmEventEntity1);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putAlarmEvent(AlarmEvent alarmEvent) {
+    List<AlarmEventEntity> currentList = alarmEventRepository.findAllById(alarmEvent.getId());
+    List<ProductEventEntity> eventList =
+        productEventRepository.findAllByModelIdAndName(alarmEvent.getModelId(),
+            alarmEvent.getName());
+    if (currentList.isEmpty() || eventList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    ProductEventEntity targetEvent = eventList.get(0);
+    for (var duplicate : alarmEventRepository.findAllByEventId(targetEvent.getId())) {
+      if (duplicate.getId() != alarmEvent.getId())
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    AlarmEventEntity current = currentList.get(0);
+    current.setEventId(targetEvent.getId());
+    return ResultTool.success(alarmEventRepository.save(current));
   }
 
   @Override

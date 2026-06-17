@@ -28,9 +28,13 @@ import java.util.List;
 public interface AlarmEventService {
   List<AlarmEventEntity> findAllById(int id);
 
+  JsonResult<?> getAlarmEventByModelId(int modelId);
+
   JsonResult<?> getAlarmEvent(String token);
 
   JsonResult<?> postAlarmEvent(AlarmEvent alarmEvent);
+
+  JsonResult<?> putAlarmEvent(AlarmEvent alarmEvent);
 
   JsonResult<?> deleteAlarmEvent(int id);
 

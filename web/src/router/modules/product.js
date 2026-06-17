@@ -132,7 +132,7 @@ export default [
         {
           path: '/productModel',
           name: 'productModel',
-          component: () => import('@/views/productModel/index.vue'),
+          component: () => import('@/views/productModelCenter/index.vue'),
           meta: {
             title: 'productModelAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
@@ -145,6 +145,7 @@ export default [
           meta: {
             title: 'productDataAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
+            isHidden: true,
           },
         },
         {
@@ -154,6 +155,7 @@ export default [
           meta: {
             title: 'productFunctionAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
+            isHidden: true,
           },
         },
         {
@@ -163,6 +165,7 @@ export default [
           meta: {
             title: 'productDeviceAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
+            isHidden: true,
           },
         },
         {
@@ -172,6 +175,7 @@ export default [
           meta: {
             title: 'productEventAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
+            isHidden: true,
           },
         },
         {
@@ -181,6 +185,7 @@ export default [
           meta: {
             title: 'productEventDataAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
+            isHidden: true,
           },
         },
         {
@@ -217,6 +222,7 @@ export default [
           meta: {
             title: 'alarmEventAdd',
             auth: ['[ROLE_admin]', '[ROLE_guest]'],
+            isHidden: true,
           },
         },
         {

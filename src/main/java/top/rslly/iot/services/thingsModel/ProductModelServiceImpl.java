@@ -132,6 +132,26 @@ public class ProductModelServiceImpl implements ProductModelService {
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putProductModel(ProductModel productModel) {
+    List<ProductModelEntity> currentList = productModelRepository.findAllById(productModel.getId());
+    List<ProductEntity> productList = productRepository.findAllById(productModel.getProductId());
+    if (currentList.isEmpty() || productList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<ProductModelEntity> duplicates = productModelRepository
+        .findAllByProductIdAndName(productModel.getProductId(), productModel.getName());
+    for (var duplicate : duplicates) {
+      if (duplicate.getId() != productModel.getId())
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+    ProductModelEntity current = currentList.get(0);
+    current.setName(productModel.getName());
+    current.setProductId(productModel.getProductId());
+    current.setDescription(productModel.getDescription());
+    return ResultTool.success(productModelRepository.save(current));
+  }
+
+  @Override
   public List<ProductModelDescription> getDescription(int productId) {
     var result = productModelRepository.findAllByProductId(productId);
     List<ProductModelDescription> productModelDescriptionList = new LinkedList<>();

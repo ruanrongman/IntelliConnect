@@ -22,6 +22,11 @@ package top.rslly.iot.services.thingsModel;
 import cn.hutool.core.util.RandomUtil;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
@@ -154,6 +159,50 @@ public class ProductServiceImpl implements ProductService {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     } else
       return ResultTool.success(result);
+  }
+
+  @Override
+  public JsonResult<?> getProductPage(String token, int pageNum, int pageSize) {
+    if (pageNum < 1 || pageSize < 1) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(token_deal);
+    String username = JwtTokenUtil.getUsername(token_deal);
+    Pageable pageable = PageRequest.of(pageNum - 1, pageSize, Sort.by(Sort.Direction.ASC, "id"));
+    Page<ProductEntity> result;
+    if (role.equals("ROLE_" + "wx_user")) {
+      if (wxUserRepository.findAllByName(username).isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      String appid = wxUserEntityList.get(0).getAppid();
+      String openid = wxUserEntityList.get(0).getOpenid();
+      List<Integer> productIdList = new ArrayList<>();
+      var wxBindProductResponseList =
+          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
+      for (var s : wxBindProductResponseList) {
+        productIdList.add(s.getProductId());
+      }
+      result = productIdList.isEmpty() ? emptyProductPage(pageable)
+          : productRepository.findAllByIdIn(productIdList, pageable);
+    } else if (!role.equals("[ROLE_admin]")) {
+      var userList = userRepository.findAllByUsername(username);
+      if (userList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      int userId = userList.get(0).getId();
+      List<Integer> productIdList = new ArrayList<>();
+      var userProductBindEntityList = userProductBindRepository.findAllByUserId(userId);
+      for (var s : userProductBindEntityList) {
+        productIdList.add(s.getProductId());
+      }
+      result = productIdList.isEmpty() ? emptyProductPage(pageable)
+          : productRepository.findAllByIdIn(productIdList, pageable);
+    } else {
+      result = productRepository.findAll(pageable);
+    }
+    return ResultTool.success(result);
   }
 
   @Override
@@ -408,5 +457,9 @@ public class ProductServiceImpl implements ProductService {
   @Override
   public List<ProductEntity> findAllById(int productId) {
     return productRepository.findAllById(productId);
+  }
+
+  private Page<ProductEntity> emptyProductPage(Pageable pageable) {
+    return new PageImpl<>(List.of(), pageable, 0);
   }
 }

@@ -392,7 +392,17 @@ public class Tool {
   }
 
   @RequestMapping(value = "/alarmEvent", method = RequestMethod.GET)
-  public JsonResult<?> alarmEvent(@RequestHeader("Authorization") String header) {
+  public JsonResult<?> alarmEvent(@RequestHeader("Authorization") String header,
+      @RequestParam(value = "modelId", required = false) Integer modelId) {
+    if (modelId != null) {
+      try {
+        if (!safetyService.controlAuthorizeModel(header, modelId))
+          return ResultTool.fail(ResultCode.NO_PERMISSION);
+      } catch (NullPointerException e) {
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      }
+      return alarmEventService.getAlarmEventByModelId(modelId);
+    }
     return alarmEventService.getAlarmEvent(header);
   }
 
@@ -406,6 +416,21 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return alarmEventService.postAlarmEvent(alarmEvent);
+  }
+
+  @RequestMapping(value = "/alarmEvent", method = RequestMethod.PUT)
+  public JsonResult<?> putAlarmEvent(
+      @Validated(UpdateGroup.class) @RequestBody AlarmEvent alarmEvent,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeAlarmEvent(header, alarmEvent.getId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+      if (!safetyService.controlAuthorizeModel(header, alarmEvent.getModelId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return alarmEventService.putAlarmEvent(alarmEvent);
   }
 
   // delete
@@ -945,6 +970,21 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return knowledgeGraphicService.getKnowledgeGraphicByProductId(productId);
+  }
+
+  @Operation(summary = "查询知识图谱", description = "通过问题召回产品相关的知识图谱")
+  @RequestMapping(value = "/kg/graphic/query", method = RequestMethod.GET)
+  public JsonResult<?> queryKnowledgeGraphic(
+      @RequestParam("query") @NotBlank(message = "query 不能为空") String query,
+      @RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.queryKnowledgeGraphicJsonResult(query, productId);
   }
 
   @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")

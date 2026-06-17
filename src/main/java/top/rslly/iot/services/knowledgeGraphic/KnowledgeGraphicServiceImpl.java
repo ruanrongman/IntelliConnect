@@ -143,6 +143,23 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   public String queryKnowledgeGraphic(String query, int productId) {
+    KnowledgeGraphic knowledgeGraphic = queryKnowledgeGraphicData(query, productId);
+    if (knowledgeGraphic == null) {
+      return null;
+    }
+    return JSON.toJSONString(knowledgeGraphic);
+  }
+
+  @Override
+  public JsonResult<?> queryKnowledgeGraphicJsonResult(String query, int productId) {
+    KnowledgeGraphic knowledgeGraphic = queryKnowledgeGraphicData(query, productId);
+    if (knowledgeGraphic == null) {
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+    return ResultTool.success(knowledgeGraphic);
+  }
+
+  private KnowledgeGraphic queryKnowledgeGraphicData(String query, int productId) {
     List<TextSegment> matchSegment;
     try {
       Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
@@ -180,7 +197,7 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
         return null;
       }
     }
-    return JSON.toJSONString(knowledgeGraphic);
+    return knowledgeGraphic;
   }
 
   private String safeQueryLog(String query) {

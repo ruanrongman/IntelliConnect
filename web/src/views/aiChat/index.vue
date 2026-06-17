@@ -53,6 +53,8 @@ import { message as antMessage } from 'ant-design-vue'
 import { getProduct } from '@/api/product'
 import { getHistoryMessage } from '@/api/agentMemory'
 import { stopAiControlStream, streamAiControl } from '@/api/aiChat'
+import { queryKnowledgeGraphicReference } from '@/api/knowledgeGraphic'
+import { postKnowledgeChatRecall } from '@/api/productKnowledge'
 import ChatComposer from './ChatComposer.vue'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatSidebar from './ChatSidebar.vue'
@@ -78,6 +80,7 @@ const historyPagination = reactive({
   total: 0,
 })
 const loadedHistoryCount = ref(0)
+const KNOWLEDGE_RECALL_QUERY_MAX_LENGTH = 2048
 
 const productOptions = computed(() =>
   products.value.map((item) => ({
@@ -189,6 +192,9 @@ async function loadHistory(page = 1, mode = 'replace') {
         role: item.messageType === 'user' ? 'user' : 'assistant',
         content: parsedContent.content,
         fileNames: parsedContent.fileNames,
+        knowledgeRecall: [],
+        knowledgeGraphicReference: null,
+        loadingReferences: false,
         pending: false,
       }
     })
@@ -243,6 +249,9 @@ async function sendMessage() {
     id: `assistant-${Date.now()}`,
     role: 'assistant',
     content: '',
+    knowledgeRecall: [],
+    knowledgeGraphicReference: null,
+    loadingReferences: false,
     pending: true,
   }
   messages.value.push({
@@ -287,8 +296,9 @@ async function sendMessage() {
     if (currentMessage && !currentMessage.content.trim()) {
       currentMessage.content = '请求已结束。'
     }
-    statusText.value = '回复完成，正在刷新历史...'
-    await loadHistory(1)
+    statusText.value = '回复完成，正在查询参考记录...'
+    await appendReferenceRecords(assistantMessageIndex, requestText)
+    statusText.value = '回复完成。'
   } catch (error) {
     if (error.name === 'AbortError') {
       statusText.value = '已停止。'
@@ -312,6 +322,137 @@ async function sendMessage() {
     currentStreamId = ''
     await scrollToBottom()
   }
+}
+
+async function appendReferenceRecords(messageIndex, query) {
+  if (!selectedProductId.value || !query.trim()) {
+    return
+  }
+  const currentMessage = messages.value[messageIndex]
+  if (!currentMessage) {
+    return
+  }
+  currentMessage.loadingReferences = true
+  try {
+    const productId = selectedProductId.value
+    const referenceQuery = query.slice(0, KNOWLEDGE_RECALL_QUERY_MAX_LENGTH)
+    const [knowledgeRecallResult, knowledgeGraphicResult] = await Promise.allSettled([
+      fetchKnowledgeRecall(productId, referenceQuery),
+      fetchKnowledgeGraphicReference(productId, referenceQuery),
+    ])
+    let shouldScroll = false
+    if (knowledgeRecallResult.status === 'fulfilled' && knowledgeRecallResult.value.length) {
+      currentMessage.knowledgeRecall = knowledgeRecallResult.value
+      shouldScroll = true
+    }
+    if (knowledgeGraphicResult.status === 'fulfilled' && hasGraphicReference(knowledgeGraphicResult.value)) {
+      currentMessage.knowledgeGraphicReference = knowledgeGraphicResult.value
+      shouldScroll = true
+    }
+    if (shouldScroll) {
+      await scrollToBottom()
+    }
+  } catch (error) {
+    console.warn('Reference records failed:', error)
+  } finally {
+    currentMessage.loadingReferences = false
+  }
+}
+
+async function fetchKnowledgeRecall(productId, query) {
+  try {
+    const res = await postKnowledgeChatRecall({
+      productId,
+      query,
+    })
+    const payload = res.data || {}
+    if (payload.errorCode !== 200) {
+      return []
+    }
+    return normalizeKnowledgeRecall(payload.data)
+  } catch (error) {
+    console.warn('Knowledge recall failed:', error)
+    return []
+  }
+}
+
+async function fetchKnowledgeGraphicReference(productId, query) {
+  try {
+    const res = await queryKnowledgeGraphicReference({
+      productId,
+      query,
+    })
+    const payload = res.data || {}
+    if (payload.errorCode !== 200) {
+      return null
+    }
+    return normalizeKnowledgeGraphicReference(payload.data)
+  } catch (error) {
+    console.warn('Knowledge graphic reference failed:', error)
+    return null
+  }
+}
+
+function normalizeKnowledgeRecall(data) {
+  if (!Array.isArray(data)) {
+    return []
+  }
+  return data
+    .map((item) => ({
+      text: String(item?.text || '').trim(),
+      score: Number(item?.score ?? 0),
+    }))
+    .filter((item) => item.text)
+}
+
+function normalizeKnowledgeGraphicReference(data) {
+  if (!data || typeof data !== 'object') {
+    return null
+  }
+  const nodes = normalizeGraphicNodes(data.nodes)
+  const relations = normalizeGraphicRelations(data.relations)
+  if (!nodes.length && !relations.length) {
+    return null
+  }
+  return {
+    nodes,
+    relations,
+  }
+}
+
+function normalizeGraphicNodes(nodes) {
+  if (!Array.isArray(nodes)) {
+    return []
+  }
+  return nodes
+    .map((node) => ({
+      name: String(node?.name || '').trim(),
+      des: String(node?.des || '').trim(),
+      attributes: Array.isArray(node?.attributes)
+        ? node.attributes.map((attribute) => String(attribute || '').trim()).filter(Boolean)
+        : [],
+    }))
+    .filter((node) => node.name)
+}
+
+function normalizeGraphicRelations(relations) {
+  if (!Array.isArray(relations)) {
+    return []
+  }
+  return relations
+    .map((relation) => ({
+      from: String(relation?.from || '').trim(),
+      name: String(relation?.name || '').trim(),
+      to: String(relation?.to || '').trim(),
+    }))
+    .filter((relation) => relation.from && relation.to)
+}
+
+function hasGraphicReference(graphicReference) {
+  return Boolean(
+    graphicReference
+    && (graphicReference.nodes?.length || graphicReference.relations?.length)
+  )
 }
 
 async function stopStream() {

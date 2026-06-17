@@ -127,6 +127,14 @@ public class EventDataServiceImpl implements EventDataService {
   }
 
   @Override
+  public JsonResult<?> getEventDataByModelId(int modelId) {
+    List<EventDataEntity> result = eventDataRepository.findAllByModelId(modelId);
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    return ResultTool.success(result);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postEventData(EventData eventData) {
     EventDataEntity eventDataEntity = new EventDataEntity();
@@ -147,6 +155,34 @@ public class EventDataServiceImpl implements EventDataService {
       EventDataEntity eventDataEntity1 = eventDataRepository.save(eventDataEntity);
       return ResultTool.success(eventDataEntity1);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putEventData(EventData eventData) {
+    List<EventDataEntity> currentList = eventDataRepository.findAllById(eventData.getId());
+    List<ProductModelEntity> modelList = productModelRepository.findAllById(eventData.getModelId());
+    if (currentList.isEmpty() || modelList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<EventDataEntity> duplicates =
+        eventDataRepository.findAllByModelIdAndJsonKey(eventData.getModelId(),
+            eventData.getJsonKey());
+    for (var duplicate : duplicates) {
+      if (duplicate.getId() != eventData.getId())
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+    HashMap<String, Integer> typeMap = new HashMap<>();
+    typeMap.put("string", 1);
+    typeMap.put("int", 2);
+    typeMap.put("float", 3);
+    if (typeMap.get(eventData.getType()) == null)
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    EventDataEntity current = currentList.get(0);
+    current.setJsonKey(eventData.getJsonKey());
+    current.setModelId(eventData.getModelId());
+    current.setDescription(eventData.getDescription());
+    current.setType(eventData.getType());
+    return ResultTool.success(eventDataRepository.save(current));
   }
 
   @Override

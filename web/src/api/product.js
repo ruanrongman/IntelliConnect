@@ -11,6 +11,12 @@ export const getProduct = (data) =>
     url: '/api/v2/Product',
     method: 'get',
   })
+export const getProductPage = (params) =>
+  request({
+    url: '/api/v2/ProductPage',
+    method: 'get',
+    params
+  })
   export const postProduct = (data) =>
     request({
       url: '/api/v2/Product',

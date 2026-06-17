@@ -34,6 +34,8 @@ public interface ProductModelService {
 
   JsonResult<?> postProductModel(ProductModel productModel);
 
+  JsonResult<?> putProductModel(ProductModel productModel);
+
   List<ProductModelDescription> getDescription(int productId);
 
   List<ProductModelEntity> findAllById(int id);

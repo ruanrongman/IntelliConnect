@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.dao;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -35,6 +37,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
   List<ProductEntity> findAllByKeyvalue(String keyvalue);
 
   List<ProductEntity> findAllById(int id);
+
+  Page<ProductEntity> findAllByIdIn(List<Integer> ids, Pageable pageable);
 
   List<ProductEntity> findAllByProductName(String productName);
 

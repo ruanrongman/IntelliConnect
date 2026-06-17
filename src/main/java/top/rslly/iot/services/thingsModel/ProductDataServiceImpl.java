@@ -158,6 +158,14 @@ public class ProductDataServiceImpl implements ProductDataService {
   }
 
   @Override
+  public JsonResult<?> getProductDataByModelId(int modelId) {
+    List<ProductDataEntity> result = productDataRepository.findAllByModelId(modelId);
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    return ResultTool.success(result);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductData(ProductData productData) {
     ProductDataEntity productDataEntity = new ProductDataEntity();
@@ -194,6 +202,53 @@ public class ProductDataServiceImpl implements ProductDataService {
       ProductDataEntity productDataEntity1 = productDataRepository.save(productDataEntity);
       return ResultTool.success(productDataEntity1);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putProductData(ProductData productData) {
+    List<ProductDataEntity> currentList = productDataRepository.findAllById(productData.getId());
+    List<ProductModelEntity> modelList = productModelRepository.findAllById(productData.getModelId());
+    if (currentList.isEmpty() || modelList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<ProductDataEntity> duplicates = productDataRepository
+        .findAllByModelIdAndJsonKey(productData.getModelId(), productData.getJsonKey());
+    for (var duplicate : duplicates) {
+      if (duplicate.getId() != productData.getId())
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+    HashMap<String, Integer> typeMap = new HashMap<>();
+    typeMap.put("string", 1);
+    typeMap.put("int", 2);
+    typeMap.put("float", 3);
+    HashMap<String, Integer> storageMap = new HashMap<>();
+    storageMap.put(DataSave.never.getStorageType(), 1);
+    storageMap.put(DataSave.week.getStorageType(), 2);
+    storageMap.put(DataSave.permanent.getStorageType(), 3);
+    boolean isPermit = productData.getrRw() == 0 || productData.getrRw() == 1;
+    if (typeMap.get(productData.getType()) == null
+        || storageMap.get(productData.getStorageType()) == null || !isPermit)
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    try {
+      String max = productData.getMax();
+      String min = productData.getMin();
+      if (max != null && min != null && Double.parseDouble(max) - Double.parseDouble(min) < 1e-8)
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    } catch (Exception e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    ProductDataEntity current = currentList.get(0);
+    current.setJsonKey(productData.getJsonKey());
+    current.setModelId(productData.getModelId());
+    current.setDescription(productData.getDescription());
+    current.setStorageType(productData.getStorageType());
+    current.setrRw(productData.getrRw());
+    current.setType(productData.getType());
+    current.setMax(productData.getMax());
+    current.setMin(productData.getMin());
+    current.setStep(productData.getStep());
+    current.setUnit(productData.getUnit());
+    return ResultTool.success(productDataRepository.save(current));
   }
 
   @Override

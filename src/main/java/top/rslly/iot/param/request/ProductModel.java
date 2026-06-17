@@ -23,11 +23,14 @@ import lombok.Getter;
 import lombok.Setter;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 @Getter
 @Setter
 public class ProductModel {
+  @NotNull(message = "id 不能为空", groups = UpdateGroup.class)
+  private Integer id;
   @NotBlank(message = "name 不能为空")
   @Size(min = 1, max = 255, message = "name 长度必须在 1 到 255 之间")
   private String name;

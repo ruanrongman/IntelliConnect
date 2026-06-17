@@ -48,9 +48,13 @@ public interface ProductDeviceService {
 
   JsonResult<?> getProductDevice(String token);
 
+  JsonResult<?> getProductDeviceByModelId(int modelId);
+
   JsonResult<?> getProductDeviceConnectedNum(String token);
 
   JsonResult<?> postProductDevice(ProductDevice productDevice);
+
+  JsonResult<?> putProductDevice(ProductDevice productDevice);
 
   JsonResult<?> deleteProductDevice(int id);
 

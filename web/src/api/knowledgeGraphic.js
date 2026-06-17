@@ -6,6 +6,12 @@ export const queryKnowledgeGraphic = (params) => request({
   params
 })
 
+export const queryKnowledgeGraphicReference = (params) => request({
+  url: "/api/v2/kg/graphic/query",
+  method: "get",
+  params
+})
+
 export const addKnowledgeGraphicNode = (data) => request({
   url: "/api/v2/kg/node",
   method: "post",

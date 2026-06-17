@@ -62,6 +62,11 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
   }
 
   @Override
+  public List<ProductFunctionEntity> findAllByModelId(int modelId) {
+    return productFunctionRepository.findAllByModelId(modelId);
+  }
+
+  @Override
   public List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType) {
     return productFunctionRepository.findAllByModelIdAndDataType(modelId, dataType);
   }
@@ -153,6 +158,14 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
   }
 
   @Override
+  public JsonResult<?> getProductFunctionByModelId(int modelId) {
+    List<ProductFunctionEntity> result = productFunctionRepository.findAllByModelId(modelId);
+    if (result.isEmpty())
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    return ResultTool.success(result);
+  }
+
+  @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductFunction(ProductFunction productFunction) {
     ProductFunctionEntity productFunctionEntity = new ProductFunctionEntity();
@@ -190,6 +203,55 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
           productFunctionRepository.save(productFunctionEntity);
       return ResultTool.success(productFunctionEntity1);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putProductFunction(ProductFunction productFunction) {
+    List<ProductFunctionEntity> currentList =
+        productFunctionRepository.findAllById(productFunction.getId());
+    List<ProductModelEntity> modelList =
+        productModelRepository.findAllById(productFunction.getModelId());
+    if (currentList.isEmpty() || modelList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    List<ProductFunctionEntity> duplicates = productFunctionRepository
+        .findAllByModelIdAndFunctionNameAndJsonKeyAndDataType(productFunction.getModelId(),
+            productFunction.getFunctionName(), productFunction.getJsonKey(),
+            productFunction.getDataType());
+    for (var duplicate : duplicates) {
+      if (duplicate.getId() != productFunction.getId())
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+    }
+    HashMap<String, Integer> typeMap = new HashMap<>();
+    typeMap.put("string", 1);
+    typeMap.put("int", 2);
+    typeMap.put("float", 3);
+    HashMap<String, Integer> dataTypeMap = new HashMap<>();
+    dataTypeMap.put("input", 1);
+    dataTypeMap.put("output", 2);
+    if (typeMap.get(productFunction.getType()) == null
+        || dataTypeMap.get(productFunction.getDataType()) == null)
+      return ResultTool.fail(ResultCode.COMMON_FAIL);
+    try {
+      String max = productFunction.getMax();
+      String min = productFunction.getMin();
+      if (max != null && min != null && Double.parseDouble(max) - Double.parseDouble(min) < 1e-8)
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    } catch (Exception e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    ProductFunctionEntity current = currentList.get(0);
+    current.setFunctionName(productFunction.getFunctionName());
+    current.setJsonKey(productFunction.getJsonKey());
+    current.setDataType(productFunction.getDataType());
+    current.setModelId(productFunction.getModelId());
+    current.setDescription(productFunction.getDescription());
+    current.setType(productFunction.getType());
+    current.setMax(productFunction.getMax());
+    current.setMin(productFunction.getMin());
+    current.setStep(productFunction.getStep());
+    current.setUnit(productFunction.getUnit());
+    return ResultTool.success(productFunctionRepository.save(current));
   }
 
   @Override

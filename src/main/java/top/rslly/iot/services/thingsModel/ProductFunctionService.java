@@ -33,6 +33,8 @@ public interface ProductFunctionService {
 
   List<ProductFunctionEntity> findAllById(int id);
 
+  List<ProductFunctionEntity> findAllByModelId(int modelId);
+
   List<ProductFunctionEntity> findAllByModelIdAndDataType(int modelId, String dataType);
 
   List<ProductFunctionEntity> findAllByModelIdAndFunctionNameAndDataType(int modelId,
@@ -42,7 +44,11 @@ public interface ProductFunctionService {
 
   JsonResult<?> getProductFunction(String token);
 
+  JsonResult<?> getProductFunctionByModelId(int modelId);
+
   JsonResult<?> postProductFunction(ProductFunction productFunction);
+
+  JsonResult<?> putProductFunction(ProductFunction productFunction);
 
   JsonResult<?> deleteProductFunction(int id);
 }

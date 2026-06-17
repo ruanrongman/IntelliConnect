@@ -35,7 +35,11 @@ public interface EventDataService {
 
   JsonResult<?> getEventData(String token);
 
+  JsonResult<?> getEventDataByModelId(int modelId);
+
   JsonResult<?> postEventData(EventData eventData);
+
+  JsonResult<?> putEventData(EventData eventData);
 
   JsonResult<?> deleteEventData(int id);
 }

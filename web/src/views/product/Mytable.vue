@@ -4,7 +4,9 @@
       :columns="columns"     
       :data-source="dataSource"     
       :pagination="pagination"    
+      :loading="tableLoading"
       class="custom-table"    
+      @change="handleTableChange"
     >    
       <template #action="{ record }">    
         <a-space>  
@@ -299,7 +301,7 @@
 <script setup>    
 import { ref, onMounted, onUnmounted, computed } from 'vue';    
 import { message } from 'ant-design-vue'    
-import { getProduct, deleteProduct } from '@/api/product';    
+import { getProductPage, deleteProduct } from '@/api/product';    
 import { getMcpPointUrl, getMcpPointTools } from '@/api/mcpPoint'; // 导入新的API函数  
 import { getProductToolsBan, postProductToolsBan, deleteProductToolsBan } from '@/api/productToolsBan'; // 导入工具管理API
 import { useRouter } from 'vue-router'    
@@ -348,9 +350,14 @@ const availableToolsCount = computed(() => {
   return Object.keys(availableTools).length - selectedBannedTools.value.length
 })
     
-const pagination = {    
-  pageSize: 5,    
-};    
+const tableLoading = ref(false)
+const pagination = ref({
+  current: 1,
+  pageSize: 5,
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total) => `共 ${total} 条`
+})
     
     
 const dataSource = ref([]);    
@@ -401,29 +408,66 @@ onUnmounted(() => {
     
     
 const fetchProduct = () => {    
-  getProduct()    
+  tableLoading.value = true
+  getProductPage({
+    pageNum: pagination.value.current,
+    pageSize: pagination.value.pageSize
+  })    
     .then((res) => {    
       const { data, errorCode } = res.data;    
       if(errorCode===2001){
         router.push('/login')    
       }    
-      if(errorCode===200&& data && Array.isArray(data)){
-        dataSource.value = data.map((item, index) => ({
+      if(errorCode===200&& data){
+        const productList = Array.isArray(data) ? data : (data.content || [])
+        const total = Number(data.totalElements ?? productList.length)
+        const current = Number(data.number ?? pagination.value.current - 1) + 1
+        pagination.value = {
+          ...pagination.value,
+          current,
+          pageSize: Number(data.size ?? pagination.value.pageSize),
+          total
+        }
+        dataSource.value = productList.map((item, index) => ({
           id: item.id,    
           name: item.productName,    
           key: item.keyvalue,    
           register: item.register,    
           mqttUser: item.mqttUser    
         }));    
+        const maxPage = Math.max(1, Math.ceil(total / pagination.value.pageSize))
+        if (pagination.value.current > maxPage) {
+          pagination.value = {
+            ...pagination.value,
+            current: maxPage
+          }
+          fetchProduct()
+        }
       } else {    
         // 当没有数据时，设置为空数组    
         dataSource.value = [];    
+        pagination.value = {
+          ...pagination.value,
+          total: 0
+        }
       }    
     })    
     .catch((err) => {    
       console.log(err);    
+    })
+    .finally(() => {
+      tableLoading.value = false
     });    
 };    
+
+const handleTableChange = (paginationInfo) => {
+  pagination.value = {
+    ...pagination.value,
+    current: paginationInfo.current,
+    pageSize: paginationInfo.pageSize
+  }
+  fetchProduct()
+}
   
   
 const normalizeMcpUrlData = (urlData) => {
@@ -750,6 +794,7 @@ const handleDelete = (record) => {
       const { data, errorCode } = res.data;    
       if(errorCode==200){    
         message.success("删除成功")    
+        fetchProduct()
       }else if(errorCode==3002){    
         message.warn("删除失败，产品被绑定或者下面有物模型")    
       }else if(errorCode==2001){    

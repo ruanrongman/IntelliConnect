@@ -38,7 +38,11 @@ public interface ProductDataService {
 
   JsonResult<?> getProductData(String token);
 
+  JsonResult<?> getProductDataByModelId(int modelId);
+
   JsonResult<?> postProductData(ProductData productData);
+
+  JsonResult<?> putProductData(ProductData productData);
 
   JsonResult<?> deleteProductData(int id);
 }

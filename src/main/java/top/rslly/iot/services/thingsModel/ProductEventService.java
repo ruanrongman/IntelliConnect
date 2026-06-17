@@ -30,11 +30,17 @@ public interface ProductEventService {
 
   List<ProductEventEntity> findAllById(int id);
 
+  List<ProductEventEntity> findAllByModelId(int modelId);
+
   List<ProductEventEntity> findAllByModelIdAndName(int modelId, String name);
 
   JsonResult<?> getProductEvent(String token);
 
+  JsonResult<?> getProductEventByModelId(int modelId);
+
   JsonResult<?> postProductEvent(ProductEvent productEvent);
+
+  JsonResult<?> putProductEvent(ProductEvent productEvent);
 
   JsonResult<?> deleteProductEvent(int id);
 }
