@@ -1,10 +1,16 @@
 <template>    
-  <div class="table-container">    
+  <div
+    class="table-container"
+    @pointerdown.capture="handleTablePointerDown"
+    @focusin.capture="handleTableFocusIn"
+    @focusout.capture="resumePaginationRefreshSoon"
+  >    
     <a-table     
       :columns="columns"     
       :data-source="dataSource"     
       :pagination="pagination"    
       :loading="tableLoading"
+      :row-key="(record) => record.id"
       class="custom-table"    
       @change="handleTableChange"
     >    
@@ -351,11 +357,14 @@ const availableToolsCount = computed(() => {
 })
     
 const tableLoading = ref(false)
+const silentRefreshing = ref(false)
+const paginationInteracting = ref(false)
 const pagination = ref({
   current: 1,
   pageSize: 5,
   total: 0,
   showSizeChanger: true,
+  pageSizeOptions: ['5', '10', '20', '50'],
   showTotal: (total) => `共 ${total} 条`
 })
     
@@ -393,39 +402,55 @@ const columns = [
 ];    
     
     
-let intervalId;    
-    
-    
-onMounted(() => {    
-  fetchProduct();    
-  intervalId = setInterval(fetchProduct, 1000); // 每 60 秒钟刷新一次数据
-});    
-    
-    
-onUnmounted(() => {    
-  clearInterval(intervalId);    
-});    
-    
-    
-const fetchProduct = () => {    
-  tableLoading.value = true
+let intervalId
+let paginationInteractionTimer
+
+onMounted(() => {
+  fetchProduct()
+  intervalId = setInterval(() => {
+    if (canSilentRefresh()) {
+      fetchProduct({ silent: true })
+    }
+  }, 1000)
+})
+
+onUnmounted(() => {
+  clearInterval(intervalId)
+  clearTimeout(paginationInteractionTimer)
+})
+
+let requestSequence = 0
+
+const fetchProduct = (options = {}) => {
+  if ((tableLoading.value || silentRefreshing.value) && !options.force) {
+    return
+  }
+  const currentRequest = ++requestSequence
+  if (options.silent) {
+    silentRefreshing.value = true
+  } else {
+    tableLoading.value = true
+  }
   getProductPage({
     pageNum: pagination.value.current,
     pageSize: pagination.value.pageSize
   })    
     .then((res) => {    
+      if (currentRequest !== requestSequence) {
+        return
+      }
       const { data, errorCode } = res.data;    
       if(errorCode===2001){
         router.push('/login')    
       }    
       if(errorCode===200&& data){
-        const productList = Array.isArray(data) ? data : (data.content || [])
-        const total = Number(data.totalElements ?? productList.length)
-        const current = Number(data.number ?? pagination.value.current - 1) + 1
+        const productList = getPageContent(data)
+        const total = getPageTotal(data, productList.length)
+        const current = getPageCurrent(data, pagination.value.current)
         pagination.value = {
           ...pagination.value,
           current,
-          pageSize: Number(data.size ?? pagination.value.pageSize),
+          pageSize: getPageSize(data, pagination.value.pageSize),
           total
         }
         dataSource.value = productList.map((item, index) => ({
@@ -441,7 +466,7 @@ const fetchProduct = () => {
             ...pagination.value,
             current: maxPage
           }
-          fetchProduct()
+          fetchProduct({ force: true })
         }
       } else {    
         // 当没有数据时，设置为空数组    
@@ -456,18 +481,104 @@ const fetchProduct = () => {
       console.log(err);    
     })
     .finally(() => {
-      tableLoading.value = false
+      if (currentRequest === requestSequence) {
+        tableLoading.value = false
+        silentRefreshing.value = false
+      }
     });    
 };    
 
+const getPageContent = (pageData) => {
+  if (Array.isArray(pageData)) {
+    return pageData
+  }
+  if (Array.isArray(pageData?.content)) {
+    return pageData.content
+  }
+  if (Array.isArray(pageData?.data)) {
+    return pageData.data
+  }
+  return []
+}
+
+const getPageTotal = (pageData, fallback) => {
+  const total = pageData?.totalElements ?? pageData?.page?.totalElements ?? pageData?.total
+  const totalNumber = Number(total)
+  return Number.isFinite(totalNumber) ? totalNumber : fallback
+}
+
+const getPageCurrent = (pageData, fallback) => {
+  const number = pageData?.number ?? pageData?.page?.number
+  const currentNumber = Number(number)
+  return Number.isFinite(currentNumber) ? currentNumber + 1 : fallback
+}
+
+const getPageSize = (pageData, fallback) => {
+  const size = pageData?.size ?? pageData?.page?.size
+  const sizeNumber = Number(size)
+  return Number.isFinite(sizeNumber) ? sizeNumber : fallback
+}
+
+const pausePaginationRefresh = () => {
+  paginationInteracting.value = true
+  clearTimeout(paginationInteractionTimer)
+}
+
+const resumePaginationRefreshSoon = () => {
+  clearTimeout(paginationInteractionTimer)
+  paginationInteractionTimer = setTimeout(() => {
+    paginationInteracting.value = false
+  }, 800)
+}
+
+const hasOpenPaginationDropdown = () => {
+  if (typeof document === 'undefined') {
+    return false
+  }
+  return Array.from(document.querySelectorAll('.ant-select-dropdown')).some((dropdown) => {
+    if (dropdown.classList.contains('ant-select-dropdown-hidden')) {
+      return false
+    }
+    const style = window.getComputedStyle(dropdown)
+    const rect = dropdown.getBoundingClientRect()
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
+  })
+}
+
+const canSilentRefresh = () => {
+  return !paginationInteracting.value && !hasOpenPaginationDropdown()
+}
+
+const isPaginationElement = (target) => {
+  return target?.closest?.('.ant-pagination')
+}
+
+const handleTablePointerDown = (event) => {
+  if (isPaginationElement(event.target)) {
+    pausePaginationRefresh()
+  }
+}
+
+const handleTableFocusIn = (event) => {
+  if (isPaginationElement(event.target)) {
+    pausePaginationRefresh()
+  }
+}
+
 const handleTableChange = (paginationInfo) => {
+  const pageSizeChanged = paginationInfo.pageSize !== pagination.value.pageSize
   pagination.value = {
     ...pagination.value,
-    current: paginationInfo.current,
+    current: pageSizeChanged ? 1 : paginationInfo.current,
     pageSize: paginationInfo.pageSize
   }
-  fetchProduct()
+  paginationInteracting.value = false
+  fetchProduct({ force: true })
 }
+
+defineExpose({
+  fetchProduct: () => fetchProduct({ force: true })
+})
   
   
 const normalizeMcpUrlData = (urlData) => {

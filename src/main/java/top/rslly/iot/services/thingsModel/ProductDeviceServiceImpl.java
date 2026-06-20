@@ -324,7 +324,8 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> putProductDevice(ProductDevice productDevice) {
-    List<ProductDeviceEntity> currentList = productDeviceRepository.findAllById(productDevice.getId());
+    List<ProductDeviceEntity> currentList =
+        productDeviceRepository.findAllById(productDevice.getId());
     if (currentList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     ProductDeviceEntity current = currentList.get(0);

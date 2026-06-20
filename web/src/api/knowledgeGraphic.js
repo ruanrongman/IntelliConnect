@@ -12,6 +12,39 @@ export const queryKnowledgeGraphicReference = (params) => request({
   params
 })
 
+export const uploadKnowledgeGraphicFile = (files, params) => {
+  const formData = new FormData()
+  const uploadFiles = Array.isArray(files) ? files : [files]
+  uploadFiles.forEach((file) => {
+    formData.append('file', file)
+  })
+  return request({
+    url: '/api/v2/kg/graphic/file',
+    method: 'post',
+    params,
+    data: formData
+  })
+}
+
+export const getKnowledgeGraphicFileProgress = (params) => request({
+  url: '/api/v2/kg/graphic/file/progress',
+  method: 'get',
+  params
+})
+
+export const downloadKnowledgeGraphicDataset = (params) => request({
+  url: '/api/v2/kg/graphic/export',
+  method: 'get',
+  params,
+  responseType: 'blob'
+})
+
+export const clearKnowledgeGraphic = (params) => request({
+  url: '/api/v2/kg/graphic',
+  method: 'delete',
+  params
+})
+
 export const addKnowledgeGraphicNode = (data) => request({
   url: "/api/v2/kg/node",
   method: "post",

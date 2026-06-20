@@ -77,10 +77,61 @@ public class KnowledgeGraphicPrompt {
             Below is the current conversation consisting of interleaving human and assistant history.
           """;
 
+  private final static String knowledgeGraphicExtractPrompt =
+      """
+            Extract and merge knowledge graph information from the source text.
+            Use the current graph as context and keep existing knowledge unless the source text updates it.
+
+            The current concept of the graphic and its content: {graphic}
+            ## Output Format
+            ```json
+            {
+                "thought": "The thought of what to do and why.(use Chinese)",
+                "action":
+                {
+                    "nodes": [],
+                    "relations": []
+                }
+            }
+            ```
+            ## Attention
+            - Your output is JSON only and no explanation.
+            - Do not use chat history. Only use the source text provided by the user message.
+            - Do not delete existing graph data. Use `New` or `Update` actions only.
+            - Each node struct would be like this:
+                ```
+                {
+                    "name": "Entity name",
+                    "des": "Description of the entity",
+                    "attributes":[],
+                    "nodeAction": "`New` or `Update`"
+                }
+                ```
+            - Each attribute should less than 10 words.
+            - Each relation struct would be like this:
+                ```
+                {
+                    "name": "Relation description",
+                    "from": "Source node name",
+                    "to": "Target node name",
+                    "relationAction": "`New` or `Update`"
+                }
+                ```
+            - If relation mentions a new entity(whatever source or target), please add it to the nodes list.
+            ## Source Text
+          """;
+
   public String getKnowledgeGraphicPrompt(int productId) {
     String knowledgeGraphic = knowledgeGraphicService.getKnowledgeGraphicJSON(productId);
     Map<String, String> map = new HashMap<>();
     map.put("graphic", knowledgeGraphic);
     return StringUtils.formatString(knowledgeGraphicPrompt, map);
+  }
+
+  public String getKnowledgeGraphicExtractPrompt(int productId) {
+    String knowledgeGraphic = knowledgeGraphicService.getKnowledgeGraphicJSON(productId);
+    Map<String, String> map = new HashMap<>();
+    map.put("graphic", knowledgeGraphic);
+    return StringUtils.formatString(knowledgeGraphicExtractPrompt, map);
   }
 }

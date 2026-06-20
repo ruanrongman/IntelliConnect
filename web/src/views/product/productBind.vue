@@ -49,6 +49,7 @@ import { reactive, ref, toRaw, computed } from 'vue';
 import { message } from 'ant-design-vue'  
 import { postProductBind, postProductUnbind } from '@/api/productBind';  
 
+const emit = defineEmits(['refresh-products'])
 const visible = ref(false)  
 const isBindMode = ref(true) // true: 绑定模式, false: 解绑模式
 
@@ -98,6 +99,7 @@ const handleBind = () => {
         console.log(data)
         visible.value = false
         resetForm()
+        emit('refresh-products')
       }  
     })  
     .catch((err) => {  
@@ -119,6 +121,7 @@ const handleUnbind = () => {
         console.log(data)
         visible.value = false
         resetForm()
+        emit('refresh-products')
       }  
     })  
     .catch((err) => {  

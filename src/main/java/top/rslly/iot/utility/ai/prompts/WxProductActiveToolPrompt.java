@@ -30,9 +30,9 @@ public class WxProductActiveToolPrompt {
                ```json
                {
                "thought": "The thought of what to do and why.(use Chinese)",
-               "action": # the action to take
+               "action":
                    {
-                   "code": "If this is related to bind product output 200,else output 400",
+                   "code": "If this is related to control product output 200,else output 400",
                    "answer": "Answer vivid,lively,kind and amiable(use Chinese)",
                    "productName": "The name of the product that the user wants to control"
                    }

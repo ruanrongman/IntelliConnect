@@ -53,6 +53,7 @@
 import { reactive,ref,toRaw } from 'vue';
 import { message } from 'ant-design-vue'
 import { postProduct } from '@/api/product';
+const emit = defineEmits(['refresh-products'])
 const visible = ref(false)
 const showModal = () => {
 visible.value = !visible.value
@@ -81,6 +82,7 @@ const handleSubmit = () => {
           console.log("error")
         } else {
           message.success("创建成功!")
+          emit('refresh-products')
           console.log(data)
         }
       })

@@ -91,7 +91,7 @@ public class WxBoundProductTool implements BaseTool<String> {
       return process_llm_result(obj, appid, openid);
     } catch (Exception e) {
       // e.printStackTrace();
-      log.error("LLM error: " + e.getMessage());
+      log.error("WxBoundProductTool error{}", e.getMessage());
       return "对不起小主人,绑定产品操作发生了异常，请重新尝试";
     }
   }

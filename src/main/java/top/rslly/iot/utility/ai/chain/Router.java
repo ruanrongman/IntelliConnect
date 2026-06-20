@@ -21,6 +21,8 @@ package top.rslly.iot.utility.ai.chain;
 
 
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import jakarta.websocket.Session;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -158,7 +160,6 @@ public class Router {
       answer = routeExecutionResult.answer();
       toolResult = routeExecutionResult.toolResult();
     } else {
-      // ========== 分支预测启动 ==========
       final AtomicReference<String> predictionResult = new AtomicReference<>(null);
       final CountDownLatch predictionLatch = new CountDownLatch(1);
       final Queue<String> predictionQueue = new ConcurrentLinkedQueue<>();
@@ -171,14 +172,14 @@ public class Router {
         final Map<String, Queue<String>> predictionQueueMap = new ConcurrentHashMap<>();
         final String predictionChatId = streamChatId + "_prediction";
         predictionQueueMap.put(predictionChatId, predictionQueue);
-        predictionGlobalMessage.put("queueMap", predictionQueueMap);
-        predictionGlobalMessage.put("chatId", predictionChatId);
-        // predictionGlobalMessage.put("memory", new ArrayList<>(memory));
+        predictionGlobalMessage.put(GlobalMessageContext.QUEUE_MAP, predictionQueueMap);
+        predictionGlobalMessage.put(GlobalMessageContext.CHAT_ID, predictionChatId);
 
         predictionThread = Thread.ofVirtual().start(() -> {
           try {
-            if (predictionCancelled.get())
+            if (predictionCancelled.get()) {
               return;
+            }
             String result = chatTool.run(predictionContent, predictionGlobalMessage);
             if (!predictionCancelled.get()) {
               predictionResult.set(result);
@@ -191,7 +192,6 @@ public class Router {
           }
         });
       }
-      // ========== 分支预测启动 END ==========
       var resultMap = classifierTool.run(content, globalMessage);
       String args;
       Object argsObject = resultMap.get("args");
@@ -200,6 +200,7 @@ public class Router {
       } else {
         args = "";
       }
+      args = mergeRouterArgs(content, args);
       List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
       if (resultMap.containsKey("value") && !args.equals("")) {
         List<String> value = Cast.castList(resultMap.get("value"), String.class);
@@ -230,13 +231,13 @@ public class Router {
             case "4" -> {
               predictionCancelled.set(true);
               predictionQueue.clear();
-              toolResult = agent.run(content, globalMessage);
+              toolResult = agent.run(args, globalMessage);
               answer = ToolPrefix.AGENT.getPrefix() + toolResult;
             }
             case "5" -> {
-              answer = resolveChatToolAnswer(content, globalMessage,
-                  predictionThread, predictionResult, predictionCancelled,
-                  predictionLatch, queue, predictionQueue, streamChatId);
+              answer = resolvePredictedChatAnswer(content, globalMessage, predictionThread,
+                  predictionResult, predictionCancelled, predictionLatch, queue, predictionQueue,
+                  streamChatId);
             }
             case "6" -> {
               predictionCancelled.set(true);
@@ -279,20 +280,20 @@ public class Router {
               answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
             }
             default -> {
-              answer = resolveChatToolAnswer(content, globalMessage,
-                  predictionThread, predictionResult, predictionCancelled,
-                  predictionLatch, queue, predictionQueue, streamChatId);
+              answer = resolvePredictedChatAnswer(content, globalMessage, predictionThread,
+                  predictionResult, predictionCancelled, predictionLatch, queue, predictionQueue,
+                  streamChatId);
             }
           }
         } else {
-          answer = resolveChatToolAnswer(content, globalMessage,
-              predictionThread, predictionResult, predictionCancelled,
-              predictionLatch, queue, predictionQueue, streamChatId);
+          answer = resolvePredictedChatAnswer(content, globalMessage, predictionThread,
+              predictionResult, predictionCancelled, predictionLatch, queue, predictionQueue,
+              streamChatId);
         }
       } else {
-        answer = resolveChatToolAnswer(content, globalMessage,
-            predictionThread, predictionResult, predictionCancelled,
-            predictionLatch, queue, predictionQueue, streamChatId);
+        answer = resolvePredictedChatAnswer(content, globalMessage, predictionThread,
+            predictionResult, predictionCancelled, predictionLatch, queue, predictionQueue,
+            streamChatId);
       }
     }
     if (toolResult == null || toolResult.equals(""))
@@ -342,7 +343,8 @@ public class Router {
       Optional<FunctionRouterRoute> route =
           FunctionRouterRoute.fromFunctionName(result.getFunctionName());
       if (route.isPresent()) {
-        return executeToolRoute(route.get().getTaskId(), content, result.getArguments(),
+        FunctionRouterRoute matchedRoute = route.get();
+        return executeToolRoute(matchedRoute.getTaskId(), content, result.getArguments(),
             globalMessage, dataArgs);
       }
       log.warn("Unknown function router target {}, fallback to legacy router, chatId={}",
@@ -360,7 +362,7 @@ public class Router {
     String args = resultMap.get("args") == null ? "" : resultMap.get("args").toString();
     List<String> value = Cast.castList(resultMap.get("value"), String.class);
     if (value == null || value.isEmpty()) {
-      String directReply = chatTool.run(content, globalMessage);
+      String directReply = chatTool.run(mergeRouterArgs(content, args), globalMessage);
       return new RouteExecutionResult(directReply, directReply);
     }
     return executeToolRoute(value.get(0), content, args, globalMessage, dataArgs);
@@ -368,63 +370,64 @@ public class Router {
 
   private RouteExecutionResult executeToolRoute(String routeId, String content, String args,
       Map<String, Object> globalMessage, String... dataArgs) {
+    String routeArgs = mergeRouterArgs(content, args);
     String answer;
     String toolResult;
     switch (routeId) {
       case "1" -> {
-        toolResult = weatherTool.run(args, globalMessage);
+        toolResult = weatherTool.run(routeArgs, globalMessage);
         answer = ToolPrefix.WEATHER.getPrefix() + toolResult;
       }
       case "2" -> {
-        toolResult = controlTool.run(args, globalMessage);
+        toolResult = controlTool.run(routeArgs, globalMessage);
         answer = ToolPrefix.CONTROL.getPrefix() + toolResult;
       }
       case "3" -> {
-        var musicMap = musicTool.run(args, globalMessage);
+        var musicMap = musicTool.run(routeArgs, globalMessage);
         toolResult = musicMap.get("answer");
         answer = ToolPrefix.MUSIC.getPrefix() + toolResult + musicMap.get("url");
       }
       case "4" -> {
-        toolResult = agent.run(content, globalMessage);
+        toolResult = agent.run(routeArgs, globalMessage);
         answer = ToolPrefix.AGENT.getPrefix() + toolResult;
       }
       case "6" -> {
-        toolResult = wxBoundProductTool.run(args, globalMessage);
+        toolResult = wxBoundProductTool.run(routeArgs, globalMessage);
         answer = ToolPrefix.WX_BOUND_PRODUCT.getPrefix() + toolResult;
       }
       case "7" -> {
-        toolResult = wxProductActiveTool.run(args, globalMessage);
+        toolResult = wxProductActiveTool.run(routeArgs, globalMessage);
         answer = ToolPrefix.WX_PRODUCT_ACTIVE.getPrefix() + toolResult;
       }
       case "8" -> {
         if (dataArgs.length > 0 && dataArgs[0].equals("false")) {
           toolResult = "定时任务禁止递归调用!!!";
         } else {
-          toolResult = scheduleTool.run(args, globalMessage);
+          toolResult = scheduleTool.run(routeArgs, globalMessage);
         }
         answer = ToolPrefix.SCHEDULE.getPrefix() + toolResult;
       }
       case "9" -> {
-        toolResult = productRoleTool.run(args, globalMessage);
+        toolResult = productRoleTool.run(routeArgs, globalMessage);
         answer = ToolPrefix.PRODUCT_ROLE.getPrefix() + toolResult;
       }
       case "10" -> {
-        toolResult = mcpAgent.run(args, globalMessage);
+        toolResult = mcpAgent.run(routeArgs, globalMessage);
         answer = ToolPrefix.MCP_AGENT.getPrefix() + toolResult;
       }
       case "11" -> {
-        toolResult = goodByeTool.run(args, globalMessage);
+        toolResult = goodByeTool.run(routeArgs, globalMessage);
         answer = ToolPrefix.GOODBYE.getPrefix() + toolResult;
       }
       default -> {
-        answer = chatTool.run(content, globalMessage);
+        answer = chatTool.run(routeArgs, globalMessage);
         toolResult = answer;
       }
     }
     return new RouteExecutionResult(answer, toolResult);
   }
 
-  private String resolveChatToolAnswer(
+  private String resolvePredictedChatAnswer(
       String content,
       Map<String, Object> globalMessage,
       Thread predictionThread,
@@ -439,7 +442,6 @@ public class Router {
       return chatTool.run(content, globalMessage);
     }
 
-    // ✅ 修复1：只要预测线程还活着(或已有结果)，就认为HIT，不再看队列是否为空
     if (predictionThread.isAlive() || predictionResult.get() != null) {
       log.debug("[BranchPrediction] HIT, chatId={}", chatId);
 
@@ -454,7 +456,6 @@ public class Router {
             if (token != null) {
               mainQueue.offer(token);
             } else {
-              // ✅ 修复2：线程还活着但队列暂时为空，yield等待新token
               Thread.yield();
             }
           }
@@ -482,7 +483,6 @@ public class Router {
       return "";
     }
 
-    // MISS：预测线程已死且无结果（异常退出）
     log.debug("[BranchPrediction] MISS, chatId={}", chatId);
     predictionCancelled.set(true);
     predictionQueue.clear();
@@ -498,5 +498,41 @@ public class Router {
     } catch (Exception e) {
       log.warn("record history message failed, chatId={}", chatId, e);
     }
+  }
+
+  private String mergeRouterArgs(String content, String rawArguments) {
+    String routedArgs = extractRoutedArgs(rawArguments);
+    String originalContent = content == null ? "" : content.trim();
+    if (routedArgs.isBlank()) {
+      return originalContent;
+    }
+    if (originalContent.isBlank()) {
+      return routedArgs;
+    }
+    if (routedArgs.equals(originalContent)) {
+      return originalContent;
+    }
+    return "用户原始输入:\n" + originalContent + "\n上下文补充:\n" + routedArgs;
+  }
+
+  private String extractRoutedArgs(String rawArguments) {
+    if (rawArguments == null || rawArguments.isBlank()) {
+      return "";
+    }
+    String trimmed = rawArguments.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        JSONObject obj = JSON.parseObject(trimmed);
+        if (obj != null) {
+          String args = obj.getString("args");
+          if (args != null) {
+            return args.trim();
+          }
+        }
+      } catch (Exception e) {
+        log.debug("failed to parse function router arguments as JSON: {}", trimmed, e);
+      }
+    }
+    return trimmed;
   }
 }

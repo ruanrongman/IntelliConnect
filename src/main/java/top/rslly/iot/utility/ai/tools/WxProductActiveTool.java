@@ -95,7 +95,7 @@ public class WxProductActiveTool implements BaseTool<String> {
     try {
       return process_llm_result(obj, appid, openid);
     } catch (Exception e) {
-      // e.printStackTrace();
+      log.error("WxProductActiveTool error{}", e.getMessage());
       return "对不起小主人,切换产品操作发生了异常，请重新尝试";
     }
   }

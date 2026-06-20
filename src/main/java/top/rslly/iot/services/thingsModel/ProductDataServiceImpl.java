@@ -208,7 +208,8 @@ public class ProductDataServiceImpl implements ProductDataService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> putProductData(ProductData productData) {
     List<ProductDataEntity> currentList = productDataRepository.findAllById(productData.getId());
-    List<ProductModelEntity> modelList = productModelRepository.findAllById(productData.getModelId());
+    List<ProductModelEntity> modelList =
+        productModelRepository.findAllById(productData.getModelId());
     if (currentList.isEmpty() || modelList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     List<ProductDataEntity> duplicates = productDataRepository

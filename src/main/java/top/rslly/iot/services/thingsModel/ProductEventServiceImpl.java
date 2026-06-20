@@ -154,7 +154,8 @@ public class ProductEventServiceImpl implements ProductEventService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> putProductEvent(ProductEvent productEvent) {
     List<ProductEventEntity> currentList = productEventRepository.findAllById(productEvent.getId());
-    List<ProductModelEntity> modelList = productModelRepository.findAllById(productEvent.getModelId());
+    List<ProductModelEntity> modelList =
+        productModelRepository.findAllById(productEvent.getModelId());
     if (currentList.isEmpty() || modelList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     List<ProductEventEntity> duplicates =

@@ -41,6 +41,7 @@ import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
 import top.rslly.iot.services.storage.DataServiceImpl;
 import top.rslly.iot.services.storage.EventStorageServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
+import top.rslly.iot.utility.ai.tools.KnowledgeGraphicTool;
 import top.rslly.iot.utility.RuntimeMessage;
 import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.result.JsonResult;
@@ -54,6 +55,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 @RestController
@@ -100,6 +102,8 @@ public class Tool {
   private ProductLlmModelServiceImpl productLlmModelService;
   @Autowired
   private KnowledgeGraphicService knowledgeGraphicService;
+  @Autowired
+  private KnowledgeGraphicTool knowledgeGraphicTool;
   @Autowired
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
@@ -985,6 +989,59 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return knowledgeGraphicService.queryKnowledgeGraphicJsonResult(query, productId);
+  }
+
+  @Operation(summary = "上传文件生成知识图谱", description = "上传文档或zip压缩包并异步合并生成知识图谱")
+  @RequestMapping(value = "/kg/graphic/file", method = RequestMethod.POST,
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public JsonResult<?> uploadKnowledgeGraphicFile(@RequestParam("productId") int productId,
+      @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile[] multipartFiles,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicTool.startFileGeneration(productId, multipartFiles);
+  }
+
+  @Operation(summary = "获取知识图谱文件生成进度", description = "通过任务ID获取页面内临时处理进度")
+  @RequestMapping(value = "/kg/graphic/file/progress", method = RequestMethod.GET)
+  public JsonResult<?> getKnowledgeGraphicFileProgress(
+      @RequestParam("taskId") @NotBlank(message = "taskId 不能为空") String taskId) {
+    return knowledgeGraphicTool.getFileGenerationProgress(taskId);
+  }
+
+  @Operation(summary = "下载知识图谱数据集", description = "通过产品ID下载该产品知识图谱JSON")
+  @RequestMapping(value = "/kg/graphic/export", method = RequestMethod.GET)
+  public ResponseEntity<?> exportKnowledgeGraphic(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResponseEntity.ok(ResultTool.fail(ResultCode.NO_PERMISSION));
+    } catch (NullPointerException e) {
+      return ResponseEntity.ok(ResultTool.fail(ResultCode.PARAM_NOT_VALID));
+    }
+    String knowledgeGraphic = knowledgeGraphicService.getKnowledgeGraphicJSON(productId);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"knowledge-graphic-" + productId + ".json\"")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(knowledgeGraphic.getBytes(StandardCharsets.UTF_8));
+  }
+
+  @Operation(summary = "清空知识图谱", description = "通过产品ID清空该产品下所有知识图谱数据")
+  @RequestMapping(value = "/kg/graphic", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteKnowledgeGraphic(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeGraphicService.deleteNodes(productId);
   }
 
   @Operation(summary = "添加知识图谱节点", description = "添加知识图谱节点")

@@ -524,6 +524,9 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     knowledgeGraphicNodeRepository.delete(node);
+    knowledgeGraphicRelationRepository.deleteAllByFrom(node.getId());
+    knowledgeGraphicRelationRepository.deleteAllByTo(node.getId());
+    knowledgeGraphicAttributeRepository.deleteByBelong(node.getId());
     this.deleteKnowledgeGraphicNodeEmbedding(node.getId());
     return ResultTool.success();
   }
@@ -549,14 +552,15 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     List<KnowledgeGraphicNodeEntity> nodes =
         knowledgeGraphicNodeRepository.findAllByProductId(productId);
     if (nodes.isEmpty()) {
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      this.deleteKnowledgeGraphicNodesEmbedding(productId);
+      return ResultTool.success();
     }
     for (KnowledgeGraphicNodeEntity node : nodes) {
       if (!this.deleteNode(node.getId()).getSuccess()) {
         return ResultTool.fail();
       }
     }
-    this.deleteKnowledgeGraphicNodeEmbedding(productId);
+    this.deleteKnowledgeGraphicNodesEmbedding(productId);
     return ResultTool.success();
   }
 

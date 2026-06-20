@@ -12,8 +12,14 @@ import {
   Switch,
   Tooltip,
   Slider,
+  Progress,
 } from 'ant-design-vue'
-import { QuestionCircleOutlined } from '@ant-design/icons-vue'
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  QuestionCircleOutlined,
+  UploadOutlined,
+} from '@ant-design/icons-vue'
 import NodeInfo from '@/views/knowledgeGraphic/nodeInfo.vue'
 import RelationConfig from '@/views/knowledgeGraphic/relationConfig.vue'
 
@@ -31,6 +37,10 @@ import {
   knowledgeGraphicForgetToggle,
   updateKnowledgeGraphicForgetEpoch,
   getKnowledgeGraphicForgetEpoch,
+  uploadKnowledgeGraphicFile,
+  getKnowledgeGraphicFileProgress,
+  downloadKnowledgeGraphicDataset,
+  clearKnowledgeGraphic,
 } from '@/api/knowledgeGraphic'
 import { getProduct } from '@/api/product'
 
@@ -111,6 +121,20 @@ const newNodeForm = reactive({
 const knowledgeGraphicEnable = ref(false)
 const knowledgeGraphForgetEnable = ref(false)
 const knowledgeGraphForgetEpoch = ref(10)
+const allowedUploadTypes = [
+  '.pdf',
+  '.txt',
+  '.md',
+  '.markdown',
+  '.doc',
+  '.docx',
+  '.ppt',
+  '.pptx',
+  '.xls',
+  '.xlsx',
+  '.zip',
+]
+const allowedUploadTypesString = allowedUploadTypes.join(', ')
 
 const cavWidth = ref(300)
 const cavHeight = ref(100)
@@ -123,6 +147,25 @@ const graphic = ref(null)
 const products = ref([])
 const productLoading = ref(true)
 const currentProductId = ref(null)
+const isUploadModalOpen = ref(false)
+const uploadLoading = ref(false)
+const downloadLoading = ref(false)
+const uploadSelectedFiles = ref([])
+const uploadProgressTimer = ref(null)
+const uploadForm = reactive({
+  file: [],
+})
+const uploadProgress = reactive({
+  percent: 0,
+  status: 'pending',
+  message: '',
+  fileName: '',
+  currentChunk: 0,
+  totalChunks: 0,
+  finished: false,
+  success: false,
+  errorMessage: '',
+})
 
 // Variables for handling relation
 const isConnection = ref(false)
@@ -247,6 +290,218 @@ function handleAddNewNode() {
     getCurrentKnowledgeGraphic()
   })
   handleStopAddNewNode()
+}
+
+function resetUploadProgress() {
+  uploadProgress.percent = 0
+  uploadProgress.status = 'pending'
+  uploadProgress.message = ''
+  uploadProgress.fileName = ''
+  uploadProgress.currentChunk = 0
+  uploadProgress.totalChunks = 0
+  uploadProgress.finished = false
+  uploadProgress.success = false
+  uploadProgress.errorMessage = ''
+}
+
+function handleOpenUploadModal() {
+  if (!currentProductId.value) return
+  resetUploadProgress()
+  uploadForm.file = []
+  uploadSelectedFiles.value = []
+  isUploadModalOpen.value = true
+}
+
+function handleCloseUploadModal() {
+  if (uploadLoading.value) {
+    message.warning('知识图谱正在生成中，请等待完成')
+    return
+  }
+  isUploadModalOpen.value = false
+}
+
+function handleUploadDone() {
+  isUploadModalOpen.value = false
+  uploadForm.file = []
+  uploadSelectedFiles.value = []
+  resetUploadProgress()
+}
+
+function handleBeforeUpload(file) {
+  const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+  if (!allowedUploadTypes.includes(fileExtension)) {
+    message.error(`文件类型不支持，请上传 ${allowedUploadTypesString} 格式的文件`)
+    return false
+  }
+  const isLt200M = file.size / 1024 / 1024 < 200
+  if (!isLt200M) {
+    message.error('文件大小不能超过200MB')
+    return false
+  }
+  const exists = uploadSelectedFiles.value.some(
+    (item) => item.uid === file.uid || (item.name === file.name && item.size === file.size)
+  )
+  if (!exists) {
+    uploadSelectedFiles.value = [...uploadSelectedFiles.value, file]
+    uploadForm.file = uploadSelectedFiles.value
+  }
+  return false
+}
+
+function handleUploadRemove(file) {
+  uploadSelectedFiles.value = uploadSelectedFiles.value.filter((item) => item.uid !== file.uid)
+  uploadForm.file = uploadSelectedFiles.value
+  return true
+}
+
+function stopUploadProgressPolling() {
+  if (uploadProgressTimer.value) {
+    clearInterval(uploadProgressTimer.value)
+    uploadProgressTimer.value = null
+  }
+}
+
+function applyUploadProgress(progress) {
+  uploadProgress.percent = Number(progress.percent || 0)
+  uploadProgress.status = progress.status || 'pending'
+  uploadProgress.message = progress.message || ''
+  uploadProgress.fileName = progress.fileName || ''
+  uploadProgress.currentChunk = Number(progress.currentChunk || 0)
+  uploadProgress.totalChunks = Number(progress.totalChunks || 0)
+  uploadProgress.finished = Boolean(progress.finished)
+  uploadProgress.success = Boolean(progress.success)
+  uploadProgress.errorMessage = progress.errorMessage || ''
+}
+
+function pollUploadProgress(taskId) {
+  stopUploadProgressPolling()
+  uploadProgressTimer.value = setInterval(() => {
+    getKnowledgeGraphicFileProgress({ taskId })
+      .then((res) => {
+        const { data, errorCode } = res.data
+        if (errorCode !== 200 || !data) return
+        applyUploadProgress(data)
+        if (data.finished) {
+          stopUploadProgressPolling()
+          uploadLoading.value = false
+          if (data.success) {
+            message.success('知识图谱生成完成')
+            getCurrentKnowledgeGraphic()
+          } else {
+            message.error(data.errorMessage || '知识图谱生成失败')
+          }
+        }
+      })
+      .catch(() => {
+        stopUploadProgressPolling()
+        uploadLoading.value = false
+        message.error('获取处理进度失败')
+      })
+  }, 1000)
+}
+
+async function handleUploadKnowledgeGraphic() {
+  const files = uploadSelectedFiles.value.length > 0 ? uploadSelectedFiles.value : uploadForm.file
+  if (!files || files.length === 0) {
+    message.error('请先选择文件')
+    return
+  }
+  try {
+    uploadLoading.value = true
+    resetUploadProgress()
+    uploadProgress.status = 'uploading'
+    uploadProgress.message = '正在上传文件'
+    const filesToUpload = files.map((file) => file.originFileObj || file)
+    const res = await uploadKnowledgeGraphicFile(filesToUpload, {
+      productId: currentProductId.value,
+    })
+    const { data, errorCode, errorMsg } = res.data
+    if (errorCode !== 200 || !data?.taskId) {
+      uploadLoading.value = false
+      message.error(errorMsg || '上传失败')
+      return
+    }
+    uploadProgress.message = '文件已上传，正在开始处理'
+    pollUploadProgress(data.taskId)
+  } catch (err) {
+    uploadLoading.value = false
+    message.error('上传失败，请重试')
+  }
+}
+
+async function handleDownloadDataset() {
+  if (!currentProductId.value) return
+  if (downloadLoading.value) return
+  downloadLoading.value = true
+  try {
+    const res = await downloadKnowledgeGraphicDataset({ productId: currentProductId.value })
+    if (res.data instanceof Blob && res.data.type.includes('application/json')) {
+      const text = await res.data.text()
+      try {
+        const json = JSON.parse(text)
+        if (json.errorCode && json.errorCode !== 200) {
+          message.error(json.errorMsg || '下载失败')
+          return
+        }
+      } catch (e) {
+        // The response is the dataset JSON itself.
+      }
+      const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+      downloadBlob(blob)
+      message.success('数据集下载已开始')
+      return
+    }
+    const blob = new Blob([res.data], { type: 'application/json;charset=utf-8' })
+    downloadBlob(blob)
+    message.success('数据集下载已开始')
+  } catch (err) {
+    message.error('下载失败，请重试')
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
+function downloadBlob(blob) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `knowledge-graphic-${currentProductId.value}.json`
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url)
+  }, 1000)
+}
+
+function handleClearKnowledgeGraphic() {
+  if (!currentProductId.value) return
+  const hasGraphicData =
+    graphic.value &&
+    ((Array.isArray(graphic.value.nodes) && graphic.value.nodes.length > 0) ||
+      (Array.isArray(graphic.value.relations) && graphic.value.relations.length > 0))
+  if (!hasGraphicData) {
+    message.info('当前知识图谱为空，无需清空')
+    return
+  }
+  Modal.confirm({
+    title: '确认清空知识图谱？',
+    content: '该操作会删除当前产品下的所有节点、关系、属性和图谱向量数据。',
+    okText: '清空',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      const res = await clearKnowledgeGraphic({ productId: currentProductId.value })
+      const { errorCode, errorMsg } = res.data
+      if (errorCode === 200) {
+        message.success('知识图谱已清空')
+        getCurrentKnowledgeGraphic()
+      } else {
+        message.error(errorMsg || '清空失败')
+      }
+    },
+  })
 }
 
 function handleStartConnecting(e) {
@@ -729,7 +984,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  resizeObserver.value.disconnect()
+  if (resizeObserver.value) resizeObserver.value.disconnect()
+  stopUploadProgressPolling()
   removeGlobalEvent()
 })
 </script>
@@ -773,6 +1029,32 @@ onUnmounted(() => {
             @click="handleStartAddNewNode"
             >添加节点</Button
           >
+        </div>
+        <div class="option-item">
+          <Button
+            :type="'primary'"
+            :disabled="currentProductId === null"
+            @click="handleOpenUploadModal"
+          >
+            <template #icon><UploadOutlined /></template>
+            上传生成图谱
+          </Button>
+        </div>
+        <div class="option-item">
+          <Button
+            :disabled="currentProductId === null"
+            :loading="downloadLoading"
+            @click="handleDownloadDataset"
+          >
+            <template #icon><DownloadOutlined /></template>
+            下载数据集
+          </Button>
+        </div>
+        <div class="option-item">
+          <Button danger :disabled="currentProductId === null" @click="handleClearKnowledgeGraphic">
+            <template #icon><DeleteOutlined /></template>
+            清空图谱
+          </Button>
         </div>
         <div v-if="currentProductId !== null" class="option-item">
           <label class="option-label" for="connect-toggle">
@@ -859,6 +1141,74 @@ onUnmounted(() => {
             :maxlength="255"
             placeholder="节点描述，不超过255字"
           />
+        </Form.Item>
+      </Form>
+    </Modal>
+    <Modal
+      :open="isUploadModalOpen"
+      title="上传生成知识图谱"
+      :footer="null"
+      :closable="!uploadLoading"
+      :mask-closable="!uploadLoading"
+      @cancel="handleCloseUploadModal"
+    >
+      <Form :model="uploadForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+        <Form.Item
+          label="选择文件"
+          name="file"
+          :rules="[{ required: true, message: '请上传文件' }]"
+        >
+          <a-upload
+            v-model:file-list="uploadForm.file"
+            :multiple="true"
+            :before-upload="handleBeforeUpload"
+            :show-upload-list="true"
+            :disabled="uploadLoading"
+            :accept="allowedUploadTypesString"
+            @remove="handleUploadRemove"
+          >
+            <Button :disabled="uploadLoading">
+              <template #icon><UploadOutlined /></template>
+              选择文件（单个200MB以内）
+            </Button>
+          </a-upload>
+          <div class="upload-tip">支持格式：{{ allowedUploadTypesString }}</div>
+        </Form.Item>
+        <Form.Item v-if="uploadLoading || uploadProgress.finished" label="处理进度">
+          <Progress
+            :percent="uploadProgress.percent"
+            :status="
+              uploadProgress.status === 'error'
+                ? 'exception'
+                : uploadProgress.finished && uploadProgress.success
+                  ? 'success'
+                  : 'active'
+            "
+          />
+          <div class="upload-progress-text">
+            {{ uploadProgress.message }}
+          </div>
+          <div v-if="uploadProgress.totalChunks > 0" class="upload-progress-subtext">
+            当前片段：{{ uploadProgress.currentChunk }} / {{ uploadProgress.totalChunks }}
+          </div>
+        </Form.Item>
+        <Form.Item :wrapper-col="{ offset: 6, span: 16 }">
+          <Button
+            v-if="uploadProgress.finished && uploadProgress.success"
+            type="primary"
+            @click="handleUploadDone"
+          >
+            完成
+          </Button>
+          <Button
+            v-else
+            type="primary"
+            :loading="uploadLoading"
+            :disabled="uploadLoading"
+            @click="handleUploadKnowledgeGraphic"
+          >
+            {{ uploadLoading ? '处理中...' : uploadProgress.finished ? '重新生成' : '开始生成' }}
+          </Button>
         </Form.Item>
       </Form>
     </Modal>
@@ -965,6 +1315,17 @@ onUnmounted(() => {
   content: '*';
   color: red;
   margin-right: 2px;
+}
+
+.upload-tip,
+.upload-progress-subtext {
+  margin-top: 8px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.upload-progress-text {
+  margin-top: 8px;
 }
 
 .kg-body {

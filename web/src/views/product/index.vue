@@ -3,10 +3,10 @@
     <HeaderCard :device="homeData"/>
     <div class="product-content">
       <div class="action-bar">
-        <product />
-        <productBind/>
+        <product @refresh-products="refreshProductTable" />
+        <productBind @refresh-products="refreshProductTable"/>
       </div>
-      <Mytable />
+      <Mytable ref="productTableRef" />
     </div>
   </div>
 </template>
@@ -17,7 +17,10 @@ import product from './product.vue'
 import productBind from './productBind.vue'
 import Mytable from './Mytable.vue'
 import { getConnectedNum } from '@/api/connectedNum'
-import { reactive, onUnmounted } from 'vue'
+import { reactive, ref, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+const router = useRouter()
+const productTableRef = ref(null)
 let homeData = reactive({
       num: 0,
       connected: 0,
@@ -44,9 +47,13 @@ let intervalId = setInterval(  //设置定时器，1s更新一次
         })
         .catch((err) => {
           console.log(err)
-        })
+    })
 	},5000
 );
+function refreshProductTable() {
+  productTableRef.value?.fetchProduct?.()
+}
+
 onUnmounted(() => {
   clearInterval(intervalId)
   console.log(`the component is now unmounted.`)

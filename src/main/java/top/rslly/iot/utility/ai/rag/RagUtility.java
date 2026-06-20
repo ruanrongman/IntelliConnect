@@ -40,6 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +49,9 @@ import java.util.Map;
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
 public class RagUtility {
+  private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("pdf", "txt", "md", "markdown",
+      "doc", "docx", "ppt", "pptx", "xls", "xlsx");
+
   /**
    * 解析 PDF → 分段 → 存入
    */
@@ -95,6 +99,23 @@ public class RagUtility {
     }
   }
 
+  public static String parseFile(File file) {
+    if (file == null || !file.exists() || !file.isFile()) {
+      throw new IllegalArgumentException("File not found");
+    }
+    String extension = getFileExtension(file.getName()).toLowerCase(Locale.ROOT);
+    DocumentParser parser = documentParser(extension);
+    Document document = FileSystemDocumentLoader.loadDocument(file.getAbsolutePath(), parser);
+    return document.text();
+  }
+
+  public static boolean isSupportedKnowledgeFile(String fileName) {
+    if (fileName == null || fileName.isBlank()) {
+      return false;
+    }
+    return SUPPORTED_EXTENSIONS.contains(getFileExtension(fileName).toLowerCase(Locale.ROOT));
+  }
+
   /**
    * 按 productId 过滤检索
    */
@@ -128,7 +149,7 @@ public class RagUtility {
     store.removeAll(filter);
   }
 
-  private static String getFileExtension(String fileName) {
+  public static String getFileExtension(String fileName) {
     int dotIndex = fileName.lastIndexOf('.');
     return (dotIndex != -1 && dotIndex < fileName.length() - 1)
         ? fileName.substring(dotIndex + 1)
