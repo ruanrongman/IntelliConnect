@@ -17,6 +17,7 @@ import {
 import {
   DeleteOutlined,
   DownloadOutlined,
+  EditOutlined,
   QuestionCircleOutlined,
   UploadOutlined,
 } from '@ant-design/icons-vue'
@@ -41,6 +42,13 @@ import {
   getKnowledgeGraphicFileProgress,
   downloadKnowledgeGraphicDataset,
   clearKnowledgeGraphic,
+  getKnowledgeGraphicPromptState,
+  addKnowledgeGraphicPromptToggleConfig,
+  knowledgeGraphicPromptToggle,
+  getProductKnowledgeGraphicPrompt,
+  addProductKnowledgeGraphicPrompt,
+  updateProductKnowledgeGraphicPrompt,
+  deleteProductKnowledgeGraphicPrompt,
 } from '@/api/knowledgeGraphic'
 import { getProduct } from '@/api/product'
 
@@ -121,6 +129,15 @@ const newNodeForm = reactive({
 const knowledgeGraphicEnable = ref(false)
 const knowledgeGraphForgetEnable = ref(false)
 const knowledgeGraphForgetEpoch = ref(10)
+const knowledgeGraphicPromptEnable = ref(false)
+const promptModalOpen = ref(false)
+const promptLoading = ref(false)
+const promptSaving = ref(false)
+const promptDeleting = ref(false)
+const knowledgeGraphicPromptForm = reactive({
+  id: null,
+  prompt: '',
+})
 const allowedUploadTypes = [
   '.pdf',
   '.txt',
@@ -206,6 +223,7 @@ function afterFetchCurrentProduct() {
   getCurrentKnowledgeGraphic()
   getCurrentKnowledgeGraphForgetState()
   getCurrentKnowledgeGraphForgetEpoch()
+  getCurrentKnowledgeGraphicPromptState()
 }
 
 function handleKnowledgeGraphicEnableToggle() {
@@ -275,6 +293,158 @@ function handleKnowledgeGraphForgetEpochChange(value) {
 function handleStartAddNewNode() {
   newNodeForm.productId = currentProductId.value
   isAddingNode.value = true
+}
+
+function handleKnowledgeGraphicPromptToggle() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+  }
+  const data = {
+    productId: currentProductId.value,
+    value: String(!knowledgeGraphicPromptEnable.value),
+  }
+  knowledgeGraphicPromptToggle(data)
+    .then((res) => resultPreFilter(res))
+    .then(() => {
+      if (knowledgeGraphicPromptEnable.value) {
+        message.info('已关闭图谱提示增强')
+        promptModalOpen.value = false
+      } else {
+        message.info('已开启图谱提示增强')
+        fetchProductKnowledgeGraphicPrompt()
+      }
+      knowledgeGraphicPromptEnable.value = !knowledgeGraphicPromptEnable.value
+    })
+}
+
+function resetKnowledgeGraphicPromptForm() {
+  knowledgeGraphicPromptForm.id = null
+  knowledgeGraphicPromptForm.prompt = ''
+}
+
+function normalizeKnowledgeGraphicPrompt(data) {
+  if (Array.isArray(data) && data.length > 0) return data[0]
+  if (data && typeof data === 'object' && !Array.isArray(data)) return data
+  return null
+}
+
+function fetchProductKnowledgeGraphicPrompt() {
+  if (!currentProductId.value) return Promise.resolve()
+  promptLoading.value = true
+  return getProductKnowledgeGraphicPrompt({ productId: currentProductId.value })
+    .then((res) => {
+      const { data, errorCode } = res.data
+      if (errorCode === 2001) {
+        router.push('/login')
+        return
+      }
+      if (errorCode !== 200) {
+        resetKnowledgeGraphicPromptForm()
+        return
+      }
+      const promptConfig = normalizeKnowledgeGraphicPrompt(data)
+      if (!promptConfig) {
+        resetKnowledgeGraphicPromptForm()
+        return
+      }
+      knowledgeGraphicPromptForm.id = promptConfig.id
+      knowledgeGraphicPromptForm.prompt = promptConfig.prompt || ''
+    })
+    .catch(() => {
+      resetKnowledgeGraphicPromptForm()
+    })
+    .finally(() => {
+      promptLoading.value = false
+    })
+}
+
+function handleOpenPromptModal() {
+  if (!currentProductId.value || !knowledgeGraphicPromptEnable.value) return
+  promptModalOpen.value = true
+  fetchProductKnowledgeGraphicPrompt()
+}
+
+function handleClosePromptModal() {
+  promptModalOpen.value = false
+}
+
+function handleSaveKnowledgeGraphicPrompt() {
+  const prompt = knowledgeGraphicPromptForm.prompt.trim()
+  if (!prompt) {
+    message.warning('请输入背景信息及要求')
+    return
+  }
+  promptSaving.value = true
+  const hasExistingPrompt = Boolean(knowledgeGraphicPromptForm.id)
+  const payload = {
+    productId: currentProductId.value,
+    prompt,
+  }
+  const request = hasExistingPrompt
+    ? updateProductKnowledgeGraphicPrompt({
+        ...payload,
+        id: knowledgeGraphicPromptForm.id,
+      })
+    : addProductKnowledgeGraphicPrompt(payload)
+  request
+    .then((res) => {
+      const { data, errorCode, errorMsg } = res.data
+      if (errorCode !== 200) {
+        message.error(errorMsg || '保存失败')
+        return
+      }
+      const promptConfig = normalizeKnowledgeGraphicPrompt(data)
+      if (promptConfig) {
+        knowledgeGraphicPromptForm.id = promptConfig.id
+        knowledgeGraphicPromptForm.prompt = promptConfig.prompt || prompt
+      }
+      message.success(hasExistingPrompt ? '已修改图谱提示增强' : '已设置图谱提示增强')
+      promptModalOpen.value = false
+    })
+    .catch(() => {
+      message.error('保存失败')
+    })
+    .finally(() => {
+      promptSaving.value = false
+    })
+}
+
+function handleDeleteKnowledgeGraphicPrompt() {
+  if (!knowledgeGraphicPromptForm.id) {
+    resetKnowledgeGraphicPromptForm()
+    message.info('当前没有可删除的配置')
+    return
+  }
+  Modal.confirm({
+    title: '删除图谱提示增强？',
+    content: '删除后，背景信息及要求将不再参与知识图谱生成。',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      promptDeleting.value = true
+      try {
+        const res = await deleteProductKnowledgeGraphicPrompt({
+          id: knowledgeGraphicPromptForm.id,
+        })
+        const { errorCode, errorMsg } = res.data
+        if (errorCode === 200) {
+          resetKnowledgeGraphicPromptForm()
+          promptModalOpen.value = false
+          message.success('已删除图谱提示增强')
+        } else {
+          message.error(errorMsg || '删除失败')
+        }
+      } catch (err) {
+        message.error('删除失败')
+      } finally {
+        promptDeleting.value = false
+      }
+    },
+  })
 }
 
 function handleStopAddNewNode() {
@@ -977,6 +1147,38 @@ function getCurrentKnowledgeGraphForgetEpoch() {
     })
 }
 
+function getCurrentKnowledgeGraphicPromptState() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const params = { productId: currentProductId.value }
+  getKnowledgeGraphicPromptState(params)
+    .then((res) => resultPreFilter(res))
+    .then((res) => {
+      const { data, errorCode } = res
+      if (errorCode !== 200) {
+        message.error('获取图谱提示增强状态失败！')
+        return
+      }
+      if (data === null) {
+        addKnowledgeGraphicPromptToggleConfig(params).then(() => {
+          getCurrentKnowledgeGraphicPromptState()
+        })
+      } else {
+        knowledgeGraphicPromptEnable.value = data.value === 'true'
+        if (knowledgeGraphicPromptEnable.value) {
+          fetchProductKnowledgeGraphicPrompt()
+        } else {
+          resetKnowledgeGraphicPromptForm()
+        }
+      }
+    })
+}
+
 onMounted(() => {
   fetchProducts()
   initializeCanvas()
@@ -1021,6 +1223,20 @@ onUnmounted(() => {
             :checked="knowledgeGraphicEnable"
             @click="handleKnowledgeGraphicEnableToggle"
           />
+        </div>
+        <div v-if="currentProductId !== null" class="option-item">
+          <label class="option-label" for="prompt-toggle"> 图谱提示增强 </label>
+          <Switch
+            id="prompt-toggle"
+            :checked="knowledgeGraphicPromptEnable"
+            @click="handleKnowledgeGraphicPromptToggle"
+          />
+        </div>
+        <div v-if="currentProductId !== null && knowledgeGraphicPromptEnable" class="option-item">
+          <Button :loading="promptLoading" @click="handleOpenPromptModal">
+            <template #icon><EditOutlined /></template>
+            配置
+          </Button>
         </div>
         <div class="option-item">
           <Button
@@ -1141,6 +1357,45 @@ onUnmounted(() => {
             :maxlength="255"
             placeholder="节点描述，不超过255字"
           />
+        </Form.Item>
+      </Form>
+    </Modal>
+    <Modal
+      :open="promptModalOpen"
+      title="图谱提示增强"
+      :confirm-loading="promptSaving"
+      ok-text="保存"
+      cancel-text="取消"
+      @cancel="handleClosePromptModal"
+      @ok="handleSaveKnowledgeGraphicPrompt"
+    >
+      <Form
+        :model="knowledgeGraphicPromptForm"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 17 }"
+      >
+        <Form.Item
+          label="背景要求"
+          name="prompt"
+          :rules="[{ required: true, message: '请输入背景信息及要求' }]"
+        >
+          <Input.TextArea
+            v-model:value="knowledgeGraphicPromptForm.prompt"
+            :maxlength="2048"
+            :auto-size="{ minRows: 6, maxRows: 10 }"
+            show-count
+            placeholder="例如：优先抽取设备、场景、故障现象之间的关系；不要把临时对话称呼写入图谱。"
+          />
+        </Form.Item>
+        <Form.Item :wrapper-col="{ offset: 6, span: 17 }">
+          <Button
+            danger
+            :disabled="!knowledgeGraphicPromptForm.id"
+            :loading="promptDeleting"
+            @click="handleDeleteKnowledgeGraphicPrompt"
+          >
+            删除
+          </Button>
         </Form.Item>
       </Form>
     </Modal>

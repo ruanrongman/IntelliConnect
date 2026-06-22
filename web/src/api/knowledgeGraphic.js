@@ -230,3 +230,67 @@ export const updateKnowledgeGraphicForgetEpoch = (data) =>
       des: 'Knowledge graph forget epoch',
     },
   })
+
+export const getKnowledgeGraphicPromptState = (params) =>
+  request({
+    url: '/api/v2/user/config/knowledge_graph.prompt',
+    method: 'get',
+    params
+  })
+
+export const addKnowledgeGraphicPromptToggleConfig = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'post',
+    data: {
+      ...data,
+      name: 'knowledge_graph.prompt',
+      type: 'boolean',
+      value: 'false',
+      defaultValue: 'false',
+      required: true,
+      des: 'Knowledge graph prompt toggle',
+    },
+  })
+
+export const knowledgeGraphicPromptToggle = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...data,
+      name: 'knowledge_graph.prompt',
+      type: 'boolean',
+      defaultValue: 'false',
+      required: true,
+      des: 'Knowledge graph prompt toggle',
+    },
+  })
+
+export const getProductKnowledgeGraphicPrompt = (params) =>
+  request({
+    url: '/api/v2/productKnowledgeGraphicPrompt',
+    method: 'get',
+    params
+  })
+
+export const addProductKnowledgeGraphicPrompt = (data) =>
+  request({
+    url: '/api/v2/productKnowledgeGraphicPrompt',
+    method: 'post',
+    data
+  })
+
+export const updateProductKnowledgeGraphicPrompt = (data) =>
+  request({
+    url: '/api/v2/productKnowledgeGraphicPrompt',
+    method: 'put',
+    data
+  })
+
+export const deleteProductKnowledgeGraphicPrompt = (params) =>
+  request({
+    url: '/api/v2/productKnowledgeGraphicPrompt',
+    method: 'delete',
+    params
+  })

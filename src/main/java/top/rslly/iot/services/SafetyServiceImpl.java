@@ -22,6 +22,7 @@ package top.rslly.iot.services;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import top.rslly.iot.dao.ProductKnowledgeGraphicPromptRepository;
 import top.rslly.iot.models.*;
 import top.rslly.iot.services.agent.*;
 import top.rslly.iot.services.iot.AlarmEventServiceImpl;
@@ -80,6 +81,8 @@ public class SafetyServiceImpl implements SafetyService {
   private AgentLongMemoryServiceImpl agentLongMemoryService;
   @Autowired
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
+  @Autowired
+  private ProductKnowledgeGraphicPromptRepository productKnowledgeGraphicPromptRepository;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
@@ -290,6 +293,16 @@ public class SafetyServiceImpl implements SafetyService {
       throw new NullPointerException("productVoiceDiyId not found!");
     return this.controlAuthorizeProduct(token,
         productVoiceDiyEntityList.get(0).getProductId());
+  }
+
+  @Override
+  public boolean controlAuthorizeProductKnowledgeGraphicPrompt(String token, int id) {
+    List<ProductKnowledgeGraphicPromptEntity> productKnowledgeGraphicPromptEntityList =
+        productKnowledgeGraphicPromptRepository.findAllById(id);
+    if (productKnowledgeGraphicPromptEntityList.isEmpty())
+      throw new NullPointerException("productKnowledgeGraphicPromptId not found!");
+    return this.controlAuthorizeProduct(token,
+        productKnowledgeGraphicPromptEntityList.get(0).getProductId());
   }
 
   @Override

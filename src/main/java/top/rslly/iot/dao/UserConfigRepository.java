@@ -20,6 +20,10 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.UserConfigEntity;
 
 import java.util.List;
@@ -27,7 +31,34 @@ import java.util.List;
 public interface UserConfigRepository extends JpaRepository<UserConfigEntity, Long> {
   List<UserConfigEntity> getAllByProductId(int productId);
 
+  List<UserConfigEntity> getAllByProductIdAndName(int productId, String name);
+
   UserConfigEntity getTopByProductIdAndName(int productId, String name);
 
+  boolean existsByUserIdAndIsWechatUserAndProductIdAndName(int userId, String isWechatUser,
+      int productId, String name);
+
+  @Modifying
+  @Transactional
+  @Query("""
+      UPDATE UserConfigEntity e
+      SET e.type = :type,
+          e.value = :value,
+          e.defaultValue = :defaultValue,
+          e.min = :min,
+          e.max = :max,
+          e.required = :required,
+          e.parent = :parent,
+          e.des = :des
+      WHERE e.productId = :productId
+        AND e.name = :name
+      """)
+  int updateAllByProductIdAndName(@Param("productId") int productId, @Param("name") String name,
+      @Param("type") String type, @Param("value") String value,
+      @Param("defaultValue") String defaultValue, @Param("min") String min,
+      @Param("max") String max, @Param("required") boolean required,
+      @Param("parent") long parent, @Param("des") String des);
+
+  @Transactional
   void deleteAllByProductId(int productId);
 }

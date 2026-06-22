@@ -80,6 +80,8 @@ public class ProductServiceImpl implements ProductService {
   @Resource
   private ProductVoiceDiyRepository productVoiceDiyRepository;
   @Resource
+  private ProductKnowledgeGraphicPromptRepository productKnowledgeGraphicPromptRepository;
+  @Resource
   private AdminConfigRepository adminConfigRepository;
   @Resource
   private KnowledgeGraphicNodeRepository knowledgeGraphicNodeRepository;
@@ -345,6 +347,8 @@ public class ProductServiceImpl implements ProductService {
         agentLongMemoryRepository.findAllByProductId(id);
     List<ProductVoiceDiyEntity> productVoiceDiyEntityList =
         productVoiceDiyRepository.findAllByProductId(id);
+    List<ProductKnowledgeGraphicPromptEntity> productKnowledgeGraphicPromptEntityList =
+        productKnowledgeGraphicPromptRepository.findAllByProductId(id);
     List<AdminConfigEntity> adminConfigEntityList =
         adminConfigRepository.findAllBySetKey("wx_default_product");
     List<KnowledgeGraphicNodeEntity> knowledgeGraphicNodeList =
@@ -437,6 +441,9 @@ public class ProductServiceImpl implements ProductService {
         }
         if (!productAsrEntityList.isEmpty()) {
           productAsrRepository.deleteAllByProductId(id);
+        }
+        if (!productKnowledgeGraphicPromptEntityList.isEmpty()) {
+          productKnowledgeGraphicPromptRepository.deleteAllByProductId(id);
         }
         if (!codingAgentDeviceList.isEmpty()) {
           codingAgentDeviceRepository.deleteAllByProductId(id);

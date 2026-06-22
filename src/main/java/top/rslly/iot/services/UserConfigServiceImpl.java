@@ -21,10 +21,8 @@ package top.rslly.iot.services;
 
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.formula.functions.T;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.UserConfigRepository;
 import top.rslly.iot.dao.UserRepository;
 import top.rslly.iot.dao.WxUserRepository;
@@ -48,6 +46,7 @@ public class UserConfigServiceImpl implements UserConfigService {
   private WxUserRepository wxUserRepository;
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addUserConfig(UserConfig userConfig, String header) {
     String token_deal = header.replace(JwtTokenUtil.TOKEN_PREFIX, "");
     String role = JwtTokenUtil.getUserRole(token_deal);
@@ -60,11 +59,14 @@ public class UserConfigServiceImpl implements UserConfigService {
     } else {
       userId = userRepository.findAllByUsername(username).get(0).getId();
     }
-    UserConfigEntity entity =
-        userConfigRepository.getTopByProductIdAndName(userConfig.productId, userConfig.name);
-    if (entity == null) {
+    boolean exists = userConfigRepository.existsByUserIdAndIsWechatUserAndProductIdAndName(userId,
+        isWechatUser, userConfig.productId, userConfig.name);
+    userConfigRepository.updateAllByProductIdAndName(userConfig.productId,
+        userConfig.name, userConfig.type, userConfig.value, userConfig.defaultValue,
+        userConfig.min, userConfig.max, userConfig.required, userConfig.parent, userConfig.des);
+    if (!exists) {
       // Use MapStruct!!!
-      entity = UserConfigEntity.builder()
+      UserConfigEntity entity = UserConfigEntity.builder()
           .userId(userId)
           .isWechatUser(isWechatUser)
           .productId(userConfig.productId)
@@ -78,39 +80,32 @@ public class UserConfigServiceImpl implements UserConfigService {
           .parent(userConfig.parent)
           .des(userConfig.des)
           .build();
-    } else {
-      entity.setName(userConfig.name);
-      entity.setType(userConfig.type);
-      entity.setValue(userConfig.value);
-      entity.setDefaultValue(userConfig.defaultValue);
-      entity.setMin(userConfig.min);
-      entity.setMax(userConfig.max);
-      entity.setRequired(userConfig.required);
-      entity.setParent(userConfig.parent);
-      entity.setDes(userConfig.des);
+      userConfigRepository.save(entity);
     }
-    userConfigRepository.save(entity);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteUserConfig(UserConfig userConfig) {
-    UserConfigEntity entity =
-        userConfigRepository.getTopByProductIdAndName(userConfig.productId, userConfig.name);
-    if (entity == null) {
+    List<UserConfigEntity> entities =
+        userConfigRepository.getAllByProductIdAndName(userConfig.productId, userConfig.name);
+    if (entities.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    userConfigRepository.delete(entity);
-    return ResultTool.success(entity.getId());
+    userConfigRepository.deleteAll(entities);
+    return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteAllByProductId(int productId) {
     userConfigRepository.deleteAllByProductId(productId);
     return ResultTool.success();
   }
 
   @Override
+  @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> updateUserConfig(UserConfig userConfig, String header) {
     return addUserConfig(userConfig, header);
   }

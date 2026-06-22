@@ -21,6 +21,8 @@ package top.rslly.iot.utility.ai.prompts;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.UserConfigServiceImpl;
+import top.rslly.iot.services.agent.ProductKnowledgeGraphicPromptServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
@@ -31,13 +33,19 @@ import java.util.Map;
 public class KnowledgeGraphicPrompt {
   @Autowired
   private KnowledgeGraphicService knowledgeGraphicService;
+  @Autowired
+  private ProductKnowledgeGraphicPromptServiceImpl productKnowledgeGraphicPromptService;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
 
   private final static String knowledgeGraphicPrompt =
       """
             Please refer to the following user conversation to see if it involves any relation of the following knowledge graphic.
             If the conversation contains or updates information related to the knowledge graphic, please update them accordingly.
             Otherwise, do not add to the nodes and relations lists. If the conversation mentioned entities or relations that
-            haven't bee added to the knowledge graphic, add them to the graphic.
+            haven't been added to the knowledge graphic, add them only when it does not violate the Mandatory User Requirements.
+
+            {information}
 
             The current concept of the graphic and its content: {graphic}
             ## Output Format
@@ -53,6 +61,9 @@ public class KnowledgeGraphicPrompt {
             ```
             ## Attention
             - Your output is JSON only and no explanation.
+            - Mandatory User Requirements, when provided, have higher priority than the default extraction rules.
+            - If Mandatory User Requirements define limits, apply them to the final persisted graph across all chunks, not only to the current response.
+            - Before returning JSON, verify that every `New` node and relation complies with the Mandatory User Requirements.
             - Each node struct would be like this:
                 ```
                 {
@@ -73,6 +84,7 @@ public class KnowledgeGraphicPrompt {
                 }
                 ```
             - If relation mentions a new entity(whatever source or target), please add it to the nodes list.
+              Do this only when it does not violate the Mandatory User Requirements.
             ## Current Conversation
             Below is the current conversation consisting of interleaving human and assistant history.
           """;
@@ -81,6 +93,8 @@ public class KnowledgeGraphicPrompt {
       """
             Extract and merge knowledge graph information from the source text.
             Use the current graph as context and keep existing knowledge unless the source text updates it.
+
+            {information}
 
             The current concept of the graphic and its content: {graphic}
             ## Output Format
@@ -98,6 +112,9 @@ public class KnowledgeGraphicPrompt {
             - Your output is JSON only and no explanation.
             - Do not use chat history. Only use the source text provided by the user message.
             - Do not delete existing graph data. Use `New` or `Update` actions only.
+            - Mandatory User Requirements, when provided, have higher priority than the default extraction rules.
+            - If Mandatory User Requirements define limits, apply them to the final persisted graph across all chunks, not only to the current response.
+            - Before returning JSON, verify that every `New` node and relation complies with the Mandatory User Requirements.
             - Each node struct would be like this:
                 ```
                 {
@@ -118,6 +135,7 @@ public class KnowledgeGraphicPrompt {
                 }
                 ```
             - If relation mentions a new entity(whatever source or target), please add it to the nodes list.
+              Do this only when it does not violate the Mandatory User Requirements.
             ## Source Text
           """;
 
@@ -125,6 +143,16 @@ public class KnowledgeGraphicPrompt {
     String knowledgeGraphic = knowledgeGraphicService.getKnowledgeGraphicJSON(productId);
     Map<String, String> map = new HashMap<>();
     map.put("graphic", knowledgeGraphic);
+    if (userConfigService.getConfigValue(productId, "knowledge_graph.prompt").equals("true")) {
+      var information = productKnowledgeGraphicPromptService.findAllByProductId(productId);
+      if (!information.isEmpty() && !information.getFirst().getPrompt().isEmpty()) {
+        map.put("information", buildRequirementBlock(information.getFirst().getPrompt()));
+      } else {
+        map.put("information", "");
+      }
+    } else {
+      map.put("information", "");
+    }
     return StringUtils.formatString(knowledgeGraphicPrompt, map);
   }
 
@@ -132,6 +160,28 @@ public class KnowledgeGraphicPrompt {
     String knowledgeGraphic = knowledgeGraphicService.getKnowledgeGraphicJSON(productId);
     Map<String, String> map = new HashMap<>();
     map.put("graphic", knowledgeGraphic);
+    if (userConfigService.getConfigValue(productId, "knowledge_graph.prompt").equals("true")) {
+      var information = productKnowledgeGraphicPromptService.findAllByProductId(productId);
+      if (!information.isEmpty() && !information.getFirst().getPrompt().isEmpty()) {
+        map.put("information", buildRequirementBlock(information.getFirst().getPrompt()));
+      } else {
+        map.put("information", "");
+      }
+    } else {
+      map.put("information", "");
+    }
     return StringUtils.formatString(knowledgeGraphicExtractPrompt, map);
+  }
+
+  private String buildRequirementBlock(String requirement) {
+    return """
+          ## Mandatory User Requirements
+          The following requirements are higher priority than the default extraction rules.
+          They apply to the final persisted knowledge graph, including all generated chunks and merges.
+          If a requirement limits the total number of nodes or relations, do not create new items once that final limit would be exceeded.
+
+          %s
+        """
+        .formatted(requirement.trim());
   }
 }

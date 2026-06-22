@@ -1,0 +1,11 @@
+
+> vue3-antd-manage@0.0.0 dev
+> vite --host 127.0.0.1 --port 5173
+
+[36m
+  vite v2.9.18[39m[32m dev server running at:
+[39m
+  > Local: [36mhttp://127.0.0.1:[1m5173[22m/[39m
+
+  [36mready in 1106ms.[39m
+

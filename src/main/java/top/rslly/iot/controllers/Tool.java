@@ -93,6 +93,8 @@ public class Tool {
   @Autowired
   private ProductVoiceDiyServiceImpl productVoiceDiyService;
   @Autowired
+  private ProductKnowledgeGraphicPromptServiceImpl productKnowledgeGraphicPromptService;
+  @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
   private HistoryMessageEntityServiceImpl historyMessageEntityService;
@@ -719,6 +721,66 @@ public class Tool {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     return productVoiceDiyService.deleteProductVoiceDiy(id);
+  }
+
+  @Operation(summary = "获取产品知识图谱提示词", description = "获取产品知识图谱提示词")
+  @RequestMapping(value = "/productKnowledgeGraphicPrompt", method = RequestMethod.GET)
+  public JsonResult<?> getProductKnowledgeGraphicPrompt(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productKnowledgeGraphicPromptService.getProductKnowledgeGraphicPrompt(productId);
+  }
+
+  @Operation(summary = "提交产品知识图谱提示词", description = "提交产品知识图谱提示词")
+  @RequestMapping(value = "/productKnowledgeGraphicPrompt", method = RequestMethod.POST)
+  public JsonResult<?> postProductKnowledgeGraphicPrompt(
+      @Valid @RequestBody ProductKnowledgeGraphicPrompt productKnowledgeGraphicPrompt,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header,
+          productKnowledgeGraphicPrompt.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productKnowledgeGraphicPromptService
+        .postProductKnowledgeGraphicPrompt(productKnowledgeGraphicPrompt);
+  }
+
+  @Operation(summary = "修改产品知识图谱提示词", description = "修改产品知识图谱提示词")
+  @RequestMapping(value = "/productKnowledgeGraphicPrompt", method = RequestMethod.PUT)
+  public JsonResult<?> putProductKnowledgeGraphicPrompt(
+      @Valid @RequestBody ProductKnowledgeGraphicPrompt productKnowledgeGraphicPrompt,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (productKnowledgeGraphicPrompt.getId() == null)
+        return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+      if (!safetyService.controlAuthorizeProduct(header,
+          productKnowledgeGraphicPrompt.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productKnowledgeGraphicPromptService
+        .putProductKnowledgeGraphicPrompt(productKnowledgeGraphicPrompt);
+  }
+
+  @Operation(summary = "删除产品知识图谱提示词", description = "删除产品知识图谱提示词")
+  @RequestMapping(value = "/productKnowledgeGraphicPrompt", method = RequestMethod.DELETE)
+  public JsonResult<?> deleteProductKnowledgeGraphicPrompt(@RequestParam("id") int id,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProductKnowledgeGraphicPrompt(header, id))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return productKnowledgeGraphicPromptService.deleteProductKnowledgeGraphicPrompt(id);
   }
 
   @Operation(summary = "获取聊天记忆", description = "获取聊天记忆")
