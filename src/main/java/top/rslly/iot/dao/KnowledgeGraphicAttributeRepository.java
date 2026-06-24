@@ -30,13 +30,14 @@ public interface KnowledgeGraphicAttributeRepository
 
   void deleteByBelong(long belongId);
 
-  KnowledgeGraphicAttributeEntity getByName(String name);
+  KnowledgeGraphicAttributeEntity findFirstByNameOrderByIdAsc(String name);
 
   List<KnowledgeGraphicAttributeEntity> getAllByBelong(long id);
 
   void deleteAllByName(String name);
 
-  KnowledgeGraphicAttributeEntity getByNameAndBelong(String name, long belongId);
+  KnowledgeGraphicAttributeEntity findFirstByNameAndBelongOrderByIdAsc(String name,
+      long belongId);
 
   void deleteByBelongAndName(long belong, String name);
 }

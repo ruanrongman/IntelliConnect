@@ -22,10 +22,12 @@ package top.rslly.iot.param.request;
 import lombok.Data;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 @Data
 public class KnowledgeGraphicAttribute {
   @NotBlank(message = "属性名称不能为空！")
+  @Size(min = 1, max = 255)
   public String name;
   public long belong;
   public int productId;

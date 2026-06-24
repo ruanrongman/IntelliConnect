@@ -98,13 +98,18 @@ public class KnowledgeGraphic {
     public String nodeAction;
 
     @Override
+    public int hashCode() {
+      return Objects.hash(name);
+    }
+
+    @Override
     public boolean equals(Object o) {
       if (this == o)
         return true;
       if (o == null || getClass() != o.getClass())
         return false;
       Node node = (Node) o;
-      return name.equals(node.name);
+      return Objects.equals(name, node.name);
     }
   }
 

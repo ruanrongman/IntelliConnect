@@ -17,22 +17,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.utility;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
+public class KnowledgeGraphicTextLimit {
+  public static final int NODE_NAME_MAX_LENGTH = 20;
+  public static final int TEXT_MAX_LENGTH = 255;
 
-import java.util.List;
+  private KnowledgeGraphicTextLimit() {}
 
-public interface KnowledgeGraphicNodeRepository
-    extends JpaRepository<KnowledgeGraphicNodeEntity, Long> {
-  List<KnowledgeGraphicNodeEntity> findAllById(long id);
+  public static String normalizeNodeName(String value) {
+    return normalize(value, NODE_NAME_MAX_LENGTH);
+  }
 
-  KnowledgeGraphicNodeEntity findFirstByNameOrderByIdAsc(String name);
+  public static String normalizeText(String value) {
+    return normalize(value, TEXT_MAX_LENGTH);
+  }
 
-  KnowledgeGraphicNodeEntity findFirstByNameAndProductIdOrderByIdAsc(String name, int productId);
-
-  List<KnowledgeGraphicNodeEntity> findAllByProductId(int id);
-
-  void deleteAllByProductId(int id);
+  private static String normalize(String value, int maxLength) {
+    if (value == null) {
+      return null;
+    }
+    String normalized = value.trim();
+    if (normalized.length() > maxLength) {
+      return normalized.substring(0, maxLength);
+    }
+    return normalized;
+  }
 }

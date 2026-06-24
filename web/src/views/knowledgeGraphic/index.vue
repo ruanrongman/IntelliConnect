@@ -8,6 +8,7 @@ import {
   Form,
   message,
   Input,
+  InputNumber,
   Drawer,
   Switch,
   Tooltip,
@@ -38,6 +39,8 @@ import {
   knowledgeGraphicForgetToggle,
   updateKnowledgeGraphicForgetEpoch,
   getKnowledgeGraphicForgetEpoch,
+  getKnowledgeGraphicNodeLimit,
+  updateKnowledgeGraphicNodeLimit,
   uploadKnowledgeGraphicFile,
   getKnowledgeGraphicFileProgress,
   downloadKnowledgeGraphicDataset,
@@ -129,6 +132,7 @@ const newNodeForm = reactive({
 const knowledgeGraphicEnable = ref(false)
 const knowledgeGraphForgetEnable = ref(false)
 const knowledgeGraphForgetEpoch = ref(10)
+const knowledgeGraphNodeLimit = ref(100)
 const knowledgeGraphicPromptEnable = ref(false)
 const promptModalOpen = ref(false)
 const promptLoading = ref(false)
@@ -223,6 +227,7 @@ function afterFetchCurrentProduct() {
   getCurrentKnowledgeGraphic()
   getCurrentKnowledgeGraphForgetState()
   getCurrentKnowledgeGraphForgetEpoch()
+  getCurrentKnowledgeGraphNodeLimit()
   getCurrentKnowledgeGraphicPromptState()
 }
 
@@ -288,6 +293,29 @@ function handleKnowledgeGraphForgetEpochChange(value) {
     value: knowledgeGraphForgetEpoch.value,
   }
   updateKnowledgeGraphicForgetEpoch(data).then((res) => resultPreFilter(res))
+}
+
+function normalizeNodeLimit(value) {
+  const numberValue = Number(value)
+  if (Number.isNaN(numberValue)) return 100
+  return Math.min(300, Math.max(0, Math.round(numberValue)))
+}
+
+function handleKnowledgeGraphNodeLimitChange(value) {
+  const normalizedValue = normalizeNodeLimit(value)
+  knowledgeGraphNodeLimit.value = normalizedValue
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const data = {
+    productId: currentProductId.value,
+    value: String(normalizedValue),
+  }
+  updateKnowledgeGraphicNodeLimit(data).then((res) => resultPreFilter(res))
 }
 
 function handleStartAddNewNode() {
@@ -1147,6 +1175,36 @@ function getCurrentKnowledgeGraphForgetEpoch() {
     })
 }
 
+function getCurrentKnowledgeGraphNodeLimit() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const params = { productId: currentProductId.value }
+  getKnowledgeGraphicNodeLimit(params)
+    .then((res) => resultPreFilter(res))
+    .then((res) => {
+      const { data, errorCode } = res
+      if (errorCode !== 200) {
+        message.error('获取知识图谱节点上限出错！')
+        return
+      }
+      if (data === null) {
+        const createData = {
+          productId: currentProductId.value,
+          value: '100',
+        }
+        knowledgeGraphNodeLimit.value = 100
+        updateKnowledgeGraphicNodeLimit(createData)
+      } else {
+        knowledgeGraphNodeLimit.value = normalizeNodeLimit(data.value)
+      }
+    })
+}
+
 function getCurrentKnowledgeGraphicPromptState() {
   const resultPreFilter = (res) => {
     const { errorCode } = res.data
@@ -1292,6 +1350,29 @@ onUnmounted(() => {
             width="200"
             :value="repulsion"
             @change="handleRepulsionChange"
+          />
+        </div>
+        <div v-if="currentProductId !== null" class="option-item node-limit">
+          <label class="option-label" for="node-limit">
+            <Tooltip title="限制知识图谱自动生成时可新增的节点总数，0 表示不允许新增节点">
+              <QuestionCircleOutlined />
+            </Tooltip>
+            知识图谱节点上限
+          </label>
+          <Slider
+            id="node-limit"
+            :min="0"
+            :max="300"
+            :value="knowledgeGraphNodeLimit"
+            @change="handleKnowledgeGraphNodeLimitChange"
+          />
+          <InputNumber
+            class="node-limit-input"
+            :min="0"
+            :max="300"
+            :precision="0"
+            :value="knowledgeGraphNodeLimit"
+            @change="handleKnowledgeGraphNodeLimitChange"
           />
         </div>
         <div v-if="currentProductId !== null" class="option-item">
@@ -1556,6 +1637,19 @@ onUnmounted(() => {
 
 #forget-epoch {
   width: 150px;
+}
+
+.option-item.node-limit {
+  width: fit-content;
+}
+
+#node-limit {
+  width: 180px;
+}
+
+.node-limit-input {
+  width: 76px;
+  margin-left: 8px;
 }
 
 .option-label {

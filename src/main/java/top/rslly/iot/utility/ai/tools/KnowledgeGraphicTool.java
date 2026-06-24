@@ -32,10 +32,12 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.models.KnowledgeGraphicNodeEntity;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
 import top.rslly.iot.services.knowledgeGraphic.dbo.KnowledgeGraphic;
 import top.rslly.iot.services.knowledgeGraphic.dbo.KnowledgeGraphicFileProgress;
 import top.rslly.iot.services.thingsModel.ProductService;
+import top.rslly.iot.utility.KnowledgeGraphicTextLimit;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -70,6 +72,8 @@ public class KnowledgeGraphicTool {
   @Autowired
   private KnowledgeGraphicPrompt knowledgeGraphicPrompt;
   @Autowired
+  private UserConfigServiceImpl userConfigService;
+  @Autowired
   @Qualifier("taskExecutor")
   private TaskExecutor taskExecutor;
   @Value("${ai.knowledge_graphic_llm}")
@@ -80,6 +84,9 @@ public class KnowledgeGraphicTool {
   private int chunkChars;
   @Value("${ai.knowledge_graphic.chunk_overlap_chars:500}")
   private int chunkOverlapChars;
+  private static final int DEFAULT_NODE_LIMIT = 100;
+  private static final int MAX_NODE_LIMIT = 300;
+  private static final String NODE_LIMIT_CONFIG_KEY = "knowledge_graph.node.limit";
   private final Map<String, KnowledgeGraphicFileProgress> fileProgressMap =
       new ConcurrentHashMap<>();
   private String name = "knowledgeGraphicTool";
@@ -317,20 +324,26 @@ public class KnowledgeGraphicTool {
       return new GraphMergeResult(0, 0);
     }
     List<ModelMessage> messages = new ArrayList<>();
+    GraphLimitContext limitContext = buildGraphLimitContext(productId);
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), systemPrompt));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), buildChunkUserMessage(chunk,
-        fileMode, systemPrompt)));
+        fileMode, systemPrompt, limitContext)));
     JSONObject response = llm.jsonChat(String.valueOf(messages.get(1).getContent()), messages,
         false);
     if (response == null || response.getJSONObject("action") == null) {
       return new GraphMergeResult(0, 0);
     }
-    return process_llm_result(response.getJSONObject("action"), productId, allowDelete);
+    return process_llm_result(response.getJSONObject("action"), productId, allowDelete,
+        limitContext);
   }
 
-  private String buildChunkUserMessage(String chunk, boolean fileMode, String systemPrompt) {
+  private String buildChunkUserMessage(String chunk, boolean fileMode, String systemPrompt,
+      GraphLimitContext limitContext) {
     String prefix = fileMode ? "Source text:\n" : "Current conversation:\n";
-    return getUserMessage(systemPrompt).getContent() + "\n\n" + prefix + chunk;
+    return getUserMessage(systemPrompt).getContent() + "\n\n"
+        + knowledgeGraphicPrompt.buildGraphLimitBlock(limitContext.currentNodeCount(),
+            limitContext.currentRelationCount(), limitContext.nodeLimit())
+        + "\n\n" + prefix + chunk;
   }
 
   private List<String> splitText(String text) {
@@ -368,7 +381,7 @@ public class KnowledgeGraphicTool {
   }
 
   private GraphMergeResult process_llm_result(JSONObject jsonObject, int productId,
-      boolean allowDelete) {
+      boolean allowDelete, GraphLimitContext limitContext) {
     KnowledgeGraphic graphic =
         normalizeGraphicJson(jsonObject).toJavaObject(KnowledgeGraphic.class);
     if (graphic.nodes == null) {
@@ -377,6 +390,7 @@ public class KnowledgeGraphicTool {
     if (graphic.relations == null) {
       graphic.relations = new HashSet<>();
     }
+    int currentNodeCount = limitContext.currentNodeCount();
     int nodeCount = 0;
     int relationCount = 0;
     for (KnowledgeGraphic.Node node : graphic.nodes) {
@@ -384,19 +398,28 @@ public class KnowledgeGraphicTool {
         continue;
       }
       String nodeAction = Optional.ofNullable(node.nodeAction).orElse("New");
+      KnowledgeGraphicNodeEntity existingNode = getPersistedNode(node.name, productId);
       if (allowDelete && nodeAction.equalsIgnoreCase("Delete")) {
-        KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
-            .getNode(node.name, productId).getData();
-        if (nodeDb != null) {
-          knowledgeGraphicService.deleteNode(nodeDb.getId());
+        if (existingNode != null && knowledgeGraphicService.deleteNode(existingNode.getId())
+            .getSuccess()) {
+          currentNodeCount = Math.max(0, currentNodeCount - 1);
         }
         continue;
       } else if (!allowDelete && nodeAction.equalsIgnoreCase("Delete")) {
         continue;
       }
+      boolean newNode = existingNode == null;
+      if (newNode && currentNodeCount >= limitContext.nodeLimit()) {
+        log.debug("Knowledge graph node limit reached, skip new node: productId={}, node={}",
+            productId, node.name);
+        continue;
+      }
       KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
           .addNode(node.name, node.des, productId).getData();
       if (nodeDb != null) {
+        if (newNode) {
+          currentNodeCount++;
+        }
         if (node.attributes != null) {
           knowledgeGraphicService.addAttributes(node.attributes.stream().toList(), nodeDb.getId());
         }
@@ -438,6 +461,8 @@ public class KnowledgeGraphicTool {
   }
 
   private JSONArray normalizeNodes(JSONArray nodes) {
+    Map<String, JSONObject> nodeMap = new LinkedHashMap<>();
+    Map<String, LinkedHashSet<String>> nodeAttributesMap = new LinkedHashMap<>();
     JSONArray normalizedNodes = new JSONArray();
     if (nodes == null) {
       return normalizedNodes;
@@ -446,23 +471,42 @@ public class KnowledgeGraphicTool {
       if (!(item instanceof JSONObject node)) {
         continue;
       }
-      JSONObject normalizedNode = new JSONObject();
-      String name = firstText(node, "name", "label", "title", "entity");
+      String name = KnowledgeGraphicTextLimit
+          .normalizeNodeName(firstText(node, "name", "label", "title", "entity"));
       if (name == null || name.isBlank()) {
         continue;
       }
-      String des = firstText(node, "des", "description", "desc", "detail", "summary");
-      normalizedNode.put("name", name);
-      normalizedNode.put("des", des == null || des.isBlank() ? name : des);
-      JSONArray attributes = node.getJSONArray("attributes");
-      normalizedNode.put("attributes", attributes == null ? new JSONArray() : attributes);
-      normalizedNode.put("nodeAction", firstText(node, "nodeAction", "action"));
-      normalizedNodes.add(normalizedNode);
+      String des = KnowledgeGraphicTextLimit
+          .normalizeText(firstText(node, "des", "description", "desc", "detail", "summary"));
+      JSONObject normalizedNode = nodeMap.computeIfAbsent(name, key -> {
+        JSONObject createdNode = new JSONObject();
+        createdNode.put("name", key);
+        createdNode.put("des", key);
+        createdNode.put("attributes", new JSONArray());
+        return createdNode;
+      });
+      if (isBetterDescription(des, normalizedNode.getString("des"), name)) {
+        normalizedNode.put("des", des);
+      }
+      String nodeAction = firstText(node, "nodeAction", "action");
+      if (nodeAction != null && !nodeAction.isBlank()) {
+        normalizedNode.put("nodeAction", nodeAction);
+      }
+      LinkedHashSet<String> attributes = nodeAttributesMap.computeIfAbsent(name,
+          key -> new LinkedHashSet<>());
+      attributes.addAll(normalizeAttributesSet(node.getJSONArray("attributes")));
+    }
+    for (Map.Entry<String, JSONObject> entry : nodeMap.entrySet()) {
+      JSONArray attributes = new JSONArray();
+      attributes.addAll(nodeAttributesMap.getOrDefault(entry.getKey(), new LinkedHashSet<>()));
+      entry.getValue().put("attributes", attributes);
+      normalizedNodes.add(entry.getValue());
     }
     return normalizedNodes;
   }
 
   private JSONArray normalizeRelations(JSONArray relations) {
+    Map<String, JSONObject> relationMap = new LinkedHashMap<>();
     JSONArray normalizedRelations = new JSONArray();
     if (relations == null) {
       return normalizedRelations;
@@ -471,21 +515,70 @@ public class KnowledgeGraphicTool {
       if (!(item instanceof JSONObject relation)) {
         continue;
       }
-      JSONObject normalizedRelation = new JSONObject();
-      String name = firstText(relation, "name", "des", "description", "relation", "type");
-      String from = firstText(relation, "from", "source", "sourceNode", "start");
-      String to = firstText(relation, "to", "target", "targetNode", "end");
+      String name = KnowledgeGraphicTextLimit
+          .normalizeText(firstText(relation, "name", "des", "description", "relation", "type"));
+      String from = KnowledgeGraphicTextLimit
+          .normalizeNodeName(firstText(relation, "from", "source", "sourceNode", "start"));
+      String to = KnowledgeGraphicTextLimit
+          .normalizeNodeName(firstText(relation, "to", "target", "targetNode", "end"));
       if (name == null || from == null || to == null || name.isBlank() || from.isBlank()
           || to.isBlank()) {
         continue;
       }
-      normalizedRelation.put("name", name);
-      normalizedRelation.put("from", from);
-      normalizedRelation.put("to", to);
-      normalizedRelation.put("relationAction", firstText(relation, "relationAction", "action"));
-      normalizedRelations.add(normalizedRelation);
+      String relationKey = from + "\u0000" + to;
+      JSONObject normalizedRelation = relationMap.computeIfAbsent(relationKey, key -> {
+        JSONObject createdRelation = new JSONObject();
+        createdRelation.put("name", name);
+        createdRelation.put("from", from);
+        createdRelation.put("to", to);
+        return createdRelation;
+      });
+      if (isBetterDescription(name, normalizedRelation.getString("name"), null)) {
+        normalizedRelation.put("name", name);
+      }
+      String relationAction = firstText(relation, "relationAction", "action");
+      if (relationAction != null && !relationAction.isBlank()) {
+        normalizedRelation.put("relationAction", relationAction);
+      }
     }
+    normalizedRelations.addAll(relationMap.values());
     return normalizedRelations;
+  }
+
+  private JSONArray normalizeAttributes(JSONArray attributes) {
+    JSONArray normalizedAttributes = new JSONArray();
+    normalizedAttributes.addAll(normalizeAttributesSet(attributes));
+    return normalizedAttributes;
+  }
+
+  private Set<String> normalizeAttributesSet(JSONArray attributes) {
+    Set<String> normalizedAttributes = new LinkedHashSet<>();
+    if (attributes == null) {
+      return normalizedAttributes;
+    }
+    for (Object item : attributes) {
+      if (item == null) {
+        continue;
+      }
+      String attribute = KnowledgeGraphicTextLimit.normalizeText(String.valueOf(item));
+      if (attribute != null && !attribute.isBlank()) {
+        normalizedAttributes.add(attribute);
+      }
+    }
+    return normalizedAttributes;
+  }
+
+  private boolean isBetterDescription(String candidate, String current, String fallback) {
+    if (candidate == null || candidate.isBlank()) {
+      return false;
+    }
+    if (current == null || current.isBlank()) {
+      return true;
+    }
+    if (fallback != null && current.equals(fallback) && !candidate.equals(fallback)) {
+      return true;
+    }
+    return candidate.length() > current.length();
   }
 
   private String firstText(JSONObject object, String... keys) {
@@ -496,6 +589,39 @@ public class KnowledgeGraphicTool {
       }
     }
     return null;
+  }
+
+  private GraphLimitContext buildGraphLimitContext(int productId) {
+    GraphMergeResult graphResult = getPersistedGraphResult(productId);
+    int nodeLimit = getNodeLimit(productId);
+    return new GraphLimitContext(graphResult.nodeCount(), graphResult.relationCount(), nodeLimit);
+  }
+
+  private int getNodeLimit(int productId) {
+    String value = userConfigService.getConfigValue(productId, NODE_LIMIT_CONFIG_KEY);
+    if (value == null || value.isBlank()) {
+      return DEFAULT_NODE_LIMIT;
+    }
+    try {
+      int limit = Integer.parseInt(value.trim());
+      if (limit < 0) {
+        return DEFAULT_NODE_LIMIT;
+      }
+      return Math.min(MAX_NODE_LIMIT, limit);
+    } catch (NumberFormatException e) {
+      log.warn("Invalid knowledge graph node limit config: productId={}, value={}", productId,
+          value);
+      return DEFAULT_NODE_LIMIT;
+    }
+  }
+
+  private KnowledgeGraphicNodeEntity getPersistedNode(String name, int productId) {
+    JsonResult<?> result = knowledgeGraphicService.getNode(name, productId);
+    if (result == null || !result.getSuccess()
+        || !(result.getData()instanceof KnowledgeGraphicNodeEntity node)) {
+      return null;
+    }
+    return node;
   }
 
   private GraphMergeResult getPersistedGraphResult(int productId) {
@@ -532,6 +658,17 @@ public class KnowledgeGraphicTool {
   private record ChunkDocument(String fileName, String text, int indexInFile, int totalInFile) {}
 
   private record UploadFile(Path path, String fileName) {}
+
+  private record GraphLimitContext(int currentNodeCount, int currentRelationCount,
+      int nodeLimit) {
+    int remainingNewNodes() {
+      return Math.max(0, nodeLimit - currentNodeCount);
+    }
+
+    boolean canAddNode() {
+      return remainingNewNodes() > 0;
+    }
+  }
 
   private record GraphMergeResult(int nodeCount, int relationCount) {
     GraphMergeResult add(GraphMergeResult other) {

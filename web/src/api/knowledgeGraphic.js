@@ -231,6 +231,29 @@ export const updateKnowledgeGraphicForgetEpoch = (data) =>
     },
   })
 
+export const getKnowledgeGraphicNodeLimit = (params) =>
+  request({
+    url: '/api/v2/user/config/knowledge_graph.node.limit',
+    method: 'get',
+    params
+  })
+
+export const updateKnowledgeGraphicNodeLimit = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...data,
+      name: 'knowledge_graph.node.limit',
+      type: 'integer',
+      defaultValue: '100',
+      min: '0',
+      max: '300',
+      required: false,
+      des: 'Knowledge graph node limit',
+    },
+  })
+
 export const getKnowledgeGraphicPromptState = (params) =>
   request({
     url: '/api/v2/user/config/knowledge_graph.prompt',

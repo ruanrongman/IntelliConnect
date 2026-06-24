@@ -73,7 +73,10 @@ public class KnowledgeGraphicPrompt {
                     "nodeAction": "`New`, `Delete` or `Update`"
                 }
                 ```
-            - Each attribute should less than 10 words.
+            - Each node name must be no more than 20 characters.
+            - Each node description must be no more than 255 characters.
+            - Each attribute should be less than 10 words and no more than 255 characters.
+            - Each relation name/description must be no more than 255 characters.
             - Each relation struct would be like this:
                 ```
                 {
@@ -124,7 +127,10 @@ public class KnowledgeGraphicPrompt {
                     "nodeAction": "`New` or `Update`"
                 }
                 ```
-            - Each attribute should less than 10 words.
+            - Each node name must be no more than 20 characters.
+            - Each node description must be no more than 255 characters.
+            - Each attribute should be less than 10 words and no more than 255 characters.
+            - Each relation name/description must be no more than 255 characters.
             - Each relation struct would be like this:
                 ```
                 {
@@ -171,6 +177,26 @@ public class KnowledgeGraphicPrompt {
       map.put("information", "");
     }
     return StringUtils.formatString(knowledgeGraphicExtractPrompt, map);
+  }
+
+  public String buildGraphLimitBlock(int currentNodeCount, int currentRelationCount,
+      int nodeLimit) {
+    int remainingNewNodes = Math.max(0, nodeLimit - currentNodeCount);
+    String limitMessage = """
+          ## Current Knowledge Graph Limits
+          Current nodes: %d
+          Current relations: %d
+          Node limit: %d
+          Remaining new nodes allowed: %d
+          You may add at most %d new nodes in this response.
+        """
+        .formatted(currentNodeCount, currentRelationCount, nodeLimit, remainingNewNodes,
+            remainingNewNodes);
+    if (remainingNewNodes == 0) {
+      return limitMessage + "Do not create New nodes. You may still Update/Delete existing nodes "
+          + "and Update/Delete relations.";
+    }
+    return limitMessage;
   }
 
   private String buildRequirementBlock(String requirement) {
