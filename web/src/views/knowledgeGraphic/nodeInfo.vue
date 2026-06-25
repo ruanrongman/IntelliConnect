@@ -182,7 +182,7 @@ onMounted(()=>{
             name="name"
             :rules="[{required: true, message:'节点名称不能为空'}]"
         >
-          <Input :maxlength="10" v-model:value="updateNodeInfo.name" placeholder="节点名称，不超过10字"/>
+          <Input :maxlength="50" v-model:value="updateNodeInfo.name" placeholder="节点名称，不超过50字"/>
         </Form.Item>
         <Form.Item
             label="节点描述"

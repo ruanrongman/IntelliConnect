@@ -41,6 +41,8 @@ import {
   getKnowledgeGraphicForgetEpoch,
   getKnowledgeGraphicNodeLimit,
   updateKnowledgeGraphicNodeLimit,
+  getKnowledgeGraphicNodeHardLimit,
+  updateKnowledgeGraphicNodeHardLimit,
   uploadKnowledgeGraphicFile,
   getKnowledgeGraphicFileProgress,
   downloadKnowledgeGraphicDataset,
@@ -133,6 +135,7 @@ const knowledgeGraphicEnable = ref(false)
 const knowledgeGraphForgetEnable = ref(false)
 const knowledgeGraphForgetEpoch = ref(10)
 const knowledgeGraphNodeLimit = ref(100)
+const knowledgeGraphNodeHardLimit = ref(300)
 const knowledgeGraphicPromptEnable = ref(false)
 const promptModalOpen = ref(false)
 const promptLoading = ref(false)
@@ -228,6 +231,7 @@ function afterFetchCurrentProduct() {
   getCurrentKnowledgeGraphForgetState()
   getCurrentKnowledgeGraphForgetEpoch()
   getCurrentKnowledgeGraphNodeLimit()
+  getCurrentKnowledgeGraphNodeHardLimit()
   getCurrentKnowledgeGraphicPromptState()
 }
 
@@ -295,10 +299,10 @@ function handleKnowledgeGraphForgetEpochChange(value) {
   updateKnowledgeGraphicForgetEpoch(data).then((res) => resultPreFilter(res))
 }
 
-function normalizeNodeLimit(value) {
+function normalizeNodeLimit(value, defaultValue = 100) {
   const numberValue = Number(value)
-  if (Number.isNaN(numberValue)) return 100
-  return Math.min(300, Math.max(0, Math.round(numberValue)))
+  if (Number.isNaN(numberValue)) return defaultValue
+  return Math.min(600, Math.max(0, Math.round(numberValue)))
 }
 
 function handleKnowledgeGraphNodeLimitChange(value) {
@@ -316,6 +320,23 @@ function handleKnowledgeGraphNodeLimitChange(value) {
     value: String(normalizedValue),
   }
   updateKnowledgeGraphicNodeLimit(data).then((res) => resultPreFilter(res))
+}
+
+function handleKnowledgeGraphNodeHardLimitChange(value) {
+  const normalizedValue = normalizeNodeLimit(value, 300)
+  knowledgeGraphNodeHardLimit.value = normalizedValue
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const data = {
+    productId: currentProductId.value,
+    value: String(normalizedValue),
+  }
+  updateKnowledgeGraphicNodeHardLimit(data).then((res) => resultPreFilter(res))
 }
 
 function handleStartAddNewNode() {
@@ -1189,7 +1210,7 @@ function getCurrentKnowledgeGraphNodeLimit() {
     .then((res) => {
       const { data, errorCode } = res
       if (errorCode !== 200) {
-        message.error('获取知识图谱节点上限出错！')
+        message.error('获取知识图谱期望节点上限出错！')
         return
       }
       if (data === null) {
@@ -1201,6 +1222,36 @@ function getCurrentKnowledgeGraphNodeLimit() {
         updateKnowledgeGraphicNodeLimit(createData)
       } else {
         knowledgeGraphNodeLimit.value = normalizeNodeLimit(data.value)
+      }
+    })
+}
+
+function getCurrentKnowledgeGraphNodeHardLimit() {
+  const resultPreFilter = (res) => {
+    const { errorCode } = res.data
+    if (errorCode === 2001) {
+      router.push('/login')
+    }
+    return res.data
+  }
+  const params = { productId: currentProductId.value }
+  getKnowledgeGraphicNodeHardLimit(params)
+    .then((res) => resultPreFilter(res))
+    .then((res) => {
+      const { data, errorCode } = res
+      if (errorCode !== 200) {
+        message.error('获取知识图谱节点硬上限出错！')
+        return
+      }
+      if (data === null) {
+        const createData = {
+          productId: currentProductId.value,
+          value: '300',
+        }
+        knowledgeGraphNodeHardLimit.value = 300
+        updateKnowledgeGraphicNodeHardLimit(createData)
+      } else {
+        knowledgeGraphNodeHardLimit.value = normalizeNodeLimit(data.value, 300)
       }
     })
 }
@@ -1353,26 +1404,49 @@ onUnmounted(() => {
           />
         </div>
         <div v-if="currentProductId !== null" class="option-item node-limit">
-          <label class="option-label" for="node-limit">
-            <Tooltip title="限制知识图谱自动生成时可新增的节点总数，0 表示不允许新增节点">
+          <label class="option-label" for="expected-node-limit">
+            <Tooltip title="提示给模型的期望节点上限，0 表示不希望自动新增节点">
               <QuestionCircleOutlined />
             </Tooltip>
-            知识图谱节点上限
+            期望节点上限
           </label>
           <Slider
-            id="node-limit"
+            id="expected-node-limit"
             :min="0"
-            :max="300"
+            :max="600"
             :value="knowledgeGraphNodeLimit"
             @change="handleKnowledgeGraphNodeLimitChange"
           />
           <InputNumber
             class="node-limit-input"
             :min="0"
-            :max="300"
+            :max="600"
             :precision="0"
             :value="knowledgeGraphNodeLimit"
             @change="handleKnowledgeGraphNodeLimitChange"
+          />
+        </div>
+        <div v-if="currentProductId !== null" class="option-item node-limit">
+          <label class="option-label" for="hard-node-limit">
+            <Tooltip title="后端实际写入保护，不会发送给模型，0 表示不允许自动生成新增节点落库">
+              <QuestionCircleOutlined />
+            </Tooltip>
+            节点硬上限
+          </label>
+          <Slider
+            id="hard-node-limit"
+            :min="0"
+            :max="600"
+            :value="knowledgeGraphNodeHardLimit"
+            @change="handleKnowledgeGraphNodeHardLimitChange"
+          />
+          <InputNumber
+            class="node-limit-input"
+            :min="0"
+            :max="600"
+            :precision="0"
+            :value="knowledgeGraphNodeHardLimit"
+            @change="handleKnowledgeGraphNodeHardLimitChange"
           />
         </div>
         <div v-if="currentProductId !== null" class="option-item">
@@ -1423,8 +1497,8 @@ onUnmounted(() => {
           <Tooltip title="如果节点名称重复会更新节点描述">
             <Input
               v-model:value="newNodeForm.name"
-              :maxlength="10"
-              placeholder="节点名称，不超过10字"
+              :maxlength="50"
+              placeholder="节点名称，不超过50字"
             />
           </Tooltip>
         </Form.Item>
@@ -1643,7 +1717,8 @@ onUnmounted(() => {
   width: fit-content;
 }
 
-#node-limit {
+#expected-node-limit,
+#hard-node-limit {
   width: 180px;
 }
 

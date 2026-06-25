@@ -20,7 +20,7 @@
 package top.rslly.iot.utility;
 
 public class KnowledgeGraphicTextLimit {
-  public static final int NODE_NAME_MAX_LENGTH = 20;
+  public static final int NODE_NAME_MAX_LENGTH = 50;
   public static final int TEXT_MAX_LENGTH = 255;
 
   private KnowledgeGraphicTextLimit() {}

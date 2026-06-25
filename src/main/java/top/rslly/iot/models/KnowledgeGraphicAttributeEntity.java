@@ -26,7 +26,7 @@ import jakarta.persistence.*;
 
 @Entity
 @Data
-@Table(name = "knowledge_graphic_attribute", schema = "cwloit1.8")
+@Table(name = "knowledge_graphic_attribute", schema = "cwliot1.8")
 public class KnowledgeGraphicAttributeEntity {
   @Id
   @Column(name = "id")

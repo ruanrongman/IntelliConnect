@@ -248,9 +248,32 @@ export const updateKnowledgeGraphicNodeLimit = (data) =>
       type: 'integer',
       defaultValue: '100',
       min: '0',
-      max: '300',
+      max: '600',
       required: false,
-      des: 'Knowledge graph node limit',
+      des: 'Knowledge graph expected node limit',
+    },
+  })
+
+export const getKnowledgeGraphicNodeHardLimit = (params) =>
+  request({
+    url: '/api/v2/user/config/knowledge_graph.node.hard_limit',
+    method: 'get',
+    params
+  })
+
+export const updateKnowledgeGraphicNodeHardLimit = (data) =>
+  request({
+    url: '/api/v2/user/config',
+    method: 'put',
+    data: {
+      ...data,
+      name: 'knowledge_graph.node.hard_limit',
+      type: 'integer',
+      defaultValue: '300',
+      min: '0',
+      max: '600',
+      required: false,
+      des: 'Knowledge graph hard node limit',
     },
   })
 

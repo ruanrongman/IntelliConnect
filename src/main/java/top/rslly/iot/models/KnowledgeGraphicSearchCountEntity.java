@@ -24,7 +24,7 @@ import lombok.Data;
 
 @Entity
 @Data
-@Table(name = "knowledge_graphic_search_count", schema = "cwloit1.8")
+@Table(name = "knowledge_graphic_search_count", schema = "cwliot1.8")
 public class KnowledgeGraphicSearchCountEntity {
   @Id
   @Column(name = "id")

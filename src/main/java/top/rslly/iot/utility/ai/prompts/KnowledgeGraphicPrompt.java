@@ -181,6 +181,11 @@ public class KnowledgeGraphicPrompt {
 
   public String buildGraphLimitBlock(int currentNodeCount, int currentRelationCount,
       int nodeLimit) {
+    return buildGraphLimitBlock(currentNodeCount, currentRelationCount, nodeLimit, true);
+  }
+
+  public String buildGraphLimitBlock(int currentNodeCount, int currentRelationCount,
+      int nodeLimit, boolean allowDelete) {
     int remainingNewNodes = Math.max(0, nodeLimit - currentNodeCount);
     String limitMessage = """
           ## Current Knowledge Graph Limits
@@ -193,8 +198,14 @@ public class KnowledgeGraphicPrompt {
         .formatted(currentNodeCount, currentRelationCount, nodeLimit, remainingNewNodes,
             remainingNewNodes);
     if (remainingNewNodes == 0) {
-      return limitMessage + "Do not create New nodes. You may still Update/Delete existing nodes "
-          + "and Update/Delete relations.";
+      if (allowDelete) {
+        return limitMessage
+            + "Do not create New nodes. You may still Update/Delete existing nodes "
+            + "and New/Update/Delete relations that only reference existing nodes.";
+      }
+      return limitMessage
+          + "Do not create New nodes and do not use Delete actions. You may still Update "
+          + "existing nodes and New/Update relations that only reference existing nodes.";
     }
     return limitMessage;
   }

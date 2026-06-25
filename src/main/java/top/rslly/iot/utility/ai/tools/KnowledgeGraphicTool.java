@@ -84,9 +84,11 @@ public class KnowledgeGraphicTool {
   private int chunkChars;
   @Value("${ai.knowledge_graphic.chunk_overlap_chars:500}")
   private int chunkOverlapChars;
-  private static final int DEFAULT_NODE_LIMIT = 100;
-  private static final int MAX_NODE_LIMIT = 300;
-  private static final String NODE_LIMIT_CONFIG_KEY = "knowledge_graph.node.limit";
+  private static final int DEFAULT_EXPECTED_NODE_LIMIT = 100;
+  private static final int DEFAULT_HARD_NODE_LIMIT = 300;
+  private static final int MAX_NODE_LIMIT = 600;
+  private static final String EXPECTED_NODE_LIMIT_CONFIG_KEY = "knowledge_graph.node.limit";
+  private static final String HARD_NODE_LIMIT_CONFIG_KEY = "knowledge_graph.node.hard_limit";
   private final Map<String, KnowledgeGraphicFileProgress> fileProgressMap =
       new ConcurrentHashMap<>();
   private String name = "knowledgeGraphicTool";
@@ -327,7 +329,7 @@ public class KnowledgeGraphicTool {
     GraphLimitContext limitContext = buildGraphLimitContext(productId);
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), systemPrompt));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), buildChunkUserMessage(chunk,
-        fileMode, systemPrompt, limitContext)));
+        fileMode, allowDelete, systemPrompt, limitContext)));
     JSONObject response = llm.jsonChat(String.valueOf(messages.get(1).getContent()), messages,
         false);
     if (response == null || response.getJSONObject("action") == null) {
@@ -337,12 +339,12 @@ public class KnowledgeGraphicTool {
         limitContext);
   }
 
-  private String buildChunkUserMessage(String chunk, boolean fileMode, String systemPrompt,
-      GraphLimitContext limitContext) {
+  private String buildChunkUserMessage(String chunk, boolean fileMode, boolean allowDelete,
+      String systemPrompt, GraphLimitContext limitContext) {
     String prefix = fileMode ? "Source text:\n" : "Current conversation:\n";
     return getUserMessage(systemPrompt).getContent() + "\n\n"
         + knowledgeGraphicPrompt.buildGraphLimitBlock(limitContext.currentNodeCount(),
-            limitContext.currentRelationCount(), limitContext.nodeLimit())
+            limitContext.currentRelationCount(), limitContext.expectedNodeLimit(), allowDelete)
         + "\n\n" + prefix + chunk;
   }
 
@@ -409,9 +411,11 @@ public class KnowledgeGraphicTool {
         continue;
       }
       boolean newNode = existingNode == null;
-      if (newNode && currentNodeCount >= limitContext.nodeLimit()) {
-        log.debug("Knowledge graph node limit reached, skip new node: productId={}, node={}",
-            productId, node.name);
+      if (newNode && currentNodeCount >= limitContext.hardNodeLimit()) {
+        log.debug(
+            "Knowledge graph hard node limit reached, skip new node: productId={}, node={}, "
+                + "hardLimit={}",
+            productId, node.name, limitContext.hardNodeLimit());
         continue;
       }
       KnowledgeGraphicNodeEntity nodeDb = (KnowledgeGraphicNodeEntity) knowledgeGraphicService
@@ -593,25 +597,35 @@ public class KnowledgeGraphicTool {
 
   private GraphLimitContext buildGraphLimitContext(int productId) {
     GraphMergeResult graphResult = getPersistedGraphResult(productId);
-    int nodeLimit = getNodeLimit(productId);
-    return new GraphLimitContext(graphResult.nodeCount(), graphResult.relationCount(), nodeLimit);
+    int expectedNodeLimit = getExpectedNodeLimit(productId);
+    int hardNodeLimit = getHardNodeLimit(productId);
+    return new GraphLimitContext(graphResult.nodeCount(), graphResult.relationCount(),
+        expectedNodeLimit, hardNodeLimit);
   }
 
-  private int getNodeLimit(int productId) {
-    String value = userConfigService.getConfigValue(productId, NODE_LIMIT_CONFIG_KEY);
+  private int getExpectedNodeLimit(int productId) {
+    return getNodeLimit(productId, EXPECTED_NODE_LIMIT_CONFIG_KEY, DEFAULT_EXPECTED_NODE_LIMIT);
+  }
+
+  private int getHardNodeLimit(int productId) {
+    return getNodeLimit(productId, HARD_NODE_LIMIT_CONFIG_KEY, DEFAULT_HARD_NODE_LIMIT);
+  }
+
+  private int getNodeLimit(int productId, String configKey, int defaultValue) {
+    String value = userConfigService.getConfigValue(productId, configKey);
     if (value == null || value.isBlank()) {
-      return DEFAULT_NODE_LIMIT;
+      return defaultValue;
     }
     try {
       int limit = Integer.parseInt(value.trim());
       if (limit < 0) {
-        return DEFAULT_NODE_LIMIT;
+        return defaultValue;
       }
       return Math.min(MAX_NODE_LIMIT, limit);
     } catch (NumberFormatException e) {
-      log.warn("Invalid knowledge graph node limit config: productId={}, value={}", productId,
-          value);
-      return DEFAULT_NODE_LIMIT;
+      log.warn("Invalid knowledge graph node limit config: productId={}, key={}, value={}",
+          productId, configKey, value);
+      return defaultValue;
     }
   }
 
@@ -660,9 +674,9 @@ public class KnowledgeGraphicTool {
   private record UploadFile(Path path, String fileName) {}
 
   private record GraphLimitContext(int currentNodeCount, int currentRelationCount,
-      int nodeLimit) {
+      int expectedNodeLimit, int hardNodeLimit) {
     int remainingNewNodes() {
-      return Math.max(0, nodeLimit - currentNodeCount);
+      return Math.max(0, expectedNodeLimit - currentNodeCount);
     }
 
     boolean canAddNode() {
