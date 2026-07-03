@@ -51,6 +51,7 @@ import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -302,12 +303,31 @@ public class DeepSeek implements LLM {
   private ChatCompletionCreateParams.Builder applyModelDefaults(
       ChatCompletionCreateParams.Builder builder) {
     if (enableThinking) {
-      builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(true));
-      builder.putAdditionalBodyProperty("thinking_budget", JsonValue.from(thinkingBudget));
+      if (isOfficialDeepSeekProvider()) {
+        builder.putAdditionalBodyProperty("thinking", thinkingMode("enabled"));
+      } else {
+        builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(true));
+        builder.putAdditionalBodyProperty("thinking_budget", JsonValue.from(thinkingBudget));
+      }
+    } else if (isOfficialDeepSeekProvider()) {
+      builder.putAdditionalBodyProperty("thinking", thinkingMode("disabled"));
     } else if (shouldDisableThinkingByDefault()) {
       builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(false));
     }
     return builder;
+  }
+
+  private boolean isOfficialDeepSeekProvider() {
+    try {
+      String host = URI.create(baseUrl).getHost();
+      return "api.deepseek.com".equals(host == null ? "" : host.toLowerCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+  }
+
+  private JsonValue thinkingMode(String type) {
+    return JsonValue.from(Map.of("type", type));
   }
 
   private boolean shouldDisableThinkingByDefault() {

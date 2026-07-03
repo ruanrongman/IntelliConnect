@@ -588,6 +588,7 @@ public class McpAgent implements BaseTool<String> {
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
 
     String finalAnswer = null;
+    List<String> toolObservations = new ArrayList<>();
     for (int iteration = 0; iteration < epochLimit; iteration++) {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(clientMap, chatId);
@@ -599,16 +600,23 @@ public class McpAgent implements BaseTool<String> {
         return null;
       }
       if (result.isDirectReply()) {
+        String directReply = result.getReply();
+        if (shouldSuppressDirectReply(directReply, toolObservations)) {
+          messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(), directReply));
+          messages.add(new ModelMessage(ModelMessageRole.USER.value(),
+              "这只是进度提示，不是最终回答。请继续调用合适的工具，或在确实不需要工具时给出完整答案。"));
+          continue;
+        }
         cleanupResources(clientMap, chatId);
         if (queue != null) {
           if (!speedUp) {
-            queue.add(result.getReply());
+            queue.add(directReply);
           }
           if (!mcpIsTool) {
             queue.add("[DONE]");
           }
         }
-        return result.getReply();
+        return directReply;
       }
       if (!result.isToolCall()) {
         return null;
@@ -624,6 +632,7 @@ public class McpAgent implements BaseTool<String> {
         queue.add(ToolPrefix.getToolCallPrefix(functionRef.fullName()));
       }
       String observation = callMcpFunction(functionRef, arguments, globalMessage, clientMap);
+      addToolObservation(toolObservations, observation);
       messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
           (assistantText.isBlank() ? "" : assistantText + "\n")
               + "Called function " + result.getFunctionName() + " for " + functionRef.fullName()
@@ -634,7 +643,8 @@ public class McpAgent implements BaseTool<String> {
     }
 
     cleanupResources(clientMap, chatId);
-    String summary = summarizeFunctionConversation(question, productId, messages, finalAnswer);
+    String summary = summarizeFunctionConversation(question, productId, toolObservations,
+        finalAnswer);
     if (queue != null) {
       queue.add(summary);
       if (!mcpIsTool) {
@@ -947,20 +957,77 @@ public class McpAgent implements BaseTool<String> {
   }
 
   private String summarizeFunctionConversation(String question, int productId,
-      List<ModelMessage> messages, String fallback) {
-    String summaryPrompt = "请根据以上工具调用过程和最终观察结果，总结回答最初的问题: " + question;
+      List<String> toolObservations, String fallback) {
+    String observations = joinToolObservations(toolObservations);
+    if (observations.isBlank()) {
+      return fallback == null || fallback.isBlank()
+          ? "工具调用次数已达上限，但未获得有效工具结果，请缩小问题范围或提供更多细节后重试。"
+          : fallback;
+    }
+    String summaryPrompt = """
+        请根据以下工具返回结果，回答用户最初的问题。
+        不要复述工具调用名称、函数名、参数或调用日志。
+        如果工具结果不足以回答，请明确说明信息不足。
+
+        用户问题：
+        %s
+
+        工具结果：
+        %s
+        """.formatted(question, observations);
     List<ModelMessage> summaryMessages = new ArrayList<>();
-    summaryMessages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
-    summaryMessages.add(new ModelMessage(ModelMessageRole.USER.value(), messages.toString()));
+    summaryMessages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
+        "你是一个负责总结工具结果的助手，只能基于工具返回结果回答。"));
+    summaryMessages.add(new ModelMessage(ModelMessageRole.USER.value(), summaryPrompt));
     try {
       return llmDiyUtility.getDiyLlm(productId, llmName, "10")
           .commonChat(summaryPrompt, summaryMessages, false);
     } catch (Exception e) {
       log.error("MCP Agent function calling summary failed", e);
       return fallback == null || fallback.isBlank()
-          ? "经过多次尝试仍未找到完整答案，请重新提问或提供更多细节。"
+          ? "工具调用次数已达上限，且总结工具结果失败，请重新提问或提供更多细节。"
           : fallback;
     }
+  }
+
+  private void addToolObservation(List<String> toolObservations, String observation) {
+    if (toolObservations == null || observation == null || observation.isBlank()
+        || isFunctionCallLog(observation)) {
+      return;
+    }
+    toolObservations.add("工具返回结果 " + (toolObservations.size() + 1) + ":\n" + observation);
+  }
+
+  private String joinToolObservations(List<String> toolObservations) {
+    if (toolObservations == null || toolObservations.isEmpty()) {
+      return "";
+    }
+    return toolObservations.stream()
+        .filter(Objects::nonNull)
+        .filter(observation -> !observation.isBlank())
+        .filter(observation -> !isFunctionCallLog(observation))
+        .reduce((left, right) -> left + "\n\n" + right)
+        .orElse("");
+  }
+
+  private boolean shouldSuppressDirectReply(String reply, List<String> toolObservations) {
+    return (toolObservations == null || toolObservations.isEmpty())
+        && (isFunctionCallLog(reply) || isProgressOnlyReply(reply));
+  }
+
+  private boolean isProgressOnlyReply(String content) {
+    String text = content == null ? "" : content.strip().toLowerCase(Locale.ROOT);
+    if (text.isBlank()) {
+      return true;
+    }
+    return text.contains("function call")
+        || text.contains("called function")
+        || text.contains("with arguments");
+  }
+
+  private boolean isFunctionCallLog(String content) {
+    String text = content == null ? "" : content.strip();
+    return text.startsWith("Called function ") && text.contains(" with arguments:");
   }
 
   private boolean hasRunningEndpoint(int productId) {

@@ -90,7 +90,7 @@ public class ReactPrompt {
 
           ## Constraints
           - Output ONLY the JSON object. No markdown fences, no comments, no extra text.
-          - Final answer should be ≤ 100 words and match your role's style.
+          - Final answer should match your role's style.
           - No emojis in output.
 
           ## Tools
@@ -121,12 +121,14 @@ public class ReactPrompt {
           Available tools are provided by the function calling API.
 
           ## Rules
-          - Before calling a function, you may output a brief natural-language progress message.
+          - Before calling a function, you may output a brief natural-language progress message, but it is only progress text and not the final answer.
           - Use a function only when it helps complete the user's request.
           - Do not call the same function with the same arguments repeatedly.
+          - If you output progress text because a function is needed, you must still call the function in the same turn. Do not stop after progress text.
           - After an Observation is provided, use it to decide whether another function is needed or whether to answer.
           - When enough information is available, answer directly in the user's language.
-          - Final answer should be <= 100 words and match your role's style.
+          - Final answer should match your role's style.
+          - Final answers must not include internal tool traces such as `Called function`, function names, arguments, MCP server or endpoint names, or `Observation`.
           - No emojis in output.
 
           ## Runtime Context

@@ -251,6 +251,8 @@ ai:
   knowledge_graphic_llm: dashscope-qwen3-30b-a3b-instruct-2507
   knowledge_graphic:
     max_graphic_length: 30000
+    chunk_chars: 12000
+    chunk_overlap_chars: 500
   branch-prediction:
     enabled: true
   mcp:
