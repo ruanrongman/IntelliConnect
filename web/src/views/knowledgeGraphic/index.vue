@@ -5,25 +5,24 @@ import {
   Select,
   Button,
   Modal,
-  Form,
   message,
-  Input,
-  InputNumber,
-  Drawer,
   Switch,
   Tooltip,
-  Slider,
   Progress,
+  Form,
+  Input,
+  Drawer,
 } from 'ant-design-vue'
 import {
   DeleteOutlined,
   DownloadOutlined,
-  EditOutlined,
   QuestionCircleOutlined,
+  SettingOutlined,
   UploadOutlined,
 } from '@ant-design/icons-vue'
 import NodeInfo from '@/views/knowledgeGraphic/nodeInfo.vue'
 import RelationConfig from '@/views/knowledgeGraphic/relationConfig.vue'
+import ConfigPanel from '@/views/knowledgeGraphic/configPanel.vue'
 
 import * as echarts from 'echarts'
 
@@ -34,26 +33,10 @@ import {
   disabledKnowledgeGraphic,
   getKnowledgeGraphicState,
   addKnowledgeGraphicToggleConfig,
-  getKnowledgeGraphicForgetState,
-  addKnowledgeGraphicForgetToggleConfig,
-  knowledgeGraphicForgetToggle,
-  updateKnowledgeGraphicForgetEpoch,
-  getKnowledgeGraphicForgetEpoch,
-  getKnowledgeGraphicNodeLimit,
-  updateKnowledgeGraphicNodeLimit,
-  getKnowledgeGraphicNodeHardLimit,
-  updateKnowledgeGraphicNodeHardLimit,
   uploadKnowledgeGraphicFile,
   getKnowledgeGraphicFileProgress,
   downloadKnowledgeGraphicDataset,
   clearKnowledgeGraphic,
-  getKnowledgeGraphicPromptState,
-  addKnowledgeGraphicPromptToggleConfig,
-  knowledgeGraphicPromptToggle,
-  getProductKnowledgeGraphicPrompt,
-  addProductKnowledgeGraphicPrompt,
-  updateProductKnowledgeGraphicPrompt,
-  deleteProductKnowledgeGraphicPrompt,
 } from '@/api/knowledgeGraphic'
 import { getProduct } from '@/api/product'
 
@@ -132,19 +115,7 @@ const newNodeForm = reactive({
 })
 
 const knowledgeGraphicEnable = ref(false)
-const knowledgeGraphForgetEnable = ref(false)
-const knowledgeGraphForgetEpoch = ref(10)
-const knowledgeGraphNodeLimit = ref(100)
-const knowledgeGraphNodeHardLimit = ref(300)
-const knowledgeGraphicPromptEnable = ref(false)
-const promptModalOpen = ref(false)
-const promptLoading = ref(false)
-const promptSaving = ref(false)
-const promptDeleting = ref(false)
-const knowledgeGraphicPromptForm = reactive({
-  id: null,
-  prompt: '',
-})
+const configModalOpen = ref(false)
 const allowedUploadTypes = [
   '.pdf',
   '.txt',
@@ -225,14 +196,8 @@ function fetchProducts() {
 }
 
 function afterFetchCurrentProduct() {
-  // When product id changed, invoke this hook
   getCurrentKnowledgeGraphicState()
   getCurrentKnowledgeGraphic()
-  getCurrentKnowledgeGraphForgetState()
-  getCurrentKnowledgeGraphForgetEpoch()
-  getCurrentKnowledgeGraphNodeLimit()
-  getCurrentKnowledgeGraphNodeHardLimit()
-  getCurrentKnowledgeGraphicPromptState()
 }
 
 function handleKnowledgeGraphicEnableToggle() {
@@ -260,240 +225,17 @@ function handleKnowledgeGraphicEnableToggle() {
   }
 }
 
-function handleKnowledgeGraphForgetEnableToggle() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-  }
-  const data = {
-    productId: currentProductId.value,
-    value: String(!knowledgeGraphForgetEnable.value),
-  }
-  knowledgeGraphicForgetToggle(data)
-    .then((res) => resultPreFilter(res))
-    .then(() => {
-      if (knowledgeGraphForgetEnable.value) {
-        message.info('已关闭知识图谱遗忘功能')
-      } else {
-        message.info('已开启知识图谱遗忘功能')
-      }
-      knowledgeGraphForgetEnable.value = !knowledgeGraphForgetEnable.value
-    })
-}
-
-function handleKnowledgeGraphForgetEpochChange(value) {
-  knowledgeGraphForgetEpoch.value = value
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const data = {
-    productId: currentProductId.value,
-    value: knowledgeGraphForgetEpoch.value,
-  }
-  updateKnowledgeGraphicForgetEpoch(data).then((res) => resultPreFilter(res))
-}
-
-function normalizeNodeLimit(value, defaultValue = 100) {
-  const numberValue = Number(value)
-  if (Number.isNaN(numberValue)) return defaultValue
-  return Math.min(600, Math.max(0, Math.round(numberValue)))
-}
-
-function handleKnowledgeGraphNodeLimitChange(value) {
-  const normalizedValue = normalizeNodeLimit(value)
-  knowledgeGraphNodeLimit.value = normalizedValue
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const data = {
-    productId: currentProductId.value,
-    value: String(normalizedValue),
-  }
-  updateKnowledgeGraphicNodeLimit(data).then((res) => resultPreFilter(res))
-}
-
-function handleKnowledgeGraphNodeHardLimitChange(value) {
-  const normalizedValue = normalizeNodeLimit(value, 300)
-  knowledgeGraphNodeHardLimit.value = normalizedValue
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const data = {
-    productId: currentProductId.value,
-    value: String(normalizedValue),
-  }
-  updateKnowledgeGraphicNodeHardLimit(data).then((res) => resultPreFilter(res))
-}
-
 function handleStartAddNewNode() {
   newNodeForm.productId = currentProductId.value
   isAddingNode.value = true
 }
 
-function handleKnowledgeGraphicPromptToggle() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-  }
-  const data = {
-    productId: currentProductId.value,
-    value: String(!knowledgeGraphicPromptEnable.value),
-  }
-  knowledgeGraphicPromptToggle(data)
-    .then((res) => resultPreFilter(res))
-    .then(() => {
-      if (knowledgeGraphicPromptEnable.value) {
-        message.info('已关闭图谱提示增强')
-        promptModalOpen.value = false
-      } else {
-        message.info('已开启图谱提示增强')
-        fetchProductKnowledgeGraphicPrompt()
-      }
-      knowledgeGraphicPromptEnable.value = !knowledgeGraphicPromptEnable.value
-    })
+function handleOpenConfigModal() {
+  configModalOpen.value = true
 }
 
-function resetKnowledgeGraphicPromptForm() {
-  knowledgeGraphicPromptForm.id = null
-  knowledgeGraphicPromptForm.prompt = ''
-}
-
-function normalizeKnowledgeGraphicPrompt(data) {
-  if (Array.isArray(data) && data.length > 0) return data[0]
-  if (data && typeof data === 'object' && !Array.isArray(data)) return data
-  return null
-}
-
-function fetchProductKnowledgeGraphicPrompt() {
-  if (!currentProductId.value) return Promise.resolve()
-  promptLoading.value = true
-  return getProductKnowledgeGraphicPrompt({ productId: currentProductId.value })
-    .then((res) => {
-      const { data, errorCode } = res.data
-      if (errorCode === 2001) {
-        router.push('/login')
-        return
-      }
-      if (errorCode !== 200) {
-        resetKnowledgeGraphicPromptForm()
-        return
-      }
-      const promptConfig = normalizeKnowledgeGraphicPrompt(data)
-      if (!promptConfig) {
-        resetKnowledgeGraphicPromptForm()
-        return
-      }
-      knowledgeGraphicPromptForm.id = promptConfig.id
-      knowledgeGraphicPromptForm.prompt = promptConfig.prompt || ''
-    })
-    .catch(() => {
-      resetKnowledgeGraphicPromptForm()
-    })
-    .finally(() => {
-      promptLoading.value = false
-    })
-}
-
-function handleOpenPromptModal() {
-  if (!currentProductId.value || !knowledgeGraphicPromptEnable.value) return
-  promptModalOpen.value = true
-  fetchProductKnowledgeGraphicPrompt()
-}
-
-function handleClosePromptModal() {
-  promptModalOpen.value = false
-}
-
-function handleSaveKnowledgeGraphicPrompt() {
-  const prompt = knowledgeGraphicPromptForm.prompt.trim()
-  if (!prompt) {
-    message.warning('请输入背景信息及要求')
-    return
-  }
-  promptSaving.value = true
-  const hasExistingPrompt = Boolean(knowledgeGraphicPromptForm.id)
-  const payload = {
-    productId: currentProductId.value,
-    prompt,
-  }
-  const request = hasExistingPrompt
-    ? updateProductKnowledgeGraphicPrompt({
-        ...payload,
-        id: knowledgeGraphicPromptForm.id,
-      })
-    : addProductKnowledgeGraphicPrompt(payload)
-  request
-    .then((res) => {
-      const { data, errorCode, errorMsg } = res.data
-      if (errorCode !== 200) {
-        message.error(errorMsg || '保存失败')
-        return
-      }
-      const promptConfig = normalizeKnowledgeGraphicPrompt(data)
-      if (promptConfig) {
-        knowledgeGraphicPromptForm.id = promptConfig.id
-        knowledgeGraphicPromptForm.prompt = promptConfig.prompt || prompt
-      }
-      message.success(hasExistingPrompt ? '已修改图谱提示增强' : '已设置图谱提示增强')
-      promptModalOpen.value = false
-    })
-    .catch(() => {
-      message.error('保存失败')
-    })
-    .finally(() => {
-      promptSaving.value = false
-    })
-}
-
-function handleDeleteKnowledgeGraphicPrompt() {
-  if (!knowledgeGraphicPromptForm.id) {
-    resetKnowledgeGraphicPromptForm()
-    message.info('当前没有可删除的配置')
-    return
-  }
-  Modal.confirm({
-    title: '删除图谱提示增强？',
-    content: '删除后，背景信息及要求将不再参与知识图谱生成。',
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      promptDeleting.value = true
-      try {
-        const res = await deleteProductKnowledgeGraphicPrompt({
-          id: knowledgeGraphicPromptForm.id,
-        })
-        const { errorCode, errorMsg } = res.data
-        if (errorCode === 200) {
-          resetKnowledgeGraphicPromptForm()
-          promptModalOpen.value = false
-          message.success('已删除图谱提示增强')
-        } else {
-          message.error(errorMsg || '删除失败')
-        }
-      } catch (err) {
-        message.error('删除失败')
-      } finally {
-        promptDeleting.value = false
-      }
-    },
-  })
+function handleCloseConfigModal() {
+  configModalOpen.value = false
 }
 
 function handleStopAddNewNode() {
@@ -1156,154 +898,6 @@ function getCurrentKnowledgeGraphicState() {
   })
 }
 
-function getCurrentKnowledgeGraphForgetState() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const params = { productId: currentProductId.value }
-  getKnowledgeGraphicForgetState(params)
-    .then((res) => resultPreFilter(res))
-    .then((res) => {
-      const { data, errorCode } = res
-      if (errorCode !== 200) {
-        message.error('获取知识图谱遗忘功能状态失败！')
-        return
-      }
-      if (data === null) {
-        addKnowledgeGraphicForgetToggleConfig(params).then(() => {
-          getCurrentKnowledgeGraphForgetState()
-        })
-      } else {
-        knowledgeGraphForgetEnable.value = data.value === 'true'
-      }
-    })
-}
-
-function getCurrentKnowledgeGraphForgetEpoch() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const params = { productId: currentProductId.value }
-  getKnowledgeGraphicForgetEpoch(params)
-    .then((res) => resultPreFilter(res))
-    .then((res) => {
-      const { data, errorCode } = res
-      if (errorCode !== 200) {
-        message.error('获取知识图谱遗忘轮次出错！')
-        return
-      }
-      if (data === null) {
-        const createData = {
-          productId: currentProductId.value,
-          value: 10,
-        }
-        updateKnowledgeGraphicForgetEpoch(createData)
-      } else {
-        knowledgeGraphForgetEpoch.value = parseInt(data.value)
-      }
-    })
-}
-
-function getCurrentKnowledgeGraphNodeLimit() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const params = { productId: currentProductId.value }
-  getKnowledgeGraphicNodeLimit(params)
-    .then((res) => resultPreFilter(res))
-    .then((res) => {
-      const { data, errorCode } = res
-      if (errorCode !== 200) {
-        message.error('获取知识图谱期望节点上限出错！')
-        return
-      }
-      if (data === null) {
-        const createData = {
-          productId: currentProductId.value,
-          value: '100',
-        }
-        knowledgeGraphNodeLimit.value = 100
-        updateKnowledgeGraphicNodeLimit(createData)
-      } else {
-        knowledgeGraphNodeLimit.value = normalizeNodeLimit(data.value)
-      }
-    })
-}
-
-function getCurrentKnowledgeGraphNodeHardLimit() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const params = { productId: currentProductId.value }
-  getKnowledgeGraphicNodeHardLimit(params)
-    .then((res) => resultPreFilter(res))
-    .then((res) => {
-      const { data, errorCode } = res
-      if (errorCode !== 200) {
-        message.error('获取知识图谱节点硬上限出错！')
-        return
-      }
-      if (data === null) {
-        const createData = {
-          productId: currentProductId.value,
-          value: '300',
-        }
-        knowledgeGraphNodeHardLimit.value = 300
-        updateKnowledgeGraphicNodeHardLimit(createData)
-      } else {
-        knowledgeGraphNodeHardLimit.value = normalizeNodeLimit(data.value, 300)
-      }
-    })
-}
-
-function getCurrentKnowledgeGraphicPromptState() {
-  const resultPreFilter = (res) => {
-    const { errorCode } = res.data
-    if (errorCode === 2001) {
-      router.push('/login')
-    }
-    return res.data
-  }
-  const params = { productId: currentProductId.value }
-  getKnowledgeGraphicPromptState(params)
-    .then((res) => resultPreFilter(res))
-    .then((res) => {
-      const { data, errorCode } = res
-      if (errorCode !== 200) {
-        message.error('获取图谱提示增强状态失败！')
-        return
-      }
-      if (data === null) {
-        addKnowledgeGraphicPromptToggleConfig(params).then(() => {
-          getCurrentKnowledgeGraphicPromptState()
-        })
-      } else {
-        knowledgeGraphicPromptEnable.value = data.value === 'true'
-        if (knowledgeGraphicPromptEnable.value) {
-          fetchProductKnowledgeGraphicPrompt()
-        } else {
-          resetKnowledgeGraphicPromptForm()
-        }
-      }
-    })
-}
-
 onMounted(() => {
   fetchProducts()
   initializeCanvas()
@@ -1350,16 +944,12 @@ onUnmounted(() => {
           />
         </div>
         <div v-if="currentProductId !== null" class="option-item">
-          <label class="option-label" for="prompt-toggle"> 图谱提示增强 </label>
-          <Switch
-            id="prompt-toggle"
-            :checked="knowledgeGraphicPromptEnable"
-            @click="handleKnowledgeGraphicPromptToggle"
-          />
-        </div>
-        <div v-if="currentProductId !== null && knowledgeGraphicPromptEnable" class="option-item">
-          <Button :loading="promptLoading" @click="handleOpenPromptModal">
-            <template #icon><EditOutlined /></template>
+          <Button
+            :type="'default'"
+            :disabled="currentProductId === null"
+            @click="handleOpenConfigModal"
+          >
+            <template #icon><SettingOutlined /></template>
             配置
           </Button>
         </div>
@@ -1378,7 +968,7 @@ onUnmounted(() => {
             @click="handleOpenUploadModal"
           >
             <template #icon><UploadOutlined /></template>
-            上传生成图谱
+            上传文件以生成图谱
           </Button>
         </div>
         <div class="option-item">
@@ -1388,7 +978,7 @@ onUnmounted(() => {
             @click="handleDownloadDataset"
           >
             <template #icon><DownloadOutlined /></template>
-            下载数据集
+            下载当前图谱
           </Button>
         </div>
         <div class="option-item">
@@ -1409,93 +999,16 @@ onUnmounted(() => {
             @click="handleConnectingToggle"
           />
         </div>
-        <div v-if="currentProductId !== null" class="option-item repulsion">
-          <label class="option-label" for="repulsion">节点斥力大小（边长）</label>
-          <Slider
-            id="repulsion"
-            :max="255"
-            width="200"
-            :value="repulsion"
-            @change="handleRepulsionChange"
-          />
-        </div>
-        <div v-if="currentProductId !== null" class="option-item node-limit">
-          <label class="option-label" for="expected-node-limit">
-            <Tooltip title="提示给模型的期望节点上限，0 表示不希望自动新增节点">
-              <QuestionCircleOutlined />
-            </Tooltip>
-            期望节点上限
-          </label>
-          <Slider
-            id="expected-node-limit"
-            :min="0"
-            :max="600"
-            :value="knowledgeGraphNodeLimit"
-            @change="handleKnowledgeGraphNodeLimitChange"
-          />
-          <InputNumber
-            class="node-limit-input"
-            :min="0"
-            :max="600"
-            :precision="0"
-            :value="knowledgeGraphNodeLimit"
-            @change="handleKnowledgeGraphNodeLimitChange"
-          />
-        </div>
-        <div v-if="currentProductId !== null" class="option-item node-limit">
-          <label class="option-label" for="hard-node-limit">
-            <Tooltip title="后端实际写入保护，不会发送给模型，0 表示不允许自动生成新增节点落库">
-              <QuestionCircleOutlined />
-            </Tooltip>
-            节点硬上限
-          </label>
-          <Slider
-            id="hard-node-limit"
-            :min="0"
-            :max="600"
-            :value="knowledgeGraphNodeHardLimit"
-            @change="handleKnowledgeGraphNodeHardLimitChange"
-          />
-          <InputNumber
-            class="node-limit-input"
-            :min="0"
-            :max="600"
-            :precision="0"
-            :value="knowledgeGraphNodeHardLimit"
-            @change="handleKnowledgeGraphNodeHardLimitChange"
-          />
-        </div>
-        <div v-if="currentProductId !== null" class="option-item">
-          <label class="option-label" for="forget-toggle"> 知识图谱遗忘开关 </label>
-          <Switch
-            id="forget-toggle"
-            :checked="knowledgeGraphForgetEnable"
-            @click="handleKnowledgeGraphForgetEnableToggle"
-          />
-        </div>
-        <div
-          v-if="currentProductId !== null && knowledgeGraphForgetEnable"
-          class="option-item repulsion"
-        >
-          <label for="repulsion" class="option-label">
-            <Tooltip
-              title="对话达到这个轮次后会自动执行一次节点清理（模拟遗忘），随后重新计数。注意！这个值小于4时清理永远不会生效！"
-            >
-              <QuestionCircleOutlined />
-            </Tooltip>
-            知识图谱遗忘轮次
-          </label>
-          <Slider
-            id="forget-epoch"
-            :min="3"
-            :max="40"
-            :value="knowledgeGraphForgetEpoch"
-            @change="handleKnowledgeGraphForgetEpochChange"
-          />
-        </div>
       </div>
       <div class="kg-body">
         <canvas id="kg-cav" ref="cavDom">Your browser didn't support canvas.</canvas>
+        <ConfigPanel
+          v-if="configModalOpen"
+          :product-id="currentProductId"
+          :repulsion="repulsion"
+          @close="handleCloseConfigModal"
+          @update:repulsion="handleRepulsionChange"
+        />
       </div>
     </div>
     <Modal
@@ -1532,47 +1045,8 @@ onUnmounted(() => {
       </Form>
     </Modal>
     <Modal
-      :open="promptModalOpen"
-      title="图谱提示增强"
-      :confirm-loading="promptSaving"
-      ok-text="保存"
-      cancel-text="取消"
-      @cancel="handleClosePromptModal"
-      @ok="handleSaveKnowledgeGraphicPrompt"
-    >
-      <Form
-        :model="knowledgeGraphicPromptForm"
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 17 }"
-      >
-        <Form.Item
-          label="背景要求"
-          name="prompt"
-          :rules="[{ required: true, message: '请输入背景信息及要求' }]"
-        >
-          <Input.TextArea
-            v-model:value="knowledgeGraphicPromptForm.prompt"
-            :maxlength="2048"
-            :auto-size="{ minRows: 6, maxRows: 10 }"
-            show-count
-            placeholder="例如：优先抽取设备、场景、故障现象之间的关系；不要把临时对话称呼写入图谱。"
-          />
-        </Form.Item>
-        <Form.Item :wrapper-col="{ offset: 6, span: 17 }">
-          <Button
-            danger
-            :disabled="!knowledgeGraphicPromptForm.id"
-            :loading="promptDeleting"
-            @click="handleDeleteKnowledgeGraphicPrompt"
-          >
-            删除
-          </Button>
-        </Form.Item>
-      </Form>
-    </Modal>
-    <Modal
       :open="isUploadModalOpen"
-      title="上传生成知识图谱"
+      title="上传文件以生成知识图谱"
       :footer="null"
       :closable="!uploadLoading"
       :mask-closable="!uploadLoading"
@@ -1715,32 +1189,6 @@ onUnmounted(() => {
   align-items: center;
   padding: 2px;
   margin-right: 20px;
-}
-
-.option-item.repulsion {
-  width: fit-content;
-}
-
-#repulsion {
-  width: 200px;
-}
-
-#forget-epoch {
-  width: 150px;
-}
-
-.option-item.node-limit {
-  width: fit-content;
-}
-
-#expected-node-limit,
-#hard-node-limit {
-  width: 180px;
-}
-
-.node-limit-input {
-  width: 76px;
-  margin-left: 8px;
 }
 
 .option-label {
