@@ -101,7 +101,7 @@
 import { computed, reactive, ref, toRaw } from 'vue';
 import { message } from 'ant-design-vue'
 import { postProductLlmModel } from '@/api/productLlmModel';
-import { getProduct, getProductName } from '@/api/product';
+import { getProduct } from '@/api/product';
 import { getLlmProviderInformation, getLlmProviderModelList } from '@/api/llmProviderInformation';
 import { useRouter } from 'vue-router';
 
@@ -180,29 +180,9 @@ const fetchProducts = async () => {
     }
 
     if (errorCode === 200 && data && Array.isArray(data)) {
-      // 获取每个产品的详细信息以获取名称
-      productOptions.value = await Promise.all(data.map(async (item) => {
-        try {
-          const nameRes = await getProductName({ id: item.id });
-          const { data: nameData, errorCode: nameErrorCode } = nameRes.data;
-          if (nameErrorCode === 200 && nameData) {
-            return {
-              value: item.id,
-              label: nameData
-            };
-          } else {
-            return {
-              value: item.id,
-              label: `产品ID: ${item.id}`
-            };
-          }
-        } catch (err) {
-          console.error(`获取产品ID ${item.id} 名称失败:`, err);
-          return {
-            value: item.id,
-            label: `产品ID: ${item.id}`
-          };
-        }
+      productOptions.value = data.map((item) => ({
+        value: item.id,
+        label: item.productName || `产品ID: ${item.id}`
       }));
     } else {
       productOptions.value = [];

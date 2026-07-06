@@ -17,10 +17,11 @@ Use this skill when implementing backend service/serviceimpl code in IntelliConn
 3. Add or update the request DTO in `top.rslly.iot.param.request` when the service method accepts input from controller code.
 4. Add derived Spring Data repository methods for simple lookups and pageable queries.
 5. Use database-backed pagination for paged APIs; do not manually paginate non-empty lists in the service.
-6. Keep controller permission checks outside mutating service methods when the repository pattern already uses `SafetyServiceImpl` wrappers.
-7. Before implementing any delete path, inspect all related tables/repositories and decide whether the correct behavior is dependency failure or cascade delete.
-8. If the dependency policy is not already obvious from nearby code, ask the user whether to return `HAS_DEPENDENCIES` or delete related records too.
-9. Compile with JDK 21 after edits:
+6. Use streams for simple collection projection, but avoid repeated repository calls and mutation-heavy stream code.
+7. Keep controller permission checks outside mutating service methods when the repository pattern already uses `SafetyServiceImpl` wrappers.
+8. Before implementing any delete path, inspect all related tables/repositories and decide whether the correct behavior is dependency failure or cascade delete.
+9. If the dependency policy is not already obvious from nearby code, ask the user whether to return `HAS_DEPENDENCIES` or delete related records too.
+10. Compile with JDK 21 after edits:
    ```powershell
    $env:JAVA_HOME='C:\Users\Lenovo\.jdks\ms-21.0.9'; $env:Path="$env:JAVA_HOME\bin;$env:Path"; .\mvnw.cmd -q -DskipTests compile
    ```
@@ -79,6 +80,31 @@ if (result.isEmpty()) {
 
 Do not split this into a helper unless the surrounding codebase already does so for the same type of service. Do not `return null`; return `ResultTool.fail(ResultCode.COMMON_FAIL)`.
 
+## Collection Style
+
+Use streams for simple one-step projections from repository results, especially when extracting ids for scoped queries:
+
+```java
+List<Integer> productIdList = userProductBindRepository.findAllByUserId(userId)
+    .stream()
+    .map(UserProductBindEntity::getProductId)
+    .toList();
+```
+
+Prefer `.toList()` on Java 21 when the result is only passed to another method or returned. Use `new ArrayList<>(...)` or `collect(Collectors.toList())` only when later code must mutate the list.
+
+Do not use streams for code that needs side effects, complex branching, or repository calls per item. Prefer one repository query returning all needed rows, then a simple `map(...).toList()` if only a field is needed.
+
+Avoid duplicate repository calls. Store the result list once before checking it:
+
+```java
+List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+if (wxUserEntityList.isEmpty()) {
+  return ResultTool.fail(ResultCode.COMMON_FAIL);
+}
+String appid = wxUserEntityList.getFirst().getAppid();
+```
+
 ## Pagination Pattern
 
 For paged APIs, use Spring Data `Pageable`/`Page` and push pagination into the repository/database.
@@ -93,6 +119,17 @@ Page<ProductEntity> findAllByIdIn(List<Integer> ids, Pageable pageable);
 ```
 
 If there are no authorized ids, returning `new PageImpl<>(List.of(), pageable, 0)` is acceptable. Do not use `PageImpl` to wrap a manually sliced non-empty result list when a repository query can page it.
+
+For permission-filtered pagination, first collect the authorized ids with simple stream projection, then pass the ids to a pageable repository method. If the id list is empty, return an empty page instead of querying with `IN ()`.
+
+```java
+List<Integer> productIdList = wxProductBindRepository.findAllByAppidAndOpenid(appid, openid)
+    .stream()
+    .map(WxProductBindEntity::getProductId)
+    .toList();
+Page<ProductEntity> result = productIdList.isEmpty() ? emptyProductPage(pageable)
+    : productRepository.findAllByIdIn(productIdList, pageable);
+```
 
 ## Mutation Rules
 

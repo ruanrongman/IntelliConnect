@@ -21,6 +21,8 @@ package top.rslly.iot.utility.ai.llm;
 
 import lombok.Getter;
 
+import java.util.UUID;
+
 @Getter
 public final class FunctionResult {
   public enum Type {
@@ -28,14 +30,16 @@ public final class FunctionResult {
   }
 
   private final Type type;
+  private final String toolCallId;
   private final String functionName;
   private final String arguments;
   private final String reply;
   private final String errorMessage;
 
-  private FunctionResult(Type type, String functionName, String arguments, String reply,
-      String errorMessage) {
+  private FunctionResult(Type type, String toolCallId, String functionName, String arguments,
+      String reply, String errorMessage) {
     this.type = type;
+    this.toolCallId = toolCallId;
     this.functionName = functionName;
     this.arguments = arguments;
     this.reply = reply;
@@ -43,15 +47,20 @@ public final class FunctionResult {
   }
 
   public static FunctionResult unsupported() {
-    return new FunctionResult(Type.UNSUPPORTED, "", "", "", "");
+    return new FunctionResult(Type.UNSUPPORTED, "", "", "", "", "");
   }
 
   public static FunctionResult directReply(String reply) {
-    return new FunctionResult(Type.DIRECT_REPLY, "", "", reply == null ? "" : reply, "");
+    return new FunctionResult(Type.DIRECT_REPLY, "", "", "", reply == null ? "" : reply, "");
   }
 
   public static FunctionResult toolCall(String functionName, String arguments) {
+    return toolCall("", functionName, arguments);
+  }
+
+  public static FunctionResult toolCall(String toolCallId, String functionName, String arguments) {
     return new FunctionResult(Type.TOOL_CALL,
+        normalizeToolCallId(toolCallId),
         functionName == null ? "" : functionName,
         arguments == null ? "" : arguments,
         "",
@@ -59,7 +68,7 @@ public final class FunctionResult {
   }
 
   public static FunctionResult error(String errorMessage) {
-    return new FunctionResult(Type.ERROR, "", "", "",
+    return new FunctionResult(Type.ERROR, "", "", "", "",
         errorMessage == null ? "" : errorMessage);
   }
 
@@ -77,5 +86,12 @@ public final class FunctionResult {
 
   public boolean isError() {
     return type == Type.ERROR;
+  }
+
+  private static String normalizeToolCallId(String toolCallId) {
+    if (toolCallId != null && !toolCallId.isBlank()) {
+      return toolCallId;
+    }
+    return "call_" + UUID.randomUUID().toString().replace("-", "");
   }
 }

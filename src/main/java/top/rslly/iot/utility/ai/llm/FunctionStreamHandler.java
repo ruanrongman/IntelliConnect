@@ -28,6 +28,10 @@ public interface FunctionStreamHandler {
 
   default void onToolCall(String functionName, String arguments) {}
 
+  default void onToolCall(String toolCallId, String functionName, String arguments) {
+    onToolCall(functionName, arguments);
+  }
+
   default void onFailure(Throwable throwable) {}
 
   default void onUnsupported() {}

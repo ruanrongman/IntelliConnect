@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.*;
@@ -35,6 +36,8 @@ import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
+import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
+import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.tools.BaseTool;
@@ -52,6 +55,9 @@ import java.util.concurrent.TimeUnit;
 @Data
 @Slf4j
 public class Agent implements BaseTool<String> {
+  private static final String EPOCH_LIMIT_CONFIG_KEY = "agent.epoch_limit";
+  private static final int MAX_EPOCH_LIMIT = 100;
+
   @Autowired
   private Manage manage;
   @Autowired
@@ -76,6 +82,8 @@ public class Agent implements BaseTool<String> {
   private boolean includeThought;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
   @Value("${ai.router.mode:prompt}")
   private String routerMode;
   @Value("${ai.agent.mode:prompt}")
@@ -152,17 +160,18 @@ public class Agent implements BaseTool<String> {
         queue.add(getRandomComfortPhrase());
       }
     }
+    int currentEpochLimit = getEpochLimitConfig(productId);
     boolean includeThoughtEnabled = getIncludeThoughtConfig();
     String system =
         reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId, 1,
-            epochLimit, includeThoughtEnabled);
+            currentEpochLimit, includeThoughtEnabled);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
     conversationPrompt.append(system);
     // System.out.println("agent epoch limit" + epochLimit);
-    log.info("agent epoch limit{}", epochLimit);
+    log.info("agent epoch limit{}", currentEpochLimit);
     int iteration = 0;
-    while (iteration < epochLimit) {
+    while (iteration < currentEpochLimit) {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(chatId);
         return "操作已取消";
@@ -170,7 +179,8 @@ public class Agent implements BaseTool<String> {
       // 更新当前轮次信息
       if (iteration > 0) {
         conversationPrompt
-            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1, epochLimit));
+            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1,
+                currentEpochLimit));
       }
       messages.clear();
       ModelMessage systemMessage =
@@ -359,6 +369,27 @@ public class Agent implements BaseTool<String> {
     return includeThought;
   }
 
+  private int getEpochLimitConfig(int productId) {
+    try {
+      String value = userConfigService.getConfigValue(productId, EPOCH_LIMIT_CONFIG_KEY);
+      if (value == null || value.isBlank()) {
+        return epochLimit;
+      }
+      int configuredEpochLimit = Integer.parseInt(value.trim());
+      if (configuredEpochLimit < 1) {
+        return epochLimit;
+      }
+      return Math.min(MAX_EPOCH_LIMIT, configuredEpochLimit);
+    } catch (NumberFormatException e) {
+      log.warn("Invalid Agent epoch limit config: productId={}, key={}", productId,
+          EPOCH_LIMIT_CONFIG_KEY, e);
+      return epochLimit;
+    } catch (Exception e) {
+      log.error("从用户配置获取Agent epochLimit失败", e);
+      return epochLimit;
+    }
+  }
+
   private boolean isFunctionRouterMode() {
     return "function".equalsIgnoreCase(routerMode);
   }
@@ -383,14 +414,14 @@ public class Agent implements BaseTool<String> {
     }
 
     List<FunctionToolSpec> toolSpecs = buildFunctionToolSpecs(productId, chatId);
+    int currentEpochLimit = getEpochLimitConfig(productId);
     List<ModelMessage> messages = new ArrayList<>();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
         reactPrompt.getFunctionCalling(question, productId)));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
-
     String finalAnswer = null;
     List<String> toolObservations = new ArrayList<>();
-    for (int iteration = 0; iteration < epochLimit; iteration++) {
+    for (int iteration = 0; iteration < currentEpochLimit; iteration++) {
       if (isQueueRemoved(chatId, queueMap)) {
         return "操作已取消";
       }
@@ -420,6 +451,7 @@ public class Agent implements BaseTool<String> {
       String functionName = result.getFunctionName();
       String assistantText = extractAssistantText(result.getArguments());
       String toolArgs = extractFunctionArgs(result.getArguments());
+      String toolCallArguments = normalizeToolCallArguments(result.getArguments());
       if (!isKnownAgentFunction(functionName, toolSpecs)) {
         log.warn("Unknown Agent function call: {}", functionName);
         return null;
@@ -430,10 +462,10 @@ public class Agent implements BaseTool<String> {
       String observation = manage.runTool(functionName, toolArgs, globalMessage);
       addToolObservation(toolObservations, observation);
       messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
-          (assistantText.isBlank() ? "" : assistantText + "\n")
-              + "Called function " + functionName + " with arguments: " + toolArgs));
-      messages.add(new ModelMessage(ModelMessageRole.USER.value(),
-          "Observation: " + observation));
+          new FunctionToolCallMessage(result.getToolCallId(), functionName, toolCallArguments,
+              assistantText)));
+      messages.add(new ModelMessage(ModelMessageRole.TOOL.value(),
+          new FunctionToolResultMessage(result.getToolCallId(), observation)));
       finalAnswer = observation;
     }
 
@@ -445,6 +477,7 @@ public class Agent implements BaseTool<String> {
     }
     return summary;
   }
+
 
   private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
@@ -480,10 +513,10 @@ public class Agent implements BaseTool<String> {
       }
 
       @Override
-      public void onToolCall(String functionName, String arguments) {
-        FunctionResult result = FunctionResult.toolCall(functionName, arguments);
+      public void onToolCall(String toolCallId, String functionName, String arguments) {
+        FunctionResult result = FunctionResult.toolCall(toolCallId, functionName, arguments);
         if (!replyBuffer.isEmpty()) {
-          result = FunctionResult.toolCall(functionName,
+          result = FunctionResult.toolCall(toolCallId, functionName,
               mergeAssistantText(arguments, replyBuffer.toString()));
         }
         finish(result);
@@ -575,6 +608,24 @@ public class Agent implements BaseTool<String> {
     return arguments;
   }
 
+  private String normalizeToolCallArguments(String arguments) {
+    if (arguments == null || arguments.isBlank()) {
+      return "{\"args\":\"\"}";
+    }
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      object.remove("_assistant_text");
+      if (!object.containsKey("args")) {
+        object.put("args", "");
+      }
+      return object.toJSONString();
+    } catch (Exception ignored) {
+      JSONObject object = new JSONObject();
+      object.put("args", arguments);
+      return object.toJSONString();
+    }
+  }
+
   private String extractAssistantText(String arguments) {
     if (arguments == null || arguments.isBlank()) {
       return "";
@@ -638,7 +689,7 @@ public class Agent implements BaseTool<String> {
 
   private void addToolObservation(List<String> toolObservations, String observation) {
     if (toolObservations == null || observation == null || observation.isBlank()
-        || isFunctionCallLog(observation)) {
+        || hasFunctionCallTrace(observation)) {
       return;
     }
     toolObservations.add("工具返回结果 " + (toolObservations.size() + 1) + ":\n" + observation);
@@ -651,14 +702,17 @@ public class Agent implements BaseTool<String> {
     return toolObservations.stream()
         .filter(Objects::nonNull)
         .filter(observation -> !observation.isBlank())
-        .filter(observation -> !isFunctionCallLog(observation))
+        .filter(observation -> !hasFunctionCallTrace(observation))
         .reduce((left, right) -> left + "\n\n" + right)
         .orElse("");
   }
 
   private boolean shouldSuppressDirectReply(String reply, List<String> toolObservations) {
+    if (hasFunctionCallTrace(reply)) {
+      return true;
+    }
     return (toolObservations == null || toolObservations.isEmpty())
-        && (isFunctionCallLog(reply) || isProgressOnlyReply(reply));
+        && isProgressOnlyReply(reply);
   }
 
   private boolean isProgressOnlyReply(String content) {
@@ -666,14 +720,11 @@ public class Agent implements BaseTool<String> {
     if (text.isBlank()) {
       return true;
     }
-    return text.contains("function call")
-        || text.contains("called function")
-        || text.contains("with arguments");
+    return text.contains("function call");
   }
 
-  private boolean isFunctionCallLog(String content) {
-    String text = content == null ? "" : content.strip();
-    return text.startsWith("Called function ") && text.contains(" with arguments:");
+  private boolean hasFunctionCallTrace(String content) {
+    String text = content == null ? "" : content.strip().toLowerCase(Locale.ROOT);
+    return text.contains("called function ") && text.contains(" with arguments:");
   }
-
 }

@@ -19,14 +19,10 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
-import cn.hutool.core.date.ChineseDate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -59,6 +55,7 @@ public class FunctionCallingRouterPrompt {
 
           Context:
           Current time: {time}
+          Weekday: {weekday}
           Lunar date: {lunar_date}
           {information}
           {router_rules}
@@ -73,16 +70,13 @@ public class FunctionCallingRouterPrompt {
   public String build(String assistantName, String userName, String role, String roleIntroduction,
       String currentMemory, String information, String memoryMap, String knowledgeGraphic,
       String voice, String routerRules, String recentConversation) {
-    Date date = new Date();
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
     params.put("team_name", teamName);
     params.put("role", Objects.requireNonNullElse(role, "智能助手"));
     params.put("role_introduction",
         Objects.requireNonNullElse(roleIntroduction, "你是一个友好、自然、简洁的对话伙伴。"));
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
-    params.put("time", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date));
-    params.put("lunar_date", getLunarDateString(date));
     params.put("information", formatInformation(information));
     params.put("router_rules", formatRouterRules(routerRules));
     params.put("recent_conversation", defaultText(recentConversation, "none"));
@@ -127,16 +121,4 @@ public class FunctionCallingRouterPrompt {
         """;
   }
 
-  private String getLunarDateString(Date date) {
-    try {
-      ChineseDate chineseDate = new ChineseDate(date);
-      return chineseDate.getCyclical()
-          + "(" + chineseDate.getChineseZodiac() + "年)"
-          + chineseDate.getChineseMonthName()
-          + chineseDate.getChineseDay()
-          + chineseDate.getFestivals();
-    } catch (Exception e) {
-      return "";
-    }
-  }
 }

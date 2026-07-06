@@ -35,6 +35,7 @@ import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.models.ProductSkillsEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.McpEndpointConfigService;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
@@ -43,6 +44,8 @@ import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
+import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
+import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
@@ -66,6 +69,9 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Data
 public class McpAgent implements BaseTool<String> {
+  private static final String EPOCH_LIMIT_CONFIG_KEY = "mcp.agent.epoch_limit";
+  private static final int MAX_EPOCH_LIMIT = 100;
+
   @Value("${ai.mcp.agent-llm}")
   private String llmName;
 
@@ -93,6 +99,8 @@ public class McpAgent implements BaseTool<String> {
   private JsExecuteTool jsExecuteTool;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
   @Value("${ai.router.mode:prompt}")
@@ -238,6 +246,7 @@ public class McpAgent implements BaseTool<String> {
 
     // 构建 system prompt，包括所有服务器的工具描述
     String system;
+    int currentEpochLimit = getEpochLimitConfig(productId);
     boolean includeThoughtEnabled = getIncludeThoughtConfig();
     try {
       String toolDescriptions = combineToolDescriptions(clientMap);
@@ -249,7 +258,7 @@ public class McpAgent implements BaseTool<String> {
       if (!productSkillsService.findAllByProductId(productId).isEmpty()) {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
-      system = reactPrompt.getReact(toolDescriptions, question, productId, 1, epochLimit,
+      system = reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
           includeThoughtEnabled);
     } catch (Exception e) {
       return "获取工具描述失败";
@@ -270,8 +279,9 @@ public class McpAgent implements BaseTool<String> {
     conversationPrompt.setLength(0);
     conversationPrompt.append(system);
 
+    log.info("mcp agent epoch limit{}", currentEpochLimit);
     int iteration = 0;
-    while (iteration < epochLimit) {
+    while (iteration < currentEpochLimit) {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(clientMap, chatId);
         return "操作已取消";
@@ -279,7 +289,8 @@ public class McpAgent implements BaseTool<String> {
       // 更新当前轮次信息
       if (iteration > 0) {
         conversationPrompt
-            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1, epochLimit));
+            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1,
+                currentEpochLimit));
       }
       messages.clear();
       messages
@@ -340,12 +351,12 @@ public class McpAgent implements BaseTool<String> {
         try {
           if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
             toolResult = mcpWebsocket.sendToolCall(McpWebsocket.DEVICE_SERVER_NAME, chatId,
-                toolName, args, XiaoZhiWebsocket.clients.get(chatId), false);
+                toolName, args, XiaoZhiWebsocket.clients.get(chatId), productId, false);
           } else if (McpWebsocket.isEndpointServerName(serverKey)) {
             int endpointIndex = McpWebsocket.parseEndpointIndexFromServerName(serverKey);
             String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
             toolResult = mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
-                McpWebsocketEndpoint.clients.get(endpointChatId), true);
+                McpWebsocketEndpoint.clients.get(endpointChatId), productId, true);
           } else if (serverKey.equals("skills")) {
             if (toolName.equals(jsExecuteTool.getName())) {
               toolResult = jsExecuteTool.run(args, globalMessage);
@@ -554,6 +565,27 @@ public class McpAgent implements BaseTool<String> {
     return includeThought;
   }
 
+  private int getEpochLimitConfig(int productId) {
+    try {
+      String value = userConfigService.getConfigValue(productId, EPOCH_LIMIT_CONFIG_KEY);
+      if (value == null || value.isBlank()) {
+        return epochLimit;
+      }
+      int configuredEpochLimit = Integer.parseInt(value.trim());
+      if (configuredEpochLimit < 1) {
+        return epochLimit;
+      }
+      return Math.min(MAX_EPOCH_LIMIT, configuredEpochLimit);
+    } catch (NumberFormatException e) {
+      log.warn("Invalid MCP Agent epoch limit config: productId={}, key={}", productId,
+          EPOCH_LIMIT_CONFIG_KEY, e);
+      return epochLimit;
+    } catch (Exception e) {
+      log.error("从用户配置获取MCP Agent epochLimit失败", e);
+      return epochLimit;
+    }
+  }
+
   private boolean isFunctionRouterMode() {
     return "function".equalsIgnoreCase(routerMode);
   }
@@ -582,14 +614,14 @@ public class McpAgent implements BaseTool<String> {
       cleanupResources(clientMap, chatId);
       return "产品下面没有任何可调用的mcp工具或者skills";
     }
+    int currentEpochLimit = getEpochLimitConfig(productId);
     List<ModelMessage> messages = new ArrayList<>();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
         reactPrompt.getFunctionCalling(question, productId)));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
-
     String finalAnswer = null;
     List<String> toolObservations = new ArrayList<>();
-    for (int iteration = 0; iteration < epochLimit; iteration++) {
+    for (int iteration = 0; iteration < currentEpochLimit; iteration++) {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(clientMap, chatId);
         return "操作已取消";
@@ -628,17 +660,18 @@ public class McpAgent implements BaseTool<String> {
       }
       String assistantText = extractAssistantText(result.getArguments());
       String arguments = normalizeToolArguments(result.getArguments());
+      String toolCallArguments = normalizeToolCallArguments(result.getArguments());
       if (queue != null) {
         queue.add(ToolPrefix.getToolCallPrefix(functionRef.fullName()));
       }
       String observation = callMcpFunction(functionRef, arguments, globalMessage, clientMap);
       addToolObservation(toolObservations, observation);
       messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
-          (assistantText.isBlank() ? "" : assistantText + "\n")
-              + "Called function " + result.getFunctionName() + " for " + functionRef.fullName()
-              + " with arguments: " + arguments));
-      messages.add(new ModelMessage(ModelMessageRole.USER.value(),
-          "Observation: " + observation));
+          new FunctionToolCallMessage(result.getToolCallId(), result.getFunctionName(),
+              toolCallArguments,
+              assistantText)));
+      messages.add(new ModelMessage(ModelMessageRole.TOOL.value(),
+          new FunctionToolResultMessage(result.getToolCallId(), observation)));
       finalAnswer = observation;
     }
 
@@ -653,6 +686,7 @@ public class McpAgent implements BaseTool<String> {
     }
     return summary;
   }
+
 
   private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
@@ -688,10 +722,10 @@ public class McpAgent implements BaseTool<String> {
       }
 
       @Override
-      public void onToolCall(String functionName, String arguments) {
-        FunctionResult result = FunctionResult.toolCall(functionName, arguments);
+      public void onToolCall(String toolCallId, String functionName, String arguments) {
+        FunctionResult result = FunctionResult.toolCall(toolCallId, functionName, arguments);
         if (!replyBuffer.isEmpty()) {
-          result = FunctionResult.toolCall(functionName,
+          result = FunctionResult.toolCall(toolCallId, functionName,
               mergeAssistantText(arguments, replyBuffer.toString()));
         }
         finish(result);
@@ -890,6 +924,21 @@ public class McpAgent implements BaseTool<String> {
     }
   }
 
+  private String normalizeToolCallArguments(String arguments) {
+    if (arguments == null || arguments.isBlank()) {
+      return "{}";
+    }
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      object.remove("_assistant_text");
+      return object.toJSONString();
+    } catch (Exception ignored) {
+      JSONObject object = new JSONObject();
+      object.put("args", arguments);
+      return object.toJSONString();
+    }
+  }
+
   private String extractAssistantText(String arguments) {
     if (arguments == null || arguments.isBlank()) {
       return "";
@@ -926,12 +975,12 @@ public class McpAgent implements BaseTool<String> {
     try {
       if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
         return mcpWebsocket.sendToolCall(McpWebsocket.DEVICE_SERVER_NAME, chatId,
-            toolName, args, XiaoZhiWebsocket.clients.get(chatId), false);
+            toolName, args, XiaoZhiWebsocket.clients.get(chatId), productId, false);
       } else if (McpWebsocket.isEndpointServerName(serverKey)) {
         int endpointIndex = McpWebsocket.parseEndpointIndexFromServerName(serverKey);
         String endpointChatId = McpWebsocket.getEndpointChatId(productId, endpointIndex);
         return mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
-            McpWebsocketEndpoint.clients.get(endpointChatId), true);
+            McpWebsocketEndpoint.clients.get(endpointChatId), productId, true);
       } else if (serverKey.equals("skills")) {
         if (toolName.equals(jsExecuteTool.getName())) {
           return jsExecuteTool.run(args, globalMessage);
@@ -992,7 +1041,7 @@ public class McpAgent implements BaseTool<String> {
 
   private void addToolObservation(List<String> toolObservations, String observation) {
     if (toolObservations == null || observation == null || observation.isBlank()
-        || isFunctionCallLog(observation)) {
+        || hasFunctionCallTrace(observation)) {
       return;
     }
     toolObservations.add("工具返回结果 " + (toolObservations.size() + 1) + ":\n" + observation);
@@ -1005,14 +1054,17 @@ public class McpAgent implements BaseTool<String> {
     return toolObservations.stream()
         .filter(Objects::nonNull)
         .filter(observation -> !observation.isBlank())
-        .filter(observation -> !isFunctionCallLog(observation))
+        .filter(observation -> !hasFunctionCallTrace(observation))
         .reduce((left, right) -> left + "\n\n" + right)
         .orElse("");
   }
 
   private boolean shouldSuppressDirectReply(String reply, List<String> toolObservations) {
+    if (hasFunctionCallTrace(reply)) {
+      return true;
+    }
     return (toolObservations == null || toolObservations.isEmpty())
-        && (isFunctionCallLog(reply) || isProgressOnlyReply(reply));
+        && isProgressOnlyReply(reply);
   }
 
   private boolean isProgressOnlyReply(String content) {
@@ -1020,14 +1072,12 @@ public class McpAgent implements BaseTool<String> {
     if (text.isBlank()) {
       return true;
     }
-    return text.contains("function call")
-        || text.contains("called function")
-        || text.contains("with arguments");
+    return text.contains("function call");
   }
 
-  private boolean isFunctionCallLog(String content) {
-    String text = content == null ? "" : content.strip();
-    return text.startsWith("Called function ") && text.contains(" with arguments:");
+  private boolean hasFunctionCallTrace(String content) {
+    String text = content == null ? "" : content.strip().toLowerCase(Locale.ROOT);
+    return text.contains("called function ") && text.contains(" with arguments:");
   }
 
   private boolean hasRunningEndpoint(int productId) {

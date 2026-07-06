@@ -24,6 +24,7 @@ import com.alibaba.fastjson.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.utility.RedisUtil;
 
 import jakarta.websocket.Session;
@@ -40,8 +41,12 @@ public class McpWebsocket {
   public static final String DEVICE_SERVER_NAME = "xiaozhi_device";
   public static final String ENDPOINT_SERVER_NAME = "xiaozhi_endpoint";
   public static final String ENDPOINT_SERVER_NAME_PREFIX = "xiaozhi_endpoint_";
+  private static final String TimeOut_LIMIT_CONFIG_KEY = "mcp.time_out_limit";
+  private static final int MAX_TimeOut_LIMIT = 3600;
   @Autowired
   private RedisUtil redisUtil;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
 
 
   // 工具调用锁的前缀
@@ -60,6 +65,24 @@ public class McpWebsocket {
 
   public static boolean isEndpointServerName(String serverName) {
     return serverName != null && serverName.startsWith(ENDPOINT_SERVER_NAME_PREFIX);
+  }
+
+  private int getMcpTimeOutLimit(int productId, String configKey, int defaultValue) {
+    String value = userConfigService.getConfigValue(productId, configKey);
+    if (value == null || value.isBlank()) {
+      return defaultValue;
+    }
+    try {
+      int limit = Integer.parseInt(value.trim());
+      if (limit < 0) {
+        return defaultValue;
+      }
+      return Math.min(MAX_TimeOut_LIMIT, limit);
+    } catch (NumberFormatException e) {
+      log.warn("Invalid mcp timeout limit config: productId={}, key={}, value={}",
+          productId, configKey, value);
+      return defaultValue;
+    }
   }
 
   public static int parseEndpointIndexFromServerName(String serverName) {
@@ -110,7 +133,7 @@ public class McpWebsocket {
   }
 
   public String sendToolCall(String serverName, String chatId, String toolName,
-      String jsonArguments, Session session, boolean endpoint) {
+      String jsonArguments, Session session, int productId, boolean endpoint) {
     if (jsonArguments == null || jsonArguments.trim().isEmpty()) {
       throw new IllegalArgumentException("jsonArguments cannot be null or empty");
     }
@@ -132,7 +155,11 @@ public class McpWebsocket {
           new TypeReference<>() {});
       String jsonStr = McpProtocolSend.callTool(toolName, params, endpoint);
       sendTextSerially(serverName, chatId, session, jsonStr);
-      for (int i = 0; i < 120; i++) {
+      int timeOutLimit = getMcpTimeOutLimit(
+          productId,
+          TimeOut_LIMIT_CONFIG_KEY,
+          12) * 10;
+      for (int i = 0; i < timeOutLimit; i++) {
         try {
           if (redisUtil.hasKey(serverName + chatId + "toolResult")) {
             String result = redisUtil.get(serverName + chatId + "toolResult").toString();

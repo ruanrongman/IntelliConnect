@@ -20,7 +20,6 @@
 package top.rslly.iot.utility.ai.prompts;
 
 
-import cn.hutool.core.date.ChineseDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -30,7 +29,6 @@ import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
-import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Component
@@ -101,7 +99,7 @@ public class ReactPrompt {
           You are {agent_name}, developed by the {team_name} team.
           Your role: {role}. {role_introduction}
           The user's name: {user_name}.
-          Current time: {time} (Lunar: {lunar_date}).
+          Current time: {time}; weekday: {weekday}; Lunar: {lunar_date}.
           Long-term memory: {memory_map}
           Current step: {current_step}
           Max steps: {max_steps}
@@ -125,17 +123,17 @@ public class ReactPrompt {
           - Use a function only when it helps complete the user's request.
           - Do not call the same function with the same arguments repeatedly.
           - If you output progress text because a function is needed, you must still call the function in the same turn. Do not stop after progress text.
-          - After an Observation is provided, use it to decide whether another function is needed or whether to answer.
+          - After a tool result is provided, use it to decide whether another function is needed or whether to answer.
           - When enough information is available, answer directly in the user's language.
           - Final answer should match your role's style.
-          - Final answers must not include internal tool traces such as `Called function`, function names, arguments, MCP server or endpoint names, or `Observation`.
+          - Final answers must not include internal tool traces such as `Called function`, function names, arguments, MCP server or endpoint names, or tool result metadata.
           - No emojis in output.
 
           ## Runtime Context
           You are {agent_name}, developed by the {team_name} team.
           Your role: {role}. {role_introduction}
           The user's name: {user_name}.
-          Current time: {time} (Lunar: {lunar_date}).
+          Current time: {time}; weekday: {weekday}; Lunar: {lunar_date}.
           Long-term memory: {memory_map}
 
           ## User Question
@@ -174,14 +172,7 @@ public class ReactPrompt {
   }
 
   private Map<String, String> buildCommonParams(String question, int productId) {
-    Map<String, String> params = new HashMap<>();
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
-    params.put("time", formattedDate);
-    // ========== 农历时间 ==========
-    String lunarDate = getLunarDateString(date);
-    params.put("lunar_date", lunarDate);
+    Map<String, String> params = PromptTimeContext.build();
     params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
     params.put("question", question);
     List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
@@ -207,24 +198,4 @@ public class ReactPrompt {
     return params;
   }
 
-  /**
-   * 使用 Hutool 获取农历日期字符串
-   *
-   * @param date 公历日期
-   * @return 农历日期字符串 例如：甲辰年腊月初五
-   */
-  private String getLunarDateString(Date date) {
-    try {
-      ChineseDate chineseDate = new ChineseDate(date);
-      // 天干地支年份 + 生肖 + 月 + 日
-      // 例如：甲辰年（龙年）腊月初五
-      return chineseDate.getCyclical() // 甲辰年
-          + "(" + chineseDate.getChineseZodiac() + "年)" // (龙年)
-          + chineseDate.getChineseMonthName() // 腊月
-          + chineseDate.getChineseDay() // 初五
-          + chineseDate.getFestivals(); // 节日
-    } catch (Exception e) {
-      return "";
-    }
-  }
 }

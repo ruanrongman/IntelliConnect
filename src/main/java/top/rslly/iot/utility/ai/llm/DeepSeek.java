@@ -34,10 +34,12 @@ import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam;
 import com.openai.models.chat.completions.ChatCompletionTool;
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption;
+import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartImage;
@@ -189,7 +191,8 @@ public class DeepSeek implements LLM {
         }
         if (!partialToolCalls.isEmpty()) {
           PartialToolCall toolCall = partialToolCalls.values().iterator().next();
-          handler.onToolCall(toolCall.functionName.toString(), toolCall.arguments.toString());
+          handler.onToolCall(toolCall.id, toolCall.functionName.toString(),
+              toolCall.arguments.toString());
         } else {
           handler.onDirectReplyComplete(replyBuilder.toString());
         }
@@ -351,19 +354,45 @@ public class DeepSeek implements LLM {
         continue;
       }
       String role = message.getRole();
-      String content = message.getContent().toString();
+      Object rawContent = message.getContent();
       if (ModelMessageRole.SYSTEM.value().equals(role)) {
         messageList.add(ChatCompletionMessageParam.ofSystem(
-            ChatCompletionSystemMessageParam.builder().content(content).build()));
+            ChatCompletionSystemMessageParam.builder().content(rawContent.toString()).build()));
       } else if (ModelMessageRole.USER.value().equals(role)) {
         messageList.add(ChatCompletionMessageParam.ofUser(
-            ChatCompletionUserMessageParam.builder().content(content).build()));
+            ChatCompletionUserMessageParam.builder().content(rawContent.toString()).build()));
       } else if (ModelMessageRole.ASSISTANT.value().equals(role)) {
-        messageList.add(ChatCompletionMessageParam.ofAssistant(
-            ChatCompletionAssistantMessageParam.builder().content(content).build()));
+        messageList.add(toAssistantMessageParam(rawContent));
+      } else if (ModelMessageRole.TOOL.value().equals(role)
+          && rawContent instanceof FunctionToolResultMessage toolResult) {
+        messageList.add(ChatCompletionMessageParam.ofTool(
+            ChatCompletionToolMessageParam.builder()
+                .toolCallId(toolResult.toolCallId())
+                .content(toolResult.content() == null ? "" : toolResult.content())
+                .build()));
       }
     }
     return messageList;
+  }
+
+  private ChatCompletionMessageParam toAssistantMessageParam(Object rawContent) {
+    if (rawContent instanceof FunctionToolCallMessage toolCall) {
+      ChatCompletionAssistantMessageParam.Builder builder =
+          ChatCompletionAssistantMessageParam.builder()
+              .addToolCall(ChatCompletionMessageFunctionToolCall.builder()
+                  .id(toolCall.toolCallId())
+                  .function(ChatCompletionMessageFunctionToolCall.Function.builder()
+                      .name(toolCall.functionName())
+                      .arguments(toolCall.arguments() == null ? "" : toolCall.arguments())
+                      .build())
+                  .build());
+      if (toolCall.content() != null && !toolCall.content().isBlank()) {
+        builder.content(toolCall.content());
+      }
+      return ChatCompletionMessageParam.ofAssistant(builder.build());
+    }
+    return ChatCompletionMessageParam.ofAssistant(
+        ChatCompletionAssistantMessageParam.builder().content(rawContent.toString()).build());
   }
 
   private String extractText(ChatCompletion completion) {
@@ -401,7 +430,7 @@ public class DeepSeek implements LLM {
       return FunctionResult.error(FALLBACK_MESSAGE);
     }
     var functionToolCall = toolCall.asFunction();
-    return FunctionResult.toolCall(functionToolCall.function().name(),
+    return FunctionResult.toolCall(functionToolCall.id(), functionToolCall.function().name(),
         functionToolCall.function().arguments());
   }
 

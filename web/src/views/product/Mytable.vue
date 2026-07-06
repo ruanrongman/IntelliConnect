@@ -15,29 +15,36 @@
       @change="handleTableChange"
     >    
       <template #action="{ record }">    
-        <a-space>  
-          <a-button     
-            type="link"     
-            @click="handleGetMcpUrl(record)"    
-          >    
-            <template #icon><LinkOutlined /></template>    
-            获取MCP端点    
-          </a-button>  
-          <a-button     
-            type="link"     
-            @click="handleToolManage(record)"    
-          >    
-            <template #icon><SettingOutlined /></template>    
-            工具管理    
-          </a-button>  
-          <a-button     
-            type="link"     
-            danger    
-            @click="handleDelete(record)"    
-          >    
-            <template #icon><DeleteOutlined /></template>    
-            删除信息    
-          </a-button>   
+        <a-space>
+          <a-button
+            type="link"
+            @click="handleGetMcpUrl(record)"
+          >
+            <template #icon><LinkOutlined /></template>
+            获取MCP端点
+          </a-button>
+          <a-button
+            type="link"
+            @click="handleToolManage(record)"
+          >
+            <template #icon><SettingOutlined /></template>
+            工具管理
+          </a-button>
+          <a-button
+            type="link"
+            @click="handleRuntimeConfig(record)"
+          >
+            <template #icon><ControlOutlined /></template>
+            运行参数
+          </a-button>
+          <a-button
+            type="link"
+            danger
+            @click="handleDelete(record)"
+          >
+            <template #icon><DeleteOutlined /></template>
+            删除信息
+          </a-button>
         </a-space>   
       </template>    
     </a-table>    
@@ -211,6 +218,61 @@
       </div>  
     </a-modal>  
 
+    <!-- 运行参数配置弹窗 -->
+    <a-modal
+      v-model:visible="runtimeConfigModalVisible"
+      :title="runtimeConfigTitle"
+      :width="620"
+      :confirm-loading="runtimeConfigSaving"
+      ok-text="保存设置"
+      cancel-text="取消"
+      @ok="submitRuntimeConfig"
+    >
+      <a-spin :spinning="runtimeConfigLoading">
+        <a-alert
+          message="产品级运行参数"
+          description="这些配置会按产品生效。未配置或配置非法时，会自动使用默认值"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <a-form
+          ref="runtimeConfigFormRef"
+          :model="runtimeConfigForm"
+          :rules="runtimeConfigRules"
+          layout="vertical"
+        >
+          <a-form-item label="Agent 最大轮次" name="agentEpochLimit">
+            <a-input
+              v-model:value="runtimeConfigForm.agentEpochLimit"
+              inputmode="numeric"
+              placeholder="请输入 1 到 100 的整数"
+              @input="validateRuntimeConfigField('agentEpochLimit')"
+              @blur="validateRuntimeConfigField('agentEpochLimit')"
+            />
+          </a-form-item>
+          <a-form-item label="MCP Agent 最大轮次" name="mcpAgentEpochLimit">
+            <a-input
+              v-model:value="runtimeConfigForm.mcpAgentEpochLimit"
+              inputmode="numeric"
+              placeholder="请输入 1 到 100 的整数"
+              @input="validateRuntimeConfigField('mcpAgentEpochLimit')"
+              @blur="validateRuntimeConfigField('mcpAgentEpochLimit')"
+            />
+          </a-form-item>
+          <a-form-item label="MCP 工具调用超时（秒）" name="mcpTimeOutLimit">
+            <a-input
+              v-model:value="runtimeConfigForm.mcpTimeOutLimit"
+              inputmode="numeric"
+              placeholder="请输入 1 到 3600 的整数"
+              @input="validateRuntimeConfigField('mcpTimeOutLimit')"
+              @blur="validateRuntimeConfigField('mcpTimeOutLimit')"
+            />
+          </a-form-item>
+        </a-form>
+      </a-spin>
+    </a-modal>
+
     <!-- 工具管理弹窗 -->
     <a-modal
       v-model:visible="toolManageModalVisible"
@@ -234,17 +296,17 @@
               <a-button size="small" type="primary" :loading="toolSubmitLoading" @click="submitToolBans">
                 保存设置
               </a-button>
-              <a-button 
-                size="small" 
-                danger 
-                :loading="toolClearLoading" 
+              <a-button
+                size="small"
+                danger
+                :loading="toolClearLoading"
                 @click="clearAllBannedTools"
               >
                 清除所有禁用
               </a-button>
             </a-space>
           </div>
-          
+
           <!-- 统计信息 -->
           <div class="tool-stats">
             <a-space>
@@ -254,7 +316,6 @@
             </a-space>
           </div>
         </div>
-
         <div class="tools-list">
           <div class="tool-item" v-for="(tool, key) in availableTools" :key="key">
             <div 
@@ -310,8 +371,9 @@ import { message } from 'ant-design-vue'
 import { getProductPage, deleteProduct } from '@/api/product';    
 import { getMcpPointUrl, getMcpPointTools } from '@/api/mcpPoint'; // 导入新的API函数  
 import { getProductToolsBan, postProductToolsBan, deleteProductToolsBan } from '@/api/productToolsBan'; // 导入工具管理API
+import { getUserConfigByName, updateUserConfig } from '@/api/userConfig'
 import { useRouter } from 'vue-router'    
-import { DeleteOutlined, LinkOutlined, CopyOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue'    
+import { DeleteOutlined, LinkOutlined, CopyOutlined, ReloadOutlined, SettingOutlined, ControlOutlined } from '@ant-design/icons-vue'
     
     
 const router = useRouter()    
@@ -329,6 +391,73 @@ const currentEndpointIndex = ref(1)
 const endpointCount = ref(5)
 const endpointOptions = computed(() => Array.from({ length: endpointCount.value }, (_, index) => index + 1))
 
+const runtimeConfigModalVisible = ref(false)
+const runtimeConfigFormRef = ref(null)
+const runtimeConfigLoading = ref(false)
+const runtimeConfigSaving = ref(false)
+const currentRuntimeProduct = ref(null)
+const runtimeConfigForm = ref({
+  agentEpochLimit: 5,
+  mcpAgentEpochLimit: 5,
+  mcpTimeOutLimit: 12
+})
+const runtimeConfigTitle = computed(() => {
+  const product = currentRuntimeProduct.value
+  return product ? `运行参数 - ${product.name || ('产品 ' + product.id)}` : '运行参数'
+})
+
+const runtimeConfigItems = [
+  {
+    field: 'agentEpochLimit',
+    key: 'agent.epoch_limit',
+    defaultValue: '5',
+    min: '1',
+    max: '100',
+    label: 'Agent 最大轮次',
+    des: 'Agent maximum epoch limit'
+  },
+  {
+    field: 'mcpAgentEpochLimit',
+    key: 'mcp.agent.epoch_limit',
+    defaultValue: '5',
+    min: '1',
+    max: '100',
+    label: 'MCP Agent 最大轮次',
+    des: 'MCP Agent maximum epoch limit'
+  },
+  {
+    field: 'mcpTimeOutLimit',
+    key: 'mcp.time_out_limit',
+    defaultValue: '12',
+    min: '1',
+    max: '3600',
+    label: 'MCP 工具调用超时（秒）',
+    des: 'MCP tool call timeout seconds'
+  }
+]
+
+const getRuntimeConfigItem = (field) => runtimeConfigItems.find((item) => item.field === field)
+
+const createRuntimeConfigValidator = (field) => {
+  return async (_rule, value) => {
+    const item = getRuntimeConfigItem(field)
+    const parsed = parseConfigValue(value)
+    if (!item || !isConfigValueInRange(parsed, item)) {
+      return Promise.reject(new Error(`${item?.label || '配置项'}必须是 ${item?.min} 到 ${item?.max} 之间的整数`))
+    }
+    return Promise.resolve()
+  }
+}
+
+const runtimeConfigRules = runtimeConfigItems.reduce((rules, item) => {
+  rules[item.field] = [
+    {
+      validator: createRuntimeConfigValidator(item.field),
+      trigger: ['change', 'blur']
+    }
+  ]
+  return rules
+}, {})
 // 工具管理相关状态
 const toolManageModalVisible = ref(false)
 const toolManageLoading = ref(false)
@@ -397,7 +526,7 @@ const columns = [
     title: 'Action',    
     key: 'action',    
     slots: { customRender: 'action' },    
-    width: 280, // 增加操作列宽度以容纳三个按钮  
+    width: 360,
   },    
 ];    
     
@@ -697,6 +826,131 @@ const refreshMcpTools = async () => {
     message.error('刷新MCP工具列表失败')
   } finally {
     mcpToolsRefreshing.value = false
+  }
+}
+
+const parseConfigValue = (value) => {
+  if (value === null || value === undefined) {
+    return null
+  }
+  const normalizedValue = typeof value === 'string' ? value.trim() : value
+  if (normalizedValue === '' || !/^\d+$/.test(String(normalizedValue))) {
+    return null
+  }
+  const parsed = Number(normalizedValue)
+  if (!Number.isSafeInteger(parsed)) {
+    return null
+  }
+  return parsed
+}
+
+const isConfigValueInRange = (value, item) => {
+  return value !== null && value >= Number(item.min) && value <= Number(item.max)
+}
+
+const validateRuntimeConfigField = (field) => {
+  runtimeConfigFormRef.value?.validateFields([field]).catch(() => {})
+}
+
+const getInvalidRuntimeConfigItem = () => {
+  return runtimeConfigItems.find((item) => !isConfigValueInRange(getRuntimeConfigValue(item), item))
+}
+
+const showRuntimeConfigValidationError = (item) => {
+  runtimeConfigFormRef.value?.validateFields([item.field]).catch(() => {})
+  message.error(`${item.label}必须是 ${item.min} 到 ${item.max} 之间的整数`)
+}
+
+const getRuntimeConfigValue = (item) => {
+  return parseConfigValue(runtimeConfigForm.value[item.field])
+}
+
+const readRuntimeConfigValue = (payload, item) => {
+  const value = parseConfigValue(payload?.data?.value ?? payload?.value)
+  return isConfigValueInRange(value, item) ? value : Number(item.defaultValue)
+}
+
+const handleRuntimeConfig = async (record) => {
+  currentRuntimeProduct.value = record
+  runtimeConfigModalVisible.value = true
+  runtimeConfigLoading.value = true
+  runtimeConfigForm.value = {
+    agentEpochLimit: 5,
+    mcpAgentEpochLimit: 5,
+    mcpTimeOutLimit: 12
+  }
+
+  try {
+    const responses = await Promise.all(
+      runtimeConfigItems.map((item) =>
+        getUserConfigByName(item.key, { productId: record.id })
+          .then((response) => ({ item, response }))
+          .catch(() => ({ item, response: null }))
+      )
+    )
+
+    responses.forEach(({ item, response }) => {
+      const errorCode = response?.data?.errorCode
+      if (errorCode === 200) {
+        runtimeConfigForm.value[item.field] = readRuntimeConfigValue(response.data, item)
+      } else if (errorCode === 2001) {
+        router.push('/login')
+      }
+    })
+  } finally {
+    runtimeConfigLoading.value = false
+  }
+}
+
+const submitRuntimeConfig = async () => {
+  if (!currentRuntimeProduct.value) {
+    message.error('无法获取产品信息，请重新打开弹窗')
+    return
+  }
+
+  try {
+    const invalidItem = getInvalidRuntimeConfigItem()
+    if (invalidItem) {
+      showRuntimeConfigValidationError(invalidItem)
+      return
+    }
+    await runtimeConfigFormRef.value?.validate()
+    runtimeConfigSaving.value = true
+    const productId = currentRuntimeProduct.value.id
+    const responses = await Promise.all(
+      runtimeConfigItems.map((item) => {
+        const value = getRuntimeConfigValue(item)
+        return updateUserConfig({
+          productId,
+          name: item.key,
+          type: 'integer',
+          value: String(value),
+          defaultValue: item.defaultValue,
+          min: item.min,
+          max: item.max,
+          required: false,
+          des: item.des
+        })
+      })
+    )
+    if (responses.some((response) => response.data?.errorCode === 2001)) {
+      router.push('/login')
+      return
+    }
+    if (responses.some((response) => response.data?.errorCode !== 200)) {
+      message.error('部分运行参数保存失败')
+      return
+    }
+    message.success('运行参数已保存')
+    runtimeConfigModalVisible.value = false
+  } catch (error) {
+    if (error?.errorFields) {
+      return
+    }
+    console.log('保存运行参数失败:', error)
+    message.error('保存运行参数失败')
+  } finally {
+    runtimeConfigSaving.value = false
   }
 }
 

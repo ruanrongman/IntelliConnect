@@ -31,24 +31,37 @@ class AgentDirectReplyGuardTest {
 
   @Test
   void agentSuppressesProgressOnlyDirectReplyBeforeToolObservation() throws Exception {
-    Assertions.assertTrue(shouldSuppress(new Agent(), "我再抓一个澎湃新闻的热榜来综合一下～"));
+    Assertions.assertTrue(shouldSuppress(new Agent(), "function call in progress"));
     Assertions.assertTrue(shouldSuppress(new Agent(),
         "Called function mcp_xiaozhi_endpoint_1_trends_hub_get_thepaper_trending with arguments: {}"));
+    Assertions.assertTrue(shouldSuppress(new Agent(),
+        "好，再来抓The Verge和知乎的\n"
+            + "Called function mcp_xiaozhi_endpoint_1_trends_hub_get_theverge_news with arguments: {}",
+        List.of("工具返回结果 1:\n腾讯新闻热榜主要集中在财经和民生话题。")));
     Assertions.assertFalse(shouldSuppress(new Agent(), "腾讯新闻热榜主要集中在财经和民生话题。"));
   }
 
   @Test
   void mcpAgentSuppressesProgressOnlyDirectReplyBeforeToolObservation() throws Exception {
-    Assertions.assertTrue(shouldSuppress(new McpAgent(), "查询中，我马上帮你综合热榜。"));
+    Assertions.assertTrue(shouldSuppress(new McpAgent(), "function call in progress"));
     Assertions.assertTrue(shouldSuppress(new McpAgent(),
         "Called function mcp_xiaozhi_endpoint_1_trends_hub_get_thepaper_trending for xiaozhi_endpoint_1:trends-hub-get-thepaper-trending with arguments: {}"));
+    Assertions.assertTrue(shouldSuppress(new McpAgent(),
+        "好，再来抓The Verge和知乎的\n"
+            + "Called function mcp_xiaozhi_endpoint_1_trends_hub_get_theverge_news for xiaozhi_endpoint_1:trends-hub-get-theverge-news with arguments: {}",
+        List.of("工具返回结果 1:\n澎湃新闻热榜显示社会新闻关注度较高。")));
     Assertions.assertFalse(shouldSuppress(new McpAgent(), "澎湃新闻热榜显示社会新闻关注度较高。"));
   }
 
   private boolean shouldSuppress(Object agent, String reply) throws Exception {
+    return shouldSuppress(agent, reply, List.of());
+  }
+
+  private boolean shouldSuppress(Object agent, String reply, List<String> toolObservations)
+      throws Exception {
     Method method = agent.getClass().getDeclaredMethod("shouldSuppressDirectReply", String.class,
         List.class);
     method.setAccessible(true);
-    return (boolean) method.invoke(agent, reply, List.of());
+    return (boolean) method.invoke(agent, reply, toolObservations);
   }
 }

@@ -19,14 +19,10 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
-import cn.hutool.core.date.ChineseDate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -60,6 +56,7 @@ public class ChatToolPrompt {
           User name: {user_name}
           ## Runtime Context
           Current time: {time}
+          Weekday: {weekday}
           Lunar date: {lunar_date}
           {information}
           ## Long-term Memory
@@ -79,14 +76,9 @@ public class ChatToolPrompt {
   public String getChatTool(String assistantName, String userName, String role,
       String roleIntroduction, String memory, String information, String memoryMap,
       String knowledgeGraphicInject, String voice) {
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
     params.put("team_name", teamName);
-    params.put("time", formattedDate);
-    params.put("lunar_date", getLunarDateString(date));
     params.put("current_memory", defaultText(memory, "none"));
     params.put("memory_map", defaultText(memoryMap, "none"));
     params.put("knowledgeGraphicInject", formatKnowledgeGraphic(knowledgeGraphicInject));
@@ -133,16 +125,4 @@ public class ChatToolPrompt {
         """;
   }
 
-  private String getLunarDateString(Date date) {
-    try {
-      ChineseDate chineseDate = new ChineseDate(date);
-      return chineseDate.getCyclical()
-          + "(" + chineseDate.getChineseZodiac() + "年)"
-          + chineseDate.getChineseMonthName()
-          + chineseDate.getChineseDay()
-          + chineseDate.getFestivals();
-    } catch (Exception e) {
-      return "";
-    }
-  }
 }

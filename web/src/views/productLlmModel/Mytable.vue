@@ -49,7 +49,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { getProductLlmModel, getProductLlmModelByProductId, deleteProductLlmModel } from '@/api/productLlmModel';
-import { getProduct, getProductName } from '@/api/product';
+import { getProduct } from '@/api/product';
 import { getLlmProviderInformation } from '@/api/llmProviderInformation';
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -75,31 +75,33 @@ const filterOption = (input, option) => {
   return option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0;
 };
 
+const getProductDisplayName = (product) => {
+  return product.productName || `产品ID: ${product.id}`;
+};
+
 const fetchProductList = () => {
-  getProduct()
-    .then(async (res) => {
+  return getProduct()
+    .then((res) => {
       const { data, errorCode } = res.data;
       if (errorCode === 2001) {
         router.push('/login');
         return;
       }
       if (errorCode === 200 && data && Array.isArray(data)) {
-        productOptions.value = await Promise.all(data.map(async (item) => {
-          try {
-            const nameRes = await getProductName({ id: item.id });
-            const { data: nameData, errorCode: nameErrorCode } = nameRes.data;
-            if (nameErrorCode === 200 && nameData) {
-              return { value: item.id, label: nameData };
-            }
-            return { value: item.id, label: `产品ID: ${item.id}` };
-          } catch (err) {
-            return { value: item.id, label: `产品ID: ${item.id}` };
-          }
-        }));
+        const newProductNameMap = {};
+        productOptions.value = data.map((item) => {
+          const productName = getProductDisplayName(item);
+          newProductNameMap[item.id] = productName;
+          return { value: item.id, label: productName };
+        });
+        Object.assign(productNameMap.value, newProductNameMap);
+      } else {
+        productOptions.value = [];
       }
     })
     .catch((err) => {
       console.error('获取产品列表失败:', err);
+      productOptions.value = [];
     });
 };
 
@@ -108,9 +110,7 @@ const handleFilterChange = (value) => {
   persistSelectedProductId();
   stopPolling();
   fetchCurrentData();
-  if (selectedProductId.value === null) {
-    startPolling();
-  }
+  startPolling();
 };
 
 const handleFilterReset = () => {
@@ -206,30 +206,39 @@ const restoreSelectedProductId = () => {
   }
 };
 
-const fetchCurrentData = () => {
-  if (selectedProductId.value === null || selectedProductId.value === undefined) {
-    fetchProductLlmModel();
-    return;
-  }
-  fetchProductLlmModelByProductId(selectedProductId.value);
+const isFilteringByProduct = (productId) => {
+  return productId !== null && productId !== undefined;
 };
 
-const startPolling = () => {
+const fetchDataByProductFilter = (productId) => {
+  if (isFilteringByProduct(productId)) {
+    fetchProductLlmModelByProductId(productId);
+    return;
+  }
+  fetchProductLlmModel();
+};
+
+const fetchCurrentData = () => {
+  fetchDataByProductFilter(selectedProductId.value);
+};
+
+const startPolling = (productId = selectedProductId.value) => {
   clearInterval(intervalId);
-  intervalId = setInterval(fetchCurrentData, 1000);
+  intervalId = setInterval(() => {
+    fetchDataByProductFilter(productId);
+  }, 1000);
 };
 
 const stopPolling = () => {
   clearInterval(intervalId);
+  intervalId = null;
 };
 
-onMounted(() => {
-  fetchProductList();
+onMounted(async () => {
   restoreSelectedProductId();
+  await fetchProductList();
   fetchCurrentData();
-  if (selectedProductId.value === null) {
-    startPolling();
-  }
+  startPolling();
 });
 
 onUnmounted(() => {
@@ -238,27 +247,6 @@ onUnmounted(() => {
 
 const mapDataSource = async (data, requestId) => {
   if (!data || !Array.isArray(data)) return [];
-  // 获取产品名称映射
-  const newProductNameMap = {};
-  const uniqueProductIds = [...new Set(data.map(item => item.productId))];
-  const productNameResults = await Promise.all(uniqueProductIds.map(async (productId) => {
-    try {
-      const nameRes = await getProductName({ id: productId });
-      const { data: nameData, errorCode: nameErrorCode } = nameRes.data;
-      if (nameErrorCode === 200 && nameData) {
-        return [productId, nameData];
-      }
-    } catch (err) {
-      console.error(`获取产品ID ${productId} 名称失败:`, err);
-    }
-    return [productId, `产品ID: ${productId}`];
-  }));
-  if (requestId !== latestRequestId) {
-    return null;
-  }
-  productNameResults.forEach(([productId, productName]) => {
-    newProductNameMap[productId] = productName;
-  });
 
   // 获取提供者名称映射
   const providerRes = await getLlmProviderInformation();
@@ -276,7 +264,6 @@ const mapDataSource = async (data, requestId) => {
     });
   }
 
-  Object.assign(productNameMap.value, newProductNameMap);
   Object.assign(providerNameMap.value, newProviderNameMap);
 
   return data.map((item) => ({
@@ -287,7 +274,7 @@ const mapDataSource = async (data, requestId) => {
     modelName: item.modelName,
     toolsId: item.toolsId,
     toolsName: getToolsName(item.toolsId),
-    productName: newProductNameMap[item.productId] || `产品ID: ${item.productId}`,
+    productName: productNameMap.value[item.productId] || `产品ID: ${item.productId}`,
     providerName: newProviderNameMap[item.providerId] || `服务商ID: ${item.providerId}`
   }));
 };
@@ -358,6 +345,7 @@ const handleDelete = (record) => {
         const { data, errorCode } = res.data;
         if(errorCode === 200){
           message.success("删除成功")
+          fetchCurrentData();
         }else if(errorCode === 2001){
           router.push('/login')
         }else{

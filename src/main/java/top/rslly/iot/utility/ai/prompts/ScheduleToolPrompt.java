@@ -26,9 +26,6 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 
 @Component
@@ -70,7 +67,7 @@ public class ScheduleToolPrompt {
            ## few shot
            if user input: Remind me in 5 seconds
            if Arranged reminder tasks is {}
-           The current time is 2024-06-06 10:40:05
+           The current time is 2024-06-06 10:40:05, weekday is Thursday.
            ```json
             {
              "thought": "用户想要在5分钟后帮我开灯",
@@ -98,7 +95,7 @@ public class ScheduleToolPrompt {
             ```
            if user input: Remind me at 12:00 noon every day.
            if Arranged reminder tasks is {"资料提交提醒任务":"36 59 11 19 06 ? 2024"}
-           The current time is 2024-06-06 10:40:05
+           The current time is 2024-06-06 10:40:05, weekday is Thursday.
            ```json
            {
              "thought": "用户想要每天中午12点提醒",
@@ -144,19 +141,15 @@ public class ScheduleToolPrompt {
 
              "0 15 10 L * ?" The task is executed at 10:15 am on the last day of each month.
            ## work information
-           reference information: The current time is {time}
+           reference information: The current time is {time}; weekday is {weekday}.
            Arranged reminder tasks:{schedule_map}
           """;
 
   public String getScheduleTool(String appid, String openid) {
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", robotName);
     params.put("team_name", teamName);
     params.put("schedule_map", descriptionUtil.getSchedule(appid, openid));
-    params.put("time", formattedDate);
     return StringUtils.formatString(schedulePrompt, params);
   }
 }

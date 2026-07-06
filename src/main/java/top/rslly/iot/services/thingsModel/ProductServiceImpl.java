@@ -178,14 +178,12 @@ public class ProductServiceImpl implements ProductService {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
       List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
-      String appid = wxUserEntityList.get(0).getAppid();
-      String openid = wxUserEntityList.get(0).getOpenid();
-      List<Integer> productIdList = new ArrayList<>();
-      var wxBindProductResponseList =
-          wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
-      for (var s : wxBindProductResponseList) {
-        productIdList.add(s.getProductId());
-      }
+      String appid = wxUserEntityList.getFirst().getAppid();
+      String openid = wxUserEntityList.getFirst().getOpenid();
+      List<Integer> productIdList = wxProductBindRepository.findAllByAppidAndOpenid(appid, openid)
+          .stream()
+          .map(WxProductBindEntity::getProductId)
+          .toList();
       result = productIdList.isEmpty() ? emptyProductPage(pageable)
           : productRepository.findAllByIdIn(productIdList, pageable);
     } else if (!role.equals("[ROLE_admin]")) {
@@ -193,12 +191,11 @@ public class ProductServiceImpl implements ProductService {
       if (userList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      int userId = userList.get(0).getId();
-      List<Integer> productIdList = new ArrayList<>();
-      var userProductBindEntityList = userProductBindRepository.findAllByUserId(userId);
-      for (var s : userProductBindEntityList) {
-        productIdList.add(s.getProductId());
-      }
+      int userId = userList.getFirst().getId();
+      List<Integer> productIdList = userProductBindRepository.findAllByUserId(userId)
+          .stream()
+          .map(UserProductBindEntity::getProductId)
+          .toList();
       result = productIdList.isEmpty() ? emptyProductPage(pageable)
           : productRepository.findAllByIdIn(productIdList, pageable);
     } else {

@@ -248,9 +248,9 @@ ai:
   agent-speedUp: true
   longMemoryTool-llm: dashscope-qwen3-14b
   wx_smart_robot_llm: glm
-  knowledge_graphic_llm: dashscope-qwen3-30b-a3b-instruct-2507
+  knowledge_graphic_llm: dashscope-deepseek-v4-flash
   knowledge_graphic:
-    max_graphic_length: 30000
+    max_graphic_length: 256000
     chunk_chars: 12000
     chunk_overlap_chars: 500
   branch-prediction:
