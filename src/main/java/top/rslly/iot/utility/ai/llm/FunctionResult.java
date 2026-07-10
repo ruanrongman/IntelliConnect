@@ -35,23 +35,25 @@ public final class FunctionResult {
   private final String arguments;
   private final String reply;
   private final String errorMessage;
+  private final String reasoningContent;
 
   private FunctionResult(Type type, String toolCallId, String functionName, String arguments,
-      String reply, String errorMessage) {
+      String reply, String errorMessage, String reasoningContent) {
     this.type = type;
     this.toolCallId = toolCallId;
-    this.functionName = functionName;
-    this.arguments = arguments;
-    this.reply = reply;
-    this.errorMessage = errorMessage;
+    this.functionName = functionName == null ? "" : functionName;
+    this.arguments = arguments == null ? "" : arguments;
+    this.reply = reply == null ? "" : reply;
+    this.errorMessage = errorMessage == null ? "" : errorMessage;
+    this.reasoningContent = reasoningContent == null ? "" : reasoningContent;
   }
 
   public static FunctionResult unsupported() {
-    return new FunctionResult(Type.UNSUPPORTED, "", "", "", "", "");
+    return new FunctionResult(Type.UNSUPPORTED, "", "", "", "", "", "");
   }
 
   public static FunctionResult directReply(String reply) {
-    return new FunctionResult(Type.DIRECT_REPLY, "", "", "", reply == null ? "" : reply, "");
+    return new FunctionResult(Type.DIRECT_REPLY, "", "", "", reply, "", "");
   }
 
   public static FunctionResult toolCall(String functionName, String arguments) {
@@ -59,17 +61,22 @@ public final class FunctionResult {
   }
 
   public static FunctionResult toolCall(String toolCallId, String functionName, String arguments) {
+    return toolCall(toolCallId, functionName, arguments, "");
+  }
+
+  public static FunctionResult toolCall(String toolCallId, String functionName, String arguments,
+      String reasoningContent) {
     return new FunctionResult(Type.TOOL_CALL,
         normalizeToolCallId(toolCallId),
-        functionName == null ? "" : functionName,
-        arguments == null ? "" : arguments,
+        functionName,
+        arguments,
         "",
-        "");
+        "",
+        reasoningContent);
   }
 
   public static FunctionResult error(String errorMessage) {
-    return new FunctionResult(Type.ERROR, "", "", "", "",
-        errorMessage == null ? "" : errorMessage);
+    return new FunctionResult(Type.ERROR, "", "", "", "", errorMessage, "");
   }
 
   public boolean isUnsupported() {

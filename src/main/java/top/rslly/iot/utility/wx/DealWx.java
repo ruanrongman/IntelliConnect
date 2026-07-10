@@ -29,13 +29,17 @@ import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.RedisUtil;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 @Component
 @Slf4j
 public class DealWx {
+  private static final int MAX_CUSTOM_TEXT_CHARS = 600;
+
   @Autowired
   private HttpRequestUtils httpRequestUtils;
   @Autowired
@@ -82,6 +86,17 @@ public class DealWx {
   }
 
   public void sendContent(String openid, String content, String microappid) throws IOException {
+    List<String> contents = splitContent(content, MAX_CUSTOM_TEXT_CHARS);
+    if (contents.size() > 1) {
+      log.info("微信客服消息超过{}字，自动拆分为{}条发送", MAX_CUSTOM_TEXT_CHARS, contents.size());
+    }
+    for (String part : contents) {
+      sendSingleContent(openid, part, microappid);
+    }
+  }
+
+  private void sendSingleContent(String openid, String content, String microappid)
+      throws IOException {
     String token = (String) redisUtil.get(microappid);
     String url = baseUrl + "/cgi-bin/message/custom/send?access_token=" + token;
     // String jsonstr = "{\n" + " \"touser\":\"" + openid + "\",\n" + " \"msgtype\":\"text\",\n"
@@ -93,6 +108,23 @@ public class DealWx {
     textMap.put("content", content);
     jsonObject.put("text", textMap);
     httpRequestUtils.asyncPostByJson(url, jsonObject.toJSONString());
+  }
+
+  private List<String> splitContent(String content, int maxChars) {
+    List<String> contents = new ArrayList<>();
+    if (content == null || content.isEmpty()) {
+      contents.add("");
+      return contents;
+    }
+    int start = 0;
+    while (start < content.length()) {
+      int remainingChars = content.codePointCount(start, content.length());
+      int partChars = Math.min(maxChars, remainingChars);
+      int end = content.offsetByCodePoints(start, partChars);
+      contents.add(content.substring(start, end));
+      start = end;
+    }
+    return contents;
   }
 
   public String getMedia(String mediaId, String microappid) throws IOException {

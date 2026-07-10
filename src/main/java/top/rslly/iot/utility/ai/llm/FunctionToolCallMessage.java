@@ -20,5 +20,10 @@
 package top.rslly.iot.utility.ai.llm;
 
 public record FunctionToolCallMessage(String toolCallId, String functionName, String arguments,
-    String content) {
+    String content, String reasoningContent) {
+
+  public FunctionToolCallMessage(String toolCallId, String functionName, String arguments,
+      String content) {
+    this(toolCallId, functionName, arguments, content, "");
+  }
 }

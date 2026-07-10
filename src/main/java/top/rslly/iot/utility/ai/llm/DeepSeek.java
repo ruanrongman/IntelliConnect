@@ -173,6 +173,7 @@ public class DeepSeek implements LLM {
     handler.onOpen();
     STREAM_EXECUTOR.execute(() -> {
       StringBuilder replyBuilder = new StringBuilder();
+      StringBuilder reasoningBuilder = new StringBuilder();
       Map<Long, PartialToolCall> partialToolCalls = new LinkedHashMap<>();
       try (StreamResponse<ChatCompletionChunk> streamResponse =
           client.chat().completions().createStreaming(buildFunctionParams(messages, toolSpecs))) {
@@ -185,6 +186,8 @@ public class DeepSeek implements LLM {
               replyBuilder.append(text);
               handler.onTextDelta(text);
             });
+            appendReasoningContent(reasoningBuilder,
+                delta._additionalProperties().get("reasoning_content"));
             delta.toolCalls()
                 .ifPresent(toolCalls -> mergePartialToolCalls(partialToolCalls, toolCalls));
           }
@@ -192,7 +195,7 @@ public class DeepSeek implements LLM {
         if (!partialToolCalls.isEmpty()) {
           PartialToolCall toolCall = partialToolCalls.values().iterator().next();
           handler.onToolCall(toolCall.id, toolCall.functionName.toString(),
-              toolCall.arguments.toString());
+              toolCall.arguments.toString(), reasoningBuilder.toString());
         } else {
           handler.onDirectReplyComplete(replyBuilder.toString());
         }
@@ -389,6 +392,10 @@ public class DeepSeek implements LLM {
       if (toolCall.content() != null && !toolCall.content().isBlank()) {
         builder.content(toolCall.content());
       }
+      if (toolCall.reasoningContent() != null && !toolCall.reasoningContent().isBlank()) {
+        builder.putAdditionalProperty("reasoning_content",
+            JsonValue.from(toolCall.reasoningContent()));
+      }
       return ChatCompletionMessageParam.ofAssistant(builder.build());
     }
     return ChatCompletionMessageParam.ofAssistant(
@@ -400,9 +407,8 @@ public class DeepSeek implements LLM {
         .findFirst()
         .map(choice -> {
           if (enableThinking) {
-            JsonValue reasoningValue = choice.message()._additionalProperties()
-                .get("reasoning_content");
-            String reasoning = reasoningValue == null ? null : reasoningValue.convert(String.class);
+            String reasoning = toReasoningContent(choice.message()._additionalProperties()
+                .get("reasoning_content"));
             if (reasoning != null) {
               log.info("model reasoningContent:{}", reasoning);
             }
@@ -416,22 +422,44 @@ public class DeepSeek implements LLM {
     return completion.choices().stream()
         .findFirst()
         .map(choice -> {
+          String reasoningContent = toReasoningContent(choice.message()._additionalProperties()
+              .get("reasoning_content"));
           var toolCalls = choice.message().toolCalls().orElse(List.of());
           if (!toolCalls.isEmpty()) {
-            return toToolCallResult(toolCalls.get(0));
+            return toToolCallResult(toolCalls.get(0), reasoningContent);
           }
           return FunctionResult.directReply(choice.message().content().orElse(""));
         })
         .orElse(FunctionResult.error(FALLBACK_MESSAGE));
   }
 
-  private FunctionResult toToolCallResult(ChatCompletionMessageToolCall toolCall) {
+  private FunctionResult toToolCallResult(ChatCompletionMessageToolCall toolCall,
+      String reasoningContent) {
     if (toolCall == null || !toolCall.isFunction()) {
       return FunctionResult.error(FALLBACK_MESSAGE);
     }
     var functionToolCall = toolCall.asFunction();
     return FunctionResult.toolCall(functionToolCall.id(), functionToolCall.function().name(),
-        functionToolCall.function().arguments());
+        functionToolCall.function().arguments(), reasoningContent);
+  }
+
+  private void appendReasoningContent(StringBuilder builder, JsonValue reasoningValue) {
+    String reasoning = toReasoningContent(reasoningValue);
+    if (reasoning != null && !reasoning.isBlank()) {
+      builder.append(reasoning);
+    }
+  }
+
+  private String toReasoningContent(JsonValue reasoningValue) {
+    if (reasoningValue == null) {
+      return null;
+    }
+    try {
+      return reasoningValue.convert(String.class);
+    } catch (Exception e) {
+      log.debug("Cannot parse reasoning_content", e);
+      return null;
+    }
   }
 
   private ChatCompletionTool buildFunctionTool(FunctionToolSpec toolSpec) {

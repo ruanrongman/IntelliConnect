@@ -669,7 +669,7 @@ public class McpAgent implements BaseTool<String> {
       messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
           new FunctionToolCallMessage(result.getToolCallId(), result.getFunctionName(),
               toolCallArguments,
-              assistantText)));
+              assistantText, result.getReasoningContent())));
       messages.add(new ModelMessage(ModelMessageRole.TOOL.value(),
           new FunctionToolResultMessage(result.getToolCallId(), observation)));
       finalAnswer = observation;
@@ -722,11 +722,13 @@ public class McpAgent implements BaseTool<String> {
       }
 
       @Override
-      public void onToolCall(String toolCallId, String functionName, String arguments) {
-        FunctionResult result = FunctionResult.toolCall(toolCallId, functionName, arguments);
+      public void onToolCall(String toolCallId, String functionName, String arguments,
+          String reasoningContent) {
+        FunctionResult result = FunctionResult.toolCall(toolCallId, functionName, arguments,
+            reasoningContent);
         if (!replyBuffer.isEmpty()) {
           result = FunctionResult.toolCall(toolCallId, functionName,
-              mergeAssistantText(arguments, replyBuffer.toString()));
+              mergeAssistantText(arguments, replyBuffer.toString()), reasoningContent);
         }
         finish(result);
       }

@@ -295,8 +295,27 @@
             </dl>
           </template>
 
+          <template v-else-if="selectedModel">
+            <div class="detail-header">
+              <div>
+                <span class="detail-type">当前物模型</span>
+                <h3>{{ selectedModel.name }}</h3>
+              </div>
+              <div class="detail-actions">
+                <a-button size="small" @click="openModelEdit">编辑</a-button>
+              </div>
+            </div>
+
+            <dl class="detail-list">
+              <template v-for="field in modelDetailFields" :key="field.key">
+                <dt>{{ field.label }}</dt>
+                <dd>{{ formatFieldValue(selectedModel, field) }}</dd>
+              </template>
+            </dl>
+          </template>
+
           <div v-else class="detail-empty">
-            <a-empty description="选择一条记录查看详情" />
+            <a-empty description="请先选择物模型" />
           </div>
         </aside>
       </div>
@@ -575,6 +594,8 @@ const detailFieldMap = {
   device: [
     { key: 'id', label: '设备ID' },
     { key: 'name', label: '设备名称' },
+    { key: 'password', label: 'mqtt密码' },
+    { key: 'modelId', label: '物模型ID' },
     { key: 'clientId', label: 'clientId' },
     { key: 'subscribeTopic', label: '订阅主题' },
     { key: 'description', label: '描述' },
@@ -598,6 +619,13 @@ const detailFieldMap = {
     { key: 'eventId', label: '事件ID' },
   ],
 }
+
+const modelDetailFields = [
+  { key: 'id', label: '物模型ID' },
+  { key: 'name', label: '物模型名称' },
+  { key: 'productId', label: '产品', formatter: (value) => getProductLabel(value) },
+  { key: 'description', label: '描述' },
+]
 
 const deleteMap = {
   data: deleteProductData,
@@ -694,7 +722,7 @@ const currentEventOptions = computed(() =>
 
 watch([activeResource, selectedModelId, () => store[activeResource.value]?.length], () => {
   cancelEdit()
-  selectFirstCurrentItem()
+  selectedItemKey.value = null
 })
 
 const normalizeRows = (list, resourceKey) =>
@@ -746,7 +774,6 @@ const refreshBaseData = async () => {
     }
     await refreshModelResources()
     await nextTick()
-    selectFirstCurrentItem()
   } catch (err) {
     console.log(err)
     message.error('加载物模型配置失败')
@@ -784,7 +811,7 @@ const refreshModelResources = async () => {
   store.eventData = normalizeRows(unwrapList(eventData), 'eventData')
   store.alarm = normalizeRows(unwrapList(alarms).map(enrichAlarm), 'alarm')
   await nextTick()
-  selectFirstCurrentItem()
+  selectedItemKey.value = null
 }
 
 const refreshResource = async (resourceKey) => {
@@ -811,7 +838,9 @@ const refreshResource = async (resourceKey) => {
     } else {
       store[resourceKey] = normalizeRows(rows, resourceKey)
     }
-    selectFirstCurrentItem()
+    if (selectedItemKey.value && !filteredCurrentItems.value.some((item) => item.rowKey === selectedItemKey.value)) {
+      selectedItemKey.value = null
+    }
   } catch (err) {
     console.log(err)
     message.error('刷新失败')
@@ -837,7 +866,7 @@ const refreshDeviceStatus = async () => {
     if (previousItemKey && filteredCurrentItems.value.some((item) => item.rowKey === previousItemKey)) {
       selectedItemKey.value = previousItemKey
     } else {
-      selectFirstCurrentItem()
+      selectedItemKey.value = null
     }
   } catch (err) {
     console.log(err)
@@ -915,7 +944,11 @@ const getItemsByResource = (resourceKey) => {
 }
 
 const selectModel = async (modelId) => {
-  if (selectedModelId.value === modelId) return
+  if (selectedModelId.value === modelId) {
+    cancelEdit()
+    selectedItemKey.value = null
+    return
+  }
   selectedModelId.value = modelId
   await refreshModelResources()
 }
@@ -923,7 +956,7 @@ const selectModel = async (modelId) => {
 const selectResource = (resourceKey) => {
   activeResource.value = resourceKey
   itemKeyword.value = ''
-  selectFirstCurrentItem()
+  selectedItemKey.value = null
 }
 
 const selectItem = (rowKey) => {
@@ -931,9 +964,6 @@ const selectItem = (rowKey) => {
   selectedItemKey.value = rowKey
 }
 
-const selectFirstCurrentItem = () => {
-  selectedItemKey.value = filteredCurrentItems.value[0]?.rowKey || null
-}
 
 const getItemTitle = (item) => {
   if (!item) return '-'
@@ -950,7 +980,7 @@ const getItemSubtitle = (item) => {
 
 const formatFieldValue = (item, field) => {
   const value = item[field.key]
-  if (field.formatter) return field.formatter(value)
+  if (field.formatter) return field.formatter(value, item)
   return value ?? '-'
 }
 
