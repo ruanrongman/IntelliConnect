@@ -10,6 +10,7 @@ export const streamAiControl = async ({
   files = [],
   signal,
   onMessage,
+  onComplete,
   onError,
 }) => {
   const headers = {
@@ -41,11 +42,11 @@ export const streamAiControl = async ({
       break
     }
     buffer += decoder.decode(value, { stream: true })
-    buffer = consumeSseBuffer(buffer, onMessage, onError)
+    buffer = consumeSseBuffer(buffer, onMessage, onComplete, onError)
   }
   buffer += decoder.decode()
   if (buffer.trim()) {
-    consumeSseBuffer(`${buffer}\n\n`, onMessage, onError)
+    consumeSseBuffer(`${buffer}\n\n`, onMessage, onComplete, onError)
   }
 }
 
@@ -66,7 +67,7 @@ export const stopAiControlStream = async (productId, streamId) => {
   return response.json()
 }
 
-function consumeSseBuffer(buffer, onMessage, onError) {
+function consumeSseBuffer(buffer, onMessage, onComplete, onError) {
   const parts = buffer.split(DONE_SEPARATOR)
   const rest = parts.pop() || ''
   parts.forEach((part) => {
@@ -76,6 +77,8 @@ function consumeSseBuffer(buffer, onMessage, onError) {
     }
     if (event.name === 'error') {
       onError?.(parseErrorMessage(event.data))
+    } else if (event.name === 'complete') {
+      onComplete?.(event.data)
     } else {
       onMessage?.(event.data)
     }

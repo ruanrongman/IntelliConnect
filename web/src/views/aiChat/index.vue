@@ -283,6 +283,13 @@ async function sendMessage() {
           queueScrollToBottom()
         }
       },
+      onComplete: (finalContent) => {
+        const currentMessage = messages.value[assistantMessageIndex]
+        if (currentMessage) {
+          currentMessage.content = finalContent
+          queueScrollToBottom()
+        }
+      },
       onError: (errorText) => {
         const currentMessage = messages.value[assistantMessageIndex]
         if (currentMessage) {

@@ -190,6 +190,9 @@ public class AiServiceImpl implements AiService {
       if (!sentFromQueue && finalAnswer != null && !finalAnswer.isBlank()) {
         sendSseEvent(emitter, "message", finalAnswer);
       }
+      if (finalAnswer != null && !finalAnswer.isBlank()) {
+        sendSseEvent(emitter, "complete", finalAnswer);
+      }
     } catch (Exception e) {
       log.error("AI text stream failed, streamChatId={}", streamChatId, e);
       try {
