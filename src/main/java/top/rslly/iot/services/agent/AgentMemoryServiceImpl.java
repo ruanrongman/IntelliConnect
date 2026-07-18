@@ -39,13 +39,19 @@ import top.rslly.iot.utility.result.ResultTool;
 
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
 public class AgentMemoryServiceImpl implements AgentMemoryService {
+  private static final Pattern UUID_PATTERN = Pattern.compile(
+      "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}");
+
   @Resource
   private AgentMemoryRepository agentMemoryRepository;
   @Resource
@@ -148,43 +154,87 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
     if (productRepository.findAllById(productId).isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    List<AgentMemoryResponse> agentMemoryResponses = new ArrayList<>();
-    List<AgentMemoryEntity> agentMemoryEntities = new ArrayList<>();
+    String defaultChatId = buildDefaultChatId(productId);
+    Map<String, AgentMemoryEntity> memoryByChatId = new LinkedHashMap<>();
+    Map<String, OtaXiaozhiEntity> deviceByChatId = new LinkedHashMap<>();
     List<OtaXiaozhiEntity> otaXiaozhiEntities;
     if (nickName != null && !nickName.isBlank()) {
       otaXiaozhiEntities =
           otaXiaozhiRepository.findAllByProductIdAndNickName(productId, nickName);
     } else {
       otaXiaozhiEntities = otaXiaozhiRepository.findAllByProductId(productId);
-      // only text conversation
-      List<AgentMemoryEntity> agentMemoryByTextConv =
-          agentMemoryRepository.findAllByChatId("chatProduct" + productId);
-      if (!agentMemoryByTextConv.isEmpty()) {
-        agentMemoryEntities.addAll(agentMemoryByTextConv);
+      List<AgentMemoryEntity> textConversationMemories =
+          agentMemoryRepository.findAllByChatIdStartingWith(defaultChatId);
+      for (AgentMemoryEntity memory : textConversationMemories) {
+        if (isDefaultOrDebugChatId(productId, memory.getChatId())) {
+          memoryByChatId.putIfAbsent(memory.getChatId(), memory);
+        }
       }
     }
-    for (var s : otaXiaozhiEntities) {
-      String chatId = "chatProduct" + productId + s.getDeviceId();
-      agentMemoryEntities.addAll(agentMemoryRepository.findAllByChatId(chatId));
+    for (OtaXiaozhiEntity device : otaXiaozhiEntities) {
+      String chatId = defaultChatId + device.getDeviceId();
+      deviceByChatId.putIfAbsent(chatId, device);
     }
-    if (agentMemoryEntities.isEmpty()) {
+    if (!deviceByChatId.isEmpty()) {
+      for (AgentMemoryEntity memory : agentMemoryRepository
+          .findAllByChatIdIn(new ArrayList<>(deviceByChatId.keySet()))) {
+        String chatId = memory.getChatId();
+        memoryByChatId.putIfAbsent(chatId, memory);
+      }
+    }
+    if (memoryByChatId.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    for (var s : agentMemoryEntities) {
+    List<AgentMemoryResponse> agentMemoryResponses = new ArrayList<>();
+    for (AgentMemoryEntity memory : memoryByChatId.values()) {
       AgentMemoryResponse agentMemoryResponse = new AgentMemoryResponse();
-      agentMemoryResponse.setId(s.getId());
-      agentMemoryResponse.setContent(s.getContent());
-      agentMemoryResponse.setChatId(s.getChatId());
-
-      // 提取MAC地址
-      String mac = extractMacFromChatId(s.getChatId());
-      agentMemoryResponse.setDeviceName(Objects.requireNonNullElse(mac, "未知设备"));
+      agentMemoryResponse.setId(memory.getId());
+      agentMemoryResponse.setContent(memory.getContent());
+      agentMemoryResponse.setChatId(memory.getChatId());
+      OtaXiaozhiEntity device = deviceByChatId.get(memory.getChatId());
+      if (device != null) {
+        agentMemoryResponse.setDeviceName(device.getDeviceId());
+        agentMemoryResponse.setNickName(device.getNickName());
+      }
       agentMemoryResponses.add(agentMemoryResponse);
     }
-    if (agentMemoryResponses.isEmpty()) {
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    }
+    agentMemoryResponses.sort(Comparator.comparingInt(AgentMemoryResponse::getId).reversed());
     return ResultTool.success(agentMemoryResponses);
+  }
+
+  @Override
+  public boolean isChatIdValidForProduct(int productId, String chatId) {
+    if (chatId == null || chatId.isBlank()) {
+      return false;
+    }
+    String defaultChatId = buildDefaultChatId(productId);
+    if (chatId.equals(defaultChatId)) {
+      return true;
+    }
+    String debugPrefix = defaultChatId + "debug";
+    if (chatId.startsWith(debugPrefix)) {
+      return UUID_PATTERN.matcher(chatId.substring(debugPrefix.length())).matches();
+    }
+    if (!chatId.startsWith(defaultChatId)) {
+      return false;
+    }
+    String deviceId = chatId.substring(defaultChatId.length());
+    return !deviceId.isBlank()
+        && !otaXiaozhiRepository.findAllByProductIdAndDeviceId(productId, deviceId).isEmpty();
+  }
+
+  private boolean isDefaultOrDebugChatId(int productId, String chatId) {
+    String defaultChatId = buildDefaultChatId(productId);
+    if (defaultChatId.equals(chatId)) {
+      return true;
+    }
+    String debugPrefix = defaultChatId + "debug";
+    return chatId != null && chatId.startsWith(debugPrefix)
+        && UUID_PATTERN.matcher(chatId.substring(debugPrefix.length())).matches();
+  }
+
+  private String buildDefaultChatId(int productId) {
+    return "chatProduct" + productId;
   }
 
   @Override

@@ -5,6 +5,7 @@ const DONE_SEPARATOR = /\r?\n\r?\n/
 
 export const streamAiControl = async ({
   productId,
+  chatId,
   streamId,
   content,
   files = [],
@@ -21,6 +22,9 @@ export const streamAiControl = async ({
   body.append('productId', productId)
   body.append('streamId', streamId)
   body.append('content', content)
+  if (chatId) {
+    body.append('chatId', chatId)
+  }
   files.forEach((file) => {
     body.append('file', file)
   })

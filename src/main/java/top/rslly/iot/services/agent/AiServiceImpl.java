@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.param.request.AiControl;
+import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.services.SafetyServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
@@ -83,12 +84,15 @@ public class AiServiceImpl implements AiService {
   @Autowired
   private SafetyServiceImpl safetyService;
   @Autowired
+  private AgentMemoryServiceImpl agentMemoryService;
+  @Autowired
   private RedisUtil redisUtil;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
   private static final String SSE_DONE_SIGNAL = "[DONE]";
   private static final long STREAM_POLL_INTERVAL_MS = 10L;
+  private static final int MEMORY_CONTENT_MAX_LENGTH = 1000;
   private final Set<String> stoppedStreamChatIds = ConcurrentHashMap.newKeySet();
 
   @Override
@@ -99,7 +103,11 @@ public class AiServiceImpl implements AiService {
     if (productService.findAllById(aiControl.getProductId()).isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    String chatId = "chatProduct" + aiControl.getProductId();
+    String chatId = resolveConversationChatId(aiControl);
+    if (chatId == null) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    initializeDebugMemory(aiControl.getProductId(), chatId, aiControl.getContent());
     var answer =
         router.response(aiControl.getContent(), chatId, aiControl.getProductId());
     return ResultTool.success(answer);
@@ -131,7 +139,6 @@ public class AiServiceImpl implements AiService {
   private void handleAiResponseStream(AiControl aiControl, String streamId,
       MultipartFile[] multipartFiles, String token,
       SseEmitter emitter) {
-    String conversationChatId = buildChatId(aiControl.getProductId());
     String streamChatId = buildStreamChatId(aiControl.getProductId(), streamId);
     boolean sentFromQueue = false;
     stoppedStreamChatIds.remove(streamChatId);
@@ -149,12 +156,18 @@ public class AiServiceImpl implements AiService {
         return;
       }
 
+      String conversationChatId = resolveConversationChatId(aiControl);
+      if (conversationChatId == null) {
+        sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.PARAM_NOT_VALID));
+        return;
+      }
       DocumentPrompt documentPrompt = buildDocumentPrompt(aiControl.getContent(), multipartFiles);
       if (isStreamInputTooLong(documentPrompt.modelContent())) {
         sendSseEvent(emitter, "error",
             streamInputTooLongResult(documentPrompt.modelContent().length()));
         return;
       }
+      initializeDebugMemory(aiControl.getProductId(), conversationChatId, aiControl.getContent());
       CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(
           () -> router.response(documentPrompt.modelContent(), documentPrompt.historyContent(),
               streamChatId, conversationChatId, aiControl.getProductId()));
@@ -258,6 +271,32 @@ public class AiServiceImpl implements AiService {
 
   private String buildChatId(int productId) {
     return "chatProduct" + productId;
+  }
+
+  private String resolveConversationChatId(AiControl aiControl) {
+    String chatId = aiControl.getChatId();
+    if (chatId == null || chatId.isBlank()) {
+      return buildChatId(aiControl.getProductId());
+    }
+    String normalizedChatId = chatId.trim();
+    if (!agentMemoryService.isChatIdValidForProduct(
+        aiControl.getProductId(), normalizedChatId)) {
+      return null;
+    }
+    return normalizedChatId;
+  }
+
+  private void initializeDebugMemory(int productId, String chatId, String content) {
+    String debugPrefix = buildChatId(productId) + "debug";
+    if (!chatId.startsWith(debugPrefix)
+        || !agentMemoryService.findAllByChatId(chatId).isEmpty()) {
+      return;
+    }
+    String initialContent = content.trim();
+    if (initialContent.length() > MEMORY_CONTENT_MAX_LENGTH) {
+      initialContent = initialContent.substring(0, MEMORY_CONTENT_MAX_LENGTH);
+    }
+    agentMemoryService.insertAndUpdate(new AgentMemory(chatId, initialContent));
   }
 
   private String buildStreamChatId(int productId, String streamId) {

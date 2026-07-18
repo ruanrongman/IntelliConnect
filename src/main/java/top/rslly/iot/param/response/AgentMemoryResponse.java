@@ -26,5 +26,6 @@ public class AgentMemoryResponse {
   private int id;
   private String chatId;
   private String deviceName;
+  private String nickName;
   private String content;
 }

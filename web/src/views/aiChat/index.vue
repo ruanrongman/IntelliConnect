@@ -3,19 +3,23 @@
     <ChatSidebar
       v-model="selectedProductId"
       :product-options="productOptions"
+      :conversations="conversations"
       :active-chat-id="activeChatId"
       :loading-products="loadingProducts"
+      :loading-conversations="loadingConversations"
       :streaming="streaming"
+      :streaming-chat-ids="streamingChatIds"
       :loading-history="loadingHistory"
       :has-more-history="hasMoreHistory"
       :history-total="historyPagination.total"
       :loaded-history-count="loadedHistoryCount"
       :status-text="statusText"
       :status-type="statusType"
-      @refresh-products="loadProducts"
-      @load-history="loadHistory(1)"
+      @refresh-products="refreshProducts"
       @load-more-history="loadMoreHistory"
       @product-change="handleProductChange"
+      @new-conversation="createNewConversation"
+      @select-conversation="selectConversation"
     />
 
     <main class="chat-main">
@@ -51,7 +55,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { message as antMessage } from 'ant-design-vue'
 import { getProduct } from '@/api/product'
-import { getHistoryMessage } from '@/api/agentMemory'
+import { getAgentMemoryByNickName, getHistoryMessage } from '@/api/agentMemory'
 import { stopAiControlStream, streamAiControl } from '@/api/aiChat'
 import { queryKnowledgeGraphicReference } from '@/api/knowledgeGraphic'
 import { postKnowledgeChatRecall } from '@/api/productKnowledge'
@@ -62,18 +66,23 @@ import { acceptedFileExtensions, acceptedFileLabel, getClipboardFiles, getFileId
 
 const products = ref([])
 const selectedProductId = ref()
+const conversations = ref([])
+const activeChatId = ref('')
 const messages = ref([])
 const inputText = ref('')
 const selectedFiles = ref([])
 const loadingProducts = ref(false)
 const loadingHistory = ref(false)
-const streaming = ref(false)
+const loadingConversations = ref(false)
+const conversationViews = new Map()
+const streamContexts = reactive(new Map())
+const streaming = computed(() => streamContexts.has(activeChatId.value))
+const streamingChatIds = computed(() => Array.from(streamContexts.keys()))
 const statusText = ref('正在加载产品...')
 const statusType = ref('')
 const messageListRef = ref(null)
-let abortController = null
 let scrollFrameId = 0
-let currentStreamId = ''
+let historyRequestSequence = 0
 const historyPagination = reactive({
   current: 1,
   pageSize: 20,
@@ -97,12 +106,9 @@ const activeProductName = computed(() =>
   activeProduct.value ? activeProduct.value.productName || `产品 ${activeProduct.value.id}` : '未选择产品'
 )
 
-const activeChatId = computed(() =>
-  selectedProductId.value ? `chatProduct${selectedProductId.value}` : ''
-)
 
 const canSend = computed(() =>
-  Boolean(selectedProductId.value && (inputText.value.trim() || selectedFiles.value.length) && !streaming.value)
+  Boolean(activeChatId.value && (inputText.value.trim() || selectedFiles.value.length) && !streaming.value)
 )
 
 const hasMoreHistory = computed(() =>
@@ -110,50 +116,156 @@ const hasMoreHistory = computed(() =>
 )
 
 onMounted(() => {
-  loadProducts()
+  loadProducts(true)
 })
 
 onBeforeUnmount(() => {
-  if (abortController) {
-    abortController.abort()
-  }
+  streamContexts.forEach((context) => context.abortController.abort())
+  streamContexts.clear()
   if (scrollFrameId) {
     window.cancelAnimationFrame(scrollFrameId)
   }
 })
 
-async function loadProducts() {
+async function loadProducts(resetConversation = false) {
   loadingProducts.value = true
   statusText.value = '正在加载产品...'
   statusType.value = ''
   try {
+    const previousProductId = selectedProductId.value
     const res = await getProduct()
     const payload = res.data || {}
     if (payload.errorCode !== 200) {
       throw new Error(payload.errorMsg || '产品加载失败')
     }
     products.value = Array.isArray(payload.data) ? payload.data : []
-    if (!selectedProductId.value && products.value.length > 0) {
-      selectedProductId.value = products.value[0].id
+    const selectedProductExists = products.value.some((item) => item.id === selectedProductId.value)
+    if (!selectedProductExists) {
+      selectedProductId.value = products.value[0]?.id
     }
-    statusText.value = `已加载 ${products.value.length} 个产品。`
-    if (selectedProductId.value) {
-      await loadHistory(1)
+    if (!selectedProductId.value) {
+      resetConversationState()
+      conversations.value = []
+      statusText.value = '暂无可用产品。'
+      return
     }
+    const productChanged = previousProductId !== selectedProductId.value
+    if (resetConversation || productChanged || !activeChatId.value) {
+      activeChatId.value = buildDefaultChatId(selectedProductId.value)
+    }
+    await loadConversations(selectedProductId.value, true)
+    await loadHistory(1)
   } catch (error) {
     products.value = []
     selectedProductId.value = undefined
+    conversations.value = []
+    activeChatId.value = ''
+    resetConversationState()
     statusText.value = error.message || '产品加载失败'
     statusType.value = 'warn'
   } finally {
     loadingProducts.value = false
   }
 }
+async function refreshProducts() {
+  await loadProducts(false)
+}
 
-async function loadHistory(page = 1, mode = 'replace') {
-  if (!selectedProductId.value) {
+async function loadConversations(productId, preserveActive = true) {
+  if (!productId) {
+    conversations.value = []
     return
   }
+  loadingConversations.value = true
+  const defaultChatId = buildDefaultChatId(productId)
+  const conversationById = new Map([
+    [defaultChatId, createDefaultConversation(productId)],
+  ])
+  try {
+    const res = await getAgentMemoryByNickName({ productId })
+    const payload = res.data || {}
+    const records = payload.errorCode === 200 && Array.isArray(payload.data)
+      ? payload.data.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+      : []
+    records.forEach((record) => {
+      const chatId = String(record?.chatId || '').trim()
+      if (!chatId) {
+        return
+      }
+      const content = String(record?.content || '').trim()
+      const deviceName = record?.deviceName && record.deviceName !== '未知设备'
+        ? String(record.deviceName)
+        : ''
+      conversationById.set(chatId, {
+        id: record.id,
+        chatId,
+        title: content ? getFirstSentence(content) : chatId === defaultChatId ? '默认对话' : '新对话',
+        fullContent: content,
+        deviceName,
+        nickName: deviceName ? String(record?.nickName || '').trim() : '',
+        isDefault: chatId === defaultChatId,
+        isDraft: false,
+      })
+    })
+  } catch (error) {
+    console.warn('Conversation list failed:', error)
+  }
+  if (String(selectedProductId.value) !== String(productId)) {
+    loadingConversations.value = false
+    return
+  }
+  conversations.value
+    .filter((item) => item.chatId.startsWith(`${defaultChatId}debug`)
+      && (item.isDraft || streamContexts.has(item.chatId) || conversationViews.has(item.chatId)))
+    .forEach((item) => {
+      if (!conversationById.has(item.chatId)) {
+        conversationById.set(item.chatId, item)
+      }
+    })
+  const defaultConversation = conversationById.get(defaultChatId)
+  conversations.value = [
+    defaultConversation,
+    ...Array.from(conversationById.values()).filter((item) => item.chatId !== defaultChatId),
+  ]
+  if (!preserveActive || !conversationById.has(activeChatId.value)) {
+    activeChatId.value = defaultChatId
+  }
+  loadingConversations.value = false
+}
+
+function createDefaultConversation(productId) {
+  const chatId = buildDefaultChatId(productId)
+  return {
+    id: 0,
+    chatId,
+    title: '默认对话',
+    fullContent: '',
+    deviceName: '',
+    nickName: '',
+    isDefault: true,
+    isDraft: false,
+  }
+}
+
+function getFirstSentence(content) {
+  const text = String(content || '').trim()
+  if (!text) {
+    return ''
+  }
+  const match = text.match(/^[\s\S]*?(?:\r?\n|[。！？.!?]|$)/)
+  return String(match?.[0] || text).trim()
+}
+
+function buildDefaultChatId(productId) {
+  return `chatProduct${productId}`
+}
+
+async function loadHistory(page = 1, mode = 'replace') {
+  if (!selectedProductId.value || !activeChatId.value) {
+    return
+  }
+  const requestSequence = ++historyRequestSequence
+  const requestChatId = activeChatId.value
   const previousScrollHeight = getMessagePane()?.scrollHeight || 0
   historyPagination.current = page
   loadingHistory.value = true
@@ -163,8 +275,11 @@ async function loadHistory(page = 1, mode = 'replace') {
     const res = await getHistoryMessage({
       pageNum: historyPagination.current,
       pageSize: historyPagination.pageSize,
-      chatId: activeChatId.value,
+      chatId: requestChatId,
     })
+    if (!isCurrentHistoryRequest(requestSequence, requestChatId)) {
+      return
+    }
     const payload = res.data || {}
     if (payload.errorCode !== 200) {
       if (mode === 'replace') {
@@ -175,6 +290,7 @@ async function loadHistory(page = 1, mode = 'replace') {
       } else {
         statusText.value = '没有更早的历史。'
       }
+      saveConversationView(requestChatId, true)
       return
     }
     const pageData = payload.data || {}
@@ -202,14 +318,19 @@ async function loadHistory(page = 1, mode = 'replace') {
       messages.value = [...historyMessages, ...messages.value]
       loadedHistoryCount.value += historyMessages.length
       statusText.value = `已加载到第 ${historyPagination.current} 页，共 ${historyPagination.total} 条。`
+      saveConversationView(requestChatId, true)
       await keepScrollPositionAfterPrepend(previousScrollHeight)
     } else {
       messages.value = historyMessages
       loadedHistoryCount.value = historyMessages.length
       statusText.value = `已显示最新 ${loadedHistoryCount.value} / ${historyPagination.total} 条。`
-      await scrollToBottom()
+      saveConversationView(requestChatId, true)
+      await scrollToBottom(true)
     }
   } catch (error) {
+    if (!isCurrentHistoryRequest(requestSequence, requestChatId)) {
+      return
+    }
     if (mode === 'replace') {
       messages.value = []
       historyPagination.total = 0
@@ -217,8 +338,73 @@ async function loadHistory(page = 1, mode = 'replace') {
     }
     statusText.value = error.message || '历史加载失败'
     statusType.value = 'warn'
+    saveConversationView(requestChatId, true)
   } finally {
-    loadingHistory.value = false
+    if (isCurrentHistoryRequest(requestSequence, requestChatId)) {
+      loadingHistory.value = false
+    }
+  }
+}
+
+function isCurrentHistoryRequest(requestSequence, chatId) {
+  return requestSequence === historyRequestSequence && chatId === activeChatId.value
+}
+
+function invalidateHistoryRequest() {
+  historyRequestSequence += 1
+  loadingHistory.value = false
+}
+
+function saveConversationView(chatId, initialized = false) {
+  if (!chatId) {
+    return
+  }
+  const existingView = conversationViews.get(chatId)
+  if (!existingView && !initialized && messages.value.length === 0 && !streamContexts.has(chatId)) {
+    return
+  }
+  conversationViews.set(chatId, {
+    messages: messages.value,
+    currentPage: historyPagination.current,
+    pageSize: historyPagination.pageSize,
+    total: historyPagination.total,
+    loadedCount: loadedHistoryCount.value,
+    initialized: initialized || Boolean(existingView?.initialized),
+    statusText: statusText.value,
+    statusType: statusType.value,
+  })
+}
+
+function restoreConversationView(chatId) {
+  const view = conversationViews.get(chatId)
+  if (!view?.initialized) {
+    return false
+  }
+  messages.value = view.messages
+  historyPagination.current = view.currentPage
+  historyPagination.pageSize = view.pageSize
+  historyPagination.total = view.total
+  loadedHistoryCount.value = view.loadedCount
+  statusText.value = view.statusText
+  statusType.value = view.statusType
+  return true
+}
+
+function updateConversationStatus(chatId, text, type = '') {
+  const view = conversationViews.get(chatId)
+  if (view) {
+    view.statusText = text
+    view.statusType = type
+  }
+  if (chatId === activeChatId.value) {
+    statusText.value = text
+    statusType.value = type
+  }
+}
+
+function scrollActiveConversation(chatId) {
+  if (chatId === activeChatId.value) {
+    queueScrollToBottom()
   }
 }
 
@@ -229,17 +415,114 @@ async function loadMoreHistory() {
   await loadHistory(historyPagination.current + 1, 'prepend')
 }
 
-async function handleProductChange() {
+async function handleProductChange(productId) {
+  saveConversationView(activeChatId.value)
+  selectedProductId.value = productId
+  const nextChatId = buildDefaultChatId(productId)
+  activeChatId.value = nextChatId
+  invalidateHistoryRequest()
+  inputText.value = ''
+  selectedFiles.value = []
+  const restored = restoreConversationView(nextChatId)
+  if (!restored) {
+    resetConversationState()
+    statusText.value = '正在加载对话...'
+    statusType.value = ''
+  }
+  await loadConversations(productId, false)
+  if (restored) {
+    await scrollToBottom(true)
+  } else {
+    await loadHistory(1)
+  }
+}
+
+async function selectConversation(chatId) {
+  if (!chatId || chatId === activeChatId.value) {
+    return
+  }
+  saveConversationView(activeChatId.value)
+  activeChatId.value = chatId
+  invalidateHistoryRequest()
+  inputText.value = ''
+  selectedFiles.value = []
+  if (restoreConversationView(chatId)) {
+    await scrollToBottom(true)
+    return
+  }
+  resetConversationState()
+  await loadHistory(1)
+}
+
+function createNewConversation() {
+  if (!selectedProductId.value) {
+    return
+  }
+  saveConversationView(activeChatId.value)
+  invalidateHistoryRequest()
+  const existingDraft = conversations.value.find((item) => item.isDraft)
+  let chatId = existingDraft?.chatId
+  if (!chatId) {
+    chatId = `${buildDefaultChatId(selectedProductId.value)}debug${createUuid()}`
+    const draft = {
+      id: 0,
+      chatId,
+      title: '新对话',
+      fullContent: '',
+      deviceName: '',
+      nickName: '',
+      isDefault: false,
+      isDraft: true,
+    }
+    const [defaultConversation, ...otherConversations] = conversations.value
+    conversations.value = [defaultConversation, draft, ...otherConversations].filter(Boolean)
+  }
+  activeChatId.value = chatId
+  inputText.value = ''
+  selectedFiles.value = []
+  if (restoreConversationView(chatId)) {
+    scrollActiveConversation(chatId)
+    return
+  }
+  resetConversationState()
+  statusText.value = '新对话已创建。'
+  statusType.value = ''
+  saveConversationView(chatId, true)
+}
+
+function resetConversationState() {
+  messages.value = []
   historyPagination.current = 1
   historyPagination.total = 0
   loadedHistoryCount.value = 0
-  await loadHistory(1)
+}
+
+function createUuid() {
+  const cryptoApi = window.crypto
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID()
+  }
+  const bytes = new Uint8Array(16)
+  if (cryptoApi?.getRandomValues) {
+    cryptoApi.getRandomValues(bytes)
+  } else {
+    bytes.forEach((value, index) => {
+      bytes[index] = Math.floor(Math.random() * 256)
+    })
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0'))
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`
 }
 
 async function sendMessage() {
   if (!canSend.value) {
     return
   }
+  const productId = selectedProductId.value
+  const conversationChatId = activeChatId.value
+  const conversationMessages = messages.value
   const text = inputText.value.trim()
   const requestText = text || '请阅读上传文件。'
   const files = [...selectedFiles.value]
@@ -254,94 +537,82 @@ async function sendMessage() {
     loadingReferences: false,
     pending: true,
   }
-  messages.value.push({
+  conversationMessages.push({
     id: `user-${Date.now()}`,
     role: 'user',
     content: requestText,
     fileNames: files.map((file) => file.name),
     pending: false,
   })
-  const assistantMessageIndex = messages.value.push(assistantMessage) - 1
+  conversationMessages.push(assistantMessage)
+  const conversation = conversations.value.find((item) => item.chatId === conversationChatId)
+  if (conversation) {
+    conversation.isDraft = false
+  }
+  const streamContext = {
+    productId,
+    chatId: conversationChatId,
+    streamId: createStreamId(),
+    abortController: new AbortController(),
+  }
+  streamContexts.set(conversationChatId, streamContext)
+  saveConversationView(conversationChatId, true)
+  updateConversationStatus(conversationChatId, '正在生成回复...')
   await scrollToBottom()
-
-  streaming.value = true
-  abortController = new AbortController()
-  currentStreamId = createStreamId()
-  statusText.value = '正在生成回复...'
-  statusType.value = ''
   try {
     await streamAiControl({
-      productId: selectedProductId.value,
-      streamId: currentStreamId,
+      productId,
+      chatId: conversationChatId,
+      streamId: streamContext.streamId,
       content: requestText,
       files,
-      signal: abortController.signal,
+      signal: streamContext.abortController.signal,
       onMessage: (chunk) => {
-        const currentMessage = messages.value[assistantMessageIndex]
-        if (currentMessage) {
-          currentMessage.content += chunk
-          queueScrollToBottom()
-        }
+        assistantMessage.content += chunk
+        scrollActiveConversation(conversationChatId)
       },
       onComplete: (finalContent) => {
-        const currentMessage = messages.value[assistantMessageIndex]
-        if (currentMessage) {
-          currentMessage.content = finalContent
-          queueScrollToBottom()
-        }
+        assistantMessage.content = finalContent
+        scrollActiveConversation(conversationChatId)
       },
       onError: (errorText) => {
-        const currentMessage = messages.value[assistantMessageIndex]
-        if (currentMessage) {
-          currentMessage.content += errorText
-        }
-        statusText.value = errorText
-        statusType.value = 'warn'
+        assistantMessage.content += errorText
+        updateConversationStatus(conversationChatId, errorText, 'warn')
       },
     })
-    const currentMessage = messages.value[assistantMessageIndex]
-    if (currentMessage && !currentMessage.content.trim()) {
-      currentMessage.content = '请求已结束。'
+    if (!assistantMessage.content.trim()) {
+      assistantMessage.content = '请求已结束。'
     }
-    statusText.value = '回复完成，正在查询参考记录...'
-    await appendReferenceRecords(assistantMessageIndex, requestText)
-    statusText.value = '回复完成。'
+    updateConversationStatus(conversationChatId, '回复完成，正在查询参考记录...')
+    await appendReferenceRecords(assistantMessage, productId, conversationChatId, requestText)
+    updateConversationStatus(conversationChatId, '回复完成。')
   } catch (error) {
     if (error.name === 'AbortError') {
-      statusText.value = '已停止。'
+      updateConversationStatus(conversationChatId, '已停止。')
     } else {
       const errorText = error.message || '发送失败'
-      const currentMessage = messages.value[assistantMessageIndex]
-      if (currentMessage) {
-        currentMessage.content += errorText
-      }
-      statusText.value = errorText
-      statusType.value = 'warn'
+      assistantMessage.content += errorText
+      updateConversationStatus(conversationChatId, errorText, 'warn')
       antMessage.error(errorText)
     }
   } finally {
-    const currentMessage = messages.value[assistantMessageIndex]
-    if (currentMessage) {
-      currentMessage.pending = false
+    assistantMessage.pending = false
+    if (streamContexts.get(conversationChatId)?.streamId === streamContext.streamId) {
+      streamContexts.delete(conversationChatId)
     }
-    streaming.value = false
-    abortController = null
-    currentStreamId = ''
-    await scrollToBottom()
+    scrollActiveConversation(conversationChatId)
+  }
+  if (String(selectedProductId.value) === String(productId)) {
+    await loadConversations(productId, true)
   }
 }
 
-async function appendReferenceRecords(messageIndex, query) {
-  if (!selectedProductId.value || !query.trim()) {
-    return
-  }
-  const currentMessage = messages.value[messageIndex]
-  if (!currentMessage) {
+async function appendReferenceRecords(currentMessage, productId, chatId, query) {
+  if (!query.trim()) {
     return
   }
   currentMessage.loadingReferences = true
   try {
-    const productId = selectedProductId.value
     const referenceQuery = query.slice(0, KNOWLEDGE_RECALL_QUERY_MAX_LENGTH)
     const [knowledgeRecallResult, knowledgeGraphicResult] = await Promise.allSettled([
       fetchKnowledgeRecall(productId, referenceQuery),
@@ -356,7 +627,7 @@ async function appendReferenceRecords(messageIndex, query) {
       currentMessage.knowledgeGraphicReference = knowledgeGraphicResult.value
       shouldScroll = true
     }
-    if (shouldScroll) {
+    if (shouldScroll && chatId === activeChatId.value) {
       await scrollToBottom()
     }
   } catch (error) {
@@ -463,31 +734,27 @@ function hasGraphicReference(graphicReference) {
 }
 
 async function stopStream() {
-  const productId = selectedProductId.value
-  statusText.value = '正在停止生成...'
-  if (abortController) {
-    abortController.abort()
-  }
-  if (!productId || !currentStreamId) {
+  const chatId = activeChatId.value
+  const streamContext = streamContexts.get(chatId)
+  if (!streamContext) {
     return
   }
+  updateConversationStatus(chatId, '正在停止生成...')
+  streamContext.abortController.abort()
   try {
-    await stopAiControlStream(productId, currentStreamId)
+    await stopAiControlStream(streamContext.productId, streamContext.streamId)
   } catch (error) {
-    statusText.value = error.message || '停止失败'
-    statusType.value = 'warn'
+    updateConversationStatus(chatId, error.message || '停止失败', 'warn')
   }
 }
 
 function createStreamId() {
-  if (window.crypto?.randomUUID) {
-    return window.crypto.randomUUID()
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return createUuid()
 }
 
 function clearMessages() {
   messages.value = []
+  saveConversationView(activeChatId.value, true)
 }
 
 function selectFile(file) {
@@ -580,8 +847,29 @@ function queueScrollToBottom() {
   })
 }
 
-async function scrollToBottom() {
+async function scrollToBottom(settleLayout = false) {
   await nextTick()
+  scrollMessagePaneToBottom()
+  const maxFrames = settleLayout ? 24 : 1
+  let previousHeight = -1
+  let stableFrames = 0
+  for (let frameIndex = 0; frameIndex < maxFrames; frameIndex += 1) {
+    await new Promise((resolve) => window.requestAnimationFrame(resolve))
+    const messagePane = getMessagePane()
+    if (!messagePane) {
+      return
+    }
+    const currentHeight = messagePane.scrollHeight
+    messagePane.scrollTop = currentHeight
+    stableFrames = currentHeight === previousHeight ? stableFrames + 1 : 0
+    previousHeight = currentHeight
+    if (settleLayout && frameIndex >= 11 && stableFrames >= 3) {
+      break
+    }
+  }
+}
+
+function scrollMessagePaneToBottom() {
   const messagePane = getMessagePane()
   if (messagePane) {
     messagePane.scrollTop = messagePane.scrollHeight
@@ -604,7 +892,7 @@ function getMessagePane() {
 <style lang="scss" scoped>
 .ai-chat-page {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   height: calc(100vh - 64px);
   min-height: 0;
   overflow: hidden;
@@ -652,6 +940,7 @@ function getMessagePane() {
 @media (max-width: 840px) {
   .ai-chat-page {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(260px, 42vh) minmax(0, 1fr);
   }
 }
 </style>

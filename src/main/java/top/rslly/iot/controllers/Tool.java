@@ -193,11 +193,14 @@ public class Tool {
       @RequestParam("productId") int productId,
       @RequestParam("streamId") @NotBlank(message = "streamId 不能为空") String streamId,
       @RequestParam("content") @NotBlank(message = "content 不能为空") String content,
+      @RequestParam(value = "chatId", required = false)
+      @Size(max = 255, message = "chatId 长度不能超过 255") String chatId,
       @RequestPart(value = "file", required = false) MultipartFile[] multipartFiles,
       @RequestHeader("Authorization") String header) {
     AiControl aiControl = new AiControl();
     aiControl.setProductId(productId);
     aiControl.setContent(content);
+    aiControl.setChatId(chatId);
     return ResponseEntity.ok()
         .header(HttpHeaders.CACHE_CONTROL, "no-cache")
         .header("X-Accel-Buffering", "no")

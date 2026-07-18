@@ -36,6 +36,8 @@ public interface AgentMemoryService {
 
   JsonResult<?> getMemoryByNickName(int productId, String nickName);
 
+  boolean isChatIdValidForProduct(int productId, String chatId);
+
   JsonResult<?> updateMemory(AgentMemory agentMemory);
 
   JsonResult<?> deleteMemory(int id);

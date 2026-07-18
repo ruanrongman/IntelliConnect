@@ -30,4 +30,6 @@ public class AiControl {
   @Size(min = 1, max = 2048, message = "content 长度必须在 1 到 2048 之间")
   String content;
   int productId;
+  @Size(max = 255, message = "chatId 长度不能超过 255")
+  String chatId;
 }

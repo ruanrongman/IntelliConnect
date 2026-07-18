@@ -34,6 +34,8 @@ public interface AgentMemoryRepository extends JpaRepository<AgentMemoryEntity, 
 
   List<AgentMemoryEntity> findAllByChatId(String chatId);
 
+  List<AgentMemoryEntity> findAllByChatIdIn(List<String> chatIds);
+
   @Transactional
   List<AgentMemoryEntity> deleteAllByChatId(String chatId);
 
