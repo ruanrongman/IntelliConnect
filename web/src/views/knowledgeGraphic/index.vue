@@ -16,6 +16,7 @@ import {
 import {
   DeleteOutlined,
   DownloadOutlined,
+  DownOutlined,
   QuestionCircleOutlined,
   SettingOutlined,
   UploadOutlined,
@@ -24,6 +25,7 @@ import NodeInfo from '@/views/knowledgeGraphic/nodeInfo.vue'
 import RelationConfig from '@/views/knowledgeGraphic/relationConfig.vue'
 import ConfigPanel from '@/views/knowledgeGraphic/configPanel.vue'
 
+import SVGPainter from 'zrender/lib/svg/Painter.js'
 import * as echarts from 'echarts'
 
 import {
@@ -44,7 +46,7 @@ const router = useRouter()
 
 const chart = ref(null)
 const baseOption = {
-  tooltip: {},
+  tooltip: { show: false },
   series: [
     {
       name: 'Knowledge Graphic',
@@ -69,6 +71,8 @@ const baseOption = {
       draggable: true,
       label: {
         show: true,
+        color: '#000',
+        textBorderWidth: 0,
         position: 'right',
         formatter: '{b}',
       },
@@ -86,6 +90,7 @@ const baseOption = {
         },
         label: {
           show: true,
+          fontWeight: 'bold',
           color: '#000',
         },
       },
@@ -408,12 +413,12 @@ async function handleDownloadDataset() {
         // The response is the dataset JSON itself.
       }
       const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
-      downloadBlob(blob)
+      downloadBlob(blob, 'json')
       message.success('数据集下载已开始')
       return
     }
     const blob = new Blob([res.data], { type: 'application/json;charset=utf-8' })
-    downloadBlob(blob)
+    downloadBlob(blob, 'json')
     message.success('数据集下载已开始')
   } catch (err) {
     message.error('下载失败，请重试')
@@ -422,11 +427,11 @@ async function handleDownloadDataset() {
   }
 }
 
-function downloadBlob(blob) {
+function downloadBlob(blob, extension) {
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `knowledge-graphic-${currentProductId.value}.json`
+  link.download = `knowledge-graphic-${currentProductId.value}.${extension}`
   link.style.display = 'none'
   document.body.appendChild(link)
   link.click()
@@ -436,6 +441,65 @@ function downloadBlob(blob) {
   }, 1000)
 }
 
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob)
+      } else {
+        reject(new Error('PNG 图像生成失败'))
+      }
+    }, 'image/png')
+  })
+}
+
+function createSvgContent() {
+  const width = chart.value.getWidth()
+  const height = chart.value.getHeight()
+  const svgPainter = new SVGPainter(null, chart.value.getZr().storage, {
+    width,
+    height,
+    ssr: true,
+  })
+  try {
+    svgPainter.setBackgroundColor('#fff')
+    return svgPainter.renderToString({
+      cssAnimation: false,
+      cssEmphasis: false,
+      useViewBox: true,
+    })
+  } finally {
+    svgPainter.dispose()
+  }
+}
+
+async function handleDownloadGraphic(format) {
+  if (!currentProductId.value || !chart.value || chart.value.isDisposed()) return
+  if (downloadLoading.value) return
+  downloadLoading.value = true
+  try {
+    if (format === 'svg') {
+      const svgContent = createSvgContent()
+      downloadBlob(new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' }), 'svg')
+    } else {
+      const imageCanvas = chart.value.renderToCanvas({ pixelRatio: 2, backgroundColor: '#fff' })
+      downloadBlob(await canvasToBlob(imageCanvas), 'png')
+    }
+    message.success(`${format.toUpperCase()} 图谱下载已开始`)
+  } catch (err) {
+    message.error('图谱导出失败，请重试')
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
+function handleDownloadMenuClick({ key }) {
+  if (key === 'json') {
+    handleDownloadDataset()
+    return
+  }
+  handleDownloadGraphic(key)
+}
 function handleClearKnowledgeGraphic() {
   if (!currentProductId.value) return
   const hasGraphicData =
@@ -598,6 +662,16 @@ function updateGraphicData() {
 function handleProductIdChange(value) {
   currentProductId.value = value
   afterFetchCurrentProduct()
+}
+
+function filterProductOption(input, option) {
+  const keyword = String(input || '')
+    .trim()
+    .toLowerCase()
+  if (!keyword) return true
+  return String(option?.label || '')
+    .toLowerCase()
+    .includes(keyword)
 }
 
 function handleRepulsionChange(value) {
@@ -923,6 +997,9 @@ onUnmounted(() => {
             :value="currentProductId"
             :options="products"
             :loading="productLoading"
+            show-search
+            :filter-option="filterProductOption"
+            placeholder="搜索或选择产品"
             @change="handleProductIdChange"
           >
           </Select>
@@ -972,14 +1049,21 @@ onUnmounted(() => {
           </Button>
         </div>
         <div class="option-item">
-          <Button
-            :disabled="currentProductId === null"
-            :loading="downloadLoading"
-            @click="handleDownloadDataset"
-          >
-            <template #icon><DownloadOutlined /></template>
-            下载当前图谱
-          </Button>
+          <a-dropdown :disabled="currentProductId === null || downloadLoading">
+            <Button :disabled="currentProductId === null" :loading="downloadLoading">
+              <template #icon><DownloadOutlined /></template>
+              下载图谱
+              <DownOutlined class="download-arrow" />
+            </Button>
+            <template #overlay>
+              <a-menu @click="handleDownloadMenuClick">
+                <a-menu-item key="png">PNG 图片</a-menu-item>
+                <a-menu-item key="svg">SVG 矢量图</a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="json">JSON 数据</a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </div>
         <div class="option-item">
           <Button danger :disabled="currentProductId === null" @click="handleClearKnowledgeGraphic">
@@ -1221,5 +1305,10 @@ onUnmounted(() => {
   width: 100%;
   flex-grow: 1;
   overflow: hidden;
+}
+
+.download-arrow {
+  margin-left: 4px;
+  font-size: 10px;
 }
 </style>

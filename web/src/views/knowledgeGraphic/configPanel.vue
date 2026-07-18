@@ -352,7 +352,7 @@ function handleDeletePrompt() {
         <div class="config-row config-slider-row">
           <Slider
             id="repulsion-config"
-            :max="255"
+            :max="1000"
             :value="repulsion"
             @change="handleRepulsionChange"
           />
