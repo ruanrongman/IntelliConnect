@@ -528,7 +528,7 @@ async function sendMessage() {
   const files = [...selectedFiles.value]
   inputText.value = ''
   selectedFiles.value = []
-  const assistantMessage = {
+  const assistantMessage = reactive({
     id: `assistant-${Date.now()}`,
     role: 'assistant',
     content: '',
@@ -536,7 +536,7 @@ async function sendMessage() {
     knowledgeGraphicReference: null,
     loadingReferences: false,
     pending: true,
-  }
+  })
   conversationMessages.push({
     id: `user-${Date.now()}`,
     role: 'user',
