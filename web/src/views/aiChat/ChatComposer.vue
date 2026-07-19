@@ -35,7 +35,9 @@
         :disabled="streaming"
         placeholder="输入消息"
         @update:value="$emit('update:modelValue', $event)"
-        @keydown.enter.exact.prevent="$emit('submit')"
+        @compositionstart="handleCompositionStart"
+        @compositionend="handleCompositionEnd"
+        @keydown.enter.exact="handleEnter"
         @paste="$emit('paste', $event)"
       />
     </div>
@@ -80,6 +82,23 @@ defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'submit', 'stop', 'select-file', 'paste', 'remove-file'])
+let isComposing = false
+
+function handleCompositionStart() {
+  isComposing = true
+}
+
+function handleCompositionEnd() {
+  isComposing = false
+}
+
+function handleEnter(event) {
+  if (isComposing || event.isComposing || event.keyCode === 229) {
+    return
+  }
+  event.preventDefault()
+  emit('submit')
+}
 
 function beforeUploadFile(file) {
   emit('select-file', file)

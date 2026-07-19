@@ -523,7 +523,8 @@ async function sendMessage() {
   const productId = selectedProductId.value
   const conversationChatId = activeChatId.value
   const conversationMessages = messages.value
-  const text = inputText.value.trim()
+  const submittedInput = inputText.value
+  const text = submittedInput.trim()
   const requestText = text || '请阅读上传文件。'
   const files = [...selectedFiles.value]
   inputText.value = ''
@@ -559,6 +560,7 @@ async function sendMessage() {
   saveConversationView(conversationChatId, true)
   updateConversationStatus(conversationChatId, '正在生成回复...')
   await scrollToBottom()
+  clearSubmittedInput(conversationChatId, submittedInput)
   try {
     await streamAiControl({
       productId,
@@ -596,6 +598,7 @@ async function sendMessage() {
       antMessage.error(errorText)
     }
   } finally {
+    clearSubmittedInput(conversationChatId, submittedInput)
     assistantMessage.pending = false
     if (streamContexts.get(conversationChatId)?.streamId === streamContext.streamId) {
       streamContexts.delete(conversationChatId)
@@ -604,6 +607,12 @@ async function sendMessage() {
   }
   if (String(selectedProductId.value) === String(productId)) {
     await loadConversations(productId, true)
+  }
+}
+
+function clearSubmittedInput(chatId, submittedInput) {
+  if (chatId === activeChatId.value && inputText.value === submittedInput) {
+    inputText.value = ''
   }
 }
 
