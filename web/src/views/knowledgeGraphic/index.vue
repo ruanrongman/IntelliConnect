@@ -52,7 +52,7 @@ const baseOption = {
       name: 'Knowledge Graphic',
       type: 'graph',
       layout: 'force',
-      edgeSymbol: ['circle', 'arrow'],
+      // edgeSymbol: ['circle', 'arrow'],
       force: {
         // 节点之间的斥力，值越大节点越分散，可以设置一个较大的值以避免重叠
         repulsion: 30,
@@ -109,6 +109,8 @@ const baseOption = {
   },
 }
 const repulsion = ref(30)
+const edgeStartSymbolEnabled = ref(false)
+const edgeEndSymbolEnabled = ref(false)
 const crtOption = ref({})
 
 const isAddingNode = ref(false)
@@ -647,7 +649,7 @@ function updateGraphicData() {
     return {
       source: item.from,
       target: item.to,
-      value: Math.min(item.name.length * 10, 255),
+      value: Math.min(item.name.length * 10, 1000),
       // label: {
       //   show: true,
       //   formatter: item.name
@@ -656,6 +658,10 @@ function updateGraphicData() {
   })
   repulsion.value = Math.min(graphic.value.nodes.length * 5, 255)
   option.series[0].force.repulsion = repulsion.value
+  option.series[0].edgeSymbol = [
+    edgeStartSymbolEnabled.value ? 'circle' : 'none',
+    edgeEndSymbolEnabled.value ? 'arrow' : 'none',
+  ]
   refreshChartHandler(option)
 }
 
@@ -1090,8 +1096,22 @@ onUnmounted(() => {
           v-if="configModalOpen"
           :product-id="currentProductId"
           :repulsion="repulsion"
+          :edge-start-symbol-enabled="edgeStartSymbolEnabled"
+          :edge-end-symbol-enabled="edgeEndSymbolEnabled"
           @close="handleCloseConfigModal"
           @update:repulsion="handleRepulsionChange"
+          @update:edge-start-symbol-enabled="
+            (val) => {
+              edgeStartSymbolEnabled = val
+              updateGraphicData()
+            }
+          "
+          @update:edge-end-symbol-enabled="
+            (val) => {
+              edgeEndSymbolEnabled = val
+              updateGraphicData()
+            }
+          "
         />
       </div>
     </div>

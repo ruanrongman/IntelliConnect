@@ -38,9 +38,16 @@ import {
 const props = defineProps({
   productId: { type: Number, default: null },
   repulsion: { type: Number, default: 30 },
+  edgeStartSymbolEnabled: { type: Boolean, default: false },
+  edgeEndSymbolEnabled: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['close', 'update:repulsion'])
+const emit = defineEmits([
+  'close',
+  'update:repulsion',
+  'update:edgeStartSymbolEnabled',
+  'update:edgeEndSymbolEnabled',
+])
 
 const router = useRouter()
 
@@ -211,6 +218,14 @@ function handleRepulsionChange(value) {
   emit('update:repulsion', value)
 }
 
+function handleEdgeStartSymbolToggle(checked) {
+  emit('update:edgeStartSymbolEnabled', checked)
+}
+
+function handleEdgeEndSymbolToggle(checked) {
+  emit('update:edgeEndSymbolEnabled', checked)
+}
+
 function handleForgetToggle() {
   const data = { productId: props.productId, value: String(!knowledgeGraphForgetEnable.value) }
   knowledgeGraphicForgetToggle(data).then((res) => {
@@ -355,6 +370,25 @@ function handleDeletePrompt() {
             :max="1000"
             :value="repulsion"
             @change="handleRepulsionChange"
+          />
+        </div>
+      </div>
+      <div class="config-divider"></div>
+      <div class="config-section">
+        <div class="config-row">
+          <label class="option-label" for="edge-start-symbol-toggle">边起始标记开关</label>
+          <Switch
+            id="edge-start-symbol-toggle"
+            :checked="edgeStartSymbolEnabled"
+            @click="handleEdgeStartSymbolToggle"
+          />
+        </div>
+        <div class="config-row config-row-sub">
+          <label class="option-label" for="edge-end-symbol-toggle">边终点标记开关</label>
+          <Switch
+            id="edge-end-symbol-toggle"
+            :checked="edgeEndSymbolEnabled"
+            @click="handleEdgeEndSymbolToggle"
           />
         </div>
       </div>
