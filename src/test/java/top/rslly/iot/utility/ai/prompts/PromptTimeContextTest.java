@@ -17,22 +17,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.utility.ai.prompts;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import lombok.Data;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-@Data
-public class TimeSchedulePutParam {
-  @NotNull
-  private Integer id;
-  @NotBlank(message = "cron 不能为空")
-  @Size(min = 1, max = 255, message = "cron 长度必须在 1 到 255 之间")
-  private String cron;
-  @NotNull
-  private Boolean exec;
-  @Size(max = 255, message = "execCommand 长度不能超过 255")
-  private String execCommand;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+
+class PromptTimeContextTest {
+
+  @Test
+  void convertsCurrentTimeToFixedBeijingTimeZone() {
+    Clock clock = Clock.fixed(Instant.parse("2026-07-21T06:30:45Z"), ZoneOffset.UTC);
+
+    Map<String, String> context = PromptTimeContext.build(clock);
+
+    Assertions.assertEquals("2026-07-21 14:30:45", context.get("time"));
+    Assertions.assertEquals("星期二", context.get("weekday"));
+    Assertions.assertEquals("Asia/Shanghai (UTC+08:00)", context.get("time_zone"));
+    Assertions.assertFalse(context.containsKey("rolling_week_start"));
+  }
 }

@@ -23,12 +23,12 @@ import org.quartz.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
-import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.models.TimeScheduleEntity;
 import top.rslly.iot.models.WxProductActiveEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.TimeScheduleParam;
 import top.rslly.iot.param.request.TimeSchedulePutParam;
+import top.rslly.iot.param.response.TimeScheduleResponse;
 import top.rslly.iot.services.agent.TimeScheduleService;
 
 import jakarta.annotation.Resource;
@@ -39,8 +39,12 @@ import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class TimeScheduleServiceImpl implements TimeScheduleService {
@@ -82,51 +86,62 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
 
   @Override
   public JsonResult<?> getTimeSchedule(String token) {
-    String token_deal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
-    String role = JwtTokenUtil.getUserRole(token_deal);
-    String username = JwtTokenUtil.getUsername(token_deal);
+    String tokenDeal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(tokenDeal);
+    String username = JwtTokenUtil.getUsername(tokenDeal);
     List<TimeScheduleEntity> result;
     if (role.equals("ROLE_" + "wx_user")) {
-      if (wxUserRepository.findAllByName(username).isEmpty()) {
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      if (wxUserEntityList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
-      String appid = wxUserEntityList.get(0).getAppid();
-      String openid = wxUserEntityList.get(0).getOpenid();
-      result = new ArrayList<>();
+      String appid = wxUserEntityList.getFirst().getAppid();
+      String openid = wxUserEntityList.getFirst().getOpenid();
       var wxBindProductResponseList =
           wxProductBindRepository.findAllByAppidAndOpenid(appid, openid);
       if (wxBindProductResponseList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      for (var s : wxBindProductResponseList) {
-        List<TimeScheduleEntity> timeScheduleEntityList =
-            timeScheduleRepository.findAllByProductId(s.getProductId());
-        result.addAll(timeScheduleEntityList);
-      }
+      List<Integer> productIds = wxBindProductResponseList.stream()
+          .map(s -> s.getProductId())
+          .distinct()
+          .toList();
+      result = timeScheduleRepository.findAllByProductIdIn(productIds);
     } else if (!role.equals("[ROLE_admin]")) {
       var userList = userRepository.findAllByUsername(username);
       if (userList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      int userId = userList.get(0).getId();
-      result = new ArrayList<>();
+      int userId = userList.getFirst().getId();
       var userProductBindEntityList = userProductBindRepository.findAllByUserId(userId);
       if (userProductBindEntityList.isEmpty()) {
         return ResultTool.fail(ResultCode.COMMON_FAIL);
       }
-      for (var s : userProductBindEntityList) {
-        List<TimeScheduleEntity> timeScheduleEntityList =
-            timeScheduleRepository.findAllByProductId(s.getProductId());
-        result.addAll(timeScheduleEntityList);
-      }
+      List<Integer> productIds = userProductBindEntityList.stream()
+          .map(s -> s.getProductId())
+          .distinct()
+          .toList();
+      result = timeScheduleRepository.findAllByProductIdIn(productIds);
     } else {
       result = timeScheduleRepository.findAll();
     }
     if (result.isEmpty()) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
-    } else
-      return ResultTool.success(result);
+    }
+
+    List<Integer> productIds = result.stream()
+        .map(TimeScheduleEntity::getProductId)
+        .distinct()
+        .toList();
+    Map<Integer, String> productNames = productRepository.findAllByIdIn(productIds).stream()
+        .filter(product -> product.getProductName() != null)
+        .collect(Collectors.toMap(product -> product.getId(), product -> product.getProductName(),
+            (first, second) -> first));
+    Date evaluationTime = new Date();
+    List<TimeScheduleResponse> resultResponse = result.stream()
+        .map(schedule -> toResponse(schedule, productNames, evaluationTime))
+        .toList();
+    return ResultTool.success(resultResponse);
   }
 
   @Override
@@ -143,7 +158,12 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
 
-    if (!isValidCronExpression(timeScheduleParam.getCron())) {
+    String taskName = timeScheduleParam.getTaskName().trim();
+    String cron = timeScheduleParam.getCron().trim();
+    String execCommand = normalizeExecCommand(timeScheduleParam.getExec(),
+        timeScheduleParam.getExecCommand());
+    if (!isValidCronExpression(cron)
+        || Boolean.TRUE.equals(timeScheduleParam.getExec()) && execCommand == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
 
@@ -156,7 +176,7 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
 
       // 判断任务是否已存在
       if (!timeScheduleRepository
-          .findAllByAppidAndOpenidAndTaskName(appid, openid, timeScheduleParam.getTaskName())
+          .findAllByAppidAndOpenidAndTaskName(appid, openid, taskName)
           .isEmpty()) {
         continue; // 已存在则跳过当前用户
       }
@@ -164,16 +184,12 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
       TimeScheduleEntity timeScheduleEntity = new TimeScheduleEntity();
       timeScheduleEntity.setAppid(appid);
       timeScheduleEntity.setOpenid(openid);
-      timeScheduleEntity.setTaskName(timeScheduleParam.getTaskName());
-      timeScheduleEntity.setCron(timeScheduleParam.getCron());
+      timeScheduleEntity.setTaskName(taskName);
+      timeScheduleEntity.setCron(cron);
       timeScheduleEntity.setExec(timeScheduleParam.getExec().toString());
       timeScheduleEntity.setProductId(timeScheduleParam.getProductId());
 
-      if (Boolean.FALSE.equals(timeScheduleParam.getExec())) {
-        timeScheduleEntity.setExecCommand("");
-      } else {
-        timeScheduleEntity.setExecCommand(timeScheduleParam.getExecCommand());
-      }
+      timeScheduleEntity.setExecCommand(execCommand);
 
       String groupName = appid + ":" + openid;
       String chatId = appid + openid;
@@ -208,20 +224,21 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> putTimeSchedule(TimeSchedulePutParam timeSchedulePutParam) {
-    if (timeScheduleRepository.findAllById(timeSchedulePutParam.getId()).isEmpty()) {
+    List<TimeScheduleEntity> timeScheduleEntityList =
+        timeScheduleRepository.findAllById(timeSchedulePutParam.getId());
+    if (timeScheduleEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    if (!isValidCronExpression(timeSchedulePutParam.getCron())) {
+    String cron = timeSchedulePutParam.getCron().trim();
+    String execCommand = normalizeExecCommand(timeSchedulePutParam.getExec(),
+        timeSchedulePutParam.getExecCommand());
+    if (!isValidCronExpression(cron)
+        || Boolean.TRUE.equals(timeSchedulePutParam.getExec()) && execCommand == null) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    TimeScheduleEntity timeScheduleEntity =
-        timeScheduleRepository.findAllById(timeSchedulePutParam.getId()).get(0);
-    timeScheduleEntity.setCron(timeSchedulePutParam.getCron());
-    if (timeSchedulePutParam.getExec() == false) {
-      timeScheduleEntity.setExecCommand("");
-    } else {
-      timeScheduleEntity.setExecCommand(timeSchedulePutParam.getExecCommand());
-    }
+    TimeScheduleEntity timeScheduleEntity = timeScheduleEntityList.getFirst();
+    timeScheduleEntity.setCron(cron);
+    timeScheduleEntity.setExecCommand(execCommand);
     timeScheduleEntity.setExec(timeSchedulePutParam.getExec().toString());
     String groupName = timeScheduleEntity.getAppid() + ":" + timeScheduleEntity.getOpenid();
     String taskName = timeScheduleEntity.getTaskName();
@@ -267,5 +284,46 @@ public class TimeScheduleServiceImpl implements TimeScheduleService {
     } catch (Exception e) {
       return false;
     }
+  }
+
+  private String normalizeExecCommand(Boolean exec, String execCommand) {
+    if (Boolean.FALSE.equals(exec)) {
+      return "";
+    }
+    if (execCommand == null || execCommand.isBlank()) {
+      return null;
+    }
+    return execCommand.trim();
+  }
+
+  private TimeScheduleResponse toResponse(TimeScheduleEntity schedule,
+      Map<Integer, String> productNames, Date evaluationTime) {
+    TimeScheduleResponse response = new TimeScheduleResponse();
+    response.setId(schedule.getId());
+    response.setAppid(schedule.getAppid());
+    response.setOpenid(schedule.getOpenid());
+    response.setTaskName(schedule.getTaskName());
+    response.setCron(schedule.getCron());
+    response.setExec(Boolean.parseBoolean(schedule.getExec()));
+    response.setExecCommand(schedule.getExecCommand());
+    response.setProductId(schedule.getProductId());
+    response.setProductName(productNames.get(schedule.getProductId()));
+
+    if (schedule.getCron() == null || schedule.getCron().isBlank()) {
+      response.setCronValid(false);
+      response.setNextEvalTime(null);
+      return response;
+    }
+
+    try {
+      CronExpression expression = new CronExpression(schedule.getCron());
+      Date nextFireTime = expression.getNextValidTimeAfter(evaluationTime);
+      response.setCronValid(true);
+      response.setNextEvalTime(nextFireTime == null ? null : nextFireTime.toInstant().toString());
+    } catch (ParseException e) {
+      response.setCronValid(false);
+      response.setNextEvalTime(null);
+    }
+    return response;
   }
 }

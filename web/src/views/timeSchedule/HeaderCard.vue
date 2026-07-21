@@ -6,51 +6,42 @@
           <template #title>
             <div class="card-title">
               <CalendarOutlined />
-              <span>日程总数</span>
+              <span>任务总数</span>
             </div>
           </template>
-          <a-statistic 
-            :value="scheduleData.total"
-            :value-style="{ color: '#1890ff' }"
-          >
+          <a-statistic :value="scheduleData.total" :value-style="{ color: '#1890ff' }">
             <template #suffix>
               <span class="suffix-text">个</span>
             </template>
           </a-statistic>
         </a-card>
       </a-col>
-      
+
       <a-col :span="8">
         <a-card class="metric-card" :bordered="false">
           <template #title>
             <div class="card-title">
-              <CheckCircleOutlined />
-              <span>已启用</span>
+              <ThunderboltOutlined />
+              <span>执行命令</span>
             </div>
           </template>
-          <a-statistic 
-            :value="scheduleData.enabled"
-            :value-style="{ color: '#52c41a' }"
-          >
+          <a-statistic :value="scheduleData.command" :value-style="{ color: '#52c41a' }">
             <template #suffix>
               <span class="suffix-text">个</span>
             </template>
           </a-statistic>
         </a-card>
       </a-col>
-      
+
       <a-col :span="8">
         <a-card class="metric-card" :bordered="false">
           <template #title>
             <div class="card-title">
-              <StopOutlined />
-              <span>已禁用</span>
+              <BellOutlined />
+              <span>仅提醒</span>
             </div>
           </template>
-          <a-statistic 
-            :value="scheduleData.disabled"
-            :value-style="{ color: '#cf1322' }"
-          >
+          <a-statistic :value="scheduleData.reminder" :value-style="{ color: '#cf1322' }">
             <template #suffix>
               <span class="suffix-text">个</span>
             </template>
@@ -62,13 +53,13 @@
 </template>
 
 <script setup>
-import { CalendarOutlined, CheckCircleOutlined, StopOutlined } from '@ant-design/icons-vue'
+import { BellOutlined, CalendarOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
 
-const props = defineProps({
+defineProps({
   scheduleData: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 </script>
 
@@ -77,25 +68,25 @@ const props = defineProps({
   margin-bottom: 24px;
 
   .metric-card {
-    border-radius: 12px;
-    transition: all 0.3s;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    height: 160px;
     display: flex;
+    height: 160px;
     flex-direction: column;
     justify-content: space-between;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
+    transition: all 0.3s;
 
     &:hover {
+      box-shadow: 0 4px 16px rgb(0 0 0 / 10%);
       transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     }
 
     .card-title {
       display: flex;
       align-items: center;
-      gap: 8px;
       color: #666;
       font-size: 16px;
+      gap: 8px;
 
       .anticon {
         font-size: 20px;
@@ -104,18 +95,18 @@ const props = defineProps({
 
     .ant-statistic {
       padding: 16px 0;
-      
+
       .ant-statistic-content {
-        font-size: 32px;
-        font-weight: 600;
         display: flex;
         align-items: baseline;
+        font-size: 32px;
+        font-weight: 600;
       }
 
       .suffix-text {
-        font-size: 14px;
-        color: #999;
         margin-left: 4px;
+        color: #999;
+        font-size: 14px;
       }
     }
   }

@@ -67,7 +67,7 @@ public class ScheduleToolPrompt {
            ## few shot
            if user input: Remind me in 5 seconds
            if Arranged reminder tasks is {}
-           The current time is 2024-06-06 10:40:05, weekday is Thursday.
+           The current time is 2024-06-06 10:40:05, time zone is Asia/Shanghai (UTC+08:00), weekday is Thursday.
            ```json
             {
              "thought": "用户想要在5分钟后帮我开灯",
@@ -95,7 +95,7 @@ public class ScheduleToolPrompt {
             ```
            if user input: Remind me at 12:00 noon every day.
            if Arranged reminder tasks is {"资料提交提醒任务":"36 59 11 19 06 ? 2024"}
-           The current time is 2024-06-06 10:40:05, weekday is Thursday.
+           The current time is 2024-06-06 10:40:05, time zone is Asia/Shanghai (UTC+08:00), weekday is Thursday.
            ```json
            {
              "thought": "用户想要每天中午12点提醒",
@@ -141,7 +141,7 @@ public class ScheduleToolPrompt {
 
              "0 15 10 L * ?" The task is executed at 10:15 am on the last day of each month.
            ## work information
-           reference information: The current time is {time}; weekday is {weekday}.
+           reference information: The current time is {time}; time zone is {time_zone}; weekday is {weekday}.
            Arranged reminder tasks:{schedule_map}
           """;
 

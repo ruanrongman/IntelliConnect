@@ -34,8 +34,7 @@ public class TimeScheduleParam {
   private String cron;
   @NotNull
   private Boolean exec;
-  @NotBlank(message = "execCommand 不能为空")
-  @Size(min = 1, max = 255, message = "execCommand 长度必须在 1 到 255 之间")
+  @Size(max = 255, message = "execCommand 长度不能超过 255")
   private String execCommand;
   @NotNull
   private Integer productId;

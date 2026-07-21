@@ -54,7 +54,7 @@ public class FunctionCallingRouterPrompt {
           User name: {user_name}
 
           Context:
-          Current time: {time}
+          Current time: {time}; time zone: {time_zone}
           Weekday: {weekday}
           Lunar date: {lunar_date}
           {information}

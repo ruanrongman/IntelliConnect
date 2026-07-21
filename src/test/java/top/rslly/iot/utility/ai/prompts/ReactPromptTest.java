@@ -46,6 +46,19 @@ class ReactPromptTest {
         functionCallingSystem.contains("Final answers must not include internal tool traces"));
   }
 
+  @Test
+  void functionCallingPromptDefinesTimeRangesAndSearchFreshness() throws Exception {
+    String functionCallingSystem = readPromptConstant("FunctionCallingSystem");
+
+    Assertions.assertFalse(functionCallingSystem.contains("rolling_week_start"));
+    Assertions.assertTrue(functionCallingSystem.contains("time zone: {time_zone}"));
+    Assertions.assertTrue(functionCallingSystem.contains("[now - 7 days, now]"));
+    Assertions.assertTrue(functionCallingSystem.contains("must not end after now"));
+    Assertions.assertTrue(functionCallingSystem.contains("\"周报\"/weekly report"));
+    Assertions.assertTrue(functionCallingSystem.contains("publication/update time"));
+    Assertions.assertTrue(functionCallingSystem.contains("newest relevant reliable source"));
+  }
+
   private String readPromptConstant(String fieldName) throws Exception {
     Field field = ReactPrompt.class.getDeclaredField(fieldName);
     field.setAccessible(true);

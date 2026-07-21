@@ -125,7 +125,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，有机会获取项目的免费部署咨询，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/95ec0e55ca46178f6b3f9aa095835871.jpg" width="250px"/>
+    <img src="./docs/images/7c1bba12a1dee3e1f4040f6857fb8c40.jpg" width="250px"/>
 </div>
 
 ## 致谢

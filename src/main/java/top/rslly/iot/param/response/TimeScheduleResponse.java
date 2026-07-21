@@ -17,22 +17,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.param.request;
+package top.rslly.iot.param.response;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class TimeSchedulePutParam {
-  @NotNull
-  private Integer id;
-  @NotBlank(message = "cron 不能为空")
-  @Size(min = 1, max = 255, message = "cron 长度必须在 1 到 255 之间")
+public class TimeScheduleResponse {
+  private int id;
+  private String openid;
+  private String taskName;
   private String cron;
-  @NotNull
-  private Boolean exec;
-  @Size(max = 255, message = "execCommand 长度不能超过 255")
+  private String nextEvalTime;
+  private boolean cronValid;
+  private String appid;
+  private boolean exec;
   private String execCommand;
+  private Integer productId;
+  private String productName;
 }

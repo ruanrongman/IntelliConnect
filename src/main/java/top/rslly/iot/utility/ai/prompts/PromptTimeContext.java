@@ -21,21 +21,35 @@ package top.rslly.iot.utility.ai.prompts;
 
 import cn.hutool.core.date.ChineseDate;
 
-import java.text.SimpleDateFormat;
+import java.time.Clock;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
 public final class PromptTimeContext {
+  private static final ZoneId BUSINESS_TIME_ZONE = ZoneId.of("Asia/Shanghai");
+  private static final DateTimeFormatter DATE_TIME_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+  private static final DateTimeFormatter WEEKDAY_FORMATTER =
+      DateTimeFormatter.ofPattern("EEEE", Locale.CHINA);
+
   private PromptTimeContext() {}
 
   public static Map<String, String> build() {
-    Date date = new Date();
+    return build(Clock.system(BUSINESS_TIME_ZONE));
+  }
+
+  static Map<String, String> build(Clock clock) {
+    ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), BUSINESS_TIME_ZONE);
     Map<String, String> params = new HashMap<>();
-    params.put("time", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date));
-    params.put("weekday", new SimpleDateFormat("EEEE", Locale.CHINA).format(date));
-    params.put("lunar_date", getLunarDateString(date));
+    params.put("time", DATE_TIME_FORMATTER.format(now));
+    params.put("weekday", WEEKDAY_FORMATTER.format(now));
+    params.put("lunar_date", getLunarDateString(Date.from(now.toInstant())));
+    params.put("time_zone", now.getZone().getId() + " (UTC" + now.getOffset() + ")");
     return params;
   }
 

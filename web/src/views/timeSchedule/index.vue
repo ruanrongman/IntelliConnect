@@ -1,83 +1,97 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="model-container">
-    <HeaderCard :scheduleData="homeData"/>
+    <HeaderCard :schedule-data="scheduleSummary" />
+
     <div class="model-content">
       <div class="model-bar">
-        <newSchedule @refresh="fetchTimeSchedule"></newSchedule>
+        <NewSchedule @refresh="fetchTimeSchedule" />
       </div>
-      <Mytable @refresh="fetchTimeSchedule"/>
+
+      <Mytable :schedules="schedules" :loading="loading" @refresh="fetchTimeSchedule" />
     </div>
   </div>
 </template>
 
 <script setup>
-import HeaderCard from './HeaderCard.vue'
-import newSchedule from './add_schedule.vue'
-import Mytable from './Mytable.vue'
-import { getTimeSchedule } from '@/api/timeSchedule'
-import { reactive, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getTimeSchedule } from '@/api/timeSchedule'
+import HeaderCard from './HeaderCard.vue'
+import NewSchedule from './add_schedule.vue'
+import Mytable from './Mytable.vue'
 
 const router = useRouter()
-
-let homeData = reactive({
-  total: 0,
-  enabled: 0,
-  disabled: 0
-})
-
+const schedules = ref([])
+const loading = ref(true)
 let intervalId
+let requestInFlight = false
 
-const fetchTimeSchedule = () => {
-  getTimeSchedule()
-    .then((res) => {
-      const { data, errorCode } = res.data
-      if (errorCode === 2001) {
-        router.push('/login')
-      } else if (errorCode === 200 && data && Array.isArray(data)) {
-        homeData.total = data.length
-        homeData.enabled = data.filter(item => item.exec === 'true').length
-        homeData.disabled = data.filter(item => item.exec === 'false').length
-      } else {
-        homeData.total = 0
-        homeData.enabled = 0
-        homeData.disabled = 0
-      }
-    })
-    .catch(() => {
-      // 静默处理
-    })
+const scheduleSummary = computed(() => ({
+  total: schedules.value.length,
+  command: schedules.value.filter((item) => item.exec === true || item.exec === 'true').length,
+  reminder: schedules.value.filter((item) => item.exec === false || item.exec === 'false').length,
+}))
+
+const fetchTimeSchedule = async () => {
+  if (requestInFlight) return
+  requestInFlight = true
+
+  try {
+    const response = await getTimeSchedule()
+    const { data, errorCode } = response.data
+    if (errorCode === 2001) {
+      router.push('/login')
+      return
+    }
+    schedules.value = errorCode === 200 && Array.isArray(data) ? data : []
+  } catch {
+    // 轮询失败时保留当前列表，等待下一次请求恢复。
+  } finally {
+    loading.value = false
+    requestInFlight = false
+  }
 }
 
 onMounted(() => {
   fetchTimeSchedule()
-  intervalId = setInterval(fetchTimeSchedule, 5000)
+  intervalId = window.setInterval(fetchTimeSchedule, 1000)
 })
 
 onUnmounted(() => {
-  clearInterval(intervalId)
+  window.clearInterval(intervalId)
 })
 </script>
 
 <style lang="scss" scoped>
 .model-container {
+  min-height: 100vh;
   padding: 24px;
   background-color: #f0f2f5;
-  min-height: 100vh;
 
   .model-content {
+    padding: 24px;
     background: #fff;
     border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
 
     .model-bar {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       margin-bottom: 24px;
       padding-bottom: 24px;
       border-bottom: 1px solid #f0f0f0;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .model-container {
+    padding: 12px;
+
+    .model-content {
+      padding: 16px;
     }
   }
 }

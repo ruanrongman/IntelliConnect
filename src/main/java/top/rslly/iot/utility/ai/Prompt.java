@@ -24,9 +24,8 @@ import com.zhipu.oapi.utils.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.utility.ai.prompts.PromptTimeContext;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -155,7 +154,7 @@ public class Prompt {
                }
            }
            ```
-           reference information: The current time is {time}
+           reference information: The current time is {time}; time zone is {time_zone}
            ## Attention
            - Your output is JSON only and no explanation.
            ## Current Conversation
@@ -355,7 +354,7 @@ public class Prompt {
       """
           You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
           Identify the time when the user wants to be reminded and convert it to a cron expression.
-          reference information: The current time is {time}
+          reference information: The current time is {time}; time zone is {time_zone}
           Arranged reminder tasks:{schedule_map}
           ## Output Format
            To answer the question, Use the following JSON format. JSON only, no explanation. Otherwise, you will be punished.
@@ -378,7 +377,7 @@ public class Prompt {
            ## few shot
            if user input: Remind me in 5 seconds
            if Arranged reminder tasks is {}
-           The current time is 2024-06-06 10:40:05
+           The current time is 2024-06-06 10:40:05, time zone is Asia/Shanghai (UTC+08:00)
            ```json
              {
              "thought": "用户想要在5分钟后提醒",
@@ -396,7 +395,7 @@ public class Prompt {
             ```
            if user input: Remind me at 12:00 noon every day.
            if Arranged reminder tasks is {"1300秒后提醒任务":"36 59 11 19 06 ? 2024"}
-           The current time is 2024-06-06 10:40:05
+           The current time is 2024-06-06 10:40:05, time zone is Asia/Shanghai (UTC+08:00)
            ```json
            {
              "thought": "用户想要每天中午12点提醒",
@@ -454,9 +453,6 @@ public class Prompt {
   // 6.All other tasks except for the one above (including chatting,coding,write paper,translate and
   // etc.)
   public String getClassifierTool() {
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
     Map<String, String> classifierMap = new HashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2", "Get the current time");
@@ -471,11 +467,10 @@ public class Prompt {
     classifierMap.put("8", "handoff controlled products");
     classifierMap.put("9", "Scheduled tasks or reminder tasks");
     String classifierJson = JSON.toJSONString(classifierMap);
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", robotName);
     params.put("team_name", teamName);
     params.put("task_map", classifierJson);
-    params.put("time", formattedDate);
     return StringUtils.formatString(classifierPrompt, params);
   }
 
@@ -520,14 +515,10 @@ public class Prompt {
   }
 
   public String getScheduleTool(String appid, String openid) {
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date = new Date();
-    String formattedDate = formatter.format(date);
-    Map<String, String> params = new HashMap<>();
+    Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", robotName);
     params.put("team_name", teamName);
     params.put("schedule_map", descriptionUtil.getSchedule(appid, openid));
-    params.put("time", formattedDate);
     return StringUtils.formatString(schedulePrompt, params);
   }
 }

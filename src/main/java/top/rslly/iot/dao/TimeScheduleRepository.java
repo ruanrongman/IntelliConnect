@@ -33,6 +33,8 @@ public interface TimeScheduleRepository extends JpaRepository<TimeScheduleEntity
 
   List<TimeScheduleEntity> findAllByProductId(int productId);
 
+  List<TimeScheduleEntity> findAllByProductIdIn(List<Integer> productIds);
+
   List<TimeScheduleEntity> findAllById(int id);
 
   @Transactional

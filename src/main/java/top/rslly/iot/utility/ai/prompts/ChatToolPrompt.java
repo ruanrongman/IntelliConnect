@@ -55,7 +55,7 @@ public class ChatToolPrompt {
           Role introduction: {role_introduction}
           User name: {user_name}
           ## Runtime Context
-          Current time: {time}
+          Current time: {time}; time zone: {time_zone}
           Weekday: {weekday}
           Lunar date: {lunar_date}
           {information}
