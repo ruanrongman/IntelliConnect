@@ -17,24 +17,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.param.request;
 
-import top.rslly.iot.models.HistoryMessageEntity;
-import top.rslly.iot.utility.result.JsonResult;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
 
-import java.util.List;
+@Data
+public class KnowledgeChatDescription {
+  @NotNull(message = "id 不能为空")
+  private Integer id;
 
-public interface HistoryMessageEntityService {
-  List<HistoryMessageEntity> findAllById(int id);
-
-  List<HistoryMessageEntity> findRecentByChatId(String chatId, int limit);
-
-  JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId);
-
-  List<HistoryMessageEntity> deleteAllByChatId(String chatId);
-
-  JsonResult<?> deleteHistoryMessage(int id);
-
-  void recordHistoryMessage(String chatId, String requestId, String userContent,
-      String assistantContent);
+  @NotBlank(message = "description 不能为空")
+  @Size(max = 1024, message = "description 长度不能超过 1024")
+  private String description;
 }

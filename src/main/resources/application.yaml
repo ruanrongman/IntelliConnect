@@ -159,6 +159,10 @@ ai:
   temperature: 0.6
   top-p: 0.85
   detectRandom: false
+  memory:
+    context-window-tokens: 5000
+    summary-threshold-ratio: 0.75
+    recent-turns: 4
   showThinking: false
   classifier:
     include:

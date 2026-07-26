@@ -29,6 +29,24 @@
       </a-form-item>
 
       <a-form-item
+        label="知识描述"
+        name="description"
+        :rules="[
+          { required: true, whitespace: true, message: '请输入知识描述！' },
+          { max: 1024, message: '知识描述不能超过 1024 个字符！' }
+        ]"
+      >
+        <a-textarea
+          v-model:value="formState.description"
+          :disabled="uploading"
+          :maxlength="1024"
+          :rows="4"
+          show-count
+          placeholder="请输入该知识文件的内容说明"
+        />
+      </a-form-item>
+
+      <a-form-item
         label="产品id"
         name="productId"
         :rules="[{ required: true, message: 'Please input your productId!' }]"
@@ -175,6 +193,7 @@ const fetchProduct = () => {
 
 const formState = reactive({
   filename: "",
+  description: "",
   productId: "",
   file: []
 });
@@ -191,6 +210,7 @@ const handleSubmit = async () => {
     
     const params = {
       filename: formState.filename,
+      description: formState.description,
       productId: formState.productId
     };
 
@@ -213,6 +233,7 @@ const handleSubmit = async () => {
         
         // 重置表单
         formState.filename = '';
+        formState.description = '';
         formState.productId = undefined; // 建议重置为 undefined 而不是 0
         formState.file = [];
         selectedFile.value = null;

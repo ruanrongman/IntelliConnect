@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -40,6 +41,8 @@ import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.param.response.AgentMemoryResponse;
+import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.result.JsonResult;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +55,10 @@ class AgentMemoryServiceImplTest {
   private OtaXiaozhiRepository otaXiaozhiRepository;
   @Mock
   private ProductRepository productRepository;
+  @Mock
+  private HistoryMessageEntityService historyMessageEntityService;
+  @Mock
+  private RedisUtil redisUtil;
   @InjectMocks
   private AgentMemoryServiceImpl agentMemoryService;
 
@@ -112,6 +119,25 @@ class AgentMemoryServiceImplTest {
         .orElseThrow();
     assertEquals("76:56:26:c6:66:65", deviceResponse.getDeviceName());
     assertEquals("客厅音箱", deviceResponse.getNickName());
+  }
+
+  @Test
+  void deletingMemoryDeletesExactConversationDataAndInvalidatesSummaries() {
+    String chatId = "chatProduct1debug" + UUID;
+    AgentMemoryEntity memory = memory(7, chatId, "summary");
+    when(agentMemoryRepository.findAllById(7)).thenReturn(List.of(memory));
+    when(agentMemoryRepository.deleteAllById(7)).thenReturn(List.of(memory));
+    when(redisUtil.incr(GlobalMessageContext.memoryRevisionKey(chatId), 1)).thenReturn(1L);
+
+    JsonResult<?> result = agentMemoryService.deleteMemory(7);
+
+    assertEquals(200, result.getErrorCode());
+    verify(redisUtil).incr(GlobalMessageContext.memoryRevisionKey(chatId), 1);
+    verify(redisUtil).expire(GlobalMessageContext.memoryRevisionKey(chatId), 48 * 3600);
+    verify(redisUtil).del(
+        "memory" + chatId, GlobalMessageContext.memoryBootstrapKey(chatId));
+    verify(historyMessageEntityService).deleteAllByChatId(chatId);
+    verify(agentMemoryRepository).deleteAllById(7);
   }
 
   private AgentMemoryEntity memory(int id, String chatId, String content) {

@@ -34,7 +34,6 @@ public class WeatherToolPrompt {
   private String teamName;
   private static final String weatherPrompt =
       """
-          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Simplify user input to city names.
            ## Output Format
            ```json
            {
@@ -46,6 +45,7 @@ public class WeatherToolPrompt {
                }
            }
            ```
+           You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Simplify user input to city names.
            ## Attention
            - Your output is JSON only and no explanation.
            - First of all, the address must be a string of characters, containing the names of buildings such as country, province, city, district, town, village, street, house number, housing estate, building, etc.

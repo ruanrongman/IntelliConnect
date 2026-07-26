@@ -32,8 +32,6 @@ public class MemoryToolPrompt {
           You are maintaining long-term chat memory for future conversations.
           Merge the existing memory with the latest conversation and produce a concise memory summary.
           Keep only information that is likely to matter in later turns.
-          ## Current Memory
-          {current_memory}
           ## Memory Rules
           1. Preserve stable facts about the user, assistant, devices, relationships, preferences, habits, goals, and unresolved tasks.
           2. Preserve short-lived context only when it is likely to matter soon, such as recent plans, current issues, or follow-up items.
@@ -47,8 +45,10 @@ public class MemoryToolPrompt {
           Output a single-paragraph memory summary in Chinese.
           No line breaks.
           Keep it under 500 Chinese characters when possible, and never exceed 1000 characters.
-          ## Current Conversation
-          Below is the current conversation consisting of interleaving human and assistant history.
+          ## Existing Memory
+          {current_memory}
+          ## Conversation To Compact
+          The user message contains the conversation history being compacted.
           """;
 
   public String getMemoryToolPrompt(String memory) {

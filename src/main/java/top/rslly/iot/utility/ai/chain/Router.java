@@ -28,15 +28,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.services.UserConfigServiceImpl;
+import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.services.agent.HistoryMessageEntityService;
-import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
+import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
+
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
@@ -83,6 +88,8 @@ public class Router {
   @Autowired
   private MemoryTool memoryTool;
   @Autowired
+  private ConversationMemoryPolicy conversationMemoryPolicy;
+  @Autowired
   private GoodByeTool goodByeTool;
   @Autowired
   private ProductToolsBanServiceImpl productToolsBanService;
@@ -92,12 +99,15 @@ public class Router {
   private KnowledgeGraphicTool knowledgeGraphicTool;
   @Autowired
   private KnowledgeGraphicServiceImpl knowledgeGraphicService;
+
   @Autowired
   private UserConfigServiceImpl userConfigService;
   @Autowired
   private FunctionCallingRouterTool functionCallingRouterTool;
   @Autowired
   private HistoryMessageEntityService historyMessageEntityService;
+  @Autowired
+  private AgentMemoryServiceImpl agentMemoryService;
   @Value("${ai.branch-prediction.enabled:true}")
   private boolean branchPredictionEnabled;
   @Value("${ai.router.mode:prompt}")
@@ -134,7 +144,6 @@ public class Router {
     }
     Queue<String> queue = createResponseQueue();
     queueMap.put(streamChatId, queue);
-    Object memory_cache;
     if (dataArgs.length > 0 && !dataArgs[0].equals("false")) {
       globalMessage.put("openId", conversationChatId);
       globalMessage.put("microappid", dataArgs[0]);
@@ -143,16 +152,11 @@ public class Router {
       queueMap.put(streamChatId, queue);
       GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
     }
-    memory_cache = redisUtil.get("memory" + conversationChatId);
-    if (memory_cache != null)
-      try {
-        memory = Cast.castList(memory_cache, ModelMessage.class);
-      } catch (Exception e) {
-        e.printStackTrace();
-        memory = new ArrayList<>();
-      }
-    else
-      memory = new ArrayList<>();
+    memory = loadConversationMemory(conversationChatId);
+    boolean initializeMemorySummary =
+        agentMemoryService.findAllByChatId(conversationChatId).isEmpty();
+    globalMessage.put(GlobalMessageContext.MEMORY_REVISION,
+        currentMemoryRevision(conversationChatId));
     globalMessage.put(GlobalMessageContext.MEMORY, memory);
     if (isFunctionRouterMode()) {
       RouteExecutionResult routeExecutionResult =
@@ -302,27 +306,40 @@ public class Router {
     ModelMessage chatMessage = new ModelMessage(ChatMessageRole.ASSISTANT.value(), toolResult);
     memory.add(userContent);
     memory.add(chatMessage);
-    // System.out.println(memory.size());
-    // slide memory window
-    memoryTool.run(content, globalMessage);
     if (memory.size() > 6) {
-      longMemoryTool.run(content, globalMessage);
-      memory.subList(0, memory.size() - 6).clear();
-      // if (!banTools.contains("knowledgeGraphic")) {
-      // knowledgeGraphicTool.run(content, globalMessage);
-      // if (!banTools.contains("clearKnowledgeGraphicNode")) {
-      // knowledgeGraphicService.clearNode(productId);
-      // }
-      // }
-      if (userConfigService.getConfigValue(productId, "knowledge_graph.toggle").equals("true")) {
-        knowledgeGraphicTool.run(content, globalMessage);
-      }
-      if (userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle")
-          .equals("true")) {
-        knowledgeGraphicService.clearNode(productId);
+      List<ModelMessage> sideEffectSnapshot =
+          conversationMemoryPolicy.recentMessagesSnapshot(memory);
+      Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
+      sideEffectMessage.put(GlobalMessageContext.MEMORY, sideEffectSnapshot);
+      longMemoryTool.run(content, sideEffectMessage);
+      if ("true".equals(userConfigService.getConfigValue(productId, "knowledge_graph.toggle"))) {
+        knowledgeGraphicTool.run(content, new HashMap<>(sideEffectMessage));
       }
     }
-    redisUtil.set("memory" + conversationChatId, memory, 24 * 3600);
+    List<ModelMessage> compactionPrefix = conversationMemoryPolicy.compactionPrefix(memory);
+    boolean compacted = !compactionPrefix.isEmpty();
+    if (compacted) {
+      if (initializeMemorySummary) {
+        markMemorySummaryInProgress(conversationChatId);
+      }
+
+      Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
+      summaryMessage.put(GlobalMessageContext.MEMORY, compactionPrefix);
+      memoryTool.run(compactionPrefix, summaryMessage);
+      conversationMemoryPolicy.retainRecentTurns(memory);
+    }
+    if (!compacted && initializeMemorySummary
+        && markMemorySummaryInProgress(conversationChatId)) {
+      List<ModelMessage> summarySnapshot = conversationMemoryPolicy.copyMessages(memory);
+      Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
+      summaryMessage.put(GlobalMessageContext.MEMORY, summarySnapshot);
+      memoryTool.run(summarySnapshot, summaryMessage);
+    }
+    if ("true".equals(
+        userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle"))) {
+      knowledgeGraphicService.clearNode(productId);
+    }
+    redisUtil.set("memory" + conversationChatId, memory, 48 * 3600);
     recordHistoryMessage(conversationChatId, historyContent, answer);
     return answer;
   }
@@ -490,6 +507,65 @@ public class Router {
   }
 
   private record RouteExecutionResult(String answer, String toolResult) {}
+
+  private List<ModelMessage> loadConversationMemory(String chatId) {
+    List<ModelMessage> memory = new ArrayList<>();
+    Object memoryCache = redisUtil.get("memory" + chatId);
+    if (memoryCache != null) {
+      try {
+        List<ModelMessage> cachedMemory = Cast.castList(memoryCache, ModelMessage.class);
+        if (cachedMemory != null) {
+          memory.addAll(cachedMemory);
+        }
+      } catch (Exception e) {
+        log.warn("load cached memory failed, chatId={}", chatId, e);
+      }
+    }
+    if (!memory.isEmpty()) {
+      return memory;
+    }
+    try {
+      List<HistoryMessageEntity> recentHistory =
+          historyMessageEntityService.findRecentByChatId(
+              chatId, conversationMemoryPolicy.retainedMessageCount());
+      for (HistoryMessageEntity history : recentHistory) {
+        if (history == null || history.getContent() == null) {
+          continue;
+        }
+        String messageType = history.getMessageType();
+        if (ModelMessageRole.USER.value().equals(messageType)
+            || ModelMessageRole.ASSISTANT.value().equals(messageType)) {
+          memory.add(new ModelMessage(messageType, history.getContent()));
+        }
+      }
+      if (!memory.isEmpty()) {
+        log.debug("restored {} memory messages from history, chatId={}", memory.size(), chatId);
+      }
+    } catch (Exception e) {
+      log.warn("restore memory from history failed, chatId={}", chatId, e);
+    }
+    return memory;
+  }
+
+  private long currentMemoryRevision(String chatId) {
+    Object revision = redisUtil.get(GlobalMessageContext.memoryRevisionKey(chatId));
+    if (revision == null) {
+      return 0L;
+    }
+    try {
+      return revision instanceof Number number
+          ? number.longValue()
+          : Long.parseLong(revision.toString());
+    } catch (NumberFormatException e) {
+      log.warn("invalid memory revision, chatId={}, revision={}", chatId, revision);
+      return 0L;
+    }
+  }
+
+  private boolean markMemorySummaryInProgress(String chatId) {
+    return redisUtil.tryLock(
+        GlobalMessageContext.memoryBootstrapKey(chatId), UUID.randomUUID().toString(), 300);
+  }
 
   private void recordHistoryMessage(String chatId, String content, String answer) {
     try {

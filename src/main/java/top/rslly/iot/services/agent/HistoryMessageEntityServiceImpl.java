@@ -41,6 +41,7 @@ import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -63,6 +64,21 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   @Override
   public List<HistoryMessageEntity> findAllById(int id) {
     return historyMessageRepository.findAllById(id);
+  }
+
+  @Override
+  public List<HistoryMessageEntity> findRecentByChatId(String chatId, int limit) {
+    if (chatId == null || chatId.isBlank() || limit <= 0) {
+      return List.of();
+    }
+    Pageable pageable = PageRequest.of(0, limit,
+        Sort.by(Sort.Direction.DESC, "time")
+            .and(Sort.by(Sort.Direction.DESC, "sequenceNum")));
+    List<HistoryMessageEntity> history =
+        new ArrayList<>(historyMessageRepository.findAllByChatId(chatId, pageable).getContent());
+    history.sort(Comparator.comparing(HistoryMessageEntity::getTime)
+        .thenComparing(HistoryMessageEntity::getSequenceNum));
+    return history;
   }
 
   @Override
@@ -180,6 +196,12 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       return content;
     }
     return content.substring(0, MAX_CONTENT_LENGTH);
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public List<HistoryMessageEntity> deleteAllByChatId(String chatId) {
+    return historyMessageRepository.deleteAllByChatId(chatId);
   }
 
   @Override

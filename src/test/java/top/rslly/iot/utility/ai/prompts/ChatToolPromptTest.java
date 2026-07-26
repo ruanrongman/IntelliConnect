@@ -17,24 +17,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.services.agent;
+package top.rslly.iot.utility.ai.prompts;
 
-import top.rslly.iot.models.HistoryMessageEntity;
-import top.rslly.iot.utility.result.JsonResult;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
-public interface HistoryMessageEntityService {
-  List<HistoryMessageEntity> findAllById(int id);
+class ChatToolPromptTest {
 
-  List<HistoryMessageEntity> findRecentByChatId(String chatId, int limit);
+  @Test
+  void doesNotExposeEagerRagReferenceSlot() {
+    ChatToolPrompt prompt = new ChatToolPrompt();
+    ReflectionTestUtils.setField(prompt, "robotName", "robot");
+    ReflectionTestUtils.setField(prompt, "teamName", "team");
 
-  JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId);
+    String result = prompt.getChatTool("assistant", "user", "role", "introduction",
+        "memory", "memory map", "graph", null);
 
-  List<HistoryMessageEntity> deleteAllByChatId(String chatId);
-
-  JsonResult<?> deleteHistoryMessage(int id);
-
-  void recordHistoryMessage(String chatId, String requestId, String userContent,
-      String assistantContent);
+    assertFalse(result.contains("Reference information:"));
+    assertFalse(result.contains("{information}"));
+  }
 }

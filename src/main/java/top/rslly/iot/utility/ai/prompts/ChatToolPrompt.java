@@ -54,27 +54,26 @@ public class ChatToolPrompt {
           Role: {role}
           Role introduction: {role_introduction}
           User name: {user_name}
+          ## Long-term Memory
+          Memory categories: {memory_map}
+          Related memory: {current_memory}
+          {tts_control}
           ## Runtime Context
           Current time: {time}; time zone: {time_zone}
           Weekday: {weekday}
           Lunar date: {lunar_date}
-          {information}
-          ## Long-term Memory
-          Memory categories: {memory_map}
-          Related memory: {current_memory}
           {knowledgeGraphicInject}
-          {tts_control}
           """;
 
   public String getChatTool(String assistantName, String userName, String role,
-      String roleIntroduction, String memory, String information, String memoryMap,
+      String roleIntroduction, String memory, String memoryMap,
       String knowledgeGraphicInject) {
-    return getChatTool(assistantName, userName, role, roleIntroduction, memory, information,
-        memoryMap, knowledgeGraphicInject, null);
+    return getChatTool(assistantName, userName, role, roleIntroduction, memory, memoryMap,
+        knowledgeGraphicInject, null);
   }
 
   public String getChatTool(String assistantName, String userName, String role,
-      String roleIntroduction, String memory, String information, String memoryMap,
+      String roleIntroduction, String memory, String memoryMap,
       String knowledgeGraphicInject, String voice) {
     Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
@@ -82,7 +81,6 @@ public class ChatToolPrompt {
     params.put("current_memory", defaultText(memory, "none"));
     params.put("memory_map", defaultText(memoryMap, "none"));
     params.put("knowledgeGraphicInject", formatKnowledgeGraphic(knowledgeGraphicInject));
-    params.put("information", formatInformation(information));
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
     params.put("role", Objects.requireNonNullElse(role, "智能助手"));
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
@@ -96,13 +94,6 @@ public class ChatToolPrompt {
       return fallback;
     }
     return text;
-  }
-
-  private String formatInformation(String information) {
-    if (information == null || information.isBlank()) {
-      return "";
-    }
-    return "Reference information: " + information;
   }
 
   private String formatKnowledgeGraphic(String knowledgeGraphicInject) {

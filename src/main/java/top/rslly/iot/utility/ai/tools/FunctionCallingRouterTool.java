@@ -75,7 +75,6 @@ public class FunctionCallingRouterTool {
   private static final String DONE_SIGNAL = "[DONE]";
   private static final int MAX_ROUTER_RULES_CHARS = 1200;
   private static final int MAX_MCP_DESCRIPTION_CHARS = 6000;
-  private static final int CHAT_HISTORY_WINDOW = 6;
 
   @Autowired
   private FunctionCallingRouterPrompt functionCallingRouterPrompt;
@@ -84,8 +83,6 @@ public class FunctionCallingRouterTool {
   @Autowired
   private ProductRoleServiceImpl productRoleService;
   @Autowired
-  private top.rslly.iot.services.agent.KnowledgeChatServiceImpl knowledgeChatService;
-  @Autowired
   private ProductToolsBanServiceImpl productToolsBanService;
   @Autowired
   private DescriptionUtil descriptionUtil;
@@ -93,6 +90,8 @@ public class FunctionCallingRouterTool {
   private LlmDiyUtility llmDiyUtility;
   @Autowired
   private KnowledgeGraphicServiceImpl knowledgeGraphicService;
+  @Autowired
+  private KnowledgeTool knowledgeTool;
   @Autowired
   private ProductRouterSetServiceImpl productRouterSetService;
   @Autowired
@@ -244,20 +243,15 @@ public class FunctionCallingRouterTool {
       roleIntroduction = productRole.get(0).getRoleIntroduction();
       voice = productRole.get(0).getVoice();
     }
-    String information = "";
-    List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
-    if (banTools.isEmpty() || !banTools.contains("knowledge")) {
-      information = knowledgeChatService.searchByProductId(String.valueOf(productId), question);
-    }
     String memoryMap = descriptionUtil.getAgentLongMemory(productId);
     String knowledgeGraphic = knowledgeGraphicService.queryKnowledgeGraphic(question, productId);
-    String recentConversation = buildRecentConversationWindow(memory);
     String prompt = functionCallingRouterPrompt.build(assistantName, userName, role,
-        roleIntroduction, currentMemory, information, memoryMap, knowledgeGraphic, voice,
-        limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS),
-        recentConversation);
+        roleIntroduction, memoryMap, voice,
+        limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS));
+    String userContext = functionCallingRouterPrompt.buildUserContext(
+        question, currentMemory, knowledgeGraphic);
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt);
-    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), userContext);
     return ChatTool.buildConversationMessages(memory, systemMessage, userMessage);
   }
 
@@ -270,8 +264,12 @@ public class FunctionCallingRouterTool {
         FunctionRouterRoute.CONTROL.getDefaultDescription());
     availableRoutes.put(FunctionRouterRoute.MUSIC,
         FunctionRouterRoute.MUSIC.getDefaultDescription());
-    availableRoutes.put(FunctionRouterRoute.AGENT,
-        FunctionRouterRoute.AGENT.getDefaultDescription());
+    String agentDescription = FunctionRouterRoute.AGENT.getDefaultDescription();
+    String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);
+    if (!knowledgeDescription.isBlank()) {
+      agentDescription += " | " + knowledgeDescription;
+    }
+    availableRoutes.put(FunctionRouterRoute.AGENT, agentDescription);
     if (!chatId.startsWith("chatProduct")) {
       availableRoutes.put(FunctionRouterRoute.WX_BOUND_PRODUCT,
           FunctionRouterRoute.WX_BOUND_PRODUCT.getDefaultDescription());
@@ -302,47 +300,6 @@ public class FunctionCallingRouterTool {
           false));
     }
     return toolSpecs;
-  }
-
-  private String buildRecentConversationWindow(List<ModelMessage> memory) {
-    if (memory == null || memory.isEmpty()) {
-      return "none";
-    }
-    int start = Math.max(0, memory.size() - CHAT_HISTORY_WINDOW);
-    StringBuilder historyBuilder = new StringBuilder();
-    for (int i = start; i < memory.size(); i++) {
-      ModelMessage modelMessage = memory.get(i);
-      historyBuilder.append("- ")
-          .append(normalizeRole(modelMessage.getRole()))
-          .append(": ")
-          .append(safeContent(modelMessage.getContent()))
-          .append("\n");
-    }
-    return historyBuilder.toString().trim();
-  }
-
-  private String normalizeRole(String role) {
-    if (Objects.equals(role, ModelMessageRole.USER.value())) {
-      return "user";
-    }
-    if (Objects.equals(role, ModelMessageRole.ASSISTANT.value())) {
-      return "assistant";
-    }
-    if (Objects.equals(role, ModelMessageRole.SYSTEM.value())) {
-      return "system";
-    }
-    return role == null ? "unknown" : role;
-  }
-
-  private String safeContent(Object content) {
-    if (content == null) {
-      return "";
-    }
-    String text = String.valueOf(content).replace("\r", " ").replace("\n", " ").trim();
-    if (text.length() > 120) {
-      return text.substring(0, 120) + "...";
-    }
-    return text;
   }
 
   private String buildMcpDescription(int productId, String chatId) {

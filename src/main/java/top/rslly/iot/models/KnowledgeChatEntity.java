@@ -20,6 +20,9 @@
 package top.rslly.iot.models;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.util.Objects;
 
 @Entity
@@ -29,6 +32,7 @@ public class KnowledgeChatEntity {
   private String filename;
   private int productId;
   private String status;
+  private String description;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -69,6 +73,17 @@ public class KnowledgeChatEntity {
 
   public void setStatus(String status) {
     this.status = status;
+  }
+
+  @Size(max = 1024)
+  @NotNull
+  @Column(name = "description", nullable = false)
+  public String getDescription() {
+    return description;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
   }
 
   @Override

@@ -572,8 +572,8 @@ public class Agent implements BaseTool<String> {
 
   private List<FunctionToolSpec> buildFunctionToolSpecs(int productId, String chatId) {
     List<FunctionToolSpec> toolSpecs = new ArrayList<>();
-    JSONObject tools = JSON.parseObject(descriptionUtil.getTools(productId, chatId));
-    for (Map.Entry<String, Object> entry : tools.entrySet()) {
+    Map<String, String> tools = descriptionUtil.getToolDescriptions(productId, chatId);
+    for (Map.Entry<String, String> entry : tools.entrySet()) {
       String toolName = entry.getKey();
       String description = Objects.toString(entry.getValue(), "");
       if (toolName == null || toolName.isBlank()) {

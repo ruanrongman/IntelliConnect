@@ -35,6 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.KnowledgeChatEntity;
 import top.rslly.iot.models.WxUserEntity;
+import top.rslly.iot.param.request.KnowledgeChatDescription;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.ai.rag.RagUtility;
 import top.rslly.iot.utility.result.JsonResult;
@@ -54,6 +55,8 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class KnowledgeChatServiceImpl implements KnowledgeChatService {
+  private static final String SEARCHABLE_STATUS = "success";
+
   @Resource
   private KnowledgeChatRepository knowledgeChatRepository;
   @Resource
@@ -78,9 +81,25 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
   }
 
   @Override
+  public List<KnowledgeChatEntity> findSearchableKnowledgeByProductId(int productId) {
+    return knowledgeChatRepository.findAllByProductIdAndStatusOrderByIdAsc(productId,
+        SEARCHABLE_STATUS);
+  }
+
+  @Override
+  public boolean hasSearchableKnowledge(int productId) {
+    return knowledgeChatRepository.existsByProductIdAndStatus(productId, SEARCHABLE_STATUS);
+  }
+
+  @Override
   public String searchByProductId(String productId, String query) {
-    var res = knowledgeChatRepository.findAllByProductId(Integer.parseInt(productId));
-    if (res.isEmpty())
+    int parsedProductId;
+    try {
+      parsedProductId = Integer.parseInt(productId);
+    } catch (NumberFormatException e) {
+      return "";
+    }
+    if (!hasSearchableKnowledge(parsedProductId))
       return "";
     try {
       EmbeddingSearchResult<TextSegment> searchResult = RagUtility.searchByProductId(
@@ -90,17 +109,13 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
           .map(match -> match.embedded().text())
           .collect(Collectors.joining("\n"));
     } catch (Exception e) {
-      log.error("查询知识库失败{}", e.getMessage());
-      return "";
+      throw new IllegalStateException("查询知识库失败", e);
     }
   }
 
   @Override
   public JsonResult<?> searchByProductId(int productId, String query) {
-    // 1. 检查 productId 是否存在
-    var res = knowledgeChatRepository.findAllByProductId(productId);
-    if (res.isEmpty()) {
-      // 2. 如果不存在，返回空列表
+    if (!hasSearchableKnowledge(productId)) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
 
@@ -175,7 +190,7 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
 
   @Override
   @Transactional(rollbackFor = Exception.class)
-  public JsonResult<?> postKnowledgeChat(int productId, String fileName,
+  public JsonResult<?> postKnowledgeChat(int productId, String fileName, String description,
       MultipartFile multipartFile) {
     if (multipartFile.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_COMPLETE);
@@ -196,6 +211,7 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
       multipartFile.transferTo(tempFile);
       KnowledgeChatEntity knowledgeChatEntity = new KnowledgeChatEntity();
       knowledgeChatEntity.setFilename(fileName);
+      knowledgeChatEntity.setDescription(description);
       knowledgeChatEntity.setProductId(productId);
       knowledgeChatEntity.setStatus("training");
       var result = knowledgeChatRepository.save(knowledgeChatEntity);
@@ -226,6 +242,22 @@ public class KnowledgeChatServiceImpl implements KnowledgeChatService {
       log.error("文件上传失败: {}", e.getMessage(), e);
       return ResultTool.fail(ResultCode.COMMON_FAIL);
     }
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> putKnowledgeChat(KnowledgeChatDescription knowledgeChatDescription) {
+    if (knowledgeChatDescription.getId() == null) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    List<KnowledgeChatEntity> knowledgeChatEntities =
+        knowledgeChatRepository.findAllById(knowledgeChatDescription.getId());
+    if (knowledgeChatEntities.isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    KnowledgeChatEntity knowledgeChatEntity = knowledgeChatEntities.get(0);
+    knowledgeChatEntity.setDescription(knowledgeChatDescription.getDescription().trim());
+    return ResultTool.success(knowledgeChatRepository.save(knowledgeChatEntity));
   }
 
   @Override

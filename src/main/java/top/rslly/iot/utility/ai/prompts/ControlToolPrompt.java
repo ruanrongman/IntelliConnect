@@ -35,11 +35,7 @@ public class ControlToolPrompt {
   private static final String controlPrompt =
       """
           You are good at helping people operate various appliances，
-          You can only control the following electrical type:{electrical_name}
-          The electrical properties and value that can be controlled by each electrical:{properties_value}
-          The electrical function that can be controlled by each electrical:{function_value}
-          The device of current electrical type and the latest status:{equipment_status}
-          value ["null"] means devices information is not exist
+
           ## Output Format
           ```json
           {
@@ -66,6 +62,11 @@ public class ControlToolPrompt {
           - Your output is JSON only and no explanation.
           - Please respond to the user's request immediately, rather than using terms like "later" or "then"
           - If device cannot be controlled, such as not allow or disconnected, please inform the user
+          You can only control the following electrical type:{electrical_name}
+          The electrical properties and value that can be controlled by each electrical:{properties_value}
+          The electrical function that can be controlled by each electrical:{function_value}
+          The device of current electrical type and the latest status:{equipment_status}
+          value ["null"] means devices information is not exist
           """;
 
   public String getControlTool(int productId) {

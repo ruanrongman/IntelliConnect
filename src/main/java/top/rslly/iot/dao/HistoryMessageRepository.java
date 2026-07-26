@@ -44,6 +44,9 @@ public interface HistoryMessageRepository
   @Transactional
   List<HistoryMessageEntity> deleteAllById(int id);
 
+  @Transactional
+  List<HistoryMessageEntity> deleteAllByChatId(String chatId);
+
   // 以chatId开头的记录
   @Modifying
   @Transactional

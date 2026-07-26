@@ -45,9 +45,7 @@ public class KnowledgeGraphicPrompt {
             Otherwise, do not add to the nodes and relations lists. If the conversation mentioned entities or relations that
             haven't been added to the knowledge graphic, add them only when it does not violate the Mandatory User Requirements.
 
-            {information}
 
-            The current concept of the graphic and its content: {graphic}
             ## Output Format
             ```json
             {
@@ -88,6 +86,9 @@ public class KnowledgeGraphicPrompt {
                 ```
             - If relation mentions a new entity(whatever source or target), please add it to the nodes list.
               Do this only when it does not violate the Mandatory User Requirements.
+            {information}
+
+            The current concept of the graphic and its content: {graphic}
             ## Current Conversation
             Below is the current conversation consisting of interleaving human and assistant history.
           """;
@@ -97,9 +98,7 @@ public class KnowledgeGraphicPrompt {
             Extract and merge knowledge graph information from the source text.
             Use the current graph as context and keep existing knowledge unless the source text updates it.
 
-            {information}
 
-            The current concept of the graphic and its content: {graphic}
             ## Output Format
             ```json
             {
@@ -142,6 +141,9 @@ public class KnowledgeGraphicPrompt {
                 ```
             - If relation mentions a new entity(whatever source or target), please add it to the nodes list.
               Do this only when it does not violate the Mandatory User Requirements.
+            {information}
+
+            The current concept of the graphic and its content: {graphic}
             ## Source Text
           """;
 

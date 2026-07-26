@@ -73,32 +73,57 @@ public class LongMemoryTool {
       return;
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "longMemory");
     List<ModelMessage> messages = new ArrayList<>();
-    // 使用 Optional 进行类型安全的转换
-    List<ModelMessage> memory =
-        Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
-            .orElse(Collections.emptyList());
+    List<ModelMessage> memory = copyMemory(globalMessage.get("memory"));
+    if (memory.isEmpty()) {
+      return;
+    }
 
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             agentLongMemoryPrompt.getAgentLongMemory(productId));
-    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), "start memory!");
-    if (!memory.isEmpty()) {
-      // messages.addAll(memory);
-      systemMessage.setContent(
-          agentLongMemoryPrompt.getAgentLongMemory(productId) + memory);
-    } else {
-      return;
-    }
+    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(),
+        "start memory!\n" + formatConversationHistory(memory));
     messages.add(systemMessage);
     messages.add(userMessage);
-    // log.info("LongMemoryTool{}", messages);
-    var obj = llm.jsonChat(question, messages, true).getJSONObject("action");
+    var response = llm.jsonChat(question, messages, true);
+    if (response == null || response.getJSONObject("action") == null) {
+      return;
+    }
+    var obj = response.getJSONObject("action");
     try {
       process_llm_result(obj, productId);
     } catch (Exception e) {
       // e.printStackTrace();
       log.info("LongMemoryTool{}", e.getMessage());
     }
+  }
+
+  private List<ModelMessage> copyMemory(Object value) {
+    if (!(value instanceof List<?> rawList)) {
+      return List.of();
+    }
+    List<ModelMessage> memory = new ArrayList<>();
+    for (Object item : rawList) {
+      if (item instanceof ModelMessage modelMessage) {
+        memory.add(modelMessage);
+      }
+    }
+    return Collections.unmodifiableList(new ArrayList<>(memory));
+  }
+
+  private String formatConversationHistory(List<ModelMessage> memory) {
+    StringBuilder builder = new StringBuilder();
+    for (ModelMessage message : memory) {
+      if (message == null || message.getRole() == null || message.getContent() == null) {
+        continue;
+      }
+      String content = String.valueOf(message.getContent()).trim();
+      if (content.isBlank()) {
+        continue;
+      }
+      builder.append(message.getRole()).append(": ").append(content).append("\n");
+    }
+    return builder.toString();
   }
 
   private void process_llm_result(JSONObject jsonObject, int productId) throws IcAiException {

@@ -33,6 +33,7 @@ import top.rslly.iot.param.response.AgentMemoryResponse;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.RedisUtil;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
@@ -68,6 +69,8 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
   private RedisUtil redisUtil;
   @Autowired
   private ProductRepository productRepository;
+  @Autowired
+  private HistoryMessageEntityService historyMessageEntityService;
 
   @Override
   public List<AgentMemoryEntity> findAllById(int id) {
@@ -260,9 +263,12 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
     if (agentMemoryEntityList.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    if (redisUtil.hasKey("memory" + agentMemoryEntityList.get(0).getChatId())) {
-      redisUtil.del("memory" + agentMemoryEntityList.get(0).getChatId());
-    }
+    String chatId = agentMemoryEntityList.get(0).getChatId();
+    String revisionKey = GlobalMessageContext.memoryRevisionKey(chatId);
+    redisUtil.incr(revisionKey, 1);
+    redisUtil.expire(revisionKey, 48 * 3600);
+    redisUtil.del("memory" + chatId, GlobalMessageContext.memoryBootstrapKey(chatId));
+    historyMessageEntityService.deleteAllByChatId(chatId);
     var result = agentMemoryRepository.deleteAllById(id);
     return ResultTool.success(result);
   }

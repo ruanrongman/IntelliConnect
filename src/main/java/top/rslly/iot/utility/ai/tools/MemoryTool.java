@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
+import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -47,6 +48,8 @@ public class MemoryTool {
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
+  @Autowired
+  private RedisUtil redisUtil;
   @Value("${ai.memoryTool-llm}")
   private String llmName;
   private String name = "memoryTool";
@@ -57,40 +60,89 @@ public class MemoryTool {
 
   @Async("taskExecutor")
   public void run(String question, Map<String, Object> globalMessage) {
+    Object memoryValue = globalMessage.get(GlobalMessageContext.MEMORY);
+    List<ModelMessage> memory = copyMemory(memoryValue);
+    summarize(memory, question, globalMessage);
+  }
+
+  @Async("taskExecutor")
+  public void run(List<ModelMessage> conversation, Map<String, Object> globalMessage) {
+    summarize(conversation == null ? List.of()
+        : Collections.unmodifiableList(new ArrayList<>(conversation)), null, globalMessage);
+  }
+
+  private void summarize(List<ModelMessage> memory, String question,
+      Map<String, Object> globalMessage) {
+    if (memory.isEmpty()) {
+      return;
+    }
     int productId = (int) globalMessage.get("productId");
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "memory");
-    List<ModelMessage> messages = new ArrayList<>();
     String memoryChatId = GlobalMessageContext.memoryChatId(globalMessage);
     List<AgentMemoryEntity> agentMemoryEntities =
         agentMemoryService.findAllByChatId(memoryChatId);
-    String currentMemory = "";
-    if (!agentMemoryEntities.isEmpty()) {
-      currentMemory = agentMemoryEntities.get(0).getContent();
-    }
-    // 使用 Optional 进行类型安全的转换
-    List<ModelMessage> memory =
-        Optional.ofNullable((List<ModelMessage>) globalMessage.get("memory"))
-            .orElse(Collections.emptyList());
+    String currentMemory = agentMemoryEntities.isEmpty()
+        ? ""
+        : Optional.ofNullable(agentMemoryEntities.get(0).getContent()).orElse("");
 
-    ModelMessage systemMessage =
-        new ModelMessage(ModelMessageRole.SYSTEM.value(),
-            memoryToolPrompt.getMemoryToolPrompt(currentMemory));
-    ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
-    if (!memory.isEmpty()) {
-      systemMessage.setContent(memoryToolPrompt.getMemoryToolPrompt(currentMemory)
-          + formatConversationHistory(memory));
-    } else {
+    String conversation = formatConversationHistory(memory);
+    if (question != null && !question.isBlank()) {
+      conversation += "\nlatest user input: " + question.trim();
+    }
+    List<ModelMessage> messages = new ArrayList<>();
+    messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
+        memoryToolPrompt.getMemoryToolPrompt(currentMemory)));
+    messages.add(new ModelMessage(ModelMessageRole.USER.value(),
+        conversation.isBlank() ? "No useful conversation to compact." : conversation));
+
+    String answer = llm.commonChat(conversation, messages, true);
+    if (answer == null || answer.isBlank()) {
       return;
     }
-    messages.add(systemMessage);
-    messages.add(userMessage);
-    // log.info("systemMessage: " + systemMessage.getContent());
-    String answer = llm.commonChat(question, messages, true);
-    if (answer.length() > 1000)
+    if (answer.length() > 1000) {
       answer = answer.substring(0, 1000);
-    AgentMemory agentMemory = new AgentMemory(memoryChatId, answer);
-    agentMemoryService.insertAndUpdate(agentMemory);
-    // log.info("chatTool: " + messages);
+    }
+    if (!memoryRevisionMatches(memoryChatId, globalMessage)) {
+      log.info("skip stale memory summary, chatId={}", memoryChatId);
+      return;
+    }
+    agentMemoryService.insertAndUpdate(new AgentMemory(memoryChatId, answer));
+  }
+
+  private boolean memoryRevisionMatches(String chatId, Map<String, Object> globalMessage) {
+    Object expectedRevision = globalMessage.get(GlobalMessageContext.MEMORY_REVISION);
+    if (expectedRevision == null) {
+      return true;
+    }
+    try {
+      Object currentRevision = redisUtil.get(GlobalMessageContext.memoryRevisionKey(chatId));
+      return revisionValue(expectedRevision) == revisionValue(currentRevision);
+    } catch (NumberFormatException e) {
+      log.warn("invalid memory revision, chatId={}", chatId, e);
+      return false;
+    }
+  }
+
+  private long revisionValue(Object value) {
+    if (value == null) {
+      return 0L;
+    }
+    return value instanceof Number number
+        ? number.longValue()
+        : Long.parseLong(value.toString());
+  }
+
+  private List<ModelMessage> copyMemory(Object value) {
+    if (!(value instanceof List<?> rawList)) {
+      return List.of();
+    }
+    List<ModelMessage> result = new ArrayList<>();
+    for (Object item : rawList) {
+      if (item instanceof ModelMessage modelMessage) {
+        result.add(modelMessage);
+      }
+    }
+    return List.copyOf(result);
   }
 
   private String formatConversationHistory(List<ModelMessage> memory) {

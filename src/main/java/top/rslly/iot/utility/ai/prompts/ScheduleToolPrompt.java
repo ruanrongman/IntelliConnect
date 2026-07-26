@@ -39,9 +39,9 @@ public class ScheduleToolPrompt {
 
   private static final String schedulePrompt =
       """
-          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
           Identify the time when the user wants to be reminded and convert it to a cron expression.
           If the user does not provide a specific time, you can plan a time for them.
+
           ## Output Format
            ```json
            {
@@ -140,6 +140,7 @@ public class ScheduleToolPrompt {
              "0 0 3-5 * * *" Execute tasks every hour between 3am and 5am every day.
 
              "0 15 10 L * ?" The task is executed at 10:15 am on the last day of each month.
+          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.
            ## work information
            reference information: The current time is {time}; time zone is {time_zone}; weekday is {weekday}.
            Arranged reminder tasks:{schedule_map}

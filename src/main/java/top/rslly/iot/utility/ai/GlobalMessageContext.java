@@ -27,6 +27,7 @@ public final class GlobalMessageContext {
   public static final String CONVERSATION_CHAT_ID = "conversationChatId";
   public static final String QUEUE_MAP = "queueMap";
   public static final String MEMORY = "memory";
+  public static final String MEMORY_REVISION = "memoryRevision";
 
   private GlobalMessageContext() {}
 
@@ -47,6 +48,14 @@ public final class GlobalMessageContext {
       return conversationChatId;
     }
     return chatId(globalMessage);
+  }
+
+  public static String memoryRevisionKey(String chatId) {
+    return "memoryRevision" + chatId;
+  }
+
+  public static String memoryBootstrapKey(String chatId) {
+    return "memoryBootstrap" + chatId;
   }
 
   private static String stringValue(Map<String, Object> globalMessage, String key) {

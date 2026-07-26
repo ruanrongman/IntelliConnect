@@ -37,8 +37,7 @@ public class ProductRolePrompt {
   private static final String productRolePrompt =
       """
           Translate the user's requirements into detailed role and VoiceTimbre configurations.
-          The following are the current user role settings:{role_set}
-          The timbre list is as follows:{timbre_map}
+
           ## Output Format
           ```json
           {
@@ -59,6 +58,8 @@ public class ProductRolePrompt {
           ## Attention
           - Your output is JSON only and no explanation.
           - If the above parameters contain null, please refuse and provide suggestions in the answer.
+          The following are the current user role settings:{role_set}
+          The timbre list is as follows:{timbre_map}
           """;
 
   public String getProductRoleTool(int productId) {

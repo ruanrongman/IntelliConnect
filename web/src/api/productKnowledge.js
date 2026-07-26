@@ -22,6 +22,12 @@ export const uploadKnowledge = (file, params) => {
     data: formData
   })
 }
+export const putKnowledgeChat = (data) =>
+  request({
+    url: '/api/v2/knowledgeChat',
+    method: 'put',
+    data,
+  })
 export const deleteKnowledgeChat = (params) =>
   request({
     url: '/api/v2/knowledgeChat',

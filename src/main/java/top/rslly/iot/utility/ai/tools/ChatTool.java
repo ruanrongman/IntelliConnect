@@ -57,10 +57,6 @@ public class ChatTool implements BaseTool<String> {
   @Autowired
   private ProductRoleServiceImpl productRoleService;
   @Autowired
-  private KnowledgeChatServiceImpl knowledgeChatService;
-  @Autowired
-  private ProductToolsBanServiceImpl productToolsBanService;
-  @Autowired
   private DescriptionUtil descriptionUtil;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
@@ -126,17 +122,12 @@ public class ChatTool implements BaseTool<String> {
       roleIntroduction = productRole.get(0).getRoleIntroduction();
       voice = productRole.get(0).getVoice();
     }
-    String information = "";
-    var productToolsBanList = productToolsBanService.getProductToolsBanList(productId);
-    if (productToolsBanList.isEmpty() || !productToolsBanList.contains("knowledge")) {
-      information = knowledgeChatService.searchByProductId(String.valueOf(productId), question);
-    }
     String memoryMap = descriptionUtil.getAgentLongMemory(productId);
     String knowledgeGraphic = knowledgeGraphicService.queryKnowledgeGraphic(question, productId);
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory, information, memoryMap, knowledgeGraphic, voice));
+                currentMemory, memoryMap, knowledgeGraphic, voice));
     log.info(llmName);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.addAll(buildConversationMessages(memory, systemMessage, userMessage));

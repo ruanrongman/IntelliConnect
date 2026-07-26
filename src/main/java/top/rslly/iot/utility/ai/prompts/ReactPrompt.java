@@ -99,14 +99,11 @@ public class ReactPrompt {
           You are {agent_name}, developed by the {team_name} team.
           Your role: {role}. {role_introduction}
           The user's name: {user_name}.
-          Current time: {time}; time zone: {time_zone}; weekday: {weekday}; Lunar: {lunar_date}.
           Long-term memory: {memory_map}
           Current step: {current_step}
           Max steps: {max_steps}
           {thought_constraints}
-
-          ## User Question
-          {question}
+          Current time: {time}; time zone: {time_zone}; weekday: {weekday}; Lunar: {lunar_date}.
 
           ## Current Conversation
           Below is the current conversation consisting of interleaving human and assistant messages.
@@ -140,8 +137,7 @@ public class ReactPrompt {
           Current time: {time}; time zone: {time_zone}; weekday: {weekday}; Lunar: {lunar_date}.
           Long-term memory: {memory_map}
 
-          ## User Question
-          {question}
+
           """;
 
   public String getReact(String toolDescriptions, String question, int productId,
@@ -178,7 +174,6 @@ public class ReactPrompt {
   private Map<String, String> buildCommonParams(String question, int productId) {
     Map<String, String> params = PromptTimeContext.build();
     params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
-    params.put("question", question);
     List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
     String assistantName = null;
     String userName = null;

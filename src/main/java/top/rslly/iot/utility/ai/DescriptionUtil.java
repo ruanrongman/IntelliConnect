@@ -34,6 +34,9 @@ import top.rslly.iot.services.thingsModel.ProductModelServiceImpl;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.tools.*;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @Component
 public class DescriptionUtil {
   @Autowired
@@ -52,6 +55,8 @@ public class DescriptionUtil {
   private AgentLongMemoryServiceImpl agentLongMemoryService;
   @Autowired
   private McpAgent mcpAgent;
+  @Autowired
+  private KnowledgeTool knowledgeTool;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
@@ -112,14 +117,22 @@ public class DescriptionUtil {
   }
 
   public String getTools(int productId, String chatId) {
+    return JSON.toJSONString(getToolDescriptions(productId, chatId));
+  }
+
+  public Map<String, String> getToolDescriptions(int productId, String chatId) {
     ControlTool controlTool = new ControlTool();
     WeatherTool weatherTool = new WeatherTool();
     MusicTool musicTool = new MusicTool();
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put(controlTool.getName(), controlTool.getDescription());
-    jsonObject.put(weatherTool.getName(), weatherTool.getDescription());
-    jsonObject.put(musicTool.getName(), musicTool.getDescription());
-    jsonObject.put(mcpAgent.getName(), mcpAgent.getDescription(productId, chatId));
-    return jsonObject.toJSONString();
+    Map<String, String> toolDescriptions = new LinkedHashMap<>();
+    toolDescriptions.put(controlTool.getName(), controlTool.getDescription());
+    toolDescriptions.put(weatherTool.getName(), weatherTool.getDescription());
+    toolDescriptions.put(musicTool.getName(), musicTool.getDescription());
+    String knowledgeDescription = knowledgeTool.getDescription(productId);
+    if (!knowledgeDescription.isBlank()) {
+      toolDescriptions.put(knowledgeTool.getName(), knowledgeDescription);
+    }
+    toolDescriptions.put(mcpAgent.getName(), mcpAgent.getDescription(productId, chatId));
+    return toolDescriptions;
   }
 }

@@ -31,6 +31,10 @@ public interface KnowledgeChatRepository extends JpaRepository<KnowledgeChatEnti
 
   List<KnowledgeChatEntity> findAllByProductId(int productId);
 
+  List<KnowledgeChatEntity> findAllByProductIdAndStatusOrderByIdAsc(int productId, String status);
+
+  boolean existsByProductIdAndStatus(int productId, String status);
+
   List<KnowledgeChatEntity> findAllByProductIdAndFilename(int productId, String filename);
 
   @Transactional

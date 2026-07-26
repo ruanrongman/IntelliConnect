@@ -276,6 +276,8 @@ public class Tool {
   public JsonResult<?> postKnowledgeChat(@RequestParam("productId") int productId,
       @RequestParam("filename") @NotBlank(message = "filename 不能为空")
       @Size(min = 1, max = 255, message = "fileName 长度必须在 1 到 255 之间") String fileName,
+      @RequestParam("description") @NotBlank(message = "description 不能为空")
+      @Size(max = 1024, message = "description 长度不能超过 1024") String description,
       @RequestPart("file") @NotNull(message = "file 不能为空") MultipartFile multipartFile,
       @RequestHeader("Authorization") String header) {
     try {
@@ -284,7 +286,21 @@ public class Tool {
     } catch (NullPointerException e) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
-    return knowledgeChatService.postKnowledgeChat(productId, fileName, multipartFile);
+    return knowledgeChatService.postKnowledgeChat(productId, fileName, description, multipartFile);
+  }
+
+  @Operation(summary = "知识库", description = "修改知识库描述")
+  @RequestMapping(value = "/knowledgeChat", method = RequestMethod.PUT)
+  public JsonResult<?> putKnowledgeChat(
+      @Valid @RequestBody KnowledgeChatDescription knowledgeChatDescription,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeKnowledgeChat(header, knowledgeChatDescription.getId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return knowledgeChatService.putKnowledgeChat(knowledgeChatDescription);
   }
 
   @RequestMapping(value = "/knowledgeChat", method = RequestMethod.DELETE)

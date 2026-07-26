@@ -21,6 +21,7 @@ package top.rslly.iot.services.agent;
 
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.models.KnowledgeChatEntity;
+import top.rslly.iot.param.request.KnowledgeChatDescription;
 import top.rslly.iot.utility.result.JsonResult;
 
 import java.util.List;
@@ -29,13 +30,20 @@ public interface KnowledgeChatService {
 
   List<KnowledgeChatEntity> findAllById(int id);
 
+  List<KnowledgeChatEntity> findSearchableKnowledgeByProductId(int productId);
+
+  boolean hasSearchableKnowledge(int productId);
+
   String searchByProductId(String productId, String query);
 
   JsonResult<?> searchByProductId(int productId, String query);
 
   JsonResult<?> getKnowledgeChat(String token);
 
-  JsonResult<?> postKnowledgeChat(int productId, String fileName, MultipartFile multipartFile);
+  JsonResult<?> postKnowledgeChat(int productId, String fileName, String description,
+      MultipartFile multipartFile);
+
+  JsonResult<?> putKnowledgeChat(KnowledgeChatDescription knowledgeChatDescription);
 
   JsonResult<?> deleteKnowledgeChat(int id);
 }

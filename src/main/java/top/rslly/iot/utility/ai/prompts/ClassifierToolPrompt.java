@@ -34,8 +34,10 @@ import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
+import top.rslly.iot.utility.ai.tools.KnowledgeTool;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +60,8 @@ public class ClassifierToolPrompt {
   private AdminConfigServiceImpl adminConfigService;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
+  @Autowired
+  private KnowledgeTool knowledgeTool;
   @Value("${ai.classifier.include.thought:true}")
   private boolean includeThought;
   private static final int MAX_ROUTER_RULES_CHARS = 1200;
@@ -98,11 +102,17 @@ public class ClassifierToolPrompt {
           """;
 
   public String getClassifierTool(int productId, String chatId, String recentConversation) {
-    Map<String, String> classifierMap = new HashMap<>();
+    List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
+    Map<String, String> classifierMap = new LinkedHashMap<>();
     classifierMap.put("1", "Query weather");
     classifierMap.put("2", "Control and query electrical, excluding music and xiaozhi_device");
     classifierMap.put("3", "Play or recommend music");
-    classifierMap.put("4", "Complex multi-step task");
+    String agentDescription = "Complex multi-step task";
+    String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);
+    if (!knowledgeDescription.isBlank()) {
+      agentDescription += " | " + knowledgeDescription;
+    }
+    classifierMap.put("4", agentDescription);
     classifierMap.put("5", "Common chat or fallback");
     if (!chatId.startsWith("chatProduct")) {
       classifierMap.put("6", "Bind or unbind products");
@@ -117,7 +127,6 @@ public class ClassifierToolPrompt {
     if (chatId.startsWith("chatProduct")) {
       classifierMap.put("11", "Say goodbye or step down");
     }
-    List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
     if (!banTools.isEmpty()) {
       for (var banTool : banTools) {
         classifierMap.remove(banTool);

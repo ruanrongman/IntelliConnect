@@ -33,7 +33,7 @@ class PromptTimeZoneCoverageTest {
     assertContainsTimeZone(ReactPrompt.class, "ReactSystem");
     assertContainsTimeZone(ReactPrompt.class, "FunctionCallingSystem");
     assertContainsTimeZone(ChatToolPrompt.class, "CHAT_PROMPT");
-    assertContainsTimeZone(FunctionCallingRouterPrompt.class, "PROMPT");
+    assertContainsTimeZone(FunctionCallingRouterPrompt.class, "USER_CONTEXT");
     assertContainsTimeZone(ScheduleToolPrompt.class, "schedulePrompt");
     assertContainsTimeZone(Prompt.class, "classifierPrompt");
     assertContainsTimeZone(Prompt.class, "schedulePrompt");

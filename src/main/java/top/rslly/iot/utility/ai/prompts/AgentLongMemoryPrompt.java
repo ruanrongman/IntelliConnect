@@ -38,7 +38,6 @@ public class AgentLongMemoryPrompt {
           Otherwise, do not add to the memory_Key and memory_value lists.
           If none of the concepts match or are updated, you may set both lists to [].
 
-          The current concept of memory and its content: {memory_map}
           ## Output Format
             ```json
              {
@@ -50,6 +49,8 @@ public class AgentLongMemoryPrompt {
                   }
              }
             ```
+          ## Memory Categories
+          The current concept of memory and its content: {memory_map}
           ## Attention
             - Your output is JSON only and no explanation.
             - Each memory-value must be less than 800 words

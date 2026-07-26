@@ -35,7 +35,6 @@ public class MusicToolPrompt {
   private String teamName;
   private static final String musicPrompt =
       """
-          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Translate the user input into a music or singer name, or a combination of both, ensuring that the name is unique.
           ## Output Format
           ```json
           {
@@ -49,6 +48,7 @@ public class MusicToolPrompt {
               }
           }
           ```
+          You are a smart speaker, your name is {agent_name}, developed by the {team_name} team.Translate the user input into a music or singer name, or a combination of both, ensuring that the name is unique.
           ## Attention
           - Your output is JSON only and no explanation.
           """;
