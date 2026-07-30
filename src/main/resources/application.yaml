@@ -160,8 +160,8 @@ ai:
   top-p: 0.85
   detectRandom: false
   memory:
-    context-window-tokens: 5000
-    summary-threshold-ratio: 0.75
+    context-window-tokens: 2000
+    summary-threshold-ratio: 0.5
     recent-turns: 4
   showThinking: false
   classifier:

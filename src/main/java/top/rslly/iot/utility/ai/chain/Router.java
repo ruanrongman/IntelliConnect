@@ -364,12 +364,12 @@ public class Router {
         return executeToolRoute(matchedRoute.getTaskId(), content, result.getArguments(),
             globalMessage, dataArgs);
       }
-      log.warn("Unknown function router target {}, fallback to legacy router, chatId={}",
+      log.error("Unknown function router target {}, fallback to legacy router, chatId={}",
           result.getFunctionName(), chatId);
     } else if (result.isDirectReply()) {
       return new RouteExecutionResult(result.getReply(), result.getReply());
     } else if (result.isUnsupported()) {
-      log.debug("Function router unsupported for current LLM, fallback to legacy router, chatId={}",
+      log.error("Function router unsupported for current LLM, fallback to legacy router, chatId={}",
           chatId);
     } else {
       log.warn("Function router failed, fallback to legacy router, chatId={}", chatId);
