@@ -38,6 +38,7 @@ import top.rslly.iot.services.McpEndpointConfigService;
 import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.McpServerServiceImpl;
 import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -298,7 +299,8 @@ public class McpAgent implements BaseTool<String> {
       messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
 
       var obj =
-          callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled);
+          callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled,
+              GlobalMessageContext.reasoningQueue(globalMessage));
       if (obj == null) {
         cleanupResources(clientMap, chatId);
         return "小主人抱歉哦，服务器现在繁忙。";
@@ -451,7 +453,7 @@ public class McpAgent implements BaseTool<String> {
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
       Map<String, Queue<String>> queueMap, String chatId, int productId,
-      boolean includeThoughtEnabled) {
+      boolean includeThoughtEnabled, Queue<String> reasoningQueue) {
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "10");
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
@@ -460,7 +462,7 @@ public class McpAgent implements BaseTool<String> {
       try {
         llm.streamJsonChat(question, messages, false,
             new AgentEventSourceListener(queueMap, chatId, this, "thought",
-                showThinking && includeThoughtEnabled));
+                showThinking && includeThoughtEnabled, reasoningQueue));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);
@@ -627,7 +629,8 @@ public class McpAgent implements BaseTool<String> {
         return "操作已取消";
       }
       FunctionResult result =
-          callFunctionLlm(question, messages, registry.toolSpecs(), queueMap, chatId, llm);
+          callFunctionLlm(question, messages, registry.toolSpecs(), queueMap, chatId, llm,
+              GlobalMessageContext.reasoningQueue(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
         return null;
       }
@@ -690,7 +693,7 @@ public class McpAgent implements BaseTool<String> {
 
   private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
-      LLM llm) {
+      LLM llm, Queue<String> reasoningQueue) {
     if (!speedUp) {
       return llm.functionChat(question, messages, toolSpecs);
     }
@@ -713,6 +716,14 @@ public class McpAgent implements BaseTool<String> {
           queue.add(text.replace("\n", "").replace("\r", ""));
         }
       }
+
+      @Override
+      public void onReasoningDelta(String reasoning) {
+        if (reasoningQueue != null && reasoning != null && !reasoning.isEmpty()) {
+          reasoningQueue.add(reasoning);
+        }
+      }
+
 
       @Override
       public void onDirectReplyComplete(String reply) {

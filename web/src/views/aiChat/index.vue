@@ -307,6 +307,7 @@ async function loadHistory(page = 1, mode = 'replace') {
         id: item.id || `${item.requestId}-${item.sequenceNum}`,
         role: item.messageType === 'user' ? 'user' : 'assistant',
         content: parsedContent.content,
+        reasoningContent: '',
         fileNames: parsedContent.fileNames,
         knowledgeRecall: [],
         knowledgeGraphicReference: null,
@@ -533,6 +534,7 @@ async function sendMessage() {
     id: `assistant-${Date.now()}`,
     role: 'assistant',
     content: '',
+    reasoningContent: '',
     knowledgeRecall: [],
     knowledgeGraphicReference: null,
     loadingReferences: false,
@@ -571,6 +573,10 @@ async function sendMessage() {
       signal: streamContext.abortController.signal,
       onMessage: (chunk) => {
         assistantMessage.content += chunk
+        scrollActiveConversation(conversationChatId)
+      },
+      onReasoning: (chunk) => {
+        assistantMessage.reasoningContent += chunk
         scrollActiveConversation(conversationChatId)
       },
       onComplete: (finalContent) => {

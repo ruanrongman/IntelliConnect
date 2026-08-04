@@ -2625,7 +2625,17 @@ Authorization: Bearer {token}
   "success": true,
   "errorCode": 200,
   "errorMsg": "成功",
-  "data": []
+  "data": [
+    {
+      "id": 1,
+      "modelName": "deepseek-chat",
+      "productId": 1,
+      "providerId": 1,
+      "toolsId": "1",
+      "thinking": false,
+      "thinkingBudget": 1024
+    }
+  ]
 }
 ```
 
@@ -2638,15 +2648,18 @@ POST /productLlmModel
 **请求参数:**
 ```json
 {
-  "id": 0,
-  "productId": 0,
-  "providerId": 0,
-  "modelName": "string",
-  "modelType": "string",
-  "enabled": true,
-  "priority": 1
+  "modelName": "deepseek-chat",
+  "productId": 1,
+  "providerId": 1,
+  "toolsId": "1",
+  "thinking": false,
+  "thinkingBudget": 1024
 }
 ```
+
+`thinking` 仅在值为 `true` 时开启思考，`false` 会向模型显式发送关闭配置；缺少该字段时默认为 `false`。
+`thinkingBudget` 取值范围为 `0` 到 `8192`，缺少时默认为 `1024`。预算为 `0` 是有效配置，
+是否开启思考仅由 `thinking` 决定。查询接口返回相同的 `thinking` 和 `thinkingBudget` 字段。
 
 **请求头:**
 ```

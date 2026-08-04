@@ -33,7 +33,6 @@ import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.*;
 import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
 import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
@@ -189,7 +188,8 @@ public class Agent implements BaseTool<String> {
       messages.add(systemMessage);
       messages.add(userMessage);
       var obj =
-          callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled);
+          callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled,
+              GlobalMessageContext.reasoningQueue(globalMessage));
       if (obj == null) {
         cleanupResources(chatId);
         return "小主人抱歉哦，服务器现在繁忙。";
@@ -243,7 +243,8 @@ public class Agent implements BaseTool<String> {
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), conversationPrompt.toString()));
 
     try {
-      toolResult = LLMFactory.getLLM(llmName).commonChat(summaryPrompt, messages, false);
+      toolResult = llmDiyUtility.getDiyLlm(productId, llmName, "4")
+          .commonChat(summaryPrompt, messages, false);
       try {
         var temp = toolResult.replace("```json", "").replace("```JSON", "").replace("```", "")
             .replace("json", "");
@@ -275,7 +276,7 @@ public class Agent implements BaseTool<String> {
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
       Map<String, Queue<String>> queueMap, String chatId, int productId,
-      boolean includeThoughtEnabled) {
+      boolean includeThoughtEnabled, Queue<String> reasoningQueue) {
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4");
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
@@ -284,7 +285,7 @@ public class Agent implements BaseTool<String> {
       try {
         llm.streamJsonChat(question, messages, false,
             new AgentEventSourceListener(queueMap, chatId, this, "thought",
-                showThinking && includeThoughtEnabled));
+                showThinking && includeThoughtEnabled, reasoningQueue));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);
@@ -425,7 +426,8 @@ public class Agent implements BaseTool<String> {
       if (isQueueRemoved(chatId, queueMap)) {
         return "操作已取消";
       }
-      FunctionResult result = callFunctionLlm(question, messages, toolSpecs, queueMap, chatId, llm);
+      FunctionResult result = callFunctionLlm(question, messages, toolSpecs, queueMap, chatId, llm,
+          GlobalMessageContext.reasoningQueue(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
         return null;
       }
@@ -481,7 +483,7 @@ public class Agent implements BaseTool<String> {
 
   private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
-      LLM llm) {
+      LLM llm, Queue<String> reasoningQueue) {
     if (!speedUp) {
       return llm.functionChat(question, messages, toolSpecs);
     }
@@ -504,6 +506,14 @@ public class Agent implements BaseTool<String> {
           queue.add(text.replace("\n", "").replace("\r", ""));
         }
       }
+
+      @Override
+      public void onReasoningDelta(String reasoning) {
+        if (reasoningQueue != null && reasoning != null && !reasoning.isEmpty()) {
+          reasoningQueue.add(reasoning);
+        }
+      }
+
 
       @Override
       public void onDirectReplyComplete(String reply) {

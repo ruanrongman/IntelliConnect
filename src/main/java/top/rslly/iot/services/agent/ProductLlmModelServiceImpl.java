@@ -148,6 +148,8 @@ public class ProductLlmModelServiceImpl implements ProductLlmModelService {
       productLlmModelEntity.setId(productLlmModelEntityList.get(0).getId());
     }
     productLlmModelEntity.setModelName(productLlmModel.getModelName());
+    productLlmModelEntity.setThinking(productLlmModel.isThinking());
+    productLlmModelEntity.setThinkingBudget(productLlmModel.getThinkingBudget());
     productLlmModelEntity.setProductId(productLlmModel.getProductId());
     productLlmModelEntity.setProviderId(productLlmModel.getProviderId());
     productLlmModelEntity.setToolsId(productLlmModel.getToolsId());

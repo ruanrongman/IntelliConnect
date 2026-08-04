@@ -132,14 +132,16 @@ public class ChatTool implements BaseTool<String> {
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.addAll(buildConversationMessages(memory, systemMessage, userMessage));
     if (speedUp) {
-      return runWithStreaming(question, llm, messages, queueMap, chatId);
+      return runWithStreaming(question, llm, messages, queueMap, chatId,
+          GlobalMessageContext.reasoningQueue(globalMessage));
     }
     return runWithoutStreaming(question, llm, messages);
   }
 
   private String runWithStreaming(String question, LLM llm, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId) {
-    ChatToolEventSourceListener listener = new ChatToolEventSourceListener(queueMap, chatId, this);
+      Map<String, Queue<String>> queueMap, String chatId, Queue<String> reasoningQueue) {
+    ChatToolEventSourceListener listener =
+        new ChatToolEventSourceListener(queueMap, chatId, this, reasoningQueue);
     Lock chatLock = lockMap.get(chatId);
     Condition chatCondition = conditionMap.get(chatId);
     dataMap.remove(chatId);

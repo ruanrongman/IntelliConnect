@@ -11,6 +11,7 @@ export const streamAiControl = async ({
   files = [],
   signal,
   onMessage,
+  onReasoning,
   onComplete,
   onError,
 }) => {
@@ -46,11 +47,11 @@ export const streamAiControl = async ({
       break
     }
     buffer += decoder.decode(value, { stream: true })
-    buffer = consumeSseBuffer(buffer, onMessage, onComplete, onError)
+    buffer = consumeSseBuffer(buffer, onMessage, onReasoning, onComplete, onError)
   }
   buffer += decoder.decode()
   if (buffer.trim()) {
-    consumeSseBuffer(`${buffer}\n\n`, onMessage, onComplete, onError)
+    consumeSseBuffer(`${buffer}\n\n`, onMessage, onReasoning, onComplete, onError)
   }
 }
 
@@ -71,7 +72,7 @@ export const stopAiControlStream = async (productId, streamId) => {
   return response.json()
 }
 
-function consumeSseBuffer(buffer, onMessage, onComplete, onError) {
+function consumeSseBuffer(buffer, onMessage, onReasoning, onComplete, onError) {
   const parts = buffer.split(DONE_SEPARATOR)
   const rest = parts.pop() || ''
   parts.forEach((part) => {
@@ -83,6 +84,8 @@ function consumeSseBuffer(buffer, onMessage, onComplete, onError) {
       onError?.(parseErrorMessage(event.data))
     } else if (event.name === 'complete') {
       onComplete?.(event.data)
+    } else if (event.name === 'reasoning') {
+      onReasoning?.(event.data)
     } else {
       onMessage?.(event.data)
     }
@@ -98,7 +101,8 @@ function parseSseEvent(raw) {
     if (line.startsWith('event:')) {
       name = line.slice(6).trim() || 'message'
     } else if (line.startsWith('data:')) {
-      data.push(line.slice(5).replace(/^ /, ''))
+      // Spring's SseEmitter writes the payload directly after "data:".
+      data.push(line.slice(5))
     }
   })
   return {

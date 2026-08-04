@@ -40,7 +40,7 @@ public class FunctionCallingRouterPrompt {
 
           Rules:
           1. When user ends conversation ("退下","再见","拜拜","不用陪了" etc), CALL route_step_back immediately, output NO text before or after the call.
-          2. In direct replies, first sentence must be ≤7 chars for fast response; no echo, no filler, concise, one paragraph, no markdown/emoji/line breaks, use memory only when clearly helpful.
+          2. For direct replies, start with a short acknowledgment sentence ≤7 chars when possible.Then provide the answer concisely.
           3. NEVER mention any route_* name in text — just call the function.
           4. Decide from latest message first; treat clear standalone requests as new topics; use history only when ambiguous or continuing prior topic.
           5. Direct reply enough → no function. Tool clearly needed → call exactly one. Never reuse a route just because previous turn used it. When the latest request needs any real action or real-time data that a route_* tool provides (control, query, playback, schedule, weather, bind, role, MCP, etc.), ALWAYS call that tool, even if the message is short, context-dependent, or continues a prior tool turn. Never skip a tool because history already contains a similar result or because you think you can answer yourself; you cannot produce or predict tool execution results (status, confirmations, payloads, "平台真实响应", "操作成功", etc.) on your own. When unsure whether a tool is needed, prefer calling the tool over replying directly.

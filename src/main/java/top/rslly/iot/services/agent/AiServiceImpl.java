@@ -56,6 +56,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -94,6 +95,7 @@ public class AiServiceImpl implements AiService {
   private static final long STREAM_POLL_INTERVAL_MS = 10L;
   private static final int MEMORY_CONTENT_MAX_LENGTH = 1000;
   private final Set<String> stoppedStreamChatIds = ConcurrentHashMap.newKeySet();
+  private final Map<String, Queue<String>> reasoningQueueMap = new ConcurrentHashMap<>();
 
   @Override
   public JsonResult<?> getAiResponse(AiControl aiControl, String token) {
@@ -133,6 +135,7 @@ public class AiServiceImpl implements AiService {
     String streamChatId = buildStreamChatId(productId, streamId);
     stoppedStreamChatIds.add(streamChatId);
     Router.queueMap.remove(streamChatId);
+    reasoningQueueMap.remove(streamChatId);
     return ResultTool.success("已停止");
   }
 
@@ -168,12 +171,21 @@ public class AiServiceImpl implements AiService {
         return;
       }
       initializeDebugMemory(aiControl.getProductId(), conversationChatId, aiControl.getContent());
+      Queue<String> reasoningQueue = new ConcurrentLinkedQueue<>();
+      reasoningQueueMap.put(streamChatId, reasoningQueue);
       CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(
-          () -> router.response(documentPrompt.modelContent(), documentPrompt.historyContent(),
-              streamChatId, conversationChatId, aiControl.getProductId()));
-      while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)) {
+          () -> router.responseDebugStream(documentPrompt.modelContent(),
+              documentPrompt.historyContent(), streamChatId, conversationChatId,
+              aiControl.getProductId(), reasoningQueue));
+      while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)
+          || !reasoningQueue.isEmpty()) {
         if (stoppedStreamChatIds.contains(streamChatId)) {
           return;
+        }
+        String reasoning = reasoningQueue.poll();
+        if (reasoning != null) {
+          sendSseEvent(emitter, "reasoning", reasoning);
+          continue;
         }
         Queue<String> queue = Router.queueMap.get(streamChatId);
         if (queue == null) {
@@ -215,6 +227,7 @@ public class AiServiceImpl implements AiService {
     } finally {
       stoppedStreamChatIds.remove(streamChatId);
       Router.queueMap.remove(streamChatId);
+      reasoningQueueMap.remove(streamChatId);
       emitter.complete();
     }
   }

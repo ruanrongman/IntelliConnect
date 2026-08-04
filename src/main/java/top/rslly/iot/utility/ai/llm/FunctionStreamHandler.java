@@ -24,6 +24,8 @@ public interface FunctionStreamHandler {
 
   default void onTextDelta(String text) {}
 
+  default void onReasoningDelta(String reasoning) {}
+
   default void onDirectReplyComplete(String reply) {}
 
   default void onToolCall(String functionName, String arguments) {}

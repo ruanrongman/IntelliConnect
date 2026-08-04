@@ -135,7 +135,8 @@ const toolsIdMap = {
   '10': 'MCP代理工具',
   'classifier': '分类器工具',
   'longMemory': '长期记忆工具',
-  'memory': '记忆工具'
+  'memory': '记忆工具',
+  'knowledgeGraphic': '知识图谱'
 };
 
 // 获取工具名称的辅助函数
@@ -168,6 +169,16 @@ const columns = [
     title: '工具名称',
     dataIndex: 'toolsName',
     key: 'toolsName',
+  },
+  {
+    title: '思考模式',
+    dataIndex: 'thinkingStatus',
+    key: 'thinkingStatus',
+  },
+  {
+    title: '思考预算',
+    dataIndex: 'thinkingBudgetDisplay',
+    key: 'thinkingBudgetDisplay',
   },
   {
     title: 'Action',
@@ -245,6 +256,14 @@ onUnmounted(() => {
   stopPolling();
 });
 
+const normalizeThinkingBudget = (value) => {
+  const budget = Number(value);
+  if (!Number.isInteger(budget) || budget < 0 || budget > 8192) {
+    return 1024;
+  }
+  return budget;
+};
+
 const mapDataSource = async (data, requestId) => {
   if (!data || !Array.isArray(data)) return [];
 
@@ -275,6 +294,10 @@ const mapDataSource = async (data, requestId) => {
     toolsId: item.toolsId,
     toolsName: getToolsName(item.toolsId),
     productName: productNameMap.value[item.productId] || `产品ID: ${item.productId}`,
+    thinking: item.thinking === true,
+    thinkingBudget: normalizeThinkingBudget(item.thinkingBudget),
+    thinkingStatus: item.thinking === true ? '开启' : '关闭',
+    thinkingBudgetDisplay: item.thinking === true ? normalizeThinkingBudget(item.thinkingBudget) : '-',
     providerName: newProviderNameMap[item.providerId] || `服务商ID: ${item.providerId}`
   }));
 };

@@ -19,10 +19,12 @@
  */
 package top.rslly.iot.param.request;
 
-import lombok.Data;
-
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import lombok.Data;
 
 @Data
 public class ProductLlmModel {
@@ -30,6 +32,11 @@ public class ProductLlmModel {
   @Size(min = 1, max = 255, message = "modelName 长度必须在 1 到 255 之间")
   private String modelName;
   private int productId;
+  private boolean thinking = false;
+  @NotNull(message = "thinkingBudget 不能为空")
+  @Min(value = 0, message = "thinkingBudget 不能小于 0")
+  @Max(value = 8192, message = "thinkingBudget 不能大于 8192")
+  private Integer thinkingBudget = 1024;
   private int providerId;
   @NotBlank(message = "toolsId 不能为空")
   @Size(min = 1, max = 255, message = "toolsId 长度必须在 1 到 255 之间")

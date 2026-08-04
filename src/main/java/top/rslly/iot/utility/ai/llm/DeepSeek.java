@@ -186,8 +186,12 @@ public class DeepSeek implements LLM {
               replyBuilder.append(text);
               handler.onTextDelta(text);
             });
-            appendReasoningContent(reasoningBuilder,
+            String reasoning = toReasoningContent(
                 delta._additionalProperties().get("reasoning_content"));
+            if (reasoning != null && !reasoning.isEmpty()) {
+              reasoningBuilder.append(reasoning);
+              handler.onReasoningDelta(reasoning);
+            }
             delta.toolCalls()
                 .ifPresent(toolCalls -> mergePartialToolCalls(partialToolCalls, toolCalls));
           }
@@ -317,7 +321,7 @@ public class DeepSeek implements LLM {
       }
     } else if (isOfficialDeepSeekProvider()) {
       builder.putAdditionalBodyProperty("thinking", thinkingMode("disabled"));
-    } else if (shouldDisableThinkingByDefault()) {
+    } else {
       builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(false));
     }
     return builder;
@@ -336,19 +340,6 @@ public class DeepSeek implements LLM {
     return JsonValue.from(Map.of("type", type));
   }
 
-  private boolean shouldDisableThinkingByDefault() {
-    String normalizedModel = model == null ? "" : model.trim().toLowerCase(Locale.ROOT);
-    if (normalizedModel.isEmpty() || normalizedModel.contains("thinking")) {
-      return false;
-    }
-    return normalizedModel.startsWith("qwen3")
-        || normalizedModel.startsWith("qwen-plus")
-        || normalizedModel.startsWith("qwen-flash")
-        || normalizedModel.startsWith("qwen-turbo")
-        || normalizedModel.startsWith("deepseek-v3.2")
-        || normalizedModel.startsWith("deepseek-v3.1")
-        || normalizedModel.startsWith("deepseek-v4");
-  }
 
   private List<ChatCompletionMessageParam> toMessageParams(List<ModelMessage> messages) {
     List<ChatCompletionMessageParam> messageList = new ArrayList<>();
@@ -445,7 +436,7 @@ public class DeepSeek implements LLM {
 
   private void appendReasoningContent(StringBuilder builder, JsonValue reasoningValue) {
     String reasoning = toReasoningContent(reasoningValue);
-    if (reasoning != null && !reasoning.isBlank()) {
+    if (reasoning != null && !reasoning.isEmpty()) {
       builder.append(reasoning);
     }
   }
@@ -502,19 +493,29 @@ public class DeepSeek implements LLM {
 
   private void emitLegacyChunk(EventSourceListener listener, LegacyEventSource eventSource,
       ChatCompletionChunk chunk) {
-    chunk.choices().stream()
-        .map(choice -> choice.delta().content().orElse(null))
-        .filter(Objects::nonNull)
-        .filter(text -> !text.isBlank())
-        .forEach(text -> listener.onEvent(eventSource, null, null, toLegacyChunk(text)));
+    for (ChatCompletionChunk.Choice choice : chunk.choices()) {
+      ChatCompletionChunk.Choice.Delta delta = choice.delta();
+      String content = delta.content().orElse(null);
+      String reasoning = toReasoningContent(
+          delta._additionalProperties().get("reasoning_content"));
+      if ((content == null || content.isEmpty()) && (reasoning == null || reasoning.isEmpty())) {
+        continue;
+      }
+      listener.onEvent(eventSource, null, null, toLegacyChunk(content, reasoning));
+    }
   }
 
-  private String toLegacyChunk(String content) {
+  private String toLegacyChunk(String content, String reasoning) {
     JSONObject root = new JSONObject();
     JSONArray choices = new JSONArray();
     JSONObject choice = new JSONObject();
     JSONObject delta = new JSONObject();
-    delta.put("content", content);
+    if (content != null) {
+      delta.put("content", content);
+    }
+    if (reasoning != null) {
+      delta.put("reasoning_content", reasoning);
+    }
     choice.put("delta", delta);
     choices.add(choice);
     root.put("choices", choices);

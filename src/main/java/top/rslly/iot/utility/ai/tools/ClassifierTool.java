@@ -29,6 +29,7 @@ import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -96,7 +97,8 @@ public class ClassifierTool {
       // 清除当前会话的旧数据
       dataMap.get(chatId).clear();
       llm.streamJsonChat(question, messages, true,
-          new ClassifierToolEventSourceListener(question, new int[] {5, 11}, chatId, this));
+          new ClassifierToolEventSourceListener(question, new int[] {5, 11}, chatId, this,
+              GlobalMessageContext.reasoningQueue(globalMessage)));
       lockMap.get(chatId).lock();
       try {
         boolean timedOut = false;

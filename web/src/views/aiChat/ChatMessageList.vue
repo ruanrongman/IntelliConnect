@@ -11,6 +11,13 @@
     >
       <div class="speaker">{{ item.role === 'user' ? '你' : '助手' }}</div>
       <div class="bubble">
+        <details v-if="item.reasoningContent?.trim()" class="reasoning-process">
+          <summary>
+            <span>思考过程</span>
+          </summary>
+          <MarkdownContent class="reasoning-content" :content="item.reasoningContent" />
+        </details>
+
         <MarkdownContent v-if="item.content" class="message-content" :content="item.content" />
         <div v-if="item.fileNames?.length" class="message-files">
           <div v-for="(fileName, fileIndex) in item.fileNames" :key="`${fileName}-${fileIndex}`" class="message-file">
@@ -243,6 +250,54 @@ function formatKnowledgeGraphicSummary(graphicReference) {
   line-height: 1.7;
   overflow-wrap: anywhere;
   box-shadow: 0 8px 22px rgba(21, 32, 29, 0.07);
+}
+
+.reasoning-process {
+  border: 1px solid #d8e2df;
+  border-radius: 8px;
+  background: #f7faf9;
+  padding: 9px 10px;
+
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #4c5b57;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.4;
+    list-style: none;
+  }
+
+  > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  > summary::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 6px solid #1f7a5c;
+    transition: transform 0.16s ease;
+  }
+
+  &[open] > summary::before {
+    transform: rotate(90deg);
+  }
+}
+
+.reasoning-content {
+  display: grid;
+  gap: 8px;
+  margin-top: 9px;
+  border-top: 1px solid #d8e2df;
+  padding-top: 9px;
+  color: #4c5b57;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .message-content {

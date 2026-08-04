@@ -28,6 +28,7 @@ import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -46,13 +47,15 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
   private final int[] filter;
   private final ClassifierTool classifierTool;
   private final String chatId;
+  private final Queue<String> reasoningQueue;
 
   public ClassifierToolEventSourceListener(String question, int[] filter, String chatId,
-      ClassifierTool classifierTool) {
+      ClassifierTool classifierTool, Queue<String> reasoningQueue) {
     this.question = question;
     this.filter = filter;
     this.chatId = chatId;
     this.classifierTool = classifierTool;
+    this.reasoningQueue = reasoningQueue;
   }
 
   @Override
@@ -165,6 +168,10 @@ public class ClassifierToolEventSourceListener extends EventSourceListener {
         return;
       }
 
+      String reasoning = delta.getString("reasoning_content");
+      if (reasoningQueue != null && reasoning != null && !reasoning.isEmpty()) {
+        reasoningQueue.add(reasoning);
+      }
       String content = delta.getString("content");
       if (content == null) {
         return;

@@ -90,6 +90,33 @@
           />
         </a-form-item>
 
+        <a-form-item label="思考模式" name="thinking">
+          <a-switch v-model:checked="formState.thinking" />
+        </a-form-item>
+
+        <a-form-item
+          label="思考预算"
+          name="thinkingBudget"
+          :rules="[{ required: true, type: 'number', min: 0, max: 8192, message: '思考预算范围为 0 到 8192!' }]"
+        >
+          <div class="thinking-budget-control">
+            <a-slider
+              v-model:value="formState.thinkingBudget"
+              :min="0"
+              :max="8192"
+              :step="1"
+              :disabled="!formState.thinking"
+            />
+            <a-input-number
+              v-model:value="formState.thinkingBudget"
+              :min="0"
+              :max="8192"
+              :step="1"
+              :disabled="!formState.thinking"
+            />
+          </div>
+        </a-form-item>
+
         <a-form-item :wrapper-col="{ offset: 8, span: 16 }">
           <a-button type="primary" html-type="submit">{{ isEditing ? '更新' : '提交' }}</a-button>
         </a-form-item>
@@ -135,7 +162,9 @@ const formState = reactive({
   productId: null,
   providerId: null,
   modelName: "",
-  toolsId: ""
+  toolsId: "",
+  thinking: false,
+  thinkingBudget: 1024
 });
 
 const resetForm = () => {
@@ -144,6 +173,8 @@ const resetForm = () => {
   formState.providerId = null;
   formState.modelName = "";
   formState.toolsId = "";
+  formState.thinking = false;
+  formState.thinkingBudget = 1024;
   modelOptions.value = [];
   showModelSuggestions.value = false;
   isEditing.value = false;
@@ -303,8 +334,20 @@ const handleCreate = () => {
   resetForm();
 }
 
+const normalizeThinkingBudget = (value) => {
+  const budget = Number(value);
+  if (!Number.isInteger(budget) || budget < 0 || budget > 8192) {
+    return 1024;
+  }
+  return budget;
+};
+
 const showEditModal = (record) => {
-  Object.assign(formState, record);
+  Object.assign(formState, {
+    ...record,
+    thinking: record?.thinking === true,
+    thinkingBudget: normalizeThinkingBudget(record?.thinkingBudget)
+  });
   isEditing.value = true;
   fetchProducts(); // 确保下拉框数据加载
   fetchLlmProviders();
@@ -354,6 +397,21 @@ const onFinishFailed = errorInfo => {
 <style lang="scss" scoped>
 .model-name-field {
   position: relative;
+}
+
+.thinking-budget-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 12px;
+  :deep(.ant-input-number) {
+    width: 100%;
+  }
+}
+@media (max-width: 640px) {
+  .thinking-budget-control {
+    grid-template-columns: 1fr;
+  }
 }
 
 .model-suggestions {

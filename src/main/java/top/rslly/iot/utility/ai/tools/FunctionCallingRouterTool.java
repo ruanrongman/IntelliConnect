@@ -129,12 +129,13 @@ public class FunctionCallingRouterTool {
       return normalizeResult(llm.functionChat(question, messages, toolSpecs));
     }
     return runWithStreaming(question, chatId, llm, messages, toolSpecs,
-        (Map<String, Queue<String>>) globalMessage.get("queueMap"));
+        (Map<String, Queue<String>>) globalMessage.get("queueMap"),
+        GlobalMessageContext.reasoningQueue(globalMessage));
   }
 
   private FunctionResult runWithStreaming(String question, String chatId, LLM llm,
       List<ModelMessage> messages, List<FunctionToolSpec> toolSpecs,
-      Map<String, Queue<String>> queueMap) {
+      Map<String, Queue<String>> queueMap, Queue<String> reasoningQueue) {
     lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
     conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
     dataMap.remove(chatId);
@@ -156,6 +157,14 @@ public class FunctionCallingRouterTool {
           queue.add(text.replace("\n", "").replace("\r", ""));
         }
       }
+
+      @Override
+      public void onReasoningDelta(String reasoning) {
+        if (reasoningQueue != null && reasoning != null && !reasoning.isEmpty()) {
+          reasoningQueue.add(reasoning);
+        }
+      }
+
 
       @Override
       public void onDirectReplyComplete(String reply) {

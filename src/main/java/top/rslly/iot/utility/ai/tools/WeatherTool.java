@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -116,7 +117,8 @@ public class WeatherTool implements BaseTool<String> {
       if (speedUp && !mcpIsTool) {
         dataMap.remove(chatId); // 使用 chatId 作为 key
         llm.streamJsonChat(question, messages, true,
-            new ChatToolEventSourceListener(queueMap, chatId, this));
+            new ChatToolEventSourceListener(queueMap, chatId, this,
+                GlobalMessageContext.reasoningQueue(globalMessage)));
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);
         chatLock.lock();

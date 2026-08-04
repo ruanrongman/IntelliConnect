@@ -20,12 +20,14 @@
 package top.rslly.iot.utility.ai;
 
 import java.util.Map;
+import java.util.Queue;
 
 public final class GlobalMessageContext {
   public static final String PRODUCT_ID = "productId";
   public static final String CHAT_ID = "chatId";
   public static final String CONVERSATION_CHAT_ID = "conversationChatId";
   public static final String QUEUE_MAP = "queueMap";
+  public static final String REASONING_QUEUE = "reasoningQueue";
   public static final String MEMORY = "memory";
   public static final String MEMORY_REVISION = "memoryRevision";
 
@@ -48,6 +50,18 @@ public final class GlobalMessageContext {
       return conversationChatId;
     }
     return chatId(globalMessage);
+  }
+
+  @SuppressWarnings("unchecked")
+  public static Queue<String> reasoningQueue(Map<String, Object> globalMessage) {
+    if (globalMessage == null) {
+      return null;
+    }
+    Object queue = globalMessage.get(REASONING_QUEUE);
+    if (queue instanceof Queue<?>) {
+      return (Queue<String>) queue;
+    }
+    return null;
   }
 
   public static String memoryRevisionKey(String chatId) {

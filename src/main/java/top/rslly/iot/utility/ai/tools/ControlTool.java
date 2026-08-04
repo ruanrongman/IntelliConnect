@@ -35,6 +35,7 @@ import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductModelServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
@@ -120,7 +121,8 @@ public class ControlTool implements BaseTool<String> {
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
-    var finalObj = callLLMForThought(question, messages, queueMap, chatId, mcpIsTool, productId);
+    var finalObj = callLLMForThought(question, messages, queueMap, chatId, mcpIsTool, productId,
+        GlobalMessageContext.reasoningQueue(globalMessage));
     if (finalObj == null) {
       cleanupResources(chatId);
       return "小主人抱歉哦，服务器现在繁忙。";
@@ -153,7 +155,8 @@ public class ControlTool implements BaseTool<String> {
    * 调用LLM获取thought，支持流式和非流式
    */
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId, Boolean mcpIsTool, int productId) {
+      Map<String, Queue<String>> queueMap, String chatId, Boolean mcpIsTool, int productId,
+      Queue<String> reasoningQueue) {
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "2");
     if (speedUp && !mcpIsTool) {
       // 使用流式调用，实时获取thought内容
@@ -161,7 +164,8 @@ public class ControlTool implements BaseTool<String> {
 
       try {
         llm.streamJsonChat(question, messages, false,
-            new AgentEventSourceListener(queueMap, chatId, this, "answer"));
+            new AgentEventSourceListener(queueMap, chatId, this, "answer", true,
+                reasoningQueue));
 
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);

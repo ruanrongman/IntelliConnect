@@ -49,7 +49,9 @@ public class LlmDiyUtility {
           log.info("llmName:{}", productLlmModelEntity.getModelName());
           return LLMFactory.getLLM(productLlmModelEntity.getModelName(),
               providerInformation.get(0).getBaseUrl(),
-              providerInformation.get(0).getAppKey());
+              providerInformation.get(0).getAppKey(),
+              Boolean.TRUE.equals(productLlmModelEntity.getThinking()),
+              LLMFactory.normalizeThinkingBudget(productLlmModelEntity.getThinkingBudget()));
 
         } else {
           return LLMFactory.getLLM(llmName);

@@ -20,6 +20,19 @@ curl -X POST "http://localhost:8080/api/v2/aiControl/stream" \
 -d '{"productId":0,"message":"你好","chatId":"test-chat-1"}'
 ```
 
+流式响应使用以下 SSE 事件：
+
+| 事件 | 数据说明 |
+|------|----------|
+| `message` | 最终回答的正文增量 |
+| `reasoning` | 供应商返回的原生 `reasoning_content` 增量 |
+| `complete` | 完整的最终回答正文 |
+| `error` | 流处理错误信息 |
+
+`reasoning` 与 `message` 相互独立，只在模型返回原生思考内容时产生。调试面板将思考过程默认折叠展示；
+停止或失败时保留本次页面已接收的部分内容，但思考过程不拼接到最终回答、不包含在复制内容中，也不写入历史消息。
+刷新页面或重新进入对话后不会恢复思考过程。
+
 #### 2. 停止对话
 
 ```bash
@@ -45,8 +58,9 @@ curl -X DELETE "http://localhost:8080/api/v2/historyMessage?chatId=test-chat-1" 
 
 ## 功能特点
 
-- **SSE流式传输**: 实时获取AI回复，无需等待完整响应
-- **对话历史持久化**: 所有对话记录自动保存到数据库，支持分页查询
+- **SSE流式传输**: 分别实时获取AI回复正文和模型原生思考过程
+- **思考过程折叠展示**: 原生思考内容默认折叠，且仅在当前调试流中保留
+- **对话历史持久化**: 用户消息和AI最终回答自动保存到数据库，支持分页查询
 - **按用户权限隔离**: 历史消息按用户权限过滤，确保数据安全
 - **产品隔离**: 每个产品的对话独立管理
 - **主动停止**: 支持随时中断正在进行的流式对话
@@ -73,3 +87,5 @@ curl -X DELETE "http://localhost:8080/api/v2/historyMessage?chatId=test-chat-1" 
 | message_type | 消息类型（user/assistant/tool等） |
 | content | 消息内容 |
 | time | 消息时间 |
+
+模型原生思考过程不存储在 `history_message` 表中。

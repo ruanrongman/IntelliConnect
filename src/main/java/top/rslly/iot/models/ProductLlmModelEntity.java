@@ -20,6 +20,8 @@
 package top.rslly.iot.models;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+
 import java.util.Objects;
 
 @Entity
@@ -30,6 +32,8 @@ public class ProductLlmModelEntity {
   private int productId;
   private int providerId;
   private String toolsId;
+  private Boolean thinking = false;
+  private Integer thinkingBudget = 1024;
 
   @Basic
   @Column(name = "model_name")
@@ -82,6 +86,26 @@ public class ProductLlmModelEntity {
     this.toolsId = toolsId;
   }
 
+  @NotNull
+  @Column(name = "thinking", nullable = false)
+  public Boolean getThinking() {
+    return thinking;
+  }
+
+  public void setThinking(Boolean thinking) {
+    this.thinking = thinking;
+  }
+
+  @NotNull
+  @Column(name = "thinking_budget", nullable = false)
+  public Integer getThinkingBudget() {
+    return thinkingBudget;
+  }
+
+  public void setThinkingBudget(Integer thinkingBudget) {
+    this.thinkingBudget = thinkingBudget;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o)
@@ -90,11 +114,13 @@ public class ProductLlmModelEntity {
       return false;
     ProductLlmModelEntity that = (ProductLlmModelEntity) o;
     return id == that.id && productId == that.productId && providerId == that.providerId
-        && Objects.equals(modelName, that.modelName) && Objects.equals(toolsId, that.toolsId);
+        && Objects.equals(modelName, that.modelName) && Objects.equals(toolsId, that.toolsId)
+        && Objects.equals(thinking, that.thinking)
+        && Objects.equals(thinkingBudget, that.thinkingBudget);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, modelName, toolsId, productId, providerId);
+    return Objects.hash(id, modelName, toolsId, productId, providerId, thinking, thinkingBudget);
   }
 }

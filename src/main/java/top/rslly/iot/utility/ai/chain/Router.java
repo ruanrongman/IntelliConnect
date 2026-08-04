@@ -126,6 +126,18 @@ public class Router {
 
   public String response(String content, String historyContent, String streamChatId,
       String conversationChatId, int productId, String... dataArgs) {
+    return responseInternal(content, historyContent, streamChatId, conversationChatId, productId,
+        null, dataArgs);
+  }
+
+  public String responseDebugStream(String content, String historyContent, String streamChatId,
+      String conversationChatId, int productId, Queue<String> reasoningQueue) {
+    return responseInternal(content, historyContent, streamChatId, conversationChatId, productId,
+        reasoningQueue);
+  }
+
+  private String responseInternal(String content, String historyContent, String streamChatId,
+      String conversationChatId, int productId, Queue<String> reasoningQueue, String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
@@ -133,6 +145,9 @@ public class Router {
     globalMessage.put(GlobalMessageContext.PRODUCT_ID, productId);
     GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
     globalMessage.put(GlobalMessageContext.QUEUE_MAP, queueMap);
+    if (reasoningQueue != null) {
+      globalMessage.put(GlobalMessageContext.REASONING_QUEUE, reasoningQueue);
+    }
     // 从 WebSocket session 获取客户端 IP
     Session session = XiaoZhiWebsocket.clients
         .get(streamChatId);
@@ -310,6 +325,7 @@ public class Router {
       List<ModelMessage> sideEffectSnapshot =
           conversationMemoryPolicy.recentMessagesSnapshot(memory);
       Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
+      sideEffectMessage.remove(GlobalMessageContext.REASONING_QUEUE);
       sideEffectMessage.put(GlobalMessageContext.MEMORY, sideEffectSnapshot);
       longMemoryTool.run(content, sideEffectMessage);
       if ("true".equals(userConfigService.getConfigValue(productId, "knowledge_graph.toggle"))) {
@@ -324,6 +340,7 @@ public class Router {
       }
 
       Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
+      summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
       summaryMessage.put(GlobalMessageContext.MEMORY, compactionPrefix);
       memoryTool.run(compactionPrefix, summaryMessage);
       conversationMemoryPolicy.retainRecentTurns(memory);
@@ -332,6 +349,7 @@ public class Router {
         && markMemorySummaryInProgress(conversationChatId)) {
       List<ModelMessage> summarySnapshot = conversationMemoryPolicy.copyMessages(memory);
       Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
+      summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
       summaryMessage.put(GlobalMessageContext.MEMORY, summarySnapshot);
       memoryTool.run(summarySnapshot, summaryMessage);
     }

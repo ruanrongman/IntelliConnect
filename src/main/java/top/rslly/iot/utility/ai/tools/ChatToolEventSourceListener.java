@@ -41,6 +41,7 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   private final Map<String, Queue<String>> queueMap;
   private final String chatId;
   private final BaseTool<?> chatTool; // 持有ChatTool实例引用
+  private final Queue<String> reasoningQueue;
   private final AtomicReference<EventSource> currentEventSource = new AtomicReference<>();
 
   public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
@@ -48,7 +49,17 @@ public class ChatToolEventSourceListener extends EventSourceListener {
     this.queueMap = queueMap;
     this.chatId = chatId;
     this.chatTool = tool;
+    this.reasoningQueue = null;
   }
+
+  public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
+      BaseTool<?> tool, Queue<String> reasoningQueue) {
+    this.queueMap = queueMap;
+    this.chatId = chatId;
+    this.chatTool = tool;
+    this.reasoningQueue = reasoningQueue;
+  }
+
 
   @Override
   public void onOpen(EventSource eventSource, Response response) {
@@ -116,6 +127,10 @@ public class ChatToolEventSourceListener extends EventSourceListener {
       JSONObject delta = choice.getJSONObject("delta");
       if (delta == null) {
         return;
+      }
+      String reasoning = delta.getString("reasoning_content");
+      if (reasoningQueue != null && reasoning != null && !reasoning.isEmpty()) {
+        reasoningQueue.add(reasoning);
       }
       String content = delta.getString("content");
       if (content == null || content.trim().isEmpty()) {

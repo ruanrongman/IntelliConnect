@@ -30,6 +30,10 @@ import java.util.regex.Pattern;
 @Component
 public class LLMFactory {
 
+  public static final int DEFAULT_THINKING_BUDGET = 1024;
+  public static final int MIN_THINKING_BUDGET = 0;
+  public static final int MAX_THINKING_BUDGET = 8192;
+
   private static String deepSeekApiKey;
   private static String siliconFlowApiKey;
   private static String uniApiKey;
@@ -105,7 +109,7 @@ public class LLMFactory {
     // 3. 解析 "think" 模式 (不区分大小写)
     boolean enableThinking = false;
     boolean thinkMode = false;
-    int thinkingBudget = 128; // 默认值
+    int thinkingBudget = DEFAULT_THINKING_BUDGET;
     String baseLlmName = trimmedLlmName; // 初始化为原始名称
 
     // 使用 (?i) 标志使正则表达式不区分大小写
@@ -135,7 +139,7 @@ public class LLMFactory {
       baseLlmName = baseLlmName.substring(0, baseLlmName.length() - 1);
     }
     final boolean finalEnableThinking = enableThinking;
-    final int finalThinkingBudget = thinkingBudget;
+    final int finalThinkingBudget = normalizeThinkingBudget(thinkingBudget);
 
     // 4. 根据前缀路由到不同供应商 (使用小写版本匹配，从原始版本提取)
     if (lowerCaseLlmName.startsWith("silicon-")) {
@@ -170,11 +174,26 @@ public class LLMFactory {
   }
 
   public static LLM getLLM(String llmName, String baseUrl, String apiKey) {
+    return getLLM(llmName, baseUrl, apiKey, false, DEFAULT_THINKING_BUDGET);
+  }
+
+  public static LLM getLLM(String llmName, String baseUrl, String apiKey,
+      boolean enableThinking, int thinkingBudget) {
     if (llmName == null || llmName.trim().isEmpty()) {
       return null;
     }
-    return cached(cacheKey(baseUrl, llmName, apiKey, false, 128),
-        () -> new DeepSeek(baseUrl, llmName, apiKey));
+    int normalizedThinkingBudget = normalizeThinkingBudget(thinkingBudget);
+    return cached(cacheKey(baseUrl, llmName, apiKey, enableThinking, normalizedThinkingBudget),
+        () -> new DeepSeek(baseUrl, llmName, apiKey, enableThinking,
+            normalizedThinkingBudget, temperature, topP));
+  }
+
+  public static int normalizeThinkingBudget(Integer thinkingBudget) {
+    if (thinkingBudget == null || thinkingBudget < MIN_THINKING_BUDGET
+        || thinkingBudget > MAX_THINKING_BUDGET) {
+      return DEFAULT_THINKING_BUDGET;
+    }
+    return thinkingBudget;
   }
 
   private static LLM cached(String cacheKey, Supplier<LLM> supplier) {

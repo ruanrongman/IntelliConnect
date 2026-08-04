@@ -81,6 +81,42 @@ class DeepSeekTest {
     Assertions.assertFalse(additionalBody.containsKey("thinking"));
   }
 
+  @Test
+  void customFactoryUsesConfiguredThinkingAndBudget() throws Exception {
+    String baseUrl = "https://dashscope.aliyuncs.com/compatible-mode";
+    LLM enabled = LLMFactory.getLLM("factory-enabled-model", baseUrl, "factory-test-key", true, 0);
+    LLM disabled =
+        LLMFactory.getLLM("factory-disabled-model", baseUrl, "factory-test-key", false, 8192);
+
+    Assertions.assertInstanceOf(DeepSeek.class, enabled);
+    Assertions.assertInstanceOf(DeepSeek.class, disabled);
+    Assertions.assertNotSame(enabled, disabled);
+    Assertions.assertSame(enabled,
+        LLMFactory.getLLM("factory-enabled-model", baseUrl, "factory-test-key", true, 0));
+
+    Map<String, JsonValue> enabledBody =
+        buildTextParams((DeepSeek) enabled)._additionalBodyProperties();
+    Assertions.assertEquals(Boolean.TRUE,
+        enabledBody.get("enable_thinking").convert(Boolean.class));
+    Assertions.assertEquals(0,
+        enabledBody.get("thinking_budget").convert(Integer.class));
+
+    Map<String, JsonValue> disabledBody =
+        buildTextParams((DeepSeek) disabled)._additionalBodyProperties();
+    Assertions.assertEquals(Boolean.FALSE,
+        disabledBody.get("enable_thinking").convert(Boolean.class));
+    Assertions.assertFalse(disabledBody.containsKey("thinking_budget"));
+  }
+
+  @Test
+  void thinkingBudgetNormalizationUsesConfiguredRangeAndDefault() {
+    Assertions.assertEquals(0, LLMFactory.normalizeThinkingBudget(0));
+    Assertions.assertEquals(8192, LLMFactory.normalizeThinkingBudget(8192));
+    Assertions.assertEquals(1024, LLMFactory.normalizeThinkingBudget(null));
+    Assertions.assertEquals(1024, LLMFactory.normalizeThinkingBudget(-1));
+    Assertions.assertEquals(1024, LLMFactory.normalizeThinkingBudget(8193));
+  }
+
   private ChatCompletionCreateParams buildTextParams(DeepSeek deepSeek) throws Exception {
     Method method = DeepSeek.class.getDeclaredMethod("buildTextParams", List.class);
     method.setAccessible(true);

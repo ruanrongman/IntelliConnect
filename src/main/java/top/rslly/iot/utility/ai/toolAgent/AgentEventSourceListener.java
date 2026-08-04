@@ -46,6 +46,7 @@ public class AgentEventSourceListener extends EventSourceListener {
   // 新增：可配置的字段名
   private final String targetFieldName;
   private final boolean emitTargetFieldToQueue;
+  private final Queue<String> reasoningQueue;
 
   // 错误处理常量
   private static final String ERROR_MESSAGE = "对不起你购买的产品尚不支持这个请求或者设备不在线，请检查你的小程序的设置";
@@ -79,8 +80,22 @@ public class AgentEventSourceListener extends EventSourceListener {
     this.chatTool = tool;
     this.targetFieldName = targetFieldName; // 保存字段名
     this.emitTargetFieldToQueue = emitTargetFieldToQueue;
+    this.reasoningQueue = null;
     this.parseStateMap.put(chatId, new ThoughtParseState());
   }
+
+  public AgentEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
+      BaseTool<?> tool, String targetFieldName, boolean emitTargetFieldToQueue,
+      Queue<String> reasoningQueue) {
+    this.queueMap = queueMap;
+    this.chatId = chatId;
+    this.chatTool = tool;
+    this.targetFieldName = targetFieldName;
+    this.emitTargetFieldToQueue = emitTargetFieldToQueue;
+    this.reasoningQueue = reasoningQueue;
+    this.parseStateMap.put(chatId, new ThoughtParseState());
+  }
+
 
   @Override
   public void onOpen(EventSource eventSource, Response response) {
@@ -179,6 +194,10 @@ public class AgentEventSourceListener extends EventSourceListener {
         return;
       }
 
+      String reasoning = delta.getString("reasoning_content");
+      if (reasoningQueue != null && reasoning != null && !reasoning.isEmpty()) {
+        reasoningQueue.add(reasoning);
+      }
       String content = delta.getString("content");
       if (content == null || content.trim().isEmpty()) {
         return;
