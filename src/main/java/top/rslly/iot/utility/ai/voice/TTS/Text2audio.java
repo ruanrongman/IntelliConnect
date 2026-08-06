@@ -28,7 +28,6 @@ import com.alibaba.dashscope.protocol.ConnectionConfigurations;
 import com.alibaba.dashscope.protocol.ConnectionOptions;
 import com.alibaba.dashscope.utils.Constants;
 import jakarta.annotation.PostConstruct;
-import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,32 +35,27 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
-import top.rslly.iot.utility.SseEmitterUtil;
 import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
-import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 
-import jakarta.websocket.Session;
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 @Component
 @Slf4j
 public class Text2audio implements TtsService {
   private static final String model = "cosyvoice-v1";
   private static final String voice = "longxiaochun";
+  private static final int BOUNDARY_FADE_MS = 5;
   private static SpeechSynthesisParam param;
   private static volatile ConnectionOptions connectionOptions;
-  private final ConcurrentHashMap<String, Object> inFlightTextLocks = new ConcurrentHashMap<>();
   private volatile Semaphore ttsSemaphore = new Semaphore(64, true);
   private int dashscopeMaxConcurrent = 64;
   private long dashscopeAcquireTimeoutMs = 5000;
@@ -74,97 +68,93 @@ public class Text2audio implements TtsService {
   @Autowired
   private ProductRoleServiceImpl productRoleService;
 
-  @Data
   static class ReactCallback extends ResultCallback<SpeechSynthesisResult> {
-    public CountDownLatch latch = new CountDownLatch(1);
-    private final String chatId;
-    private final Session session;
-    private final long generation;
-
-    // Only used for WebSocket audio sending.
-    private final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
-    private List<byte[]> bytes;
-    // End-of-stream marker: an empty byte array.
-    private final byte[] EOS = new byte[0];
+    private final CountDownLatch latch = new CountDownLatch(1);
+    private final Consumer<byte[]> onChunk;
     private final OpusEncoderUtils encoder;
-    private boolean sendAfterHandler = true;
-    private final ByteArrayOutputStream pcmBuffer = new ByteArrayOutputStream();
+    private final AtomicBoolean terminal = new AtomicBoolean();
+    private volatile boolean emitted;
+    private volatile boolean failed;
 
-    ReactCallback(String chatId, Session session, long generation) {
-      this.chatId = chatId;
-      this.session = session;
-      this.generation = generation;
+    ReactCallback(String chatId, Consumer<byte[]> onChunk) {
+      this.onChunk = onChunk;
       this.encoder =
           new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
-              AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
-      if (session == null) {
-        bytes = new ArrayList<>();
-        sendAfterHandler = false;
-      }
+              AudioFrameDuration.resolveOutboundFrameDurationMs(chatId), BOUNDARY_FADE_MS);
     }
 
     @Override
-    public void onEvent(SpeechSynthesisResult message) {
-      if (message.getAudioFrame() != null) {
-        try {
-          pcmBuffer.write(readAllBytes(message.getAudioFrame()));
-        } catch (Exception e) {
-          log.error("sendBinary error{}", e.getMessage());
-        }
-      }
-    }
-
-    @Override
-    public void onComplete() {
-      log.debug("synthesis onComplete!");
-      try {
-        if (pcmBuffer.size() > 0) {
-          byte[] pcmData = pcmBuffer.toByteArray();
-          List<byte[]> packets = encoder.encodePcmToOpus(pcmData, false);
-          if (!sendAfterHandler) {
-            bytes.addAll(packets);
-          }
-          for (byte[] packet : packets) {
-            audioQueue.offer(packet);
-          }
-
-          // Flush encoder
-          packets = encoder.encodePcmToOpus(new byte[0], true);
-          if (!sendAfterHandler) {
-            bytes.addAll(packets);
-          }
-          for (byte[] packet : packets) {
-            audioQueue.offer(packet);
-          }
-        }
-      } catch (Exception e) {
-        log.error("PCM processing error: {}", e.getMessage());
-      }
-
-      if (!sendAfterHandler) {
-        bytes.add(EOS);
-        latch.countDown();
+    public synchronized void onEvent(SpeechSynthesisResult message) {
+      if (terminal.get() || failed || message.getAudioFrame() == null) {
         return;
       }
-      // Signal end-of-stream by adding an empty array.
-      audioQueue.offer(EOS);
-      // Asynchronously send the queued frames.
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue, generation);
-      latch.countDown();
+      acceptPcm(readAllBytes(message.getAudioFrame()));
+    }
+
+    synchronized void acceptPcm(byte[] pcmData) {
+      if (terminal.get() || failed || pcmData == null || pcmData.length == 0) {
+        return;
+      }
+      try {
+        emitPackets(encoder.encodePcmToOpus(pcmData, false));
+      } catch (Exception e) {
+        failed = true;
+        log.error("PCM processing error: {}", e.getMessage(), e);
+      }
     }
 
     @Override
-    public void onError(Exception e) {
-      log.debug("synthesis onError!");
-      if (session == null) {
-        SseEmitterUtil.removeUser(chatId);
+    public synchronized void onComplete() {
+      if (!terminal.compareAndSet(false, true)) {
+        return;
       }
-      latch.countDown(); // 确保释放等待锁
+      log.debug("synthesis onComplete!");
+      try {
+        if (!failed) {
+          emitPackets(encoder.encodePcmToOpus(new byte[0], true));
+        }
+      } catch (Exception e) {
+        failed = true;
+        log.error("PCM processing error: {}", e.getMessage(), e);
+      } finally {
+        latch.countDown();
+      }
+    }
+
+    @Override
+    public synchronized void onError(Exception e) {
+      if (!terminal.compareAndSet(false, true)) {
+        return;
+      }
+      log.debug("synthesis onError!");
+      failed = true;
+      latch.countDown();
       log.error("TTS合成失败: {}", e.getMessage());
+    }
+
+    synchronized void cancel() {
+      if (terminal.compareAndSet(false, true)) {
+        failed = true;
+        latch.countDown();
+      }
     }
 
     public void waitForComplete() throws InterruptedException {
       latch.await();
+    }
+
+    boolean hasAudio() {
+      return emitted && !failed;
+    }
+
+    private void emitPackets(List<byte[]> packets) {
+      for (byte[] packet : packets) {
+        if (packet == null || packet.length == 0) {
+          continue;
+        }
+        onChunk.accept(packet);
+        emitted = true;
+      }
     }
 
     private byte[] readAllBytes(ByteBuffer buffer) {
@@ -288,54 +278,29 @@ public class Text2audio implements TtsService {
 
   @Async("taskExecutor")
   public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
-    ReactCallback callback = new ReactCallback(chatId, null, 0L);
+    ReactCallback callback = new ReactCallback(chatId, ignored -> {
+    });
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback, null,
         connectionOptions);
     synthesizer.call(text);
   }
 
   @Override
-  public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
-      String chatId, String voice, long generation) {
-    ReactCallback callback = new ReactCallback(chatId, session, generation);
-    try {
-      String model = param.getModel();
-      if (voice != null && voice.startsWith("cosy_v2_")) {
-        model = "cosyvoice-v2";
-        voice = voice.substring(8);
-        log.debug(model);
-        log.debug(voice);
-      }
-      // 创建线程安全的参数副本
-      SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
-          .apiKey(param.getApiKey())
-          .model(model)
-          .format(getPcmFormat(chatId))
-          .pitchRate(pitch)
-          .speechRate(speed)
-          .voice(StringUtils.isNotBlank(voice) ? voice : param.getVoice())
-          .build();
-      SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
-          connectionOptions);
-      acquireDashScopeTts("websocketAudioSync", chatId, text);
-      try {
-        synthesizer.call(text);
-        callback.waitForComplete();
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        log.error("waitForComplete error{}", e.getMessage());
-      } finally {
-        ttsSemaphore.release();
-      }
-    } catch (Exception e) {
-      log.error("websocketAudio error{}", e.getMessage());
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice) {
+    List<byte[]> audioFrames = new ArrayList<>();
+    boolean success = streamTextAudio(chatId, text, pitch, speed, voice, audioFrames::add);
+    if (!success) {
+      return null;
     }
+    audioFrames.add(AUDIO_EOS);
+    return audioFrames;
   }
 
   @Override
-  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
-      String voice) {
-    ReactCallback callback = new ReactCallback(chatId, null, 0L);
+  public boolean streamTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice, Consumer<byte[]> onChunk) {
+    ReactCallback callback = new ReactCallback(chatId, onChunk);
     try {
       String model = param.getModel();
       String voiceId = StringUtils.isNotBlank(voice) ? voice : param.getVoice();
@@ -356,30 +321,32 @@ public class Text2audio implements TtsService {
           .build();
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
           connectionOptions);
-      Object textLock = inFlightTextLocks.computeIfAbsent(text, ignored -> new Object());
+      acquireDashScopeTts("streamTextAudio", chatId, text);
       try {
-        synchronized (textLock) {
-          acquireDashScopeTts("getTextAudio", chatId, text);
-          try {
-            synthesizer.call(text);
-            callback.waitForComplete();
-          } finally {
-            ttsSemaphore.release();
-          }
-        }
+        synthesizer.call(text);
+        callback.waitForComplete();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        log.error("waitForComplete error{}", e.getMessage());
+        callback.cancel();
       } finally {
-        inFlightTextLocks.remove(text, textLock);
+        ttsSemaphore.release();
       }
-      if (callback.bytes == null || callback.bytes.isEmpty()) {
+      if (!callback.hasAudio()) {
         log.warn("TTS未生成有效音频: chatId={}, textLength={}", chatId,
             text == null ? 0 : text.length());
-        return null;
+        return false;
       }
-      return callback.bytes;
+      return true;
+    } catch (InterruptedException e) {
+      callback.cancel();
+      Thread.currentThread().interrupt();
+      log.error("等待DashScope TTS并发许可被中断: chatId={}", chatId);
     } catch (Exception e) {
-      log.error("getTextAudio error{}", e.getMessage());
+      callback.cancel();
+      log.error("streamTextAudio error{}", e.getMessage());
     }
-    return null;
+    return false;
   }
 
   private void acquireDashScopeTts(String scene, String chatId, String text)

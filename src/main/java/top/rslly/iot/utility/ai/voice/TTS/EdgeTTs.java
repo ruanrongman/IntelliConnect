@@ -33,8 +33,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -45,19 +43,7 @@ public class EdgeTTs implements TtsService {
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
       String chatId, String voice, long generation) {
-    List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
-    if (audioList == null) {
-      return;
-    }
-    final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
-    for (byte[] b : audioList) {
-      audioQueue.offer(b);
-    }
-    try {
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue, generation);
-    } catch (Exception e) {
-      log.error("websocketAudio error for chatId: {}", chatId, e);
-    }
+    TtsService.super.websocketAudioSync(text, pitch, speed, session, chatId, voice, generation);
   }
 
   @Override

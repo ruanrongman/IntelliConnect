@@ -28,6 +28,7 @@ import top.rslly.iot.services.agent.ProductVoiceDiyServiceImpl;
 import jakarta.websocket.Session;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 @Component
 public class TtsServiceFactory {
@@ -69,6 +70,14 @@ public class TtsServiceFactory {
     TtsOptions options = resolveTtsOptions(productId);
     TtsService ttsService = getTtsService(options.provider);
     return ttsService.getTextAudio(chatId, text, options.pitch, options.speed, options.voice);
+  }
+
+  public boolean streamTextAudio(String chatId, String text, int productId,
+      Consumer<byte[]> onChunk) {
+    TtsOptions options = resolveTtsOptions(productId);
+    TtsService ttsService = getTtsService(options.provider);
+    return ttsService.streamTextAudio(chatId, text, options.pitch, options.speed, options.voice,
+        onChunk);
   }
 
   private TtsOptions resolveTtsOptions(int productId) {

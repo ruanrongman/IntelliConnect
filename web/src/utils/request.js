@@ -2,13 +2,14 @@ import axios from 'axios'
 import qs from 'qs'
 import store from '@/store'
 import router from '@/router'
+import { normalizeBaseUrl } from '@/utils/url'
 // import { useAxiosCancel } from '@/hooks/useAxiosCancel'
 // const CancelToken = axios.CancelToken
 // const source = CancelToken.source()
 const { VITE_BASE_URL, VITE_LOCAL_TEST_URL, VITE_MODE } = import.meta.env
 
 const request = axios.create({
-  baseURL: VITE_BASE_URL,
+  baseURL: normalizeBaseUrl(VITE_BASE_URL),
   // cancelToken: new CancelToken((cancel) => (axiosCancel = cancel)),
 })
 

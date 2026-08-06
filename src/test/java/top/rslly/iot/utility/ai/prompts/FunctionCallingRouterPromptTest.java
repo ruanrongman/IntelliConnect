@@ -47,6 +47,13 @@ class FunctionCallingRouterPromptTest {
     assertTrue(systemPrompt.contains("Only <current_user_request> is the user's latest message"));
     assertTrue(systemPrompt.contains("NEVER infer the user's topic, intent, route"));
     assertTrue(systemPrompt.contains("only from native conversation history"));
+    assertTrue(systemPrompt.contains("native tool_calls protocol"));
+    assertTrue(systemPrompt.contains("Plain text never invokes, represents, or confirms"));
+    assertTrue(systemPrompt.contains("Requests that change or verify external state MUST call"));
+    assertTrue(systemPrompt.contains("Without a native function call, NEVER claim"));
+    assertTrue(systemPrompt.contains("silently verify assumptions, constraints"));
+    assertTrue(systemPrompt.contains("Concise does not mean superficial"));
+    assertFalse(systemPrompt.contains("short acknowledgment sentence"));
     assertFalse(systemPrompt.contains("Related memory:"));
     assertFalse(systemPrompt.contains("Current time:"));
     assertFalse(systemPrompt.contains("Reference information:"));

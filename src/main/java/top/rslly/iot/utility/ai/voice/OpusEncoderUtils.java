@@ -46,14 +46,24 @@ public class OpusEncoderUtils {
   private final int frameSizeMs;
   private final int frameSize;
   private final int totalFrameSize;
+  private final PcmBoundarySmoother boundarySmoother;
   private short[] buffer = new short[0];
+  private boolean hasPendingPcmByte;
+  private byte pendingPcmByte;
 
   public OpusEncoderUtils(int sampleRate, int channels, int frameSizeMs) {
+    this(sampleRate, channels, frameSizeMs, 0);
+  }
+
+  public OpusEncoderUtils(int sampleRate, int channels, int frameSizeMs, int boundaryFadeMs) {
     this.sampleRate = sampleRate;
     this.channels = channels;
     this.frameSizeMs = frameSizeMs;
     this.frameSize = (sampleRate * frameSizeMs) / 1000;
     this.totalFrameSize = frameSize * channels;
+    this.boundarySmoother = boundaryFadeMs > 0
+        ? new PcmBoundarySmoother(sampleRate, channels, boundaryFadeMs)
+        : null;
     try {
       encoder = new OpusEncoder(sampleRate, channels, OpusApplication.OPUS_APPLICATION_AUDIO);
       encoder.setBitrate(bitrate);
@@ -69,8 +79,12 @@ public class OpusEncoderUtils {
   }
 
   public List<byte[]> encodePcmToOpus(byte[] pcmData, boolean endOfStream) {
-    short[] newSamples = convertByteArrayToShortArray(pcmData);
+    byte[] alignedPcmData = alignPcmData(pcmData, endOfStream);
+    short[] newSamples = convertByteArrayToShortArray(alignedPcmData);
     validatePcmData(newSamples);
+    if (boundarySmoother != null) {
+      boundarySmoother.applyFadeIn(newSamples);
+    }
 
     // 将新数据追加到缓冲区
     buffer = concatArrays(buffer, newSamples);
@@ -92,6 +106,9 @@ public class OpusEncoderUtils {
 
     // 流结束时处理剩余数据并补零
     if (endOfStream && buffer.length > 0) {
+      if (boundarySmoother != null) {
+        boundarySmoother.applyFadeOut(buffer);
+      }
       short[] lastFrame = Arrays.copyOf(buffer, buffer.length);
       lastFrame = Arrays.copyOf(lastFrame, totalFrameSize);
       Arrays.fill(lastFrame, buffer.length, totalFrameSize, (short) 0);
@@ -103,6 +120,34 @@ public class OpusEncoderUtils {
     }
 
     return opusPackets;
+  }
+
+  private byte[] alignPcmData(byte[] pcmData, boolean endOfStream) {
+    byte[] source = pcmData == null ? new byte[0] : pcmData;
+    int sourceOffset = 0;
+    int combinedLength = source.length + (hasPendingPcmByte ? 1 : 0);
+    int alignedLength = combinedLength;
+    if ((combinedLength & 1) != 0) {
+      alignedLength = endOfStream ? combinedLength + 1 : combinedLength - 1;
+    }
+
+    byte[] aligned = new byte[alignedLength];
+    int targetOffset = 0;
+    if (hasPendingPcmByte) {
+      aligned[targetOffset++] = pendingPcmByte;
+      hasPendingPcmByte = false;
+    }
+
+    int copyLength = Math.min(source.length, alignedLength - targetOffset);
+    if (copyLength > 0) {
+      System.arraycopy(source, sourceOffset, aligned, targetOffset, copyLength);
+      sourceOffset += copyLength;
+    }
+    if (!endOfStream && sourceOffset < source.length) {
+      pendingPcmByte = source[sourceOffset];
+      hasPendingPcmByte = true;
+    }
+    return aligned;
   }
 
   private short[] concatArrays(short[] a, short[] b) {
@@ -140,6 +185,79 @@ public class OpusEncoderUtils {
 
   public void close() {
 
+  }
+}
+
+
+final class PcmBoundarySmoother {
+
+  private final int channels;
+  private final int fadeSampleFrames;
+  private long fadeInSamplesProcessed;
+
+  PcmBoundarySmoother(int sampleRate, int channels, int fadeDurationMs) {
+    if (sampleRate <= 0) {
+      throw new IllegalArgumentException("sampleRate must be positive");
+    }
+    if (channels <= 0) {
+      throw new IllegalArgumentException("channels must be positive");
+    }
+    if (fadeDurationMs <= 0) {
+      throw new IllegalArgumentException("fadeDurationMs must be positive");
+    }
+    this.channels = channels;
+    this.fadeSampleFrames = Math.max(1, sampleRate * fadeDurationMs / 1000);
+  }
+
+  void applyFadeIn(short[] samples) {
+    if (samples == null || samples.length == 0) {
+      return;
+    }
+    long fadeSampleCount = (long) fadeSampleFrames * channels;
+    int samplesToFade = (int) Math.min(samples.length,
+        Math.max(0L, fadeSampleCount - fadeInSamplesProcessed));
+    for (int i = 0; i < samplesToFade; i++) {
+      long sampleFrame = fadeInSamplesProcessed / channels;
+      samples[i] = scale(samples[i], fadeInGain((int) sampleFrame, fadeSampleFrames));
+      fadeInSamplesProcessed++;
+    }
+  }
+
+  void applyFadeOut(short[] samples) {
+    if (samples == null || samples.length == 0) {
+      return;
+    }
+    int availableSampleFrames = samples.length / channels;
+    int fadeFrames = Math.min(fadeSampleFrames, availableSampleFrames);
+    if (fadeFrames == 0) {
+      return;
+    }
+    int fadeStart = samples.length - fadeFrames * channels;
+    for (int frame = 0; frame < fadeFrames; frame++) {
+      double gain = fadeOutGain(frame, fadeFrames);
+      int frameOffset = fadeStart + frame * channels;
+      for (int channel = 0; channel < channels; channel++) {
+        samples[frameOffset + channel] = scale(samples[frameOffset + channel], gain);
+      }
+    }
+  }
+
+  private static double fadeInGain(int sampleFrame, int fadeFrames) {
+    if (fadeFrames == 1) {
+      return 0.0;
+    }
+    return 0.5 - 0.5 * Math.cos(Math.PI * sampleFrame / (fadeFrames - 1));
+  }
+
+  private static double fadeOutGain(int sampleFrame, int fadeFrames) {
+    if (fadeFrames == 1) {
+      return 0.0;
+    }
+    return 0.5 + 0.5 * Math.cos(Math.PI * sampleFrame / (fadeFrames - 1));
+  }
+
+  private static short scale(short sample, double gain) {
+    return (short) Math.round(sample * gain);
   }
 }
 

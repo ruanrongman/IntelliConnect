@@ -1,4 +1,5 @@
 import store from '@/store'
+import { joinUrl } from '@/utils/url'
 
 const { VITE_BASE_URL } = import.meta.env
 const DONE_SEPARATOR = /\r?\n\r?\n/
@@ -29,7 +30,7 @@ export const streamAiControl = async ({
   files.forEach((file) => {
     body.append('file', file)
   })
-  const response = await fetch(`${VITE_BASE_URL}/api/v2/aiControl/stream`, {
+  const response = await fetch(joinUrl(VITE_BASE_URL, '/api/v2/aiControl/stream'), {
     method: 'POST',
     headers,
     body,
@@ -60,12 +61,15 @@ export const stopAiControlStream = async (productId, streamId) => {
     productId: String(productId),
     streamId,
   })
-  const response = await fetch(`${VITE_BASE_URL}/api/v2/aiControl/stream/stop?${params.toString()}`, {
-    method: 'POST',
-    headers: {
-      Authorization: store.getters['auth/token'],
-    },
-  })
+  const response = await fetch(
+    `${joinUrl(VITE_BASE_URL, '/api/v2/aiControl/stream/stop')}?${params.toString()}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: store.getters['auth/token'],
+      },
+    }
+  )
   if (!response.ok) {
     throw new Error(`停止失败：${response.status}`)
   }

@@ -41,8 +41,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * MiniMax TTS 服务实现 支持语音合成并通过 WebSocket 发送音频流
@@ -74,21 +72,7 @@ public class MiniMaxTtsService implements TtsService {
   @Override
   public void websocketAudioSync(String text, Float pitch, Float speed, Session session,
       String chatId, String voice, long generation) {
-    List<byte[]> audioList = getTextAudio(chatId, text, pitch, speed, voice);
-    if (audioList == null) {
-      return;
-    }
-    // Only used for WebSocket audio sending.
-    final BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
-    for (byte[] b : audioList) {
-      audioQueue.offer(b);
-    }
-    try {
-      // 异步发送音频队列
-      AudioUtils.asyncSendAudioQueue(chatId, session, audioQueue, generation);
-    } catch (Exception e) {
-      log.error("MiniMax TTS error for chatId: {}", chatId, e);
-    }
+    TtsService.super.websocketAudioSync(text, pitch, speed, session, chatId, voice, generation);
   }
 
   /**

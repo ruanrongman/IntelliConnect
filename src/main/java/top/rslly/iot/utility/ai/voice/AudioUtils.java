@@ -35,11 +35,33 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.function.BooleanSupplier;
 
 @Slf4j
 public class AudioUtils {
   // Number of frames for pre-buffering
   private static final int PRE_BUFFER_COUNT = 5;
+
+  record PreBufferResult(List<byte[]> frames, boolean endOfStream, boolean cancelled) {}
+
+  static PreBufferResult readPreBuffer(BlockingQueue<byte[]> queue, BooleanSupplier shouldCancel)
+      throws InterruptedException {
+    List<byte[]> frames = new ArrayList<>();
+    for (int i = 0; i < PRE_BUFFER_COUNT; i++) {
+      if (shouldCancel.getAsBoolean()) {
+        return new PreBufferResult(frames, false, true);
+      }
+      byte[] frame = queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS);
+      if (frame == null) {
+        break;
+      }
+      if (frame.length == 0) {
+        return new PreBufferResult(frames, true, false);
+      }
+      frames.add(frame);
+    }
+    return new PreBufferResult(frames, false, false);
+  }
 
   public static byte[] convertMp3ToPcm(String mp3FilePath) {
     return convertMp3ToPcm(mp3FilePath, AudioFrameDuration.DEFAULT_SAMPLE_RATE);
@@ -217,26 +239,20 @@ public class AudioUtils {
           Thread.currentThread(), queue, generation);
       XiaoZhiWebsocket.activePlayback.put(chatId, playbackSession);
 
-      final long startTime = System.nanoTime();
-      int playPosition = 0;
       int frameDurationMs = AudioFrameDuration.resolveOutboundFrameDurationMs(chatId);
-
-      // Pre-buffer: collect up to PRE_BUFFER_COUNT frames.
-      List<byte[]> preBuffer = new ArrayList<>();
-      for (int i = 0; i < PRE_BUFFER_COUNT; i++) {
-        if (XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
-            || playbackSession.isCancelled.get()
-            || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)) {
-          queue.clear();
-          return;
-        }
-        // 修改：take() -> poll()，避免无限阻塞
-        byte[] frame = queue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS);
-        if (frame == null || frame.length == 0) {
-          break;
-        }
-        preBuffer.add(frame);
+      XiaoZhiWebsocket.PlaybackSession currentPlayback = playbackSession;
+      PreBufferResult preBufferResult = readPreBuffer(queue,
+          () -> XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)
+              || currentPlayback.isCancelled.get()
+              || !session.isOpen()
+              || !XiaoZhiWebsocket.isCurrentGeneration(chatId, generation));
+      if (preBufferResult.cancelled()) {
+        queue.clear();
+        return;
       }
+      List<byte[]> preBuffer = preBufferResult.frames();
+      long startTime = preBuffer.isEmpty() ? 0L : System.nanoTime();
+      int playPosition = 0;
 
       // Send pre-buffer frames immediately.
       for (byte[] bytes : preBuffer) {
@@ -248,6 +264,11 @@ public class AudioUtils {
           return;
         }
         sendBinary(chatId, AudioUtils.byte2Bytebuffer(bytes), generation);
+        playPosition += frameDurationMs;
+      }
+
+      if (preBufferResult.endOfStream()) {
+        return;
       }
 
       // Continue sending remaining frames with timing control.
@@ -271,6 +292,9 @@ public class AudioUtils {
           break;
         }
 
+        if (startTime == 0L) {
+          startTime = System.nanoTime();
+        }
         long expectedTimeNs = startTime + playPosition * 1_000_000L;
         long currentTimeNs = System.nanoTime();
         long delayNs = expectedTimeNs - currentTimeNs;
