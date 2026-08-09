@@ -59,6 +59,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 @Component
 @Slf4j
@@ -108,21 +110,44 @@ public class XiaoZhiUtil {
   }
 
   private record TtsPlaybackTask(TtsPlaybackType type, String content,
-      BlockingQueue<byte[]> audioQueue) {
-    private static TtsPlaybackTask audio(String text) {
-      return new TtsPlaybackTask(TtsPlaybackType.AUDIO, text, new LinkedBlockingQueue<>());
+      BlockingQueue<byte[]> audioQueue, Thread synthesisThread, AtomicBoolean cancelled,
+      TtsPrefetchWindow.Permit prefetchPermit) {
+    private static TtsPlaybackTask audio(String text, BlockingQueue<byte[]> audioQueue,
+        Thread synthesisThread, AtomicBoolean cancelled,
+        TtsPrefetchWindow.Permit prefetchPermit) {
+      return new TtsPlaybackTask(TtsPlaybackType.AUDIO, text, audioQueue, synthesisThread,
+          cancelled, prefetchPermit);
     }
 
     private static TtsPlaybackTask text(String text) {
-      return new TtsPlaybackTask(TtsPlaybackType.TEXT, text, null);
+      return new TtsPlaybackTask(TtsPlaybackType.TEXT, text, null, null, null, null);
     }
 
     private static TtsPlaybackTask base(String message) {
-      return new TtsPlaybackTask(TtsPlaybackType.BASE, message, null);
+      return new TtsPlaybackTask(TtsPlaybackType.BASE, message, null, null, null, null);
     }
 
     private static TtsPlaybackTask end() {
-      return new TtsPlaybackTask(TtsPlaybackType.END, null, null);
+      return new TtsPlaybackTask(TtsPlaybackType.END, null, null, null, null, null);
+    }
+
+    private void cancelSynthesis() {
+      if (cancelled != null) {
+        cancelled.set(true);
+      }
+      if (synthesisThread != null && synthesisThread.isAlive()) {
+        synthesisThread.interrupt();
+      }
+      if (audioQueue != null) {
+        audioQueue.clear();
+        audioQueue.offer(new byte[0]);
+      }
+    }
+
+    private void releasePrefetchSlot() {
+      if (prefetchPermit != null) {
+        prefetchPermit.close();
+      }
     }
   }
 
@@ -505,47 +530,81 @@ public class XiaoZhiUtil {
         + "|voice=" + voiceFingerprint, 16);
   }
 
-  private void enqueueTtsTask(BlockingQueue<TtsPlaybackTask> playbackTasks, String chatId,
-      String src, int productId, long generation) {
-    TtsPlaybackTask task = TtsPlaybackTask.audio(src);
-    playbackTasks.offer(task);
-    Thread.ofVirtual().start(
-        () -> asyncTTS(chatId, src, productId, generation, task.audioQueue()));
+  private void enqueueTtsTask(BlockingQueue<TtsPlaybackTask> playbackTasks,
+      TtsPrefetchWindow prefetchWindow, String chatId, String src, int productId,
+      long generation) throws InterruptedException {
+    TtsPrefetchWindow.Permit permit = prefetchWindow.acquire(
+        () -> isTtsGenerationActive(chatId, generation));
+    if (permit == null) {
+      return;
+    }
+
+    BlockingQueue<byte[]> audioQueue = new LinkedBlockingQueue<>();
+    AtomicBoolean cancelled = new AtomicBoolean();
+    Thread synthesisThread = Thread.ofVirtual().unstarted(
+        () -> asyncTTS(chatId, src, productId, generation, cancelled, audioQueue));
+    TtsPlaybackTask task = TtsPlaybackTask.audio(src, audioQueue, synthesisThread, cancelled,
+        permit);
+    boolean queued = false;
+    try {
+      if (!isTtsGenerationActive(chatId, generation)) {
+        return;
+      }
+      playbackTasks.offer(task);
+      queued = true;
+      synthesisThread.start();
+    } finally {
+      if (!queued || synthesisThread.getState() == Thread.State.NEW) {
+        playbackTasks.remove(task);
+        task.cancelSynthesis();
+        task.releasePrefetchSlot();
+      }
+    }
   }
 
   /**
    * 异步生成音频。实时帧写入当前句子的内存队列，完整结果成功后再发布到Redis缓存。
    */
   private void asyncTTS(String chatId, String src, int productId, long generation,
-      BlockingQueue<byte[]> audioQueue) {
+      AtomicBoolean cancelled, BlockingQueue<byte[]> audioQueue) {
     try {
+      if (cancelled.get() || !isTtsGenerationActive(chatId, generation)) {
+        return;
+      }
       if (shouldSkipTts(src, skipToolPrefix) || !hasSpeakableContent(src)) {
         log.debug("跳过无效TTS文本: chatId={}, text={}", chatId, src);
         return;
       }
       String srcHash = getTtsCacheKey(chatId, src, productId);
-      if (enqueueCachedAudio(srcHash, audioQueue)) {
+      if (enqueueCachedAudio(srcHash, audioQueue,
+          () -> !cancelled.get() && isTtsGenerationActive(chatId, generation))) {
         return;
       }
 
       Object textLock = ttsCacheLocks.computeIfAbsent(srcHash, ignored -> new Object());
       try {
         synchronized (textLock) {
-          if (enqueueCachedAudio(srcHash, audioQueue)) {
+          if (enqueueCachedAudio(srcHash, audioQueue,
+              () -> !cancelled.get() && isTtsGenerationActive(chatId, generation))) {
+            return;
+          }
+          if (cancelled.get() || !isTtsGenerationActive(chatId, generation)) {
             return;
           }
 
           List<byte[]> cacheFrames = new ArrayList<>();
           boolean success = ttsServiceFactory.streamTextAudio(chatId, src, productId, packet -> {
-            if (packet == null || packet.length == 0) {
+            if (cancelled.get() || packet == null || packet.length == 0) {
               return;
             }
             cacheFrames.add(packet);
-            if (XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)
-                && !XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false)) {
+            if (!cancelled.get() && isTtsGenerationActive(chatId, generation)) {
               audioQueue.offer(packet);
             }
           });
+          if (cancelled.get() || !isTtsGenerationActive(chatId, generation)) {
+            return;
+          }
           if (!success || cacheFrames.isEmpty()) {
             log.warn("TTS结果为空，退化为文本输出: chatId={}, text={}", chatId, src);
             return;
@@ -566,7 +625,13 @@ public class XiaoZhiUtil {
     }
   }
 
-  private boolean enqueueCachedAudio(String srcHash, BlockingQueue<byte[]> audioQueue) {
+  private boolean isTtsGenerationActive(String chatId, long generation) {
+    return XiaoZhiWebsocket.isCurrentGeneration(chatId, generation)
+        && !XiaoZhiWebsocket.isAbort.getOrDefault(chatId, false);
+  }
+
+  private boolean enqueueCachedAudio(String srcHash, BlockingQueue<byte[]> audioQueue,
+      BooleanSupplier isActive) {
     List<byte[]> cachedFrames = bytesRedisTemplate.opsForList().range(srcHash, 0, -1);
     if (cachedFrames == null || cachedFrames.isEmpty()) {
       return false;
@@ -574,6 +639,9 @@ public class XiaoZhiUtil {
 
     boolean emitted = false;
     for (int i = cachedFrames.size() - 1; i >= 0; i--) {
+      if (!isActive.getAsBoolean()) {
+        return true;
+      }
       byte[] frame = cachedFrames.get(i);
       if (frame == null || frame.length == 0) {
         continue;
@@ -604,9 +672,14 @@ public class XiaoZhiUtil {
           case TEXT -> sendText(chatId, task.content(), generation);
           case BASE -> sendBase(chatId, task.content(), generation);
           case AUDIO -> {
-            sendText(chatId, task.content(), generation);
-            Session session = XiaoZhiWebsocket.clients.get(chatId);
-            AudioUtils.asyncSendAudioQueue(chatId, session, task.audioQueue(), generation);
+            try {
+              sendText(chatId, task.content(), generation);
+              Session session = XiaoZhiWebsocket.clients.get(chatId);
+              AudioUtils.asyncSendAudioQueue(chatId, session, task.audioQueue(), generation);
+            } finally {
+              task.cancelSynthesis();
+              task.releasePrefetchSlot();
+            }
           }
           default -> {
           }
@@ -626,7 +699,8 @@ public class XiaoZhiUtil {
     TtsPlaybackTask pendingTask;
     while ((pendingTask = playbackTasks.poll()) != null) {
       if (pendingTask.audioQueue() != null) {
-        pendingTask.audioQueue().clear();
+        pendingTask.cancelSynthesis();
+        pendingTask.releasePrefetchSlot();
       }
     }
   }
@@ -653,6 +727,7 @@ public class XiaoZhiUtil {
     // 设置处理状态为true
     redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, true);
     BlockingQueue<TtsPlaybackTask> playbackTasks = new LinkedBlockingQueue<>();
+    TtsPrefetchWindow prefetchWindow = new TtsPrefetchWindow();
     Thread playbackThread = Thread.ofVirtual().start(
         () -> streamRspResultHandler(chatId, generation, playbackTasks));
     try {
@@ -705,7 +780,7 @@ public class XiaoZhiUtil {
               break;
             if (StringUtils.isEmpty(removeEmoji(sentence)))
               break;
-            enqueueTtsTask(playbackTasks, chatId, sentence, productId, generation);
+            enqueueTtsTask(playbackTasks, prefetchWindow, chatId, sentence, productId, generation);
             answerStrBuffer.setLength(0);
           }
           break;
@@ -733,7 +808,7 @@ public class XiaoZhiUtil {
             // 不允许向结果列表中写入空字符串
             if (StringUtils.isEmpty(before))
               continue;
-            enqueueTtsTask(playbackTasks, chatId, before, productId, generation);
+            enqueueTtsTask(playbackTasks, prefetchWindow, chatId, before, productId, generation);
             answerStrBuffer.setLength(0);
             answerStrBuffer.append(eAfter);
           } else
@@ -742,9 +817,16 @@ public class XiaoZhiUtil {
       }
     } finally {
       playbackTasks.offer(TtsPlaybackTask.end());
-      playbackThread.join();
-      redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, false);
-      this.clearAudioHandlers(chatId, generation);
+      try {
+        playbackThread.join();
+      } finally {
+        if (playbackThread.isAlive()) {
+          playbackThread.interrupt();
+          clearPendingPlaybackTasks(playbackTasks);
+        }
+        redisStateTemplate.opsForHash().put(chatId + "_state", STREAM_AUDIO_HANDLER_FLAG, false);
+        this.clearAudioHandlers(chatId, generation);
+      }
     }
   }
 
