@@ -21,6 +21,35 @@ package top.rslly.iot.utility.ai.voice.ASR;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import jakarta.websocket.ClientEndpointConfig;
+import jakarta.websocket.CloseReason;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.Endpoint;
+import jakarta.websocket.EndpointConfig;
+import jakarta.websocket.MessageHandler;
+import jakarta.websocket.Session;
+import jakarta.websocket.WebSocketContainer;
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -30,33 +59,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 
-import jakarta.annotation.PostConstruct;
-import javax.net.ssl.SSLContext;
-import jakarta.websocket.*;
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.security.SecureRandom;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 @Slf4j
 @Component
-public class FunAsrClient implements AsrService {
+public class FunAsrClient implements AsrService, StreamingAsrService {
 
   private static final int DEFAULT_TIMEOUT_SECONDS = 2000;
+  private static final int STREAMING_QUEUE_CAPACITY = 1024;
   private static final Pattern TEXT_CLEANUP_PATTERN =
       Pattern.compile("<\\|(.*?)\\|><\\|(.*?)\\|><\\|(.*?)\\|>(.*)");
-
-  // 或者使用单例
+  private static final StreamCommand FINISH_COMMAND = new StreamCommand(null, true);
   private static final OkHttpClient okHttpClient = new OkHttpClient.Builder()
       .connectTimeout(30, TimeUnit.SECONDS)
       .readTimeout(30, TimeUnit.SECONDS)
@@ -80,65 +91,59 @@ public class FunAsrClient implements AsrService {
   @Value("${ai.funasr.output-dir:./funasr_output/}")
   private String outputDir;
 
+  @Value("${ai.funasr.itn:false}")
+  private boolean itn;
+
+  @Value("${ai.funasr.streaming-final-timeout-ms:10000}")
+  private long streamingFinalTimeoutMs;
+
+  private final Set<FunAsrStreamingSession> activeStreamingSessions =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
   private String wsUri;
 
   @PostConstruct
   public void init() {
-    this.wsUri = String.format("%s://%s:%d",
-        useSsl ? "wss" : "ws", host, port);
+    this.wsUri = String.format("%s://%s:%d", useSsl ? "wss" : "ws", host, port);
     log.debug("FunASR客户端初始化完成: uri={}, ssl={}", wsUri, useSsl);
   }
 
-  /**
-   * 主入口：语音转文字（线程安全）
-   */
-  public CompletableFuture<AsrResult> speechToText(byte[] pcmData, String sessionId) {
+  @Override
+  public StreamingAsrSession startStreaming(String sessionId) {
+    FunAsrStreamingSession streamingSession =
+        new FunAsrStreamingSession(sessionId, Math.max(1L, streamingFinalTimeoutMs));
+    activeStreamingSessions.add(streamingSession);
+    streamingSession.result.whenComplete(
+        (text, error) -> activeStreamingSessions.remove(streamingSession));
+    streamingSession.start();
+    return streamingSession;
+  }
 
+  /** 主入口：语音转文字（线程安全）。 */
+  public CompletableFuture<AsrResult> speechToText(byte[] pcmData, String sessionId) {
     return CompletableFuture.supplyAsync(() -> {
       CompletableFuture<String> receiveFuture = new CompletableFuture<>();
       Session session = null;
-
       try {
         log.debug("开始语音识别, sessionId={}, dataSize={}", sessionId, pcmData.length);
-
-        // 建立 WebSocket，新版返回独立 Session
-        session = connectWebSocket(receiveFuture);
-
-        // 发送配置
-        sendConfiguration(session, sessionId);
-
-        // 发送音频
+        session = connectWebSocket(createOfflineEndpoint(receiveFuture));
+        sendConfiguration(session, sessionId, "offline");
         sendAudioData(session, pcmData);
-
-        // 发送结束标记
         sendEndMarker(session);
-
-        // 等待识别结果（每个请求独享 future）
         String rawText = receiveFuture.get(DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
         String cleanedText = cleanText(rawText);
-
         log.debug("语音识别完成, sessionId={}, text={}", sessionId, cleanedText);
-
         return new AsrResult(cleanedText, "not support");
-
       } catch (Exception e) {
         log.error("语音识别失败 sessionId={}", sessionId, e);
         return new AsrResult("", null);
-
       } finally {
         closeSession(session);
       }
     });
   }
 
-  /**
-   * 建立 WebSocket（返回独立 Session）
-   */
-  private Session connectWebSocket(CompletableFuture<String> receiveFuture) throws Exception {
-
+  private Session connectWebSocket(Endpoint endpoint) throws Exception {
     WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-
     ClientEndpointConfig config = ClientEndpointConfig.Builder.create()
         .configurator(new ClientEndpointConfig.Configurator() {
           @Override
@@ -151,55 +156,25 @@ public class FunAsrClient implements AsrService {
     if (useSsl) {
       configureSslContext();
     }
-
-    Endpoint endpoint = createEndpoint(receiveFuture);
-
     Session session = container.connectToServer(endpoint, config, URI.create(wsUri));
-
     log.debug("WebSocket连接已建立");
     return session;
   }
 
-  /**
-   * 创建 WebSocket Endpoint(绑定独立 future)
-   */
-  private Endpoint createEndpoint(CompletableFuture<String> receiveFuture) {
+  private Endpoint createOfflineEndpoint(CompletableFuture<String> receiveFuture) {
     return new Endpoint() {
-
       @Override
       public void onOpen(Session session, EndpointConfig config) {
-
-        session.addMessageHandler(new MessageHandler.Whole<String>() {
-          @Override
-          public void onMessage(String message) {
-            try {
-              JSONObject json = JSON.parseObject(message);
-              boolean isFinal =
-                  !json.containsKey("is_final") || json.getBooleanValue("is_final");
-              String text = json.getString("text");
-
-              log.debug("收到消息: isFinal={}, text={}", isFinal, text);
-
-              if (isFinal) {
-                receiveFuture.complete(text);
-              }
-            } catch (Exception e) {
-              log.error("处理消息失败", e);
-              receiveFuture.completeExceptionally(e);
-            }
-          }
-        });
+        session.addMessageHandler(createOfflineMessageHandler(receiveFuture));
       }
 
       @Override
-      public void onError(Session session, Throwable thr) {
-        log.error("WebSocket错误", thr);
-        receiveFuture.completeExceptionally(thr);
+      public void onError(Session session, Throwable error) {
+        receiveFuture.completeExceptionally(error);
       }
 
       @Override
       public void onClose(Session session, CloseReason closeReason) {
-        log.debug("连接关闭: {}", closeReason);
         if (!receiveFuture.isDone()) {
           receiveFuture.complete("");
         }
@@ -207,67 +182,148 @@ public class FunAsrClient implements AsrService {
     };
   }
 
-  /**
-   * SSL 支持（开发环境）
-   */
+  private Endpoint createStreamingEndpoint(CompletableFuture<String> result) {
+    return new Endpoint() {
+      @Override
+      public void onOpen(Session session, EndpointConfig config) {
+        session.addMessageHandler(createStreamingMessageHandler(result));
+      }
+
+      @Override
+      public void onError(Session session, Throwable error) {
+        result.completeExceptionally(error);
+      }
+
+      @Override
+      public void onClose(Session session, CloseReason closeReason) {
+        if (!result.isDone()) {
+          result.completeExceptionally(
+              new IOException("FunASR流式连接提前关闭: " + closeReason));
+        }
+      }
+    };
+  }
+
+  MessageHandler.Whole<String> createOfflineMessageHandler(
+      CompletableFuture<String> receiveFuture) {
+    return new MessageHandler.Whole<String>() {
+      @Override
+      public void onMessage(String message) {
+        try {
+          JSONObject json = JSON.parseObject(message);
+          boolean isFinal =
+              !json.containsKey("is_final") || json.getBooleanValue("is_final");
+          String text = json.getString("text");
+          log.debug("收到消息: isFinal={}, text={}", isFinal, text);
+          if (isFinal) {
+            receiveFuture.complete(text);
+          }
+        } catch (Exception e) {
+          receiveFuture.completeExceptionally(e);
+        }
+      }
+    };
+  }
+
+  MessageHandler.Whole<String> createStreamingMessageHandler(CompletableFuture<String> result) {
+    return new MessageHandler.Whole<String>() {
+      @Override
+      public void onMessage(String message) {
+        try {
+          JSONObject json = JSON.parseObject(message);
+          String mode = json.getString("mode");
+          String text = json.getString("text");
+          if (isFinalStreamingMessage(json)) {
+            log.debug("收到FunASR最终结果: mode={}, text={}", mode, text);
+            result.complete(cleanText(text));
+          } else {
+            log.trace("收到FunASR在线结果: mode={}, text={}", mode, text);
+          }
+        } catch (Exception e) {
+          result.completeExceptionally(e);
+        }
+      }
+    };
+  }
+
+  boolean isFinalStreamingMessage(JSONObject json) {
+    if (json == null) {
+      return false;
+    }
+    String mode = json.getString("mode");
+    if ("2pass-online".equalsIgnoreCase(mode)) {
+      return false;
+    }
+    return "2pass-offline".equalsIgnoreCase(mode)
+        || json.containsKey("is_final") && json.getBooleanValue("is_final");
+  }
+
   private void configureSslContext() throws Exception {
     SSLContext sslContext = SSLContext.getInstance("TLS");
     sslContext.init(null, new javax.net.ssl.TrustManager[] {
         new javax.net.ssl.X509TrustManager() {
+          @Override
           public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-            return null;
+            return new java.security.cert.X509Certificate[0];
           }
 
+          @Override
           public void checkClientTrusted(java.security.cert.X509Certificate[] certs,
               String authType) {}
 
+          @Override
           public void checkServerTrusted(java.security.cert.X509Certificate[] certs,
               String authType) {}
         }
     }, new SecureRandom());
   }
 
-  /** 发送配置信息 */
-  private void sendConfiguration(Session session, String sessionId) throws Exception {
-    Map<String, Object> map = new HashMap<>();
-    map.put("mode", "offline");
-    map.put("chunk_size", List.of(5, 10, 5));
-    map.put("chunk_interval", 10);
-    map.put("wav_name", sessionId);
-    map.put("is_speaking", true);
-    map.put("itn", false);
-
-    session.getBasicRemote().sendText(JSON.toJSONString(map));
+  private void sendConfiguration(Session session, String sessionId, String mode)
+      throws IOException {
+    session.getBasicRemote().sendText(JSON.toJSONString(buildConfiguration(sessionId, mode)));
   }
 
-  /** 发送音频 */
-  private void sendAudioData(Session session, byte[] pcmData) throws Exception {
+  Map<String, Object> buildStreamingConfiguration(String sessionId) {
+    return buildConfiguration(sessionId, "2pass");
+  }
+
+  private Map<String, Object> buildConfiguration(String sessionId, String mode) {
+    Map<String, Object> configuration = new HashMap<>();
+    configuration.put("mode", mode);
+    configuration.put("chunk_size", List.of(5, 10, 5));
+    configuration.put("chunk_interval", 10);
+    configuration.put("wav_name", sessionId);
+    configuration.put("wav_format", "pcm");
+    configuration.put("is_speaking", true);
+    configuration.put("itn", itn);
+    return configuration;
+  }
+
+  private void sendAudioData(Session session, byte[] pcmData) throws IOException {
     session.getBasicRemote().sendBinary(ByteBuffer.wrap(pcmData));
   }
 
-  /** 结束标记 */
-  private void sendEndMarker(Session session) throws Exception {
-    Map<String, Object> endMap = new HashMap<>();
-    endMap.put("is_speaking", false);
-    session.getBasicRemote().sendText(JSON.toJSONString(endMap));
+  private void sendEndMarker(Session session) throws IOException {
+    session.getBasicRemote().sendText(JSON.toJSONString(Map.of("is_speaking", false)));
   }
 
-  /** 文本清理 */
   private String cleanText(String raw) {
-    if (raw == null)
+    if (raw == null) {
       return "";
-    Matcher m = TEXT_CLEANUP_PATTERN.matcher(raw);
-    if (m.find())
-      return m.group(4).trim();
+    }
+    Matcher matcher = TEXT_CLEANUP_PATTERN.matcher(raw);
+    if (matcher.find()) {
+      return matcher.group(4).trim();
+    }
     return raw.trim();
   }
 
-  /** 安全关闭 session */
   private void closeSession(Session session) {
     if (session != null && session.isOpen()) {
       try {
         session.close();
       } catch (Exception ignored) {
+        // The ASR result or original transport error is more useful than a close failure.
       }
     }
   }
@@ -276,20 +332,12 @@ public class FunAsrClient implements AsrService {
   public String getText(String url) {
     try {
       log.debug("开始从URL获取音频并识别: {}", url);
-
-      // 从URL下载音频文件
       byte[] audioData = downloadAudioFromUrl(url);
-
-      // 生成会话ID
       String sessionId = "url_" + System.currentTimeMillis();
-
-      // 调用语音识别
-      CompletableFuture<AsrResult> future = speechToText(audioData, sessionId);
-      AsrResult result = future.get(DEFAULT_TIMEOUT_SECONDS + 5, TimeUnit.SECONDS);
-
+      AsrResult result = speechToText(audioData, sessionId)
+          .get(DEFAULT_TIMEOUT_SECONDS + 5, TimeUnit.SECONDS);
       log.debug("URL音频识别完成: {}", result.getText());
       return result.getText();
-
     } catch (Exception e) {
       log.error("从URL识别音频失败: {}", url, e);
       return "";
@@ -299,68 +347,154 @@ public class FunAsrClient implements AsrService {
   @Override
   public String getTextRealtime(File file, int sampleRate, String format) {
     try {
-      if (!file.exists())
+      if (!file.exists()) {
         return "";
-
+      }
       byte[] audio = Files.readAllBytes(file.toPath());
-
       if ("wav".equalsIgnoreCase(format)) {
         audio = AudioUtils.wavBytesToPcm(audio);
       }
-
-      CompletableFuture<AsrResult> future =
-          speechToText(audio, "file_" + file.getName());
-      return future.get(DEFAULT_TIMEOUT_SECONDS + 5, TimeUnit.SECONDS)
+      return speechToText(audio, "file_" + file.getName())
+          .get(DEFAULT_TIMEOUT_SECONDS + 5, TimeUnit.SECONDS)
           .getText();
-
     } catch (Exception e) {
       log.error("实时识别失败", e);
       return "";
     }
   }
 
-  /**
-   * 从URL下载音频数据
-   */
   private byte[] downloadAudioFromUrl(String url) throws IOException {
-    log.debug("开始下载音频: {}", url);
-
-    Request request = new Request.Builder()
-        .url(url)
-        .get()
-        .build();
-
+    Request request = new Request.Builder().url(url).get().build();
     try (Response response = okHttpClient.newCall(request).execute()) {
       if (!response.isSuccessful()) {
         throw new IOException("下载音频失败: " + response.code() + " " + response.message());
       }
-
       ResponseBody body = response.body();
       if (body == null) {
         throw new IOException("响应体为空");
       }
-
       byte[] data = body.bytes();
-      log.debug("音频下载完成: {} bytes", data.length);
-
-      // 如果是WAV格式，移除头部
       if (data.length > 44 && isWavFormat(data)) {
         return AudioUtils.wavBytesToPcm(data);
       }
-
       return data;
     }
   }
 
-  /**
-   * 检查是否为WAV格式
-   */
   private boolean isWavFormat(byte[] data) {
-    if (data.length < 4) {
-      return false;
+    return data.length >= 4
+        && data[0] == 'R'
+        && data[1] == 'I'
+        && data[2] == 'F'
+        && data[3] == 'F';
+  }
+
+  @PreDestroy
+  public void shutdownStreamingSessions() {
+    new ArrayList<>(activeStreamingSessions).forEach(FunAsrStreamingSession::cancel);
+  }
+
+  private record StreamCommand(byte[] pcmData, boolean finish) {}
+
+  private final class FunAsrStreamingSession implements StreamingAsrSession {
+    private final String sessionId;
+    private final long finalTimeoutMs;
+    private final ArrayBlockingQueue<StreamCommand> commands =
+        new ArrayBlockingQueue<>(STREAMING_QUEUE_CAPACITY);
+    private final CompletableFuture<String> result = new CompletableFuture<>();
+    private final AtomicBoolean finishRequested = new AtomicBoolean(false);
+    private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    private volatile Session webSocketSession;
+    private volatile Thread senderThread;
+
+    private FunAsrStreamingSession(String sessionId, long finalTimeoutMs) {
+      this.sessionId = sessionId;
+      this.finalTimeoutMs = finalTimeoutMs;
     }
-    // 检查 "RIFF" 标识
-    return data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F';
+
+    private void start() {
+      senderThread = Thread.ofVirtual()
+          .name("funasr-stream-" + sessionId)
+          .start(this::runSender);
+      result.whenComplete((text, error) -> {
+        cancelled.set(true);
+        closeSession(webSocketSession);
+        Thread currentSender = senderThread;
+        if (currentSender != null && currentSender != Thread.currentThread()) {
+          currentSender.interrupt();
+        }
+      });
+    }
+
+    @Override
+    public boolean sendPcm(byte[] pcmData) {
+      if (pcmData == null || pcmData.length == 0) {
+        return true;
+      }
+      if (finishRequested.get() || cancelled.get() || result.isDone()) {
+        return false;
+      }
+      boolean accepted = commands.offer(new StreamCommand(pcmData.clone(), false));
+      if (!accepted) {
+        fail(new IllegalStateException("FunASR流式音频队列已满"));
+      }
+      return accepted;
+    }
+
+    @Override
+    public CompletableFuture<String> finish() {
+      if (finishRequested.compareAndSet(false, true) && !cancelled.get()) {
+        if (!commands.offer(FINISH_COMMAND)) {
+          fail(new IllegalStateException("FunASR流式音频队列无法写入结束标记"));
+        } else {
+          result.orTimeout(finalTimeoutMs, TimeUnit.MILLISECONDS);
+        }
+      }
+      return result;
+    }
+
+    @Override
+    public void cancel() {
+      if (!cancelled.compareAndSet(false, true)) {
+        return;
+      }
+      commands.clear();
+      result.completeExceptionally(new CancellationException("FunASR流式会话已取消"));
+      closeSession(webSocketSession);
+      Thread currentSender = senderThread;
+      if (currentSender != null) {
+        currentSender.interrupt();
+      }
+    }
+
+    private void runSender() {
+      try {
+        webSocketSession = connectWebSocket(createStreamingEndpoint(result));
+        sendConfiguration(webSocketSession, sessionId, "2pass");
+        while (!cancelled.get()) {
+          StreamCommand command = commands.take();
+          if (command.finish()) {
+            sendEndMarker(webSocketSession);
+            return;
+          }
+          sendAudioData(webSocketSession, command.pcmData());
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        if (!cancelled.get()) {
+          fail(e);
+        }
+      } catch (Exception e) {
+        fail(e);
+      }
+    }
+
+    private void fail(Throwable error) {
+      commands.clear();
+      cancelled.set(true);
+      result.completeExceptionally(error);
+      closeSession(webSocketSession);
+    }
   }
 
   public static class AsrResult {

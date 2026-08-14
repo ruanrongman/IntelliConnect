@@ -41,6 +41,8 @@ import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.tools.EmotionToolAsync;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
+import top.rslly.iot.utility.ai.voice.ASR.StreamingAsrService;
+import top.rslly.iot.utility.ai.voice.ASR.StreamingAsrSession;
 import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
@@ -98,12 +100,18 @@ public class XiaoZhiUtil {
   @Value("${ai.tts.cache-expire-time}")
   private long ttsCacheExpireTime;
   private final ExecutorService routerExecutor = Executors.newVirtualThreadPerTaskExecutor();
+  private final ExecutorService streamingAsrExecutor = Executors.newVirtualThreadPerTaskExecutor();
   private final ConcurrentHashMap<String, Object> ttsCacheLocks = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, StreamingAsrState> streamingAsrStates =
+      new ConcurrentHashMap<>();
 
   private final String STREAM_AUDIO_HANDLER_FLAG = "<|SAH|>";
   private final String STREAM_RESULT_HANDLER_FLAG = "<|SRH|>";
   private final String AUDIO_CONTENT_TOO_SHORT = "<|2SRT|>";
   private final String SSE_DONE_FLAG = "[DONE]";
+
+  private record StreamingAsrState(long inputRound, StreamingAsrSession session,
+      AtomicBoolean finishing) {}
 
   private enum TtsPlaybackType {
     AUDIO, TEXT, BASE, END
@@ -325,6 +333,127 @@ public class XiaoZhiUtil {
       closeQuietly(bos);
       deleteTempFileQuietly(tempFile);
     }
+  }
+
+  public boolean beginStreamingAsr(String chatId, int productId, long inputRound) {
+    if (chatId == null || inputRound <= 0L || asrServiceFactory == null) {
+      return false;
+    }
+    cancelStreamingAsr(chatId);
+    String asrProvider = getProductAsrProvider(productId);
+    StreamingAsrService streamingAsrService =
+        asrServiceFactory.getStreamingService(asrProvider);
+    if (streamingAsrService == null) {
+      return false;
+    }
+    try {
+      StreamingAsrSession session =
+          streamingAsrService.startStreaming(chatId + "_round_" + inputRound);
+      streamingAsrStates.put(chatId,
+          new StreamingAsrState(inputRound, session, new AtomicBoolean(false)));
+      return true;
+    } catch (Exception e) {
+      log.warn("启动ASR流式识别失败，将在输入结束后回退批量识别: chatId={}, inputRound={}",
+          chatId, inputRound, e);
+      return false;
+    }
+  }
+
+  public boolean hasStreamingAsr(String chatId, long inputRound) {
+    StreamingAsrState state = streamingAsrStates.get(chatId);
+    return state != null && state.inputRound() == inputRound;
+  }
+
+  public boolean sendStreamingPcm(String chatId, long inputRound, byte[] pcmData) {
+    StreamingAsrState state = streamingAsrStates.get(chatId);
+    return state != null
+        && state.inputRound() == inputRound
+        && state.session().sendPcm(pcmData);
+  }
+
+  public boolean finishStreamingAsr(List<byte[]> audioSnapshot, String chatId, int productId,
+      boolean isManual, long inputRound) {
+    StreamingAsrState state = streamingAsrStates.get(chatId);
+    if (state == null || state.inputRound() != inputRound) {
+      return false;
+    }
+    if (!state.finishing().compareAndSet(false, true)) {
+      return true;
+    }
+    List<byte[]> stableAudio = audioSnapshot == null ? List.of() : new ArrayList<>(audioSnapshot);
+    if (stableAudio.size() <= 20) {
+      if (streamingAsrStates.remove(chatId, state)) {
+        state.session().cancel();
+        CompletableFuture.runAsync(
+            () -> dealWithAudio(stableAudio, chatId, productId, isManual, inputRound),
+            streamingAsrExecutor);
+      }
+      return true;
+    }
+    CompletableFuture<String> finalResult;
+    try {
+      finalResult = state.session().finish();
+    } catch (Exception e) {
+      if (streamingAsrStates.remove(chatId, state)) {
+        state.session().cancel();
+        CompletableFuture.runAsync(() -> {
+          if (XiaoZhiWebsocket.isCurrentInputRound(chatId, inputRound)) {
+            log.warn("结束ASR流式识别失败，将回退批量识别: chatId={}, inputRound={}, error={}",
+                chatId, inputRound, describeError(e));
+            dealWithAudio(stableAudio, chatId, productId, isManual, inputRound);
+          }
+        }, streamingAsrExecutor);
+      }
+      return true;
+    }
+    finalResult.whenCompleteAsync((text, error) -> {
+      if (!streamingAsrStates.remove(chatId, state)
+          || !XiaoZhiWebsocket.isCurrentInputRound(chatId, inputRound)) {
+        return;
+      }
+      if (isCancellation(error)) {
+        return;
+      }
+      if (error != null || StringUtils.isBlank(text)) {
+        log.warn("ASR流式识别失败，将回退批量识别: chatId={}, inputRound={}, error={}",
+            chatId, inputRound, error == null ? "empty result" : describeError(error));
+        dealWithAudio(stableAudio, chatId, productId, isManual, inputRound);
+        return;
+      }
+      dealWithAudio(stableAudio, chatId, productId, isManual, inputRound, text);
+    }, streamingAsrExecutor);
+    return true;
+  }
+
+  public void cancelStreamingAsr(String chatId) {
+    if (chatId == null) {
+      return;
+    }
+    StreamingAsrState state = streamingAsrStates.remove(chatId);
+    if (state != null) {
+      state.session().cancel();
+    }
+  }
+
+  private boolean isCancellation(Throwable error) {
+    Throwable current = error;
+    while (current != null) {
+      if (current instanceof CancellationException) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
+  private String describeError(Throwable error) {
+    if (error == null) {
+      return "unknown error";
+    }
+    String message = error.getMessage();
+    return StringUtils.isBlank(message)
+        ? error.getClass().getSimpleName()
+        : error.getClass().getSimpleName() + ": " + message;
   }
 
   private void closeQuietly(ByteArrayOutputStream bos) {
@@ -877,6 +1006,10 @@ public class XiaoZhiUtil {
     }
     long effectiveInputRound =
         inputRound > 0L ? inputRound : XiaoZhiWebsocket.beginInputRound(chatId);
+    if (!XiaoZhiWebsocket.isCurrentInputRound(chatId, effectiveInputRound)) {
+      log.debug("忽略过期音频处理结果: chatId={}, inputRound={}", chatId, effectiveInputRound);
+      return;
+    }
     if (!XiaoZhiWebsocket.tryClaimInputRound(chatId, effectiveInputRound)) {
       log.debug("忽略重复音频处理触发: chatId={}, inputRound={}", chatId, effectiveInputRound);
       return;
@@ -944,6 +1077,10 @@ public class XiaoZhiUtil {
 
   @PreDestroy
   public void shutdownExecutors() {
+    List<StreamingAsrState> activeStates = new ArrayList<>(streamingAsrStates.values());
+    streamingAsrStates.clear();
+    activeStates.forEach(state -> state.session().cancel());
+    streamingAsrExecutor.close();
     routerExecutor.close();
   }
 

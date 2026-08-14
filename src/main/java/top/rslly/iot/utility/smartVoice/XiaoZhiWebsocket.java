@@ -149,6 +149,7 @@ public class XiaoZhiWebsocket {
   // 记录最近一次有效交互时间，用于空闲超时判断
   private static final Map<String, Long> lastInteractionTimeMap = new ConcurrentHashMap<>();
   private final List<byte[]> audioList = Collections.synchronizedList(new ArrayList<>());
+  private final Deque<byte[]> asrPreRoll = new ArrayDeque<>();
   private String chatId;
   private int productId;
   private boolean isManual = true;
@@ -261,6 +262,14 @@ public class XiaoZhiWebsocket {
       return 0L;
     }
     return getOrCreateSendContext(chatId).inputRound.incrementAndGet();
+  }
+
+  public static boolean isCurrentInputRound(String chatId, long inputRound) {
+    if (chatId == null || inputRound <= 0L) {
+      return false;
+    }
+    SendContext context = sendContexts.get(chatId);
+    return context != null && context.inputRound.get() == inputRound;
   }
 
   public static boolean tryClaimInputRound(String chatId, long inputRound) {
@@ -674,12 +683,24 @@ public class XiaoZhiWebsocket {
             log.info("listen start");
             isAbort.put(chatId, false);
             voiceContent.remove(chatId);
-            activeInputRound = beginInputRound(chatId);
+            clearAudioFrames();
+            clearAsrPreRoll();
+            if (xiaoZhiUtil != null) {
+              xiaoZhiUtil.cancelStreamingAsr(chatId);
+            }
+            if (isManual) {
+              activeInputRound = beginInputRound(chatId);
+              if (xiaoZhiUtil != null) {
+                xiaoZhiUtil.beginStreamingAsr(chatId, productId, activeInputRound);
+              }
+            } else {
+              activeInputRound = 0L;
+            }
             refreshInteractionTime(chatId);
           }
           case "stop" -> {
             if (xiaoZhiUtil != null) {
-              xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual, activeInputRound);
+              finishInputAudio();
             }
           }
         }
@@ -692,124 +713,115 @@ public class XiaoZhiWebsocket {
 
   @OnMessage
   public void onBinaryMessage(byte[] message) {
-    if (!isManual) {
-      try {
-        long currentTime = System.currentTimeMillis();
-        byte[] bytes = message.clone();
-        OpusDecoder decoder = opusDecoderMap.get(chatId);
-        if (decoder == null) {
-          decoder = new OpusDecoder(AudioFrameDuration.resolveInboundSampleRate(chatId), 1);
-          opusDecoderMap.put(chatId, decoder);
+    audioList.add(message);
+    boolean hasStreamingAsr = xiaoZhiUtil != null
+        && xiaoZhiUtil.hasStreamingAsr(chatId, activeInputRound);
+    if (isManual && !hasStreamingAsr) {
+      return;
+    }
+    try {
+      long currentTime = System.currentTimeMillis();
+      byte[] bytes = message.clone();
+      OpusDecoder vadDecoder = vadOpusDecoderMap.get(chatId);
+      if (vadDecoder == null) {
+        vadDecoder = new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1);
+        vadOpusDecoderMap.put(chatId, vadDecoder);
+      }
+      int vadFrameSize = AudioFrameDuration.resolveVadFrameSizeSamples(chatId);
+      byte[] vadDataPacket = new byte[vadFrameSize * 2];
+      int vadPcmFrame = vadDecoder.decode(bytes, 0, bytes.length,
+          vadDataPacket, 0, vadFrameSize, false);
+      byte[] streamingPcm = Arrays.copyOf(vadDataPacket, vadPcmFrame * 2);
+
+      if (isManual) {
+        xiaoZhiUtil.sendStreamingPcm(chatId, activeInputRound, streamingPcm);
+        return;
+      }
+      if (hasStreamingAsr) {
+        xiaoZhiUtil.sendStreamingPcm(chatId, activeInputRound, streamingPcm);
+      } else {
+        bufferAsrPreRoll(streamingPcm);
+      }
+
+      ByteArrayOutputStream buffer =
+          pcmVadBuffer.computeIfAbsent(chatId, key -> new ByteArrayOutputStream());
+      buffer.write(streamingPcm);
+      byte[] bufferArray = buffer.toByteArray();
+      int bufferLength = bufferArray.length;
+      int processed = 0;
+      boolean interactionDetected = Boolean.TRUE.equals(haveVoice.get(chatId));
+
+      while (processed + 512 * 2 <= bufferLength) {
+        byte[] chunk = Arrays.copyOfRange(bufferArray, processed, processed + 512 * 2);
+        SlieroVadListener listener = vadListenerMap.get(chatId);
+        if (listener == null) {
+          log.warn("未找到chatId对应的VAD监听器: {}", chatId);
+          pcmVadBuffer.remove(chatId);
+          return;
         }
-        OpusDecoder vadDecoder = vadOpusDecoderMap.get(chatId);
-        if (vadDecoder == null) {
-          vadDecoder = new OpusDecoder(AudioFrameDuration.VAD_SAMPLE_RATE, 1);
-          vadOpusDecoderMap.put(chatId, vadDecoder);
+        var map = listener.listen(chunk);
+        if (map != null && map.containsKey("start")) {
+          log.debug("检测到语音开始: {}", map);
+          haveVoice.put(chatId, true);
+          activeInputRound = beginInputRound(chatId);
+          interactionDetected = true;
+          if (xiaoZhiUtil != null
+              && xiaoZhiUtil.beginStreamingAsr(chatId, productId, activeInputRound)) {
+            flushAsrPreRoll(activeInputRound);
+          } else {
+            clearAsrPreRoll();
+          }
+          if (isRealTime) {
+            abortCurrentOutput(chatId);
+          }
+          cancelActivePlayback(chatId);
+          int keepFrames = Math.min(10, audioList.size());
+          trimAudioFrames(keepFrames);
         }
-        int frameSize = AudioFrameDuration.resolveInboundFrameSizeSamples(chatId);
-        int vadFrameSize = AudioFrameDuration.resolveVadFrameSizeSamples(chatId);
-        byte[] vadDataPacket = new byte[vadFrameSize * 2];
-        boolean interactionDetected = Boolean.TRUE.equals(haveVoice.get(chatId));
-
-        decoder.decode(bytes, 0, bytes.length, new byte[frameSize * 2], 0, frameSize, false);
-        int vadPcmFrame = vadDecoder.decode(bytes, 0, bytes.length,
-            vadDataPacket, 0, vadFrameSize, false);
-        int vadDecodedBytes = vadPcmFrame * 2;
-
-        // 初始化缓冲区
-        if (!pcmVadBuffer.containsKey(chatId)) {
-          pcmVadBuffer.put(chatId, new ByteArrayOutputStream());
+        if (map != null && map.containsKey("end")) {
+          log.info("检测到语音结束: {}", map);
+          interactionDetected = true;
+          if (isRealTime) {
+            isAbort.put(chatId, false);
+          }
+          refreshInteractionTime(chatId);
+          if (xiaoZhiUtil != null) {
+            finishInputAudio();
+          }
+          clearAsrPreRoll();
+          pcmVadBuffer.remove(chatId);
+          return;
         }
-        ByteArrayOutputStream buffer = pcmVadBuffer.get(chatId);
+        processed += 512 * 2;
+      }
 
-        // 将解码数据写入缓冲区
-        if (buffer != null) {
-          buffer.write(vadDataPacket, 0, vadDecodedBytes);
-          byte[] bufferArray = buffer.toByteArray();
-          int bufferLength = bufferArray.length;
-          int processed = 0;
+      if (interactionDetected) {
+        refreshInteractionTime(chatId);
+      } else if (hasExceededIdleTimeout(chatId, currentTime, isRealTime)) {
+        closeSessionForIdleTimeout(currentTime);
+        return;
+      }
 
-          // 循环处理512*2字节的数据块
-          while (processed + 512 * 2 <= bufferLength) {
-            byte[] chunk = Arrays.copyOfRange(
-                bufferArray,
-                processed,
-                processed + 512 * 2);
-            // 获取该会话对应的VAD监听器实例
-            SlieroVadListener listener = vadListenerMap.get(chatId);
-            if (listener == null) {
-              log.warn("未找到chatId对应的VAD监听器: {}", chatId);
-              pcmVadBuffer.remove(chatId);
-              return;
-            }
-            // 处理音频片段
-            var map = listener.listen(chunk);
-            if (map != null && map.containsKey("start")) {
-              log.debug("检测到语音开始: {}", map);
-              haveVoice.put(chatId, true);
-              activeInputRound = beginInputRound(chatId);
-              interactionDetected = true;
-              if (isRealTime) {
-                abortCurrentOutput(chatId);
-              }
-              // 主动取消当前正在播放的音频，防止混叠
-              cancelActivePlayback(chatId);
-              // 保留音频数据最后10帧（直接修改原始列表）
-              int keepFrames = Math.min(10, audioList.size()); // 安全处理边界
-              trimAudioFrames(keepFrames);
-            }
-            if (map != null && map.containsKey("end")) {
-              log.info("检测到语音结束: {}", map);
-              interactionDetected = true;
-              if (isRealTime) {
-                isAbort.put(chatId, false);
-              }
-              refreshInteractionTime(chatId);
-              if (xiaoZhiUtil != null) {
-                xiaoZhiUtil.dealWithAudio(audioList, chatId, productId, isManual, activeInputRound);
-              }
-              pcmVadBuffer.remove(chatId);
-              return;
-            }
-            processed += 512 * 2;
-          }
-
-          if (interactionDetected) {
-            refreshInteractionTime(chatId);
-          } else if (hasExceededIdleTimeout(chatId, currentTime, isRealTime)) {
-            closeSessionForIdleTimeout(currentTime);
-            return;
-          }
-
-          // 保留未处理数据
-          buffer.reset();
-          if (processed < bufferLength) {
-            buffer.write(bufferArray, processed, bufferLength - processed);
-          }
-
-          // 防御性清理：如果audioList过大（超过5分钟的数据），清理旧数据
-          // 假设每帧约20ms，5分钟 = 300秒 = 15000帧
-          int maxFrames = 15000;
-          if (audioList.size() > maxFrames) {
-            log.warn("audioList过大，chatId: {}, 当前大小: {}, 清理旧数据", chatId, audioList.size());
-            int keepFrames = Math.min(100, audioList.size()); // 保留最近100帧
-            trimAudioFrames(keepFrames);
-          }
-
-          // 防御性清理：如果pcmVadBuffer过大，重置
-          if (buffer.size() > 1024 * 1024) { // 超过1MB
-            log.warn("pcmVadBuffer过大，chatId: {}, 当前大小: {}bytes, 重置缓冲区", chatId, buffer.size());
-            buffer.reset();
-          }
-        }
-
-      } catch (Exception e) {
-        log.error("音频转换失败, chatId: {}, 错误: {}", chatId, e.getMessage(), e);
-        // 异常时清理缓冲区，防止内存泄漏
-        pcmVadBuffer.remove(chatId);
+      buffer.reset();
+      if (processed < bufferLength) {
+        buffer.write(bufferArray, processed, bufferLength - processed);
+      }
+      if (audioList.size() > 15000) {
+        log.warn("audioList过大，chatId: {}, 当前大小: {}, 清理旧数据", chatId, audioList.size());
+        trimAudioFrames(Math.min(100, audioList.size()));
+      }
+      if (buffer.size() > 1024 * 1024) {
+        log.warn("pcmVadBuffer过大，chatId: {}, 当前大小: {}bytes, 重置缓冲区", chatId, buffer.size());
+        buffer.reset();
+      }
+    } catch (Exception e) {
+      log.error("音频转换失败, chatId: {}, 错误: {}", chatId, e.getMessage(), e);
+      pcmVadBuffer.remove(chatId);
+      clearAsrPreRoll();
+      if (xiaoZhiUtil != null) {
+        xiaoZhiUtil.cancelStreamingAsr(chatId);
       }
     }
-    audioList.add(message);
   }
 
   @OnError
@@ -847,6 +859,7 @@ public class XiaoZhiWebsocket {
     }
     if (xiaoZhiUtil != null) {
       xiaoZhiUtil.destroyMcp(chatId);
+      xiaoZhiUtil.cancelStreamingAsr(chatId);
     }
     cancelActivePlayback(chatId);
     isAbort.remove(chatId);
@@ -993,6 +1006,52 @@ public class XiaoZhiWebsocket {
     }
   }
 
+  private void clearAudioFrames() {
+    synchronized (audioList) {
+      audioList.clear();
+    }
+  }
+
+  private List<byte[]> drainAudioFrames() {
+    synchronized (audioList) {
+      List<byte[]> snapshot = new ArrayList<>(audioList);
+      audioList.clear();
+      return snapshot;
+    }
+  }
+
+  private void finishInputAudio() {
+    List<byte[]> audioSnapshot = drainAudioFrames();
+    if (!xiaoZhiUtil.finishStreamingAsr(audioSnapshot, chatId, productId, isManual,
+        activeInputRound)) {
+      xiaoZhiUtil.dealWithAudio(audioSnapshot, chatId, productId, isManual, activeInputRound);
+    }
+  }
+
+  private void bufferAsrPreRoll(byte[] pcmData) {
+    if (pcmData == null || pcmData.length == 0) {
+      return;
+    }
+    asrPreRoll.addLast(pcmData);
+    while (asrPreRoll.size() > 10) {
+      asrPreRoll.removeFirst();
+    }
+  }
+
+  private void flushAsrPreRoll(long inputRound) {
+    while (!asrPreRoll.isEmpty()) {
+      byte[] pcmData = asrPreRoll.removeFirst();
+      if (!xiaoZhiUtil.sendStreamingPcm(chatId, inputRound, pcmData)) {
+        asrPreRoll.clear();
+        return;
+      }
+    }
+  }
+
+  private void clearAsrPreRoll() {
+    asrPreRoll.clear();
+  }
+
   private void closeSessionForIdleTimeout(long currentTime) throws IOException {
     Long lastInteractionTime = lastInteractionTimeMap.get(chatId);
     long idleMillis = lastInteractionTime == null ? 0L : currentTime - lastInteractionTime;
@@ -1000,6 +1059,10 @@ public class XiaoZhiWebsocket {
 
     audioList.clear();
     pcmVadBuffer.remove(chatId);
+    clearAsrPreRoll();
+    if (xiaoZhiUtil != null) {
+      xiaoZhiUtil.cancelStreamingAsr(chatId);
+    }
 
     Session session = XiaoZhiWebsocket.clients.get(chatId);
     if (session != null && session.isOpen()) {

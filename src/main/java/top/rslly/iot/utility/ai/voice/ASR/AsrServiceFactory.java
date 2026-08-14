@@ -68,4 +68,11 @@ public class AsrServiceFactory {
     return "funasr".equalsIgnoreCase(defaultProvider) ? funAsrClient : audio2Text;
   }
 
+  public StreamingAsrService getStreamingService(String provider) {
+    AsrService asrService = getService(provider);
+    return asrService instanceof StreamingAsrService streamingAsrService
+        ? streamingAsrService
+        : null;
+  }
+
 }
