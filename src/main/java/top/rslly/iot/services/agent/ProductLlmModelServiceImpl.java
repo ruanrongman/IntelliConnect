@@ -19,12 +19,21 @@
  */
 package top.rslly.iot.services.agent;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
+import top.rslly.iot.models.LlmProviderInformationEntity;
 import top.rslly.iot.models.ProductLlmModelEntity;
+import top.rslly.iot.models.UserProductBindEntity;
+import top.rslly.iot.models.WxProductBindEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.ProductLlmModel;
+import top.rslly.iot.param.response.ProductLlmModelResponse;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -33,7 +42,9 @@ import top.rslly.iot.utility.result.ResultTool;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductLlmModelServiceImpl implements ProductLlmModelService {
@@ -118,6 +129,101 @@ public class ProductLlmModelServiceImpl implements ProductLlmModelService {
   }
 
   @Override
+  public JsonResult<?> getProductLlmModelPage(String token, int pageNum, int pageSize,
+      Integer productId) {
+    if (pageNum < 1 || pageSize < 1 || productId != null && productId < 1) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    String tokenDeal = token.replace(JwtTokenUtil.TOKEN_PREFIX, "");
+    String role = JwtTokenUtil.getUserRole(tokenDeal);
+    String username = JwtTokenUtil.getUsername(tokenDeal);
+    Pageable pageable = PageRequest.of(pageNum - 1, pageSize, Sort.by(Sort.Direction.ASC, "id"));
+    Page<ProductLlmModelResponse> result;
+    if (role.equals("ROLE_" + "wx_user")) {
+      List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
+      if (wxUserEntityList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      String appid = wxUserEntityList.getFirst().getAppid();
+      String openid = wxUserEntityList.getFirst().getOpenid();
+      List<Integer> productIdList = wxProductBindRepository.findAllByAppidAndOpenid(appid, openid)
+          .stream()
+          .map(WxProductBindEntity::getProductId)
+          .distinct()
+          .toList();
+      if (productId != null) {
+        productIdList = productIdList.contains(productId) ? List.of(productId) : List.of();
+      }
+      if (productIdList.isEmpty()) {
+        result = emptyProductLlmModelPage(pageable);
+      } else {
+        Page<ProductLlmModelEntity> productLlmModelEntityList =
+            productLlmModelRepository.findAllByProductIdIn(productIdList, pageable);
+        result = productLlmModelResponsePage(productLlmModelEntityList);
+      }
+    } else if (!role.equals("[ROLE_admin]")) {
+      var userList = userRepository.findAllByUsername(username);
+      if (userList.isEmpty()) {
+        return ResultTool.fail(ResultCode.COMMON_FAIL);
+      }
+      int userId = userList.getFirst().getId();
+      List<Integer> productIdList = userProductBindRepository.findAllByUserId(userId)
+          .stream()
+          .map(UserProductBindEntity::getProductId)
+          .distinct()
+          .toList();
+      if (productId != null) {
+        productIdList = productIdList.contains(productId) ? List.of(productId) : List.of();
+      }
+      if (productIdList.isEmpty()) {
+        result = emptyProductLlmModelPage(pageable);
+      } else {
+        Page<ProductLlmModelEntity> productLlmModelEntityList =
+            productLlmModelRepository.findAllByProductIdIn(productIdList, pageable);
+        result = productLlmModelResponsePage(productLlmModelEntityList);
+      }
+    } else {
+      Page<ProductLlmModelEntity> productLlmModelEntityList;
+      if (productId == null) {
+        productLlmModelEntityList = productLlmModelRepository.findAll(pageable);
+      } else {
+        productLlmModelEntityList =
+            productLlmModelRepository.findAllByProductId(productId, pageable);
+      }
+      result = productLlmModelResponsePage(productLlmModelEntityList);
+    }
+    return ResultTool.success(result);
+  }
+
+  private Page<ProductLlmModelResponse> productLlmModelResponsePage(
+      Page<ProductLlmModelEntity> productLlmModelEntityList) {
+    List<Integer> providerIdList = productLlmModelEntityList.stream()
+        .map(ProductLlmModelEntity::getProviderId)
+        .distinct()
+        .toList();
+    Map<Integer, String> providerIdMap = providerIdList.isEmpty() ? Map.of()
+        : llmProviderInformationRepository.findAllByIdIn(providerIdList).stream()
+            .collect(Collectors.toMap(LlmProviderInformationEntity::getId,
+                this::getProviderDisplayName));
+    return productLlmModelEntityList.map(productLlmModelEntity -> new ProductLlmModelResponse(
+        productLlmModelEntity.getId(),
+        productLlmModelEntity.getModelName(),
+        productLlmModelEntity.getProductId(),
+        providerIdMap.get(productLlmModelEntity.getProviderId()),
+        productLlmModelEntity.getProviderId(),
+        productLlmModelEntity.getToolsId(),
+        productLlmModelEntity.getThinking(),
+        productLlmModelEntity.getThinkingBudget()));
+  }
+
+  private String getProviderDisplayName(LlmProviderInformationEntity provider) {
+    if (provider.getUserName() == null || provider.getUserName().isBlank()) {
+      return provider.getProviderName();
+    }
+    return provider.getProviderName() + " (" + provider.getUserName() + ")";
+  }
+
+  @Override
   public JsonResult<?> getProductLlmModelByProductId(int productId) {
     var result = productLlmModelRepository.findAllByProductId(productId);
     if (result.isEmpty()) {
@@ -170,5 +276,9 @@ public class ProductLlmModelServiceImpl implements ProductLlmModelService {
         return ResultTool.success(productLlmModelEntityList);
       }
     }
+  }
+
+  private Page<ProductLlmModelResponse> emptyProductLlmModelPage(Pageable pageable) {
+    return new PageImpl<>(List.of(), pageable, 0);
   }
 }

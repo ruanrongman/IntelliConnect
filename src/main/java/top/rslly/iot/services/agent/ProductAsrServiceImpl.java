@@ -24,8 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.ProductAsrEntity;
+import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.ProductAsrParam;
+import top.rslly.iot.param.response.ProductAsrResponse;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -33,6 +35,8 @@ import top.rslly.iot.utility.result.ResultTool;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductAsrServiceImpl implements ProductAsrService {
@@ -99,8 +103,23 @@ public class ProductAsrServiceImpl implements ProductAsrService {
     }
     if (result.isEmpty()) {
       return ResultTool.fail(ResultCode.COMMON_FAIL);
-    } else
-      return ResultTool.success(result);
+    } else {
+      List<ProductAsrResponse> productAsrResponseList = new ArrayList<>();
+      List<Integer> productIdList =
+          result.stream().map(ProductAsrEntity::getProductId).distinct().toList();
+      Map<Integer, String> productIdMap = productRepository.findAllByIdIn(productIdList).stream()
+          .collect(Collectors.toMap(ProductEntity::getId, ProductEntity::getProductName));
+      result.forEach(productAsrEntity -> {
+        ProductAsrResponse productAsrResponse = new ProductAsrResponse();
+        productAsrResponse.setId(productAsrEntity.getId());
+        productAsrResponse.setProviderName(productAsrEntity.getProviderName());
+        productAsrResponse.setAsrName(productAsrEntity.getAsrName());
+        productAsrResponse.setProductName(productIdMap.get(productAsrEntity.getProductId()));
+        productAsrResponse.setProductId(productAsrEntity.getProductId());
+        productAsrResponseList.add(productAsrResponse);
+      });
+      return ResultTool.success(productAsrResponseList);
+    }
   }
 
   @Override

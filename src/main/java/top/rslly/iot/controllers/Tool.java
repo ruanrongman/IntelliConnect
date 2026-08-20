@@ -920,6 +920,17 @@ public class Tool {
     return productLlmModelService.getProductLlmModel(header);
   }
 
+  @Operation(summary = "分页获取产品LLM模型配置", description = "分页获取当前用户有权访问的产品LLM模型配置")
+  @RequestMapping(value = "/productLlmModelPage", method = RequestMethod.GET)
+  public JsonResult<?> getProductLlmModelPage(
+      @RequestHeader("Authorization") String header,
+      @RequestParam("pageNum") @Min(value = 1, message = "pageNum 必须大于等于 1") int pageNum,
+      @RequestParam("pageSize") @Min(value = 1, message = "pageSize 必须大于等于 1") int pageSize,
+      @RequestParam(value = "productId", required = false) @Min(value = 1,
+          message = "productId 必须大于 0") Integer productId) {
+    return productLlmModelService.getProductLlmModelPage(header, pageNum, pageSize, productId);
+  }
+
   @Operation(summary = "获取产品LLM模型配置", description = "获取产品LLM模型配置(产品id)")
   @RequestMapping(value = "/productLlmModelByProductId", method = RequestMethod.GET)
   public JsonResult<?> getProductLlmModelByProductId(@RequestParam("productId") int productId,

@@ -34,6 +34,8 @@ public interface ProductLlmModelService {
 
   JsonResult<?> getProductLlmModel(String token);
 
+  JsonResult<?> getProductLlmModelPage(String token, int pageNum, int pageSize, Integer productId);
+
   JsonResult<?> getProductLlmModelByProductId(int productId);
 
   JsonResult<?> postProductLlmModel(ProductLlmModel productLlmModel);

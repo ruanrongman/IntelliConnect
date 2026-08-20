@@ -5,6 +5,12 @@ export const getProductLlmModel = (data) =>
     url: '/api/v2/productLlmModel',
     method: 'get',
   })
+export const getProductLlmModelPage = (params) =>
+  request({
+    url: '/api/v2/productLlmModelPage',
+    method: 'get',
+    params
+  })
 export const getProductLlmModelByProductId = (params) =>
   request({
     url: '/api/v2/productLlmModelByProductId',

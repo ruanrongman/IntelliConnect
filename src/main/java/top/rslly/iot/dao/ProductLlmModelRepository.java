@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.dao;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.ProductLlmModelEntity;
@@ -29,6 +31,10 @@ public interface ProductLlmModelRepository extends JpaRepository<ProductLlmModel
   List<ProductLlmModelEntity> findAllById(int id);
 
   List<ProductLlmModelEntity> findAllByProductId(int productId);
+
+  Page<ProductLlmModelEntity> findAllByProductId(int productId, Pageable pageable);
+
+  Page<ProductLlmModelEntity> findAllByProductIdIn(List<Integer> productIds, Pageable pageable);
 
   List<ProductLlmModelEntity> findAllByProductIdAndToolsId(int productId, String toolsId);
 

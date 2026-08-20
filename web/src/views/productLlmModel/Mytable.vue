@@ -20,6 +20,7 @@
       :data-source="dataSource"
       :pagination="pagination"
       class="custom-table"
+      @change="handleTableChange"
     >
       <template #action="{ record }">
         <div class="action-buttons">
@@ -48,9 +49,8 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { getProductLlmModel, getProductLlmModelByProductId, deleteProductLlmModel } from '@/api/productLlmModel';
+import { getProductLlmModelPage, deleteProductLlmModel } from '@/api/productLlmModel';
 import { getProduct } from '@/api/product';
-import { getLlmProviderInformation } from '@/api/llmProviderInformation';
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons-vue'
@@ -60,13 +60,17 @@ const emit = defineEmits(['editRecord']);
 
 const router = useRouter()
 
-const pagination = {
+const pagination = ref({
+  current: 1,
   pageSize: 5,
-};
+  total: 0,
+  showSizeChanger: true,
+  pageSizeOptions: ['5', '10', '20', '50'],
+  showTotal: (total) => `共 ${total} 条`
+});
 
 const dataSource = ref([]);
 const productNameMap = ref({});
-const providerNameMap = ref({});
 const selectedProductId = ref(null);
 const productOptions = ref([]);
 const FILTER_STORAGE_KEY = 'productLlmModel:selectedProductId';
@@ -107,17 +111,19 @@ const fetchProductList = () => {
 
 const handleFilterChange = (value) => {
   selectedProductId.value = value === null || value === undefined ? null : value;
+  pagination.value.current = 1;
   persistSelectedProductId();
   stopPolling();
-  fetchCurrentData();
+  fetchCurrentData({ force: true });
   startPolling();
 };
 
 const handleFilterReset = () => {
   selectedProductId.value = null;
+  pagination.value.current = 1;
   persistSelectedProductId();
   stopPolling();
-  fetchCurrentData();
+  fetchCurrentData({ force: true });
   startPolling();
 };
 
@@ -189,6 +195,7 @@ const columns = [
 
 let intervalId;
 let latestRequestId = 0;
+let requestInFlight = false;
 
 const persistSelectedProductId = () => {
   try {
@@ -217,26 +224,10 @@ const restoreSelectedProductId = () => {
   }
 };
 
-const isFilteringByProduct = (productId) => {
-  return productId !== null && productId !== undefined;
-};
-
-const fetchDataByProductFilter = (productId) => {
-  if (isFilteringByProduct(productId)) {
-    fetchProductLlmModelByProductId(productId);
-    return;
-  }
-  fetchProductLlmModel();
-};
-
-const fetchCurrentData = () => {
-  fetchDataByProductFilter(selectedProductId.value);
-};
-
-const startPolling = (productId = selectedProductId.value) => {
+const startPolling = () => {
   clearInterval(intervalId);
   intervalId = setInterval(() => {
-    fetchDataByProductFilter(productId);
+    fetchCurrentData();
   }, 1000);
 };
 
@@ -264,26 +255,8 @@ const normalizeThinkingBudget = (value) => {
   return budget;
 };
 
-const mapDataSource = async (data, requestId) => {
+const mapDataSource = (data) => {
   if (!data || !Array.isArray(data)) return [];
-
-  // 获取提供者名称映射
-  const providerRes = await getLlmProviderInformation();
-  const { data: providerData, errorCode: providerErrorCode } = providerRes.data;
-  if (requestId !== latestRequestId) {
-    return null;
-  }
-  const newProviderNameMap = {};
-  if(providerErrorCode === 200 && providerData && Array.isArray(providerData)){
-    providerData.forEach(item => {
-      const displayName = item.userName
-        ? `${item.providerName} (${item.userName})`
-        : item.providerName || `提供者ID: ${item.id}`;
-      newProviderNameMap[item.id] = displayName;
-    });
-  }
-
-  Object.assign(providerNameMap.value, newProviderNameMap);
 
   return data.map((item) => ({
     key: item.id,
@@ -298,14 +271,53 @@ const mapDataSource = async (data, requestId) => {
     thinkingBudget: normalizeThinkingBudget(item.thinkingBudget),
     thinkingStatus: item.thinking === true ? '开启' : '关闭',
     thinkingBudgetDisplay: item.thinking === true ? normalizeThinkingBudget(item.thinkingBudget) : '-',
-    providerName: newProviderNameMap[item.providerId] || `服务商ID: ${item.providerId}`
+    providerName: item.providerName || `服务商ID: ${item.providerId}`
   }));
 };
 
-const fetchProductLlmModel = () => {
+const getPageContent = (pageData) => {
+  if (Array.isArray(pageData)) {
+    return pageData;
+  }
+  if (Array.isArray(pageData?.content)) {
+    return pageData.content;
+  }
+  if (Array.isArray(pageData?.page?.content)) {
+    return pageData.page.content;
+  }
+  return [];
+};
+
+const getPageNumber = (pageData, fallback) => {
+  const pageNumber = Number(pageData?.number ?? pageData?.page?.number);
+  return Number.isFinite(pageNumber) ? pageNumber + 1 : fallback;
+};
+
+const getPageSize = (pageData, fallback) => {
+  const pageSize = Number(pageData?.size ?? pageData?.page?.size);
+  return Number.isFinite(pageSize) ? pageSize : fallback;
+};
+
+const getPageTotal = (pageData, fallback) => {
+  const total = Number(pageData?.totalElements ?? pageData?.page?.totalElements ?? pageData?.total);
+  return Number.isFinite(total) ? total : fallback;
+};
+
+const fetchCurrentData = (options = {}) => {
+  if (requestInFlight && !options.force) {
+    return;
+  }
+  requestInFlight = true;
   const requestId = ++latestRequestId;
-  getProductLlmModel()
-    .then(async (res) => {
+  const params = {
+    pageNum: pagination.value.current,
+    pageSize: pagination.value.pageSize
+  };
+  if (selectedProductId.value !== null && selectedProductId.value !== undefined) {
+    params.productId = selectedProductId.value;
+  }
+  getProductLlmModelPage(params)
+    .then((res) => {
       const { data, errorCode } = res.data;
       if (requestId !== latestRequestId) {
         return;
@@ -314,45 +326,50 @@ const fetchProductLlmModel = () => {
         router.push('/login')
         return;
       }
-      if(errorCode === 200 && data && Array.isArray(data)){
-        const mappedData = await mapDataSource(data, requestId);
+      if(errorCode === 200 && data){
+        const pageContent = getPageContent(data);
+        const mappedData = mapDataSource(pageContent);
         if (requestId === latestRequestId && mappedData) {
           dataSource.value = mappedData;
+          pagination.value = {
+            ...pagination.value,
+            current: getPageNumber(data, pagination.value.current),
+            pageSize: getPageSize(data, pagination.value.pageSize),
+            total: getPageTotal(data, pageContent.length)
+          };
+          const maxPage = Math.max(1,
+            Math.ceil(pagination.value.total / pagination.value.pageSize));
+          if (pagination.value.current > maxPage) {
+            pagination.value.current = maxPage;
+            fetchCurrentData({ force: true });
+          }
         }
       } else {
         dataSource.value = [];
+        pagination.value.total = 0;
       }
     })
     .catch((err) => {
       console.log(err);
+      if (options.force && requestId === latestRequestId) {
+        message.error('获取产品LLM模型失败');
+      }
+    })
+    .finally(() => {
+      if (requestId === latestRequestId) {
+        requestInFlight = false;
+      }
     });
 };
 
-const fetchProductLlmModelByProductId = (productId) => {
-  const requestId = ++latestRequestId;
-  getProductLlmModelByProductId({ productId })
-    .then(async (res) => {
-      const { data, errorCode } = res.data;
-      if (requestId !== latestRequestId) {
-        return;
-      }
-      if(errorCode === 2001){
-        router.push('/login')
-        return;
-      }
-      if(errorCode === 200 && data && Array.isArray(data)){
-        const mappedData = await mapDataSource(data, requestId);
-        if (requestId === latestRequestId && mappedData) {
-          dataSource.value = mappedData;
-        }
-      } else {
-        dataSource.value = [];
-      }
-    })
-    .catch((err) => {
-      console.log(err);
-      message.error('按产品筛选失败');
-    });
+const handleTableChange = (paginationInfo) => {
+  const pageSizeChanged = paginationInfo.pageSize !== pagination.value.pageSize;
+  pagination.value = {
+    ...pagination.value,
+    current: pageSizeChanged ? 1 : paginationInfo.current,
+    pageSize: paginationInfo.pageSize
+  };
+  fetchCurrentData({ force: true });
 };
 
 const handleEdit = (record) => {

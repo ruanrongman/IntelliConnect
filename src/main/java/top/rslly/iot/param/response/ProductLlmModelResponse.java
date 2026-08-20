@@ -17,27 +17,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package top.rslly.iot.dao;
+package top.rslly.iot.param.response;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.models.LlmProviderInformationEntity;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
-import java.util.List;
-
-public interface LlmProviderInformationRepository
-    extends JpaRepository<LlmProviderInformationEntity, Long> {
-  List<LlmProviderInformationEntity> findAllById(int id);
-
-  List<LlmProviderInformationEntity> findAllByIdIn(List<Integer> providerIdList);
-
-  List<LlmProviderInformationEntity> findAllByUserName(String userName);
-
-  List<LlmProviderInformationEntity> findAllByProviderNameAndUserName(String providerName,
-      String userName);
-
-  List<LlmProviderInformationEntity> findAllByProviderName(String providerName);
-
-  @Transactional
-  List<LlmProviderInformationEntity> deleteAllById(int id);
+@Data
+@AllArgsConstructor
+public class ProductLlmModelResponse {
+  private int id;
+  private String modelName;
+  private int productId;
+  private String providerName;
+  private int providerId;
+  private String toolsId;
+  private Boolean thinking = false;
+  private Integer thinkingBudget = 1024;
 }

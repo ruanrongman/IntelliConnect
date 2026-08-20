@@ -153,6 +153,12 @@ const columns = [
     width: 80,
   },
   {
+    title: '产品名称',
+    dataIndex: 'productName',
+    key: 'productName',
+    width: 100,
+  },
+  {
     title: '产品ID',
     dataIndex: 'productId',
     key: 'productId',
@@ -204,6 +210,7 @@ const fetchProductAsr = () => {
         dataSource.value = data.map((item, index) => ({
           key: index,
           id: item.id,
+          productName: item.productName,
           productId: item.productId,
           asrName: item.asrName,
           providerName: item.providerName,
