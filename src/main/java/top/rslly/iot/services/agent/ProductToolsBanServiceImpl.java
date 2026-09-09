@@ -41,9 +41,10 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   @Override
   public List<String> getProductToolsBanList(int productId) {
     List<String> result = new ArrayList<>();
-    if (productToolsBanRepository.findAllByProductId(productId).isEmpty())
+    var productToolsBanEntityList = productToolsBanRepository.findAllByProductId(productId);
+    if (productToolsBanEntityList.isEmpty())
       return result;
-    for (var s : productToolsBanRepository.findAllByProductId(productId)) {
+    for (var s : productToolsBanEntityList) {
       result.add(s.getToolsName());
     }
     return result;
@@ -72,8 +73,8 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan) {
     // 允许值列表（不包含 "5"）
-    Set<String> allowed =
-        Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge", "knowledgeGraphic");
+    Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge",
+        "knowledgeGraphic");
 
     for (var s : productToolsBan.getToolsName()) {
       if (!allowed.contains(s))
@@ -96,8 +97,8 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addProductToolBan(String toolName, int productId) {
-    Set<String> allowed =
-        Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge", "knowledgeGraphic");
+    Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge",
+        "knowledgeGraphic");
     if (!allowed.contains(toolName))
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     List<ProductToolsBanEntity> productToolsBanEntityList =

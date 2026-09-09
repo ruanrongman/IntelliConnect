@@ -42,12 +42,12 @@ public interface LLM {
   }
 
   default FunctionResult functionChat(String content, List<ModelMessage> messages,
-      List<FunctionToolSpec> toolSpecs) {
+      List<FunctionToolSpec> toolSpecs, boolean search) {
     return FunctionResult.unsupported();
   }
 
   default void streamFunctionChat(String content, List<ModelMessage> messages,
-      List<FunctionToolSpec> toolSpecs, FunctionStreamHandler handler) {
+      List<FunctionToolSpec> toolSpecs, boolean search, FunctionStreamHandler handler) {
     if (handler != null) {
       handler.onUnsupported();
     }

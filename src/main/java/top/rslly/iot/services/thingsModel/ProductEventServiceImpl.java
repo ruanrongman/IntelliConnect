@@ -138,7 +138,9 @@ public class ProductEventServiceImpl implements ProductEventService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductEvent(ProductEvent productEvent) {
     ProductEventEntity productEventEntity = new ProductEventEntity();
-    BeanUtils.copyProperties(productEvent, productEventEntity);
+    // The request id is null for creates, while the entity uses a primitive int.
+    // Keep the generated entity id untouched instead of unboxing that null value.
+    BeanUtils.copyProperties(productEvent, productEventEntity, "id");
     List<ProductModelEntity> result = productModelRepository.findAllById(productEvent.getModelId());
     List<ProductEventEntity> p1 = productEventRepository
         .findAllByModelIdAndName(productEvent.getModelId(), productEvent.getName());

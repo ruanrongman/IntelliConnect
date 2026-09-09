@@ -1940,10 +1940,11 @@ POST /productToolsBan
 ```json
 {
   "productId": 0,
-  "tools": "string",
-  "description": "string"
+  "toolsName": ["1", "knowledge"]
 }
 ```
+
+`toolsName` 为要禁用的工具标识列表，不能包含 `webSearch`。模型联网搜索由产品运行参数 `web-search.enabled` 控制，未配置、配置为非法值或配置为 `false` 时默认关闭。
 
 **请求头:**
 ```

@@ -22,6 +22,7 @@ package top.rslly.iot.utility.ai;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.llm.LLM;
@@ -30,17 +31,31 @@ import top.rslly.iot.utility.ai.llm.LLMFactory;
 @Component
 @Slf4j
 public class LlmDiyUtility {
+  public static final String WEB_SEARCH_CONFIG_KEY = "web-search.enabled";
+
   @Autowired
   private ProductLlmModelServiceImpl productLlmModelService;
   @Autowired
   private LlmProviderInformationServiceImpl llmProviderInformationService;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
 
   public LLM getDiyLlm(int productId, String llmName, String toolsId) {
+    return getDiyLlm(productId, llmName, toolsId, false);
+  }
+
+  /**
+   * Gets a product model and optionally enables provider web search for this call path. The product
+   * setting is read once per model acquisition so changes apply to the next request.
+   */
+  public LLM getDiyLlm(int productId, String llmName, String toolsId,
+      boolean requestWebSearch) {
+    boolean webSearchEnabled = requestWebSearch && isWebSearchEnabled(productId);
     if (!productLlmModelService.findAllByProductId(productId).isEmpty()) {
       var productLlmModelEntityList =
           productLlmModelService.findAllByProductIdAndToolsId(productId, toolsId);
       if (productLlmModelEntityList.isEmpty()) {
-        return LLMFactory.getLLM(llmName);
+        return LLMFactory.getLLM(llmName, webSearchEnabled);
       } else {
         var productLlmModelEntity = productLlmModelEntityList.get(0);
         var providerInformation =
@@ -51,14 +66,29 @@ public class LlmDiyUtility {
               providerInformation.get(0).getBaseUrl(),
               providerInformation.get(0).getAppKey(),
               Boolean.TRUE.equals(productLlmModelEntity.getThinking()),
-              LLMFactory.normalizeThinkingBudget(productLlmModelEntity.getThinkingBudget()));
+              LLMFactory.normalizeThinkingBudget(productLlmModelEntity.getThinkingBudget()),
+              webSearchEnabled);
 
         } else {
-          return LLMFactory.getLLM(llmName);
+          return LLMFactory.getLLM(llmName, webSearchEnabled);
         }
       }
     } else {
-      return LLMFactory.getLLM(llmName);
+      return LLMFactory.getLLM(llmName, webSearchEnabled);
+    }
+  }
+
+  private boolean isWebSearchEnabled(int productId) {
+    if (userConfigService == null || productId <= 0) {
+      return false;
+    }
+    try {
+      String configuredValue = userConfigService.getConfigValue(productId, WEB_SEARCH_CONFIG_KEY);
+      return configuredValue != null && "true".equals(configuredValue.trim());
+    } catch (RuntimeException e) {
+      log.warn("Unable to read web search setting, keeping it disabled, productId={}", productId,
+          e);
+      return false;
     }
   }
 }

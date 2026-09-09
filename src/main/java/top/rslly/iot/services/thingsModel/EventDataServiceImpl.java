@@ -138,7 +138,7 @@ public class EventDataServiceImpl implements EventDataService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postEventData(EventData eventData) {
     EventDataEntity eventDataEntity = new EventDataEntity();
-    BeanUtils.copyProperties(eventData, eventDataEntity);
+    BeanUtils.copyProperties(eventData, eventDataEntity, "id");
     List<ProductModelEntity> result =
         productModelRepository.findAllById(eventDataEntity.getModelId());
     List<EventDataEntity> p1 = eventDataRepository

@@ -117,7 +117,7 @@ public class FunctionCallingRouterTool {
   public FunctionResult run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
     String chatId = (String) globalMessage.get("chatId");
-    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "classifier");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "classifier", true);
     if (!llm.supportsFunctionCalling()) {
       return FunctionResult.unsupported();
     }
@@ -126,7 +126,7 @@ public class FunctionCallingRouterTool {
     List<ModelMessage> messages =
         buildPromptMessages(question, productId, chatId, globalMessage, toolSpecs);
     if (!speedUp) {
-      return normalizeResult(llm.functionChat(question, messages, toolSpecs));
+      return normalizeResult(llm.functionChat(question, messages, toolSpecs, true));
     }
     return runWithStreaming(question, chatId, llm, messages, toolSpecs,
         (Map<String, Queue<String>>) globalMessage.get("queueMap"),
@@ -210,7 +210,7 @@ public class FunctionCallingRouterTool {
       }
     };
 
-    llm.streamFunctionChat(question, messages, toolSpecs, handler);
+    llm.streamFunctionChat(question, messages, toolSpecs, true, handler);
     lock.lock();
     try {
       while (!dataMap.containsKey(chatId)) {

@@ -37,6 +37,7 @@ import {
   Popconfirm,
   Tooltip
 } from 'ant-design-vue'
+import TimePicker from 'ant-design-vue/es/time-picker'
 import * as AntdIcon from '@ant-design/icons-vue'
 import 'ant-design-vue/dist/reset.css'
 export function setupAntd(app) {
@@ -65,6 +66,7 @@ export function setupAntd(app) {
   app.use(Col)
   app.use(Row)
   app.use(DatePicker)
+  app.use(TimePicker)
   app.use(Transfer)
   app.use(Tabs)
   app.use(Checkbox)

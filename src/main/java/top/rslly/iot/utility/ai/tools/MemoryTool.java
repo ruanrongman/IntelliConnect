@@ -95,7 +95,7 @@ public class MemoryTool {
     messages.add(new ModelMessage(ModelMessageRole.USER.value(),
         conversation.isBlank() ? "No useful conversation to compact." : conversation));
 
-    String answer = llm.commonChat(conversation, messages, true);
+    String answer = llm.commonChat(conversation, messages, false);
     if (answer == null || answer.isBlank()) {
       return;
     }

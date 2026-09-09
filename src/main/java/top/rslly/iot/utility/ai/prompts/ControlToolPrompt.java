@@ -44,7 +44,7 @@ public class ControlToolPrompt {
           ```json
           {
           "thought": "The thought of what to do and why.(use Chinese)",
-          "action": # the action to take
+          "action":
               {
               "answer": "Respond to user requests with a lively and playful tone, quickly based on business data. If the user inquires about device metrics, be sure to provide the relevant numerical information clearly and in detail in your response.",
               "controlParameters":[
@@ -52,11 +52,11 @@ public class ControlToolPrompt {
                 "name": "device name",
                 "code": "if device connect output 200,else output 400",
                 "taskType": "control/query",
-                "properties": "electronic input parameters, json list data,If there is no such properties, please output [] and do not include any null values",
-                "properties_value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output [] and do not include any null values",
-                "service_name":"electronic function name,If it doesn't match, please output null"
-                "function_param": "electronic function parameters, json list data,If there is no such properties, please output [] and do not include any null values",
-                "function_value": "electronic input parameters, json list data like ["on",30],If it doesn't match Or the user is queried, please output [] and do not include any null values"
+                "properties": [parameter names selected from the device's controllable properties],
+                "properties_value": [corresponding values, same length and order as properties],
+                "service_name": "electronic function name,If it doesn't match, please output null",
+                "function_param": [parameter names selected from the electronic function's input parameters],
+                "function_value": [corresponding values, same length and order as function_param]
                }
               ]
               }
@@ -64,6 +64,8 @@ public class ControlToolPrompt {
           ```
           ## Attention
           - Your output is JSON only and no explanation.
+          - "properties","properties_value","function_param" and "function_value" must be JSON arrays, never plain strings. e.g. properties=["switch"], properties_value=["on"]. If not needed, output [] and do not include any null values.
+          - "properties_value" must correspond to "properties" one by one, with the same length and order.
           - Please respond to the user's request immediately, rather than using terms like "later" or "then"
           - If device cannot be controlled, such as not allow or disconnected, please inform the user
           """;

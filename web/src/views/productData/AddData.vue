@@ -49,10 +49,10 @@
 
       <a-form-item
         label="读写设置"
-        name="rrw"
+        name="rRw"
         :rules="[{ required: true, message: '请选择读写设置!' }]"
       >
-        <a-select v-model:value="formState.rrw">
+        <a-select v-model:value="formState.rRw">
           <a-select-option value="0">只读</a-select-option>
           <a-select-option value="1">读写</a-select-option>
         </a-select>
@@ -136,7 +136,7 @@ const formState = reactive({
   description: '',
   jsonKey: '',
   modelId: null, // ⚡ 改成 null 而不是数字
-  rrw: 0,
+  rRw: 0,
   storageType: '',
   type: '',
   max: null,

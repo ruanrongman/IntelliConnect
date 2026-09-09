@@ -85,7 +85,7 @@ public class LongMemoryTool {
         "start memory!\n" + formatConversationHistory(memory));
     messages.add(systemMessage);
     messages.add(userMessage);
-    var response = llm.jsonChat(question, messages, true);
+    var response = llm.jsonChat(question, messages, false);
     if (response == null || response.getJSONObject("action") == null) {
       return;
     }

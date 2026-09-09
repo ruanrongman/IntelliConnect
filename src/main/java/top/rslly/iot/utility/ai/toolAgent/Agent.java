@@ -277,13 +277,13 @@ public class Agent implements BaseTool<String> {
   private JSONObject callLLMForThought(String question, List<ModelMessage> messages,
       Map<String, Queue<String>> queueMap, String chatId, int productId,
       boolean includeThoughtEnabled, Queue<String> reasoningQueue) {
-    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4", true);
     if (speedUp) {
       // 使用流式调用，实时获取thought内容
       dataMap.remove(chatId);
 
       try {
-        llm.streamJsonChat(question, messages, false,
+        llm.streamJsonChat(question, messages, true,
             new AgentEventSourceListener(queueMap, chatId, this, "thought",
                 showThinking && includeThoughtEnabled, reasoningQueue));
 
@@ -324,7 +324,7 @@ public class Agent implements BaseTool<String> {
     } else {
       // 非流式调用
       try {
-        return llm.jsonChat(question, messages, false);
+        return llm.jsonChat(question, messages, true);
       } catch (Exception e) {
         log.error("调用LLM失败: {}", e.getMessage());
         return null;
@@ -405,7 +405,7 @@ public class Agent implements BaseTool<String> {
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");
     Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
-    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4", true);
     if (!llm.supportsFunctionCalling()) {
       return null;
     }
@@ -485,7 +485,7 @@ public class Agent implements BaseTool<String> {
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
       LLM llm, Queue<String> reasoningQueue) {
     if (!speedUp) {
-      return llm.functionChat(question, messages, toolSpecs);
+      return llm.functionChat(question, messages, toolSpecs, true);
     }
     lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
     conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
@@ -494,7 +494,7 @@ public class Agent implements BaseTool<String> {
     Condition condition = conditionMap.get(chatId);
     StringBuilder replyBuffer = new StringBuilder();
 
-    llm.streamFunctionChat(question, messages, toolSpecs, new FunctionStreamHandler() {
+    llm.streamFunctionChat(question, messages, toolSpecs, true, new FunctionStreamHandler() {
       @Override
       public void onTextDelta(String text) {
         if (text == null || text.isBlank()) {

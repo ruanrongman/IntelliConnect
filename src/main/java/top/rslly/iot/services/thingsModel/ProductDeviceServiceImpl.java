@@ -292,7 +292,7 @@ public class ProductDeviceServiceImpl implements ProductDeviceService {
   public JsonResult<?> postProductDevice(ProductDevice productDevice) {
     ProductDeviceEntity productDeviceEntity = new ProductDeviceEntity();
     productDeviceEntity.setOnline("disconnected");
-    BeanUtils.copyProperties(productDevice, productDeviceEntity);
+    BeanUtils.copyProperties(productDevice, productDeviceEntity, "id");
     List<ProductModelEntity> result =
         productModelRepository.findAllById(productDeviceEntity.getModelId());
     List<ProductDeviceEntity> p1 =

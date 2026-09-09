@@ -83,28 +83,35 @@ public class DeepSeek implements LLM {
   private final int thinkingBudget;
   private final double temperature;
   private final double topP;
+  private final boolean webSearchEnabled;
 
   public DeepSeek(String apiKey) {
     this(DEFAULT_URL, DEFAULT_MODEL, apiKey);
   }
 
   public DeepSeek(String url, String model, String apiKey) {
-    this(url, model, apiKey, false, 128, 0.6, 0.85);
+    this(url, model, apiKey, false, 128, 0.6, 0.85, false);
   }
 
   public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
       int thinkingBudget) {
-    this(url, model, apiKey, enableThinking, thinkingBudget, 0.6, 0.85);
+    this(url, model, apiKey, enableThinking, thinkingBudget, 0.6, 0.85, false);
   }
 
   public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
       int thinkingBudget, double temperature, double topP) {
+    this(url, model, apiKey, enableThinking, thinkingBudget, temperature, topP, false);
+  }
+
+  public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
+      int thinkingBudget, double temperature, double topP, boolean webSearchEnabled) {
     this.baseUrl = normalizeBaseUrl(url);
     this.model = model;
     this.enableThinking = enableThinking;
     this.thinkingBudget = thinkingBudget;
     this.temperature = temperature;
     this.topP = topP;
+    this.webSearchEnabled = webSearchEnabled;
     this.client = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .baseUrl(this.baseUrl)
@@ -116,7 +123,8 @@ public class DeepSeek implements LLM {
   @Override
   public JSONObject jsonChat(String content, List<ModelMessage> messages, boolean search) {
     try {
-      String response = extractText(client.chat().completions().create(buildTextParams(messages)));
+      String response =
+          extractText(client.chat().completions().create(buildTextParams(messages, search)));
       log.debug("model output:{} ", response);
       String temp = stripMarkdownFence(response);
       JSONObject jsonResponse = JSON.parseObject(temp);
@@ -137,7 +145,8 @@ public class DeepSeek implements LLM {
   @Override
   public String commonChat(String content, List<ModelMessage> messages, boolean search) {
     try {
-      String response = extractText(client.chat().completions().create(buildTextParams(messages)));
+      String response =
+          extractText(client.chat().completions().create(buildTextParams(messages, search)));
       log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
@@ -153,10 +162,10 @@ public class DeepSeek implements LLM {
 
   @Override
   public FunctionResult functionChat(String content, List<ModelMessage> messages,
-      List<FunctionToolSpec> toolSpecs) {
+      List<FunctionToolSpec> toolSpecs, boolean search) {
     try {
       ChatCompletion completion = client.chat().completions()
-          .create(buildFunctionParams(messages, toolSpecs));
+          .create(buildFunctionParams(messages, toolSpecs, search));
       return toFunctionResult(completion);
     } catch (Exception e) {
       log.error("function calling error", e);
@@ -166,7 +175,7 @@ public class DeepSeek implements LLM {
 
   @Override
   public void streamFunctionChat(String content, List<ModelMessage> messages,
-      List<FunctionToolSpec> toolSpecs, FunctionStreamHandler handler) {
+      List<FunctionToolSpec> toolSpecs, boolean search, FunctionStreamHandler handler) {
     if (handler == null) {
       return;
     }
@@ -176,7 +185,8 @@ public class DeepSeek implements LLM {
       StringBuilder reasoningBuilder = new StringBuilder();
       Map<Long, PartialToolCall> partialToolCalls = new LinkedHashMap<>();
       try (StreamResponse<ChatCompletionChunk> streamResponse =
-          client.chat().completions().createStreaming(buildFunctionParams(messages, toolSpecs))) {
+          client.chat().completions()
+              .createStreaming(buildFunctionParams(messages, toolSpecs, search))) {
         var iterator = streamResponse.stream().iterator();
         while (iterator.hasNext()) {
           ChatCompletionChunk chunk = iterator.next();
@@ -217,7 +227,7 @@ public class DeepSeek implements LLM {
     listener.onOpen(eventSource, null);
     STREAM_EXECUTOR.execute(() -> {
       try {
-        ChatCompletionCreateParams params = buildTextParams(messages);
+        ChatCompletionCreateParams params = buildTextParams(messages, search);
         try (StreamResponse<ChatCompletionChunk> streamResponse =
             client.chat().completions().createStreaming(params)) {
           eventSource.setStreamResponse(streamResponse);
@@ -283,22 +293,34 @@ public class DeepSeek implements LLM {
   }
 
   private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages) {
-    return applyModelDefaults(ChatCompletionCreateParams.builder()
-        .model(model)
-        .temperature(temperature)
-        .topP(topP)
-        .messages(toMessageParams(messages)))
-            .build();
+    return buildTextParams(messages, false);
+  }
+
+  private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages, boolean search) {
+    ChatCompletionCreateParams.Builder builder =
+        applyModelDefaults(ChatCompletionCreateParams.builder()
+            .model(model)
+            .temperature(temperature)
+            .topP(topP)
+            .messages(toMessageParams(messages)));
+    applySearch(builder, search);
+    return builder.build();
   }
 
   private ChatCompletionCreateParams buildFunctionParams(List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs) {
+    return buildFunctionParams(messages, toolSpecs, false);
+  }
+
+  private ChatCompletionCreateParams buildFunctionParams(List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs, boolean search) {
     ChatCompletionCreateParams.Builder builder = applyModelDefaults(
         ChatCompletionCreateParams.builder()
             .model(model)
             .temperature(temperature)
             .topP(topP)
             .messages(toMessageParams(messages)));
+    applySearch(builder, search);
     if (toolSpecs != null && !toolSpecs.isEmpty()) {
       builder.toolChoice(ChatCompletionToolChoiceOption.Auto.AUTO)
           .parallelToolCalls(false);
@@ -325,6 +347,26 @@ public class DeepSeek implements LLM {
       builder.putAdditionalBodyProperty("enable_thinking", JsonValue.from(false));
     }
     return builder;
+  }
+
+  private void applySearch(ChatCompletionCreateParams.Builder builder, boolean search) {
+    if (search && webSearchEnabled && isDashScopeProvider()) {
+      builder.putAdditionalBodyProperty("enable_search", JsonValue.from(true));
+    }
+  }
+
+  private boolean isDashScopeProvider() {
+    try {
+      String host = URI.create(baseUrl).getHost();
+      if (host == null) {
+        return false;
+      }
+      String normalizedHost = host.toLowerCase(Locale.ROOT);
+      return "dashscope.aliyuncs.com".equals(normalizedHost)
+          || normalizedHost.endsWith(".maas.aliyuncs.com");
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
   }
 
   private boolean isOfficialDeepSeekProvider() {

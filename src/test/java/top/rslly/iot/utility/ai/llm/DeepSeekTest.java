@@ -27,6 +27,7 @@ import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 
 import java.lang.reflect.Method;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -82,6 +83,73 @@ class DeepSeekTest {
   }
 
   @Test
+  void dashScopeSearchParameterIsAddedOnlyWhenRequestedAndEnabled() throws Exception {
+    DeepSeek enabled = new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
+        "qwen-plus", "test-key", false, 128, 0.6, 0.85, true);
+    DeepSeek disabled = new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
+        "qwen-plus", "test-key", false, 128, 0.6, 0.85, false);
+
+    Map<String, JsonValue> enabledBody = buildTextParams(enabled, true)._additionalBodyProperties();
+    Assertions.assertEquals(Boolean.TRUE, enabledBody.get("enable_search").convert(Boolean.class));
+    Assertions.assertFalse(buildTextParams(enabled, false)._additionalBodyProperties()
+        .containsKey("enable_search"));
+    Assertions.assertFalse(buildTextParams(disabled, true)._additionalBodyProperties()
+        .containsKey("enable_search"));
+  }
+
+  @Test
+  void legacyConstructorsAndFactoryCallsDefaultToSearchDisabled() throws Exception {
+    DeepSeek deepSeek = new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
+        "qwen-plus", "test-key", false, 128);
+    Assertions.assertFalse(buildTextParams(deepSeek, true)._additionalBodyProperties()
+        .containsKey("enable_search"));
+
+    LLM factoryLlm = LLMFactory.getLLM("factory-default-search-model",
+        "https://dashscope.aliyuncs.com/compatible-mode", "test-key", false, 128);
+    Assertions.assertFalse(buildTextParams((DeepSeek) factoryLlm, true)
+        ._additionalBodyProperties().containsKey("enable_search"));
+  }
+
+  @Test
+  void nonDashScopeProviderDoesNotReceiveDashScopeSearchParameter() throws Exception {
+    DeepSeek siliconFlow = new DeepSeek("https://api.siliconflow.cn", "qwen-plus", "test-key",
+        false, 128, 0.6, 0.85, true);
+
+    Assertions.assertFalse(buildTextParams(siliconFlow, true)._additionalBodyProperties()
+        .containsKey("enable_search"));
+  }
+
+  @Test
+  void maasProviderReceivesDashScopeSearchParameter() throws Exception {
+    DeepSeek maas = new DeepSeek("https://tenant.maas.aliyuncs.com/v1", "qwen-plus", "test-key",
+        false, 128, 0.6, 0.85, true);
+
+    Assertions.assertEquals(Boolean.TRUE,
+        buildTextParams(maas, true)._additionalBodyProperties().get("enable_search")
+            .convert(Boolean.class));
+  }
+
+  @Test
+  void functionParamsCarrySearchParameterAndKeepRouterTools() throws Exception {
+    DeepSeek deepSeek = new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
+        "qwen-plus", "test-key", false, 128, 0.6, 0.85, true);
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "object");
+    FunctionToolSpec toolSpec = new FunctionToolSpec("route_weather", "weather", schema);
+
+    ChatCompletionCreateParams params = buildFunctionParams(deepSeek, List.of(toolSpec), true);
+
+    Assertions.assertEquals(Boolean.TRUE,
+        params._additionalBodyProperties().get("enable_search").convert(Boolean.class));
+    Assertions.assertEquals(1, params.tools().orElseThrow().size());
+
+    ChatCompletionCreateParams disabledParams =
+        buildFunctionParams(deepSeek, List.of(toolSpec), false);
+    Assertions.assertFalse(disabledParams._additionalBodyProperties().containsKey("enable_search"));
+    Assertions.assertEquals(1, disabledParams.tools().orElseThrow().size());
+  }
+
+  @Test
   void customFactoryUsesConfiguredThinkingAndBudget() throws Exception {
     String baseUrl = "https://dashscope.aliyuncs.com/compatible-mode";
     LLM enabled = LLMFactory.getLLM("factory-enabled-model", baseUrl, "factory-test-key", true, 0);
@@ -122,5 +190,22 @@ class DeepSeekTest {
     method.setAccessible(true);
     return (ChatCompletionCreateParams) method.invoke(deepSeek, List.of(
         new ModelMessage(ModelMessageRole.USER.value(), "hello")));
+  }
+
+  private ChatCompletionCreateParams buildTextParams(DeepSeek deepSeek, boolean search)
+      throws Exception {
+    Method method = DeepSeek.class.getDeclaredMethod("buildTextParams", List.class, boolean.class);
+    method.setAccessible(true);
+    return (ChatCompletionCreateParams) method.invoke(deepSeek, List.of(
+        new ModelMessage(ModelMessageRole.USER.value(), "hello")), search);
+  }
+
+  private ChatCompletionCreateParams buildFunctionParams(DeepSeek deepSeek,
+      List<FunctionToolSpec> toolSpecs, boolean search) throws Exception {
+    Method method = DeepSeek.class.getDeclaredMethod("buildFunctionParams", List.class,
+        List.class, boolean.class);
+    method.setAccessible(true);
+    return (ChatCompletionCreateParams) method.invoke(deepSeek,
+        List.of(new ModelMessage(ModelMessageRole.USER.value(), "hello")), toolSpecs, search);
   }
 }

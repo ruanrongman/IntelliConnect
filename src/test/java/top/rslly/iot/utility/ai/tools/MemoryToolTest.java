@@ -68,7 +68,7 @@ class MemoryToolTest {
     when(llmDiyUtility.getDiyLlm(1, "memory-model", "memory")).thenReturn(llm);
     when(agentMemoryService.findAllByChatId("chat-1")).thenReturn(List.of());
     when(memoryToolPrompt.getMemoryToolPrompt("")).thenReturn("system");
-    when(llm.commonChat(anyString(), anyList(), eq(true))).thenReturn("summary");
+    when(llm.commonChat(anyString(), anyList(), eq(false))).thenReturn("summary");
   }
 
   @Test

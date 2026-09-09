@@ -169,7 +169,7 @@ public class ProductDataServiceImpl implements ProductDataService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductData(ProductData productData) {
     ProductDataEntity productDataEntity = new ProductDataEntity();
-    BeanUtils.copyProperties(productData, productDataEntity);
+    BeanUtils.copyProperties(productData, productDataEntity, "id");
     List<ProductModelEntity> result =
         productModelRepository.findAllById(productDataEntity.getModelId());
     List<ProductDataEntity> p1 = productDataRepository

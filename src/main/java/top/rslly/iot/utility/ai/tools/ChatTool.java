@@ -88,7 +88,7 @@ public class ChatTool implements BaseTool<String> {
 
   public String run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
-    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "5");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "5", true);
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
     String chatId = (String) globalMessage.get("chatId");

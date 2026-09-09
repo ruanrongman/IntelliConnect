@@ -119,7 +119,7 @@ public class ProductModelServiceImpl implements ProductModelService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductModel(ProductModel productModel) {
     ProductModelEntity productModelEntity = new ProductModelEntity();
-    BeanUtils.copyProperties(productModel, productModelEntity);
+    BeanUtils.copyProperties(productModel, productModelEntity, "id");
     List<ProductEntity> result = productRepository.findAllById(productModel.getProductId());
     List<ProductModelEntity> p1 = productModelRepository
         .findAllByProductIdAndName(productModel.getProductId(), productModel.getName());

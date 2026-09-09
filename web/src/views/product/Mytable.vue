@@ -243,6 +243,15 @@
           :rules="runtimeConfigRules"
           layout="vertical"
         >
+          <a-form-item name="webSearchEnabled">
+            <template #label>
+              <span>联网搜索</span>
+              <a-tooltip title="影响 FunctionCallingRouter、Router（Classifier/Chat 路径）、ChatTool、Agent 和 MCP Agent；不是所有模型都支持联网搜索，开启后仍可能因模型能力限制而调用失败。">
+                <QuestionCircleOutlined class="web-search-help" />
+              </a-tooltip>
+            </template>
+            <a-switch v-model:checked="runtimeConfigForm.webSearchEnabled" />
+          </a-form-item>
           <a-form-item label="Agent 最大轮次" name="agentEpochLimit">
             <a-input
               v-model:value="runtimeConfigForm.agentEpochLimit"
@@ -404,7 +413,7 @@ import { getMcpPointUrl, getMcpPointTools } from '@/api/mcpPoint'; // 导入新�
 import { getProductToolsBan, postProductToolsBan, deleteProductToolsBan } from '@/api/productToolsBan'; // 导入工具管理API
 import { getUserConfigByName, updateUserConfig } from '@/api/userConfig'
 import { useRouter } from 'vue-router'    
-import { DeleteOutlined, LinkOutlined, CopyOutlined, ReloadOutlined, SettingOutlined, ControlOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, LinkOutlined, CopyOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
     
     
 const router = useRouter()    
@@ -428,6 +437,7 @@ const runtimeConfigLoading = ref(false)
 const runtimeConfigSaving = ref(false)
 const currentRuntimeProduct = ref(null)
 const runtimeConfigForm = ref({
+  webSearchEnabled: false,
   agentEpochLimit: 5,
   mcpAgentEpochLimit: 5,
   mcpTimeOutLimit: 12,
@@ -446,6 +456,14 @@ const memorySummaryThresholdMarks = {
 }
 
 const runtimeConfigItems = [
+  {
+    field: 'webSearchEnabled',
+    key: 'web-search.enabled',
+    defaultValue: 'false',
+    valueType: 'boolean',
+    label: '联网搜索',
+    des: 'Enable web search for FunctionCallingRouter, Router and Chat'
+  },
   {
     field: 'agentEpochLimit',
     key: 'agent.epoch_limit',
@@ -514,6 +532,11 @@ const createRuntimeConfigValidator = (field) => {
   return async (_rule, value) => {
     const item = getRuntimeConfigItem(field)
     const parsed = parseConfigValue(value, item?.valueType)
+    if (item?.valueType === 'boolean') {
+      return typeof parsed === 'boolean'
+        ? Promise.resolve()
+        : Promise.reject(new Error(`${item.label}必须是 true 或 false`))
+    }
     if (!item || !isConfigValueInRange(parsed, item)) {
       const valueDescription = item?.valueType === 'decimal' ? '数字' : '整数'
       return Promise.reject(new Error(`${item?.label || '配置项'}必须是 ${item?.min} 到 ${item?.max} 之间的${valueDescription}`))
@@ -907,6 +930,15 @@ const parseConfigValue = (value, valueType = 'integer') => {
     return null
   }
   const normalizedValue = typeof value === 'string' ? value.trim() : value
+  if (valueType === 'boolean') {
+    if (typeof normalizedValue === 'boolean') {
+      return normalizedValue
+    }
+    if (/^(true|false)$/.test(String(normalizedValue))) {
+      return normalizedValue === 'true'
+    }
+    return null
+  }
   const pattern = valueType === 'decimal' ? /^\d+(?:\.\d+)?$/ : /^\d+$/
   if (normalizedValue === '' || !pattern.test(String(normalizedValue))) {
     return null
@@ -919,6 +951,9 @@ const parseConfigValue = (value, valueType = 'integer') => {
 }
 
 const isConfigValueInRange = (value, item) => {
+  if (item?.valueType === 'boolean') {
+    return typeof value === 'boolean'
+  }
   return value !== null && value >= Number(item.min) && value <= Number(item.max)
 }
 
@@ -932,6 +967,10 @@ const getInvalidRuntimeConfigItem = () => {
 
 const showRuntimeConfigValidationError = (item) => {
   runtimeConfigFormRef.value?.validateFields([item.field]).catch(() => {})
+  if (item.valueType === 'boolean') {
+    message.error(`${item.label}必须是 true 或 false`)
+    return
+  }
   const valueDescription = item.valueType === 'decimal' ? '数字' : '整数'
   message.error(`${item.label}必须是 ${item.min} 到 ${item.max} 之间的${valueDescription}`)
 }
@@ -942,6 +981,9 @@ const getRuntimeConfigValue = (item) => {
 
 const readRuntimeConfigValue = (payload, item) => {
   const value = parseConfigValue(payload?.data?.value ?? payload?.value, item.valueType)
+  if (item.valueType === 'boolean') {
+    return typeof value === 'boolean' ? value : item.defaultValue === 'true'
+  }
   return isConfigValueInRange(value, item) ? value : Number(item.defaultValue)
 }
 
@@ -950,6 +992,7 @@ const handleRuntimeConfig = async (record) => {
   runtimeConfigModalVisible.value = true
   runtimeConfigLoading.value = true
   runtimeConfigForm.value = {
+    webSearchEnabled: false,
     agentEpochLimit: 5,
     mcpAgentEpochLimit: 5,
     mcpTimeOutLimit: 12,
@@ -1001,7 +1044,9 @@ const submitRuntimeConfig = async () => {
         return updateUserConfig({
           productId,
           name: item.key,
-          type: item.valueType === 'decimal' ? 'decimal' : 'integer',
+          type: item.valueType === 'boolean'
+            ? 'toggle'
+            : (item.valueType === 'decimal' ? 'decimal' : 'integer'),
           value: String(value),
           defaultValue: item.defaultValue,
           min: item.min,
@@ -1045,7 +1090,8 @@ const handleToolManage = async (record) => {
     const { data, errorCode } = response.data
 
     if (errorCode === 200 && data && Array.isArray(data)) {
-      selectedBannedTools.value = data
+      selectedBannedTools.value = data.filter((toolKey) =>
+        Object.prototype.hasOwnProperty.call(availableTools, toolKey))
     } else if (errorCode === 2001) {
       router.push('/login')
       return
@@ -1097,7 +1143,8 @@ const submitToolBans = async () => {
     
     const response = await postProductToolsBan({
       productId: currentManageProductId.value,
-      toolsName: selectedBannedTools.value
+      toolsName: selectedBannedTools.value.filter((toolKey) =>
+        Object.prototype.hasOwnProperty.call(availableTools, toolKey))
     })
     
     const { errorCode } = response.data
@@ -1261,6 +1308,12 @@ const handleDelete = (record) => {
   :deep(.ant-slider) {
     margin: 10px 0 24px;
   }
+}
+
+.web-search-help {
+  margin-left: 6px;
+  color: #d48806;
+  cursor: help;
 }
 
 .table-container {    

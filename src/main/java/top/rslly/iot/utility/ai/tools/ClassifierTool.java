@@ -73,7 +73,7 @@ public class ClassifierTool {
   public Map<String, Object> run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
     String chatId = (String) globalMessage.get("chatId");
-    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "classifier");
+    LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "classifier", true);
     List<ModelMessage> messages = new ArrayList<>();
     Map<String, Object> resultMap = new HashMap<>();
     // 使用 Optional 进行类型安全的转换

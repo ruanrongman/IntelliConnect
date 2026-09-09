@@ -169,7 +169,7 @@ public class ProductFunctionServiceImpl implements ProductFunctionService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> postProductFunction(ProductFunction productFunction) {
     ProductFunctionEntity productFunctionEntity = new ProductFunctionEntity();
-    BeanUtils.copyProperties(productFunction, productFunctionEntity);
+    BeanUtils.copyProperties(productFunction, productFunctionEntity, "id");
     List<ProductModelEntity> result =
         productModelRepository.findAllById(productFunctionEntity.getModelId());
     List<ProductFunctionEntity> p1 = productFunctionRepository

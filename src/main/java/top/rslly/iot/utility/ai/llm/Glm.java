@@ -53,8 +53,14 @@ public class Glm implements LLM {
 
   private static ClientV4 client;
   private static final ObjectMapper mapper = defaultObjectMapper();
+  private final boolean webSearchEnabled;
 
   public Glm(String apiKey) {
+    this(apiKey, false);
+  }
+
+  public Glm(String apiKey, boolean webSearchEnabled) {
+    this.webSearchEnabled = webSearchEnabled;
     // 填写自己的api key
     client = new ClientV4.Builder(apiKey)
         .enableTokenCache()
@@ -88,7 +94,7 @@ public class Glm implements LLM {
       searchTool.setType(ChatToolType.WEB_SEARCH.value());
       WebSearch webSearch = new WebSearch();
       webSearch.setSearch_query(content);
-      webSearch.setEnable(search);
+      webSearch.setEnable(search && webSearchEnabled);
       searchTool.setWeb_search(webSearch);
       chatToolList.add(searchTool);
       String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
@@ -125,7 +131,7 @@ public class Glm implements LLM {
       searchTool.setType(ChatToolType.WEB_SEARCH.value());
       WebSearch webSearch = new WebSearch();
       webSearch.setSearch_query(content);
-      webSearch.setEnable(search);
+      webSearch.setEnable(search && webSearchEnabled);
       searchTool.setWeb_search(webSearch);
       chatToolList.add(searchTool);
       String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
@@ -158,7 +164,7 @@ public class Glm implements LLM {
       searchTool.setType(ChatToolType.WEB_SEARCH.value());
       WebSearch webSearch = new WebSearch();
       webSearch.setSearch_query(content);
-      webSearch.setEnable(search);
+      webSearch.setEnable(search && webSearchEnabled);
       searchTool.setWeb_search(webSearch);
       chatToolList.add(searchTool);
       String requestId = String.format(requestIdTemplate, System.currentTimeMillis());
