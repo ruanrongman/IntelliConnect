@@ -1,7 +1,31 @@
 <template>
   <div>
+    <div class="search-bar">
+      <a-select
+        v-model:value="selectedProductId"
+        :options="productOptions"
+        :loading="productOptionsLoading"
+        placeholder="按产品筛选"
+        aria-label="按产品筛选"
+        allowClear
+        show-search
+        :filter-option="filterProductOption"
+        class="product-filter"
+        @change="handleFilterChange"
+      />
+      <a-button v-if="selectedProductId !== null" @click="handleFilterChange(null)">
+        重置
+      </a-button>
+    </div>
     <!-- 数据表格 -->
-    <a-table :columns="columns" :data-source="dataSource" :pagination="pagination">
+    <a-table
+      :columns="columns"
+      :data-source="dataSource"
+      :pagination="pagination"
+      :loading="tableLoading"
+      row-key="id"
+      @change="handleTableChange"
+    >
       <template #action="{ record }">
         <div class="action-buttons">
           <a-button 
@@ -76,21 +100,75 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, reactive } from 'vue';
+import { ref, onMounted, onUnmounted, reactive, watch } from 'vue';
 import { message, Modal } from 'ant-design-vue'; // 从这里导入 Modal
 import { useRouter } from 'vue-router';
 // 引入新的API
-import { getLongMemory, postLongMemory, deleteLongMemory } from '@/api/agentLongMemory';
+import {
+  getLongMemory,
+  getLongMemoryByProductId,
+  postLongMemory,
+  deleteLongMemory,
+} from '@/api/agentLongMemory';
+import { getProduct } from '@/api/product';
 // 引入图标
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 
 const router = useRouter();
 
-const pagination = {
+const pagination = reactive({
+  current: 1,
   pageSize: 5,
-};
+});
 
 const dataSource = ref([]);
+const tableLoading = ref(false);
+const selectedProductId = ref(null);
+const productOptions = ref([]);
+const productOptionsLoading = ref(false);
+
+const filterProductOption = (input, option) => {
+  return `${option.label} ${option.value}`.toLowerCase().includes(input.toLowerCase());
+};
+
+const handleFilterChange = (value) => {
+  selectedProductId.value = value ?? null;
+  pagination.current = 1;
+  dataSource.value = [];
+  fetchLongMemory({ force: true });
+};
+
+const handleTableChange = ({ current, pageSize }) => {
+  pagination.current = current;
+  pagination.pageSize = pageSize;
+};
+
+watch(() => dataSource.value.length, (total) => {
+  const maxPage = Math.max(1, Math.ceil(total / pagination.pageSize));
+  pagination.current = Math.min(pagination.current, maxPage);
+});
+
+const fetchProductList = async () => {
+  productOptionsLoading.value = true;
+  try {
+    const { data, errorCode } = (await getProduct()).data;
+    if (errorCode == 2001) {
+      router.push('/login');
+      return;
+    }
+    productOptions.value = errorCode == 200 && Array.isArray(data)
+      ? data.map((item) => ({
+        value: item.id,
+        label: item.productName || `产品ID: ${item.id}`,
+      }))
+      : [];
+  } catch (err) {
+    console.error('获取产品列表失败:', err);
+    message.error('获取产品列表失败');
+  } finally {
+    productOptionsLoading.value = false;
+  }
+};
 
 // 表格列定义
 const columns = [
@@ -143,36 +221,49 @@ const formState = reactive({
 });
 
 let intervalId;
+let latestRequestId = 0;
+let requestInFlight = false;
 
 onMounted(() => {
-  fetchLongMemory();
+  fetchProductList();
+  fetchLongMemory({ force: true });
   // 每1秒钟刷新一次数据
   intervalId = setInterval(fetchLongMemory, 1000);
 });
 
 onUnmounted(() => {
   clearInterval(intervalId);
+  latestRequestId++;
 });
 
 // 获取数据
-const fetchLongMemory = () => {
-  getLongMemory()
-    .then((res) => {
-      const { data, errorCode } = res.data;
-      if (errorCode == 2001) {
-        router.push('/login');
-        return;
-      }
-      if (errorCode == 200 && data && Array.isArray(data)) {
-        dataSource.value = data;
-      } else {
-        dataSource.value = [];
-      }
-    })
-    .catch((err) => {
-      console.error('获取长期记忆失败:', err);
-      message.error('获取数据失败');
-    });
+const fetchLongMemory = async ({ force = false } = {}) => {
+  if (requestInFlight && !force) return;
+  requestInFlight = true;
+  const requestId = ++latestRequestId;
+  const productId = selectedProductId.value;
+  if (force) tableLoading.value = true;
+  try {
+    const res = await (productId === null
+      ? getLongMemory()
+      : getLongMemoryByProductId({ productId }));
+    if (requestId !== latestRequestId) return;
+    const { data, errorCode } = res.data;
+    if (errorCode == 2001) {
+      router.push('/login');
+      return;
+    }
+    dataSource.value = errorCode == 200 && Array.isArray(data) ? data : [];
+  } catch (err) {
+    if (requestId !== latestRequestId) return;
+    console.error('获取长期记忆失败:', err);
+    message.error('获取数据失败');
+  } finally {
+    if (requestId === latestRequestId) {
+      requestInFlight = false;
+      tableLoading.value = false;
+    }
+  }
 };
 
 // 打开编辑模态框
@@ -198,7 +289,7 @@ const handleModalOk = async () => {
     if (res.data.errorCode == 200) {
       message.success('修改成功');
       modalVisible.value = false;
-      fetchLongMemory(); // 刷新列表
+      fetchLongMemory({ force: true }); // 刷新列表
     } else if (res.data.errorCode == 2001) {
       router.push('/login');
     } else {
@@ -235,7 +326,7 @@ const doDelete = async (id) => {
     const res = await deleteLongMemory({ id });
     if (res.data.errorCode == 200) {
       message.success('删除成功');
-      fetchLongMemory(); // 刷新列表
+      fetchLongMemory({ force: true }); // 刷新列表
     } else if (res.data.errorCode == 2001) {
       router.push('/login');
     } else {
@@ -249,6 +340,17 @@ const doDelete = async (id) => {
 </script>
 
 <style scoped>
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.product-filter {
+  width: 220px;
+  max-width: 100%;
+}
 .action-buttons {
   display: flex;
   justify-content: space-around;

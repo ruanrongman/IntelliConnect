@@ -689,6 +689,34 @@ public class Tool {
     return agentLongMemoryService.postLongMemory(agentLongMemory);
   }
 
+  @Operation(summary = "快速初始化长期记忆", description = "快速初始化长期记忆（已经存在时候失败）")
+  @RequestMapping(value = "/longMemoryFastInit", method = RequestMethod.POST)
+  public JsonResult<?> postLongMemory(
+      @Valid @RequestBody AgentLongMemoryFastInitParam agentLongMemoryFastInitParam,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header,
+          agentLongMemoryFastInitParam.getProductId()))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentLongMemoryService.fastInitLongMemory(agentLongMemoryFastInitParam);
+  }
+
+  @Operation(summary = "按产品获取长期记忆", description = "按产品获取长期记忆")
+  @RequestMapping(value = "/longMemoryByProductId", method = RequestMethod.GET)
+  public JsonResult<?> getLongMemoryByProductId(@RequestParam("productId") int productId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return agentLongMemoryService.getLongMemoryByProductId(productId);
+  }
+
   @Operation(summary = "删除长期记忆", description = "删除长期记忆")
   @RequestMapping(value = "/longMemory", method = RequestMethod.DELETE)
   public JsonResult<?> deleteLongMemory(@RequestParam("id") int id,

@@ -314,6 +314,12 @@ public class ProductServiceImpl implements ProductService {
       agentLongMemoryEntity.setDescription("用户所在的城市");
       agentLongMemoryEntity.setMemoryValue(quickProduct.getCity());
       agentLongMemoryRepository.save(agentLongMemoryEntity);
+      AgentLongMemoryEntity agentLongMemoryEntity1 = new AgentLongMemoryEntity();
+      agentLongMemoryEntity1.setProductId(productEntity1.getId());
+      agentLongMemoryEntity1.setMemoryKey("用户画像和偏好");
+      agentLongMemoryEntity1.setDescription("用户画像和偏好");
+      agentLongMemoryEntity1.setMemoryValue("暂无");
+      agentLongMemoryRepository.save(agentLongMemoryEntity1);
       return ResultTool.success(productEntity1);
     }
   }

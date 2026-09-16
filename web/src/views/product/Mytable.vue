@@ -252,6 +252,28 @@
             </template>
             <a-switch v-model:checked="runtimeConfigForm.webSearchEnabled" />
           </a-form-item>
+          <a-form-item label="长期记忆">
+            <div class="long-memory-init-actions">
+              <a-button
+                type="primary"
+                :disabled="longMemoryStatus !== 'empty' || longMemoryInitializing"
+                :loading="longMemoryStatus === 'loading' || longMemoryInitializing"
+                @click="openLongMemoryInitModal"
+              >
+                一键初始化长期记忆
+              </a-button>
+              <a-button v-if="longMemoryStatus === 'error'" type="link" @click="retryLongMemoryStatus">
+                重新检查
+              </a-button>
+            </div>
+            <div class="long-memory-hint" role="status">
+              <template v-if="longMemoryStatus === 'exists'">该产品已存在长期记忆</template>
+              <template v-else-if="longMemoryStatus === 'error'">长期记忆状态获取失败</template>
+              <template v-else-if="longMemoryStatus === 'loading'">正在检查长期记忆…</template>
+              <template v-else-if="longMemoryInitializing">正在初始化长期记忆…</template>
+              <template v-else>该产品尚未初始化长期记忆</template>
+            </div>
+          </a-form-item>
           <a-form-item label="Agent 最大轮次" name="agentEpochLimit">
             <a-input
               v-model:value="runtimeConfigForm.agentEpochLimit"
@@ -311,6 +333,26 @@
           </a-form-item>
         </a-form>
       </a-spin>
+    </a-modal>
+
+    <a-modal
+      v-model:visible="longMemoryInitModalVisible"
+      title="初始化长期记忆"
+      ok-text="确认初始化"
+      cancel-text="取消"
+      :confirm-loading="longMemoryInitializing"
+      @ok="handleFastInitLongMemory"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="所在城市" required>
+          <a-input
+            v-model:value="longMemoryCity"
+            placeholder="请输入您的城市"
+            :maxlength="255"
+            @press-enter="handleFastInitLongMemory"
+          />
+        </a-form-item>
+      </a-form>
     </a-modal>
 
     <!-- 工具管理弹窗 -->
@@ -412,6 +454,7 @@ import { getProductPage, deleteProduct } from '@/api/product';
 import { getMcpPointUrl, getMcpPointTools } from '@/api/mcpPoint'; // 导入新的API函数  
 import { getProductToolsBan, postProductToolsBan, deleteProductToolsBan } from '@/api/productToolsBan'; // 导入工具管理API
 import { getUserConfigByName, updateUserConfig } from '@/api/userConfig'
+import { getLongMemoryByProductId, fastInitLongMemory } from '@/api/agentLongMemory'
 import { useRouter } from 'vue-router'    
 import { DeleteOutlined, LinkOutlined, CopyOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
     
@@ -436,6 +479,11 @@ const runtimeConfigFormRef = ref(null)
 const runtimeConfigLoading = ref(false)
 const runtimeConfigSaving = ref(false)
 const currentRuntimeProduct = ref(null)
+const longMemoryStatus = ref('loading')
+const longMemoryInitializing = ref(false)
+const longMemoryInitModalVisible = ref(false)
+const longMemoryCity = ref('')
+let runtimeConfigRequestSequence = 0
 const runtimeConfigForm = ref({
   webSearchEnabled: false,
   agentEpochLimit: 5,
@@ -683,8 +731,8 @@ const fetchProduct = (options = {}) => {
           name: item.productName,    
           key: item.keyvalue,    
           register: item.register,    
-          mqttUser: item.mqttUser    
-        }));    
+          mqttUser: item.mqttUser
+        }));
         const maxPage = Math.max(1, Math.ceil(total / pagination.value.pageSize))
         if (pagination.value.current > maxPage) {
           pagination.value = {
@@ -712,6 +760,78 @@ const fetchProduct = (options = {}) => {
       }
     });    
 };    
+
+const loadLongMemoryStatus = async (productId, requestId) => {
+  longMemoryStatus.value = 'loading'
+  try {
+    const response = await getLongMemoryByProductId({ productId })
+    if (requestId !== runtimeConfigRequestSequence) return
+    const { data, errorCode } = response.data || {}
+    if (errorCode === 200 && Array.isArray(data)) {
+      longMemoryStatus.value = data.length > 0 ? 'exists' : 'empty'
+    } else {
+      longMemoryStatus.value = 'error'
+      if (errorCode === 2001) router.push('/login')
+    }
+  } catch (error) {
+    if (requestId !== runtimeConfigRequestSequence) return
+    longMemoryStatus.value = 'error'
+    console.log('获取长期记忆状态失败:', error)
+  }
+}
+
+const retryLongMemoryStatus = () => {
+  if (currentRuntimeProduct.value && longMemoryStatus.value === 'error') {
+    loadLongMemoryStatus(currentRuntimeProduct.value.id, runtimeConfigRequestSequence)
+  }
+}
+
+const openLongMemoryInitModal = () => {
+  if (!currentRuntimeProduct.value || longMemoryStatus.value !== 'empty' || longMemoryInitializing.value) {
+    return
+  }
+  longMemoryCity.value = ''
+  longMemoryInitModalVisible.value = true
+}
+
+const handleFastInitLongMemory = async () => {
+  if (!currentRuntimeProduct.value || longMemoryInitializing.value || longMemoryStatus.value !== 'empty') {
+    return
+  }
+  const city = longMemoryCity.value.trim()
+  if (!city) {
+    message.warning('请输入您的城市')
+    return
+  }
+  const productId = currentRuntimeProduct.value.id
+  const requestId = runtimeConfigRequestSequence
+  longMemoryInitializing.value = true
+  try {
+    const response = await fastInitLongMemory({ productId, city })
+    if (requestId !== runtimeConfigRequestSequence) return
+    const { errorCode } = response.data || {}
+    if (errorCode === 200) {
+      longMemoryStatus.value = 'exists'
+      longMemoryInitModalVisible.value = false
+      message.success('长期记忆初始化成功')
+    } else if (errorCode === 2001) {
+      router.push('/login')
+    } else if (errorCode === 3005) {
+      longMemoryStatus.value = 'exists'
+      longMemoryInitModalVisible.value = false
+      message.info('该产品已存在长期记忆')
+    } else {
+      message.error('长期记忆初始化失败')
+    }
+  } catch (error) {
+    if (requestId !== runtimeConfigRequestSequence) return
+    console.log('初始化长期记忆失败:', error)
+    message.error('长期记忆初始化失败')
+    await loadLongMemoryStatus(productId, requestId)
+  } finally {
+    if (requestId === runtimeConfigRequestSequence) longMemoryInitializing.value = false
+  }
+}
 
 const getPageContent = (pageData) => {
   if (Array.isArray(pageData)) {
@@ -988,7 +1108,12 @@ const readRuntimeConfigValue = (payload, item) => {
 }
 
 const handleRuntimeConfig = async (record) => {
+  const requestId = ++runtimeConfigRequestSequence
   currentRuntimeProduct.value = record
+  longMemoryInitializing.value = false
+  longMemoryInitModalVisible.value = false
+  longMemoryCity.value = ''
+  loadLongMemoryStatus(record.id, requestId)
   runtimeConfigModalVisible.value = true
   runtimeConfigLoading.value = true
   runtimeConfigForm.value = {
@@ -1010,6 +1135,7 @@ const handleRuntimeConfig = async (record) => {
       )
     )
 
+    if (requestId !== runtimeConfigRequestSequence) return
     responses.forEach(({ item, response }) => {
       const errorCode = response?.data?.errorCode
       if (errorCode === 200) {
@@ -1019,7 +1145,7 @@ const handleRuntimeConfig = async (record) => {
       }
     })
   } finally {
-    runtimeConfigLoading.value = false
+    if (requestId === runtimeConfigRequestSequence) runtimeConfigLoading.value = false
   }
 }
 
@@ -1302,6 +1428,18 @@ const handleDelete = (record) => {
     
     
 <style lang="scss" scoped>    
+.long-memory-init-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.long-memory-hint {
+  margin-top: 8px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
 .memory-summary-threshold-slider {
   padding: 0 16px 8px;
 

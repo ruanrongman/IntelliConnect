@@ -43,7 +43,7 @@ public enum ResultCode {
 
   /* 业务错误 */
   NO_PERMISSION(3001, "没有权限"), HAS_DEPENDENCIES(3002, "存在依赖关系，无法删除"), DEVICE_ABANDON(3003,
-      "设备被禁用"), DEVICE_TIMEOUT(3004, "设备响应超时");
+      "设备被禁用"), DEVICE_TIMEOUT(3004, "设备响应超时"), ENTITY_EXIST(3005, "保存实体已经存在");
 
   private Integer code;
   private String message;

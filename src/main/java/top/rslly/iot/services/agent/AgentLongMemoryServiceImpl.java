@@ -26,6 +26,7 @@ import top.rslly.iot.models.AgentLongMemoryEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.prompt.AgentLongMemoryDescription;
 import top.rslly.iot.param.request.AgentLongMemory;
+import top.rslly.iot.param.request.AgentLongMemoryFastInitParam;
 import top.rslly.iot.param.request.AgentLongMemoryToolParam;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
@@ -112,6 +113,14 @@ public class AgentLongMemoryServiceImpl implements AgentLongMemoryService {
   }
 
   @Override
+  public JsonResult<?> getLongMemoryByProductId(int productId) {
+    if (productRepository.findAllById(productId).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return ResultTool.success(agentLongMemoryRepository.findAllByProductId(productId));
+  }
+
+  @Override
   public List<AgentLongMemoryDescription> getDescription(int productId) {
     var result = agentLongMemoryRepository.findAllByProductId(productId);
     List<AgentLongMemoryDescription> agentLongMemoryDescriptionList = new LinkedList<>();
@@ -146,6 +155,33 @@ public class AgentLongMemoryServiceImpl implements AgentLongMemoryService {
     agentLongMemoryEntity.setMemoryValue(agentLongMemory.getMemoryValue());
     var result = agentLongMemoryRepository.save(agentLongMemoryEntity);
     return ResultTool.success(result);
+  }
+
+  @Override
+  @Transactional(rollbackFor = Exception.class)
+  public JsonResult<?> fastInitLongMemory(
+      AgentLongMemoryFastInitParam agentLongMemoryFastInitParam) {
+    // Serialize initialization even when there are no memory rows to lock yet.
+    if (productRepository.findLockedById(agentLongMemoryFastInitParam.getProductId()).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    if (!agentLongMemoryRepository.findAllByProductId(agentLongMemoryFastInitParam.getProductId())
+        .isEmpty()) {
+      return ResultTool.fail(ResultCode.ENTITY_EXIST);
+    }
+    AgentLongMemoryEntity agentLongMemoryEntity = new AgentLongMemoryEntity();
+    agentLongMemoryEntity.setProductId(agentLongMemoryFastInitParam.getProductId());
+    agentLongMemoryEntity.setMemoryKey("city");
+    agentLongMemoryEntity.setDescription("用户所在的城市");
+    agentLongMemoryEntity.setMemoryValue(agentLongMemoryFastInitParam.getCity().trim());
+    agentLongMemoryRepository.save(agentLongMemoryEntity);
+    AgentLongMemoryEntity agentLongMemoryEntity1 = new AgentLongMemoryEntity();
+    agentLongMemoryEntity1.setProductId(agentLongMemoryFastInitParam.getProductId());
+    agentLongMemoryEntity1.setMemoryKey("用户画像和偏好");
+    agentLongMemoryEntity1.setDescription("用户画像和偏好");
+    agentLongMemoryEntity1.setMemoryValue("暂无");
+    agentLongMemoryRepository.save(agentLongMemoryEntity1);
+    return ResultTool.success();
   }
 
   @Override

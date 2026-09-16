@@ -22,6 +22,7 @@ package top.rslly.iot.services.agent;
 import top.rslly.iot.models.AgentLongMemoryEntity;
 import top.rslly.iot.param.prompt.AgentLongMemoryDescription;
 import top.rslly.iot.param.request.AgentLongMemory;
+import top.rslly.iot.param.request.AgentLongMemoryFastInitParam;
 import top.rslly.iot.param.request.AgentLongMemoryToolParam;
 import top.rslly.iot.utility.result.JsonResult;
 
@@ -34,9 +35,13 @@ public interface AgentLongMemoryService {
 
   JsonResult<?> getLongMemory(String token);
 
+  JsonResult<?> getLongMemoryByProductId(int productId);
+
   List<AgentLongMemoryDescription> getDescription(int productId);
 
   JsonResult<?> postLongMemory(AgentLongMemory agentLongMemory);
+
+  JsonResult<?> fastInitLongMemory(AgentLongMemoryFastInitParam agentLongMemoryFastInitParam);
 
   Boolean updateLongMemory(AgentLongMemoryToolParam agentLongMemoryToolParam);
 

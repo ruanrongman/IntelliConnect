@@ -238,66 +238,112 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     if (rootNode == null || maxDepth <= 0) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+
     if (maxDepth >= 20) {
       // Too deep will cause performance problem.
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+
     // Update start node hit count.
     rootNode.setHitTimes(rootNode.getHitTimes() + 1);
     knowledgeGraphicNodeRepository.save(rootNode);
+
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
 
-    // Use Set to record visited node IDs for self-loop detection and deduplication
+    // Record visited node IDs for self-loop detection and deduplication.
     Set<Long> visitedNodeIds = new HashSet<>();
 
-    Stack<KnowledgeGraphicNodeEntity> nodeStack = new Stack<>();
-    List<KnowledgeGraphicNodeEntity> nodeList = new ArrayList<>();
+    // BFS queue.
+    Queue<KnowledgeGraphicNodeEntity> queue = new ArrayDeque<>();
 
-    // Add root node to visited set
+    // Add root node.
     visitedNodeIds.add(rootNode.getId());
-    nodeList.add(rootNode);
-    knowledgeGraphic.addNode(rootNode.getName(), rootNode.getDes());
-    for (KnowledgeGraphicNodeEntity node : nodeList) {
-      nodeStack.push(node);
-      knowledgeGraphic.addNode(node.getName());
-    }
-    while (!nodeStack.isEmpty() && maxDepth > 0) {
-      List<KnowledgeGraphicNodeEntity> nextNodeList = new ArrayList<>();
-      for (KnowledgeGraphicNodeEntity node : nodeList) {
+    queue.offer(rootNode);
+
+    // Add root node to knowledge graph.
+    knowledgeGraphic.addNode(
+        rootNode.getName(),
+        rootNode.getDes());
+
+    int depth = 0;
+
+    // BFS layer traversal.
+    while (!queue.isEmpty() && depth < maxDepth) {
+
+      // Number of nodes in the current layer.
+      int levelSize = queue.size();
+
+      for (int i = 0; i < levelSize; i++) {
+
+        // poll() is used because levelSize guarantees
+        // that the current layer has this many nodes.
+        KnowledgeGraphicNodeEntity node = queue.poll();
+
+        if (node == null) {
+          continue;
+        }
+
         // Update node search count.
         node.setSearchTimes(node.getSearchTimes() + 1);
         knowledgeGraphicNodeRepository.save(node);
+
+        // Get outgoing relations.
         List<KnowledgeGraphicRelationEntity> relationList =
             knowledgeGraphicRelationRepository.getAllByFrom(node.getId());
-        for (KnowledgeGraphicRelationEntity relation : relationList) {
-          KnowledgeGraphicNodeEntity to = this.getNodeById(relation.getTo());
 
-          // Self-loop + deduplication, use contains() instead of == comparison
-          if (visitedNodeIds.contains(to.getId())) {
-            // Even if node is visited, relation still needs to be added (avoid losing edge info)
-            knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
+        for (KnowledgeGraphicRelationEntity relation : relationList) {
+
+          KnowledgeGraphicNodeEntity to =
+              this.getNodeById(relation.getTo());
+
+          // Avoid NullPointerException if target node does not exist.
+          if (to == null) {
+            log.warn(
+                "Skipping knowledge graph relation with missing target node: productId={}, relationId={}, fromNodeId={}, toNodeId={}",
+                node.getProductId(), relation.getId(), relation.getFrom(), relation.getTo());
             continue;
           }
 
-          // Mark this node as visited
+          // Always add the relation.
+          // Even if the target node has already been visited,
+          // the edge itself should not be lost.
+          knowledgeGraphic.addRelation(
+              node.getName(),
+              relation.getDes(),
+              to.getName());
+
+          // Self-loop or already visited node.
+          if (visitedNodeIds.contains(to.getId())) {
+            continue;
+          }
+
+          // Mark node as visited.
           visitedNodeIds.add(to.getId());
-          nextNodeList.add(to);
-          knowledgeGraphic.addRelation(node.getName(), relation.getDes(), to.getName());
+
+          // Add new node to BFS queue.
+          queue.offer(to);
+
+          // Add new node to knowledge graph.
+          knowledgeGraphic.addNode(
+              to.getName(),
+              to.getDes());
         }
+
+        // Get attributes of current node.
         List<KnowledgeGraphicAttributeEntity> attributes =
             knowledgeGraphicAttributeRepository.getAllByBelong(node.getId());
+
         for (KnowledgeGraphicAttributeEntity attribute : attributes) {
-          knowledgeGraphic.addAttribute(node.getName(), attribute.getName());
+          knowledgeGraphic.addAttribute(
+              node.getName(),
+              attribute.getName());
         }
       }
-      nodeStack.clear();
-      nodeList = nextNodeList;
-      for (KnowledgeGraphicNodeEntity node : nodeList) {
-        nodeStack.push(node);
-        knowledgeGraphic.addNode(node.getName(), node.getDes());
-      }
-      maxDepth--;
+
+      // Move to next BFS layer.
+      depth++;
     }
+
     return ResultTool.success(knowledgeGraphic);
   }
 

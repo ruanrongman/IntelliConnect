@@ -231,7 +231,7 @@ ai:
   chatTool-speedUp: true
   emotionTool-llm: dashscope-qwen3-14b
   memoryTool-llm: dashscope-qwen3-32b
-  classifierTool-llm: dashscope-deepseek-v4-flash
+  classifierTool-llm: dashscope-deepseek-v4.1-flash
   classifierTool-speedUp: true
   router:
     mode: function
@@ -250,11 +250,11 @@ ai:
   scheduleTool-llm: dashscope-qwen3-next-80b-a3b-instruct
   scheduleTool-llm-speed: true
   searchTool-llm: silicon-Qwen3-30B-A3B-think-64
-  agent-llm: dashscope-deepseek-v4-flash
+  agent-llm: dashscope-deepseek-v4.1-flash
   agent-speedUp: true
   longMemoryTool-llm: dashscope-qwen3-14b
   wx_smart_robot_llm: glm
-  knowledge_graphic_llm: dashscope-deepseek-v4-flash
+  knowledge_graphic_llm: dashscope-deepseek-v4.1-flash
   knowledge_graphic:
     max_graphic_length: 256000
     chunk_chars: 12000
@@ -263,7 +263,7 @@ ai:
     enabled: true
   mcp:
     agent-mode: function
-    agent-llm: dashscope-deepseek-v4-flash
+    agent-llm: dashscope-deepseek-v4.1-flash
     agent-speedUp: true
     agent-epoch-limit: 5
     agent-include-thought: false
