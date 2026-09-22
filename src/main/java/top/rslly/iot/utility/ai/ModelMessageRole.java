@@ -20,7 +20,11 @@
 package top.rslly.iot.utility.ai;
 
 public enum ModelMessageRole {
-  SYSTEM("system"), USER("user"), ASSISTANT("assistant"), TOOL("tool"), FUNCTION("function");
+  SYSTEM("system"),
+  USER("user"),
+  ASSISTANT("assistant"),
+  TOOL("tool"),
+  FUNCTION("function");
 
   private final String value;
 

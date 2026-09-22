@@ -25,7 +25,9 @@ import lombok.Getter;
 @AllArgsConstructor
 @Getter
 public enum DataSave {
-  never("never"), week("week"), permanent("permanent");
+  never("never"),
+  week("week"),
+  permanent("permanent");
 
   private String storageType;
 }

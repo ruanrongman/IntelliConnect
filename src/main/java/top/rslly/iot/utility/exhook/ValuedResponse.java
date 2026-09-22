@@ -132,7 +132,8 @@ public final class ValuedResponse extends com.google.protobuf.GeneratedMessageV3
     /**
      * <code>STOP_AND_RETURN = 2;</code>
      */
-    STOP_AND_RETURN(2), UNRECOGNIZED(-1),;
+    STOP_AND_RETURN(2),
+    UNRECOGNIZED(-1),;
 
     /**
      * <code>CONTINUE = 0;</code>
@@ -224,7 +225,9 @@ public final class ValuedResponse extends com.google.protobuf.GeneratedMessageV3
   private Object value_;
 
   public enum ValueCase implements com.google.protobuf.Internal.EnumLite {
-    BOOL_RESULT(3), MESSAGE(4), VALUE_NOT_SET(0);
+    BOOL_RESULT(3),
+    MESSAGE(4),
+    VALUE_NOT_SET(0);
 
     private final int value;
 

@@ -20,5 +20,7 @@
 package top.rslly.iot.utility.script;
 
 public enum ScriptType {
-  RULE_NODE_SCRIPT, ALARM_SCRIPT, Control_Script
+  RULE_NODE_SCRIPT,
+  ALARM_SCRIPT,
+  Control_Script
 }

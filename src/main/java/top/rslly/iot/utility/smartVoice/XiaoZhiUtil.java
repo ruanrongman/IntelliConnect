@@ -114,7 +114,10 @@ public class XiaoZhiUtil {
       AtomicBoolean finishing) {}
 
   private enum TtsPlaybackType {
-    AUDIO, TEXT, BASE, END
+    AUDIO,
+    TEXT,
+    BASE,
+    END
   }
 
   private record TtsPlaybackTask(TtsPlaybackType type, String content,

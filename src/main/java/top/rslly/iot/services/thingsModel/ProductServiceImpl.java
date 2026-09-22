@@ -306,7 +306,7 @@ public class ProductServiceImpl implements ProductService {
           找新闻热榜，只需要找一个榜单即可。拍照只允许拍照一次就够了。
           执行工具的时候，最多允许调用两个工具就必须结束，否则你将会受到惩罚。
           """);
-      productRoleEntity.setVoice(VoiceTimbre.CosyVoiceLongXiaoXia.getTimbre());
+      productRoleEntity.setVoice(VoiceTimbre.CosyVoiceV3FlashLongXiaoChun.getTimbre());
       productRoleRepository.save(productRoleEntity);
       AgentLongMemoryEntity agentLongMemoryEntity = new AgentLongMemoryEntity();
       agentLongMemoryEntity.setProductId(productEntity1.getId());

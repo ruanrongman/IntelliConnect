@@ -227,32 +227,32 @@ ai:
   custom-key: XXX
   custom-llm-provider-url: XXX
   agent-epoch-limit: 5
-  chatTool-llm: dashscope-qwen3-235b-a22b-instruct-2507
+  chatTool-llm: dashscope-deepseek-v4.1-flash
   chatTool-speedUp: true
-  emotionTool-llm: dashscope-qwen3-14b
-  memoryTool-llm: dashscope-qwen3-32b
+  emotionTool-llm: dashscope-qwen3.8-flash
+  memoryTool-llm: dashscope-qwen3.8-flash
   classifierTool-llm: dashscope-deepseek-v4.1-flash
   classifierTool-speedUp: true
   router:
     mode: function
-  controlTool-llm: dashscope-qwen3-32b
+  controlTool-llm: dashscope-qwen3.8-flash
   controlTool-llm-speed: true
-  musicTool-llm: dashscope-qwen3-14b
+  musicTool-llm: dashscope-qwen3.8-flash
   # 本地音乐文件夹路径（用于小智设备播放音乐），留空则使用网易云
   # 示例: D:/music/
   music:
     path: D:/music/
-  productRoleTool-llm: dashscope-qwen3-14b
-  weatherTool-llm: dashscope-qwen3-next-80b-a3b-instruct
+  productRoleTool-llm: dashscope-qwen3.8-flash
+  weatherTool-llm: dashscope-qwen3.8-flash
   weatherTool-speedUp: true
-  wxBoundProductTool-llm: dashscope-qwen3-14b
-  wxProductActiveTool-llm: dashscope-qwen3-14b
-  scheduleTool-llm: dashscope-qwen3-next-80b-a3b-instruct
+  wxBoundProductTool-llm: dashscope-qwen3.8-flash
+  wxProductActiveTool-llm: dashscope-qwen3.8-flash
+  scheduleTool-llm: dashscope-qwen3.8-flash
   scheduleTool-llm-speed: true
-  searchTool-llm: silicon-Qwen3-30B-A3B-think-64
+  searchTool-llm: dashscope-qwen3.8-flash
   agent-llm: dashscope-deepseek-v4.1-flash
   agent-speedUp: true
-  longMemoryTool-llm: dashscope-qwen3-14b
+  longMemoryTool-llm: dashscope-qwen3.8-flash
   wx_smart_robot_llm: glm
   knowledge_graphic_llm: dashscope-deepseek-v4.1-flash
   knowledge_graphic:

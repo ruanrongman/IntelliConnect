@@ -73,7 +73,9 @@ public class XiaoZhiWebsocket {
   private static final ExecutorService sendExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
   public enum OutboundMessageType {
-    TEXT, BINARY, CLOSE
+    TEXT,
+    BINARY,
+    CLOSE
   }
 
   public static final class OutboundMessage {

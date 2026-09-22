@@ -142,7 +142,8 @@ public final class ClientAuthorizeRequest extends com.google.protobuf.GeneratedM
     /**
      * <code>SUBSCRIBE = 1;</code>
      */
-    SUBSCRIBE(1), UNRECOGNIZED(-1),;
+    SUBSCRIBE(1),
+    UNRECOGNIZED(-1),;
 
     /**
      * <code>PUBLISH = 0;</code>

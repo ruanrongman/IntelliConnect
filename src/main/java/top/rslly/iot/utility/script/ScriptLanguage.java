@@ -20,5 +20,6 @@
 package top.rslly.iot.utility.script;
 
 public enum ScriptLanguage {
-  JS, IBEL
+  JS,
+  IBEL
 }

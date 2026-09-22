@@ -29,7 +29,10 @@ public class IcScriptException extends RuntimeException {
   private static final long serialVersionUID = -1958193538782818284L;
 
   public static enum ErrorCode {
-    COMPILATION, TIMEOUT, RUNTIME, OTHER
+    COMPILATION,
+    TIMEOUT,
+    RUNTIME,
+    OTHER
   }
 
   @Getter

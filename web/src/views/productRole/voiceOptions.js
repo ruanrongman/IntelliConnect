@@ -1,28 +1,94 @@
-const voiceOptions = [  
-  {  
-    value: 'longxiaochun',  
-    label: '龙小醇 - 嗓音如丝般柔滑，温暖中流淌着亲切与抚慰，恰似春风吹过心田。'  
-  },  
-  {  
-    value: 'longxiaoxia',  
-    label: '龙小夏 - 以温润磁性的声线，宛如夏日细雨，悄然滋润听者心灵，营造恬静氛围。'  
-  },  
-  {  
-    value: 'longxiaocheng',  
-    label: '龙小诚 - 深邃而稳重的声音犹如醇厚佳酿，散发出成熟魅力。'  
-  },  
-  {  
-    value: 'longxiaobai',  
-    label: '龙小白 - 以轻松亲和的声调演绎闲适日常，其嗓音如邻家女孩般亲切自然。'  
-  },  
-  {  
-    value: 'longshu',  
-    label: '龙叔 - 以专业沉稳的播报风格传递新闻资讯，其嗓音富含权威与信赖感。'  
-  },  
-  {  
-    value: 'longtong',  
-    label: '龙童 - 以稚嫩的童声撒欢，像是春日里的小溪，清脆跳跃，流淌着生机勃勃的旋律。'  
-  },
+// Source: https://docs.bailian.console.aliyun.com/zh/model-studio/cosyvoice-voice-list
+// CosyVoice v3 flash catalog verified on 2026-09-17.
+const voiceOptions = [
+  { value: 'cosy_v3_flash_longxiaochun_v3', label: '龙小淳（V3 Flash） - 知性积极女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longxiaoxia_v3', label: '龙小夏（V3 Flash） - 沉稳权威女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longsanshu_v3', label: '龙三叔（V3 Flash） - 沉稳质感男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longxing_v3', label: '龙星（V3 Flash） - 温婉邻家女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longshu_v3', label: '龙书（V3 Flash） - 沉稳青年男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longhuhu_v3', label: '龙呼呼（V3 Flash） - 天真烂漫女童；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanyang', label: '龙安洋（V3 Flash） - 阳光大男孩；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanhuan_v3', label: '龙安欢（V3）（V3 Flash） - 欢脱元气女；中文（普通话、广东话、东北话、河南话、湖南话、陕西话、山东话、四川话、安徽话）、英文' },
+  { value: 'cosy_v3_flash_longanhuan', label: '龙安欢（V3 Flash） - 欢脱元气女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longpaopao_v3', label: '龙泡泡（V3 Flash） - 飞天泡泡音；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longjielidou_v3', label: '龙杰力豆（V3 Flash） - 阳光顽皮男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longxian_v3', label: '龙仙（V3 Flash） - 豪放可爱女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longling_v3', label: '龙铃（V3 Flash） - 稚气呆板女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longshanshan_v3', label: '龙闪闪（V3 Flash） - 戏剧化童声；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longniuniu_v3', label: '龙牛牛（V3 Flash） - 阳光男童声；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longjiaxin_v3', label: '龙嘉欣（V3 Flash） - 优雅粤语女；中文（粤语）、英文' },
+  { value: 'cosy_v3_flash_longjiayi_v3', label: '龙嘉怡（V3 Flash） - 知性粤语女；中文（粤语）、英文' },
+  { value: 'cosy_v3_flash_longanyue_v3', label: '龙安粤（V3 Flash） - 欢脱粤语男；中文（粤语）、英文' },
+  { value: 'cosy_v3_flash_longlaotie_v3', label: '龙老铁（V3 Flash） - 东北直率男；中文（东北话）、英文' },
+  { value: 'cosy_v3_flash_longshange_v3', label: '龙陕哥（V3 Flash） - 原味陕北男；中文（陕西话）、英文' },
+  { value: 'cosy_v3_flash_longanmin_v3', label: '龙安闽（V3 Flash） - 清纯萝莉女；中文（闽南话）、英文' },
+  { value: 'cosy_v3_flash_loongkyong_v3', label: 'loongkyong（V3 Flash） - 韩语女；韩语' },
+  { value: 'cosy_v3_flash_loongriko_v3', label: 'Riko（V3 Flash） - 二次元霓虹女；日语' },
+  { value: 'cosy_v3_flash_loongtomoka_v3', label: 'loongtomoka（V3 Flash） - 日语女；日语' },
+  { value: 'cosy_v3_flash_loongabby_v3', label: 'loongabby（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongandy_v3', label: 'loongandy（V3 Flash） - 美式英文男；美式英语' },
+  { value: 'cosy_v3_flash_loongannie_v3', label: 'loongannie（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongava_v3', label: 'loongava（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongbeth_v3', label: 'loongbeth（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongbetty_v3', label: 'loongbetty（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongcally_v3', label: 'loongcally（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongcindy_v3', label: 'loongcindy（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongdavid_v3', label: 'loongdavid（V3 Flash） - 美式英文男；美式英语' },
+  { value: 'cosy_v3_flash_loongdonna_v3', label: 'loongdonna（V3 Flash） - 美式英文女；美式英语' },
+  { value: 'cosy_v3_flash_loongemily_v3', label: 'loongemily（V3 Flash） - 英式英文女；英式英语' },
+  { value: 'cosy_v3_flash_loongeric_v3', label: 'loongeric（V3 Flash） - 英式英文男；英式英语' },
+  { value: 'cosy_v3_flash_loongluna_v3', label: 'loongluna（V3 Flash） - 英式英文女；英式英语' },
+  { value: 'cosy_v3_flash_loongluca_v3', label: 'loongluca（V3 Flash） - 英式英文男；英式英语' },
+  { value: 'cosy_v3_flash_loongtomoya_v3', label: 'loongtomoya（V3 Flash） - 日语男；日语' },
+  { value: 'cosy_v3_flash_loongyuuna_v3', label: 'Yuuna（V3 Flash） - 日语女；日语' },
+  { value: 'cosy_v3_flash_loongyuuma_v3', label: 'Yuuma（V3 Flash） - 日语男；日语' },
+  { value: 'cosy_v3_flash_loongjihun_v3', label: 'Jihun（V3 Flash） - 韩语男；韩语' },
+  { value: 'cosy_v3_flash_loongindah_v3', label: 'loongindah（V3 Flash） - 印尼女；印尼语' },
+  { value: 'cosy_v3_flash_longfei_v3', label: '龙飞（V3 Flash） - 热血磁性男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyingxiao_v3', label: '龙应笑（V3 Flash） - 清甜推销女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyingxun_v3', label: '龙应询（V3 Flash） - 年轻青涩男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyingjing_v3', label: '龙应静（V3 Flash） - 低调冷静女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyingling_v3', label: '龙应聆（V3 Flash） - 温和共情女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyingtao_v3', label: '龙应桃（V3 Flash） - 温柔淡定女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyumi_v3', label: 'YUMI（V3 Flash） - 正经青年女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanyun_v3', label: '龙安昀（V3 Flash） - 居家暖男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanwen_v3', label: '龙安温（V3 Flash） - 优雅知性女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanli_v3', label: '龙安莉（V3 Flash） - 利落从容女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanlang_v3', label: '龙安朗（V3 Flash） - 清爽利落男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyingmu_v3', label: '龙应沐（V3 Flash） - 优雅知性女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longantai_v3', label: '龙安台（V3 Flash） - 嗲甜台湾女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longhua_v3', label: '龙华（V3 Flash） - 元气甜美女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longcheng_v3', label: '龙橙（V3 Flash） - 智慧青年男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longze_v3', label: '龙泽（V3 Flash） - 温暖元气男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longzhe_v3', label: '龙哲（V3 Flash） - 呆板大暖男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyan_v3', label: '龙颜（V3 Flash） - 温暖春风女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longtian_v3', label: '龙天（V3 Flash） - 磁性理智男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longwan_v3', label: '龙婉（V3 Flash） - 细腻柔声女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longqiang_v3', label: '龙嫱（V3 Flash） - 浪漫风情女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longfeifei_v3', label: '龙菲菲（V3 Flash） - 甜美娇气女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longhao_v3', label: '龙浩（V3 Flash） - 多情忧郁男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanrou_v3', label: '龙安柔（V3 Flash） - 温柔闺蜜女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longhan_v3', label: '龙寒（V3 Flash） - 温暖痴情男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanzhi_v3', label: '龙安智（V3 Flash） - 睿智轻熟男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanling_v3', label: '龙安灵（V3 Flash） - 思维灵动女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanya_v3', label: '龙安雅（V3 Flash） - 高雅气质女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanqin_v3', label: '龙安亲（V3 Flash） - 亲和活泼女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longmiao_v3', label: '龙妙（V3 Flash） - 抑扬顿挫女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyuan_v3', label: '龙媛（V3 Flash） - 温暖治愈女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyue_v3', label: '龙悦（V3 Flash） - 温暖磁性女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longxiu_v3', label: '龙修（V3 Flash） - 博才说书男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longnan_v3', label: '龙楠（V3 Flash） - 睿智青年男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longwanjun_v3', label: '龙婉君（V3 Flash） - 细腻柔声女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longyichen_v3', label: '龙逸尘（V3 Flash） - 洒脱活力男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longlaobo_v3', label: '龙老伯（V3 Flash） - 沧桑岁月爷；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longlaoyi_v3', label: '龙老姨（V3 Flash） - 烟火从容阿姨；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longjiqi_v3', label: '龙机器（V3 Flash） - 呆萌机器人；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longhouge_v3', label: '龙猴哥（V3 Flash） - 经典猴哥；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longdaiyu_v3', label: '龙黛玉（V3 Flash） - 娇率才女音；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanran_v3', label: '龙安燃（V3 Flash） - 活泼质感女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longanxuan_v3', label: '龙安宣（V3 Flash） - 经典直播女；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_longshuo_v3', label: '龙硕（V3 Flash） - 博才干练男；中文（普通话）、英文' },
+  { value: 'cosy_v3_flash_loongbella_v3', label: 'Bella3.0（V3 Flash） - 精准干练女；中文（普通话）、英文' },
   // --- 电话销售 ---
   {
     value: 'cosy_v2_longyingxiao',
@@ -600,4 +666,17 @@ const voiceOptions = [
     label: '【MiniMax】粤语-善良女士'
   },
 ];
+const legacyVoiceMap = {
+  longxiaochun: 'cosy_v3_flash_longxiaochun_v3',
+  longxiaoxia: 'cosy_v3_flash_longxiaoxia_v3',
+  longxiaocheng: 'cosy_v3_flash_longsanshu_v3',
+  longxiaobai: 'cosy_v3_flash_longxing_v3',
+  longshu: 'cosy_v3_flash_longshu_v3',
+  longtong: 'cosy_v3_flash_longhuhu_v3'
+};
+
+export const normalizeVoice = (voice) => {
+  const value = typeof voice === 'string' ? voice.trim() : voice;
+  return Object.hasOwn(legacyVoiceMap, value) ? legacyVoiceMap[value] : value;
+};
 export default voiceOptions;

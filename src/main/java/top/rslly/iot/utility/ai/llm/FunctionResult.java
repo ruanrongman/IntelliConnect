@@ -26,7 +26,10 @@ import java.util.UUID;
 @Getter
 public final class FunctionResult {
   public enum Type {
-    UNSUPPORTED, DIRECT_REPLY, TOOL_CALL, ERROR
+    UNSUPPORTED,
+    DIRECT_REPLY,
+    TOOL_CALL,
+    ERROR
   }
 
   private final Type type;

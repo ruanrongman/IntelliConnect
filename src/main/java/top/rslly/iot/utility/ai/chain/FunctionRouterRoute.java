@@ -23,16 +23,25 @@ import java.util.Arrays;
 import java.util.Optional;
 
 public enum FunctionRouterRoute {
-  WEATHER("1", "route_weather", "Query weather"), CONTROL("2", "route_control_electrical",
-      "Control and query electrical, excluding music and xiaozhi_device"), MUSIC("3", "route_music",
-          "Play or recommend music"), AGENT("4", "route_agent",
-              "Complex multi-step task"), WX_BOUND_PRODUCT("6", "route_bind_product",
-                  "Bind or unbind products"), WX_PRODUCT_ACTIVE("7", "route_switch_product",
-                      "WeChat-Controlled Switching Product"), SCHEDULE("8", "route_schedule",
-                          "Schedule or reminder"), PRODUCT_ROLE("9", "route_role",
-                              "Role or voice configuration"), MCP("10", "route_mcp",
-                                  "Use MCP capability"), GOODBYE("11", "route_step_back",
-                                      "Say goodbye or step down");
+  WEATHER("1", "route_weather", "Query weather"),
+  CONTROL("2", "route_control_electrical",
+      "Control and query electrical, excluding music and xiaozhi_device"),
+  MUSIC("3", "route_music",
+      "Play or recommend music"),
+  AGENT("4", "route_agent",
+      "Complex multi-step task"),
+  WX_BOUND_PRODUCT("6", "route_bind_product",
+      "Bind or unbind products"),
+  WX_PRODUCT_ACTIVE("7", "route_switch_product",
+      "WeChat-Controlled Switching Product"),
+  SCHEDULE("8", "route_schedule",
+      "Schedule or reminder"),
+  PRODUCT_ROLE("9", "route_role",
+      "Role or voice configuration"),
+  MCP("10", "route_mcp",
+      "Use MCP capability"),
+  GOODBYE("11", "route_step_back",
+      "Say goodbye or step down");
 
   private final String taskId;
   private final String functionName;

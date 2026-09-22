@@ -54,7 +54,10 @@ public class TtsServiceFactory {
 
   public String getCacheFingerprint(int productId) {
     TtsOptions options = resolveTtsOptions(productId);
-    return options.provider + "|" + options.voice + "|" + options.pitch + "|" + options.speed;
+    String voiceFingerprint = "dashscope".equals(options.provider)
+        ? Text2audio.resolveVoiceFingerprint(options.voice)
+        : options.voice;
+    return options.provider + "|" + voiceFingerprint + "|" + options.pitch + "|" + options.speed;
   }
 
   @Deprecated

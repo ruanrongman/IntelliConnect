@@ -37,6 +37,7 @@ import org.springframework.stereotype.Component;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.utility.ai.voice.AudioFrameDuration;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
+import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -51,8 +52,6 @@ import java.util.function.Consumer;
 @Component
 @Slf4j
 public class Text2audio implements TtsService {
-  private static final String model = "cosyvoice-v1";
-  private static final String voice = "longxiaochun";
   private static final int BOUNDARY_FADE_MS = 5;
   private static SpeechSynthesisParam param;
   private static volatile ConnectionOptions connectionOptions;
@@ -167,14 +166,15 @@ public class Text2audio implements TtsService {
 
   @Value("${ai.dashscope-key}")
   public void setApiKey(String apiKey) {
+    ResolvedVoice defaultVoice = resolveVoice(null);
     // 填写自己的api key
     param =
         SpeechSynthesisParam.builder()
             // 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
             .apiKey(apiKey)
-            .model(model)
+            .model(defaultVoice.model())
             .format(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT)
-            .voice(voice)
+            .voice(defaultVoice.voice())
             .build();
   }
 
@@ -248,17 +248,12 @@ public class Text2audio implements TtsService {
   }
 
   public static ByteBuffer synthesizeAndSaveAudio(String text, String voice) {
-    String model = param.getModel();
-    String voiceId = StringUtils.isNotBlank(voice) ? voice : param.getVoice();
-    if (voiceId.startsWith("cosy_v2_")) {
-      model = "cosyvoice-v2";
-      voiceId = voiceId.substring(8);
-    }
+    ResolvedVoice resolvedVoice = resolveVoice(voice);
     SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
         .apiKey(param.getApiKey())
-        .model(model)
+        .model(resolvedVoice.model())
         .format(SpeechSynthesisAudioFormat.MP3_16000HZ_MONO_128KBPS)
-        .voice(voiceId)
+        .voice(resolvedVoice.voice())
         .build();
     SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, null, null,
         connectionOptions);
@@ -280,7 +275,14 @@ public class Text2audio implements TtsService {
   public void asyncSynthesizeAndSaveAudio(String text, String chatId) {
     ReactCallback callback = new ReactCallback(chatId, ignored -> {
     });
-    SpeechSynthesizer synthesizer = new SpeechSynthesizer(param, callback, null,
+    ResolvedVoice resolvedVoice = resolveVoice(null);
+    SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
+        .apiKey(param.getApiKey())
+        .model(resolvedVoice.model())
+        .format(param.getFormat())
+        .voice(resolvedVoice.voice())
+        .build();
+    SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
         connectionOptions);
     synthesizer.call(text);
   }
@@ -302,22 +304,15 @@ public class Text2audio implements TtsService {
       String voice, Consumer<byte[]> onChunk) {
     ReactCallback callback = new ReactCallback(chatId, onChunk);
     try {
-      String model = param.getModel();
-      String voiceId = StringUtils.isNotBlank(voice) ? voice : param.getVoice();
-      if (voiceId.startsWith("cosy_v2_")) {
-        model = "cosyvoice-v2";
-        voiceId = voiceId.substring(8);
-        log.debug(model);
-        log.debug(voiceId);
-      }
+      ResolvedVoice resolvedVoice = resolveVoice(voice);
       // 创建线程安全的参数副本
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
-          .model(model)
+          .model(resolvedVoice.model())
           .format(getPcmFormat(chatId))
           .pitchRate(pitch)
           .speechRate(speed)
-          .voice(voiceId)
+          .voice(resolvedVoice.voice())
           .build();
       SpeechSynthesizer synthesizer = new SpeechSynthesizer(localParam, callback, null,
           connectionOptions);
@@ -348,6 +343,34 @@ public class Text2audio implements TtsService {
     }
     return false;
   }
+
+  public static String resolveVoiceFingerprint(String voice) {
+    ResolvedVoice resolvedVoice = resolveVoice(voice);
+    return resolvedVoice.model() + "|" + resolvedVoice.voice();
+  }
+
+  static ResolvedVoice resolveVoice(String requestedVoice) {
+    String configuredVoice = StringUtils.isNotBlank(requestedVoice)
+        ? VoiceTimbre.normalizeVoice(requestedVoice)
+        : VoiceTimbre.CosyVoiceV3FlashLongXiaoChun.getTimbre();
+    if (configuredVoice.startsWith("cosy_v3_flash_")) {
+      return new ResolvedVoice("cosyvoice-v3-flash",
+          configuredVoice.substring("cosy_v3_flash_".length()));
+    }
+    if (configuredVoice.startsWith("cosy_v2_")) {
+      return new ResolvedVoice("cosyvoice-v2", configuredVoice.substring("cosy_v2_".length()));
+    }
+    // Only migrate to IDs present in the flash catalog; some voices have no _v3 suffix.
+    if (VoiceTimbre.isValidVoice("cosy_v3_flash_" + configuredVoice)) {
+      return new ResolvedVoice("cosyvoice-v3-flash", configuredVoice);
+    }
+    if (VoiceTimbre.isValidVoice("cosy_v3_flash_" + configuredVoice + "_v3")) {
+      return new ResolvedVoice("cosyvoice-v3-flash", configuredVoice + "_v3");
+    }
+    return resolveVoice(null);
+  }
+
+  record ResolvedVoice(String model, String voice) {}
 
   private void acquireDashScopeTts(String scene, String chatId, String text)
       throws InterruptedException {

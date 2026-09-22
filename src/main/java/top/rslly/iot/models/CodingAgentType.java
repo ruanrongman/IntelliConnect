@@ -22,7 +22,8 @@ package top.rslly.iot.models;
 import java.util.Locale;
 
 public enum CodingAgentType {
-  CODEX, CLAUDE_CODE;
+  CODEX,
+  CLAUDE_CODE;
 
   public static String normalize(String agentType) {
     if (agentType == null) {

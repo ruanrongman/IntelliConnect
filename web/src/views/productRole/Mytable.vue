@@ -315,7 +315,7 @@ import { getProductRole, deleteProductRole, putProductRole } from '@/api/product
 import { getProductVoiceDiy, postProductVoiceDiy, deleteProductVoiceDiy } from '@/api/productVoiceDiy';      
 import { useRouter } from 'vue-router'      
 import { DeleteOutlined, EditOutlined, SaveOutlined, SoundOutlined, ReloadOutlined, ClockCircleOutlined, RocketOutlined } from '@ant-design/icons-vue'      
-import voiceOptionsData from './voiceOptions.js'  // 重命名导入  
+import voiceOptionsData, { normalizeVoice } from './voiceOptions.js'  // 重命名导入
     
 const router = useRouter()      
     
@@ -469,7 +469,7 @@ const columns = [
     key: 'voice',  
     width: 120,  
     customRender: ({ record }) => {  
-      return voiceDisplayMap.value[record.voice] || record.voice  
+      return voiceDisplayMap.value[normalizeVoice(record.voice)] || record.voice
     }  
   },    
   {      
@@ -541,7 +541,7 @@ const handleEdit = async (record) => {
       userName: record.userName,  
       role: record.role,  
       roleIntroduction: record.roleIntroduction,  
-      voice: record.voice  
+      voice: normalizeVoice(record.voice)
     }  
       
   } catch (error) {  
@@ -560,7 +560,7 @@ const handleEditSubmit = async () => {
       
     editSubmitting.value = true  
       
-    const response = await putProductRole(editForm.value)  
+    const response = await putProductRole({ ...editForm.value, voice: normalizeVoice(editForm.value.voice) })
     const { data, errorCode } = response.data  
       
     if (errorCode === 200) {  

@@ -73,7 +73,6 @@
         <setting id="org.eclipse.jdt.core.formatter.align_type_members_on_columns" value="false"/>
         <setting id="org.eclipse.jdt.core.formatter.blank_lines_before_member_type" value="0"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_space_after_opening_paren_in_enum_constant" value="do not insert"/>
-        <setting id="org.eclipse.jdt.core.formatter.alignment_for_enum_constants.count_dependent" value="16|5|48"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_space_after_opening_paren_in_for" value="do not insert"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_space_before_opening_brace_in_method_declaration" value="insert"/>
         <setting id="org.eclipse.jdt.core.formatter.alignment_for_selector_in_method_invocation" value="16"/>
@@ -291,7 +290,8 @@
         <setting id="org.eclipse.jdt.core.formatter.comment.format_header" value="true"/>
         <setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="true"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_space_before_closing_paren_in_enum_constant" value="do not insert"/>
-        <setting id="org.eclipse.jdt.core.formatter.alignment_for_enum_constants" value="0"/>
+        <!-- Force one enum constant per line with default indentation (1 + 48). -->
+        <setting id="org.eclipse.jdt.core.formatter.alignment_for_enum_constants" value="49"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_space_before_closing_paren_in_parenthesized_expression" value="do not insert"/>
         <setting id="org.eclipse.jdt.core.formatter.indent_body_declarations_compare_to_annotation_declaration_header" value="true"/>
         <setting id="org.eclipse.jdt.core.formatter.insert_new_line_in_empty_block" value="insert"/>
