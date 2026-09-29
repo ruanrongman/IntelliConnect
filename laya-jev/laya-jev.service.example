@@ -1,0 +1,28 @@
+[Unit]
+Description=Laya Jev compatible inference service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=laya-jev
+Group=laya-jev
+WorkingDirectory=/opt/laya-jev/laya-jev
+EnvironmentFile=/etc/laya-jev/laya-jev.env
+ExecStartPre=/usr/bin/test -f /opt/laya-jev/laya-jev/.runtime/models/multilingual/verified.json
+ExecStartPre=/usr/bin/test -f /opt/laya-jev/laya-jev/.runtime/models/multilingual/model.safetensors
+ExecStart=/opt/laya-jev/laya-jev/.venv/bin/python -u /opt/laya-jev/laya-jev/supervise.py
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=330
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/laya-jev/laya-jev/.runtime
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

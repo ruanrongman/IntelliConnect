@@ -156,6 +156,10 @@ weather:
     # Ed25519私钥 (PKCS8格式，Base64编码，不含-----BEGIN PRIVATE KEY-----等标记)
     private-key: XXX
 ai:
+  jev:
+    base-url: http://127.0.0.1:8001
+    key: XXX
+    model: jev-latest
   temperature: 0.6
   top-p: 0.85
   detectRandom: false

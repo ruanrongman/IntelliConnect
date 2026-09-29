@@ -126,6 +126,19 @@ public class HttpRequestUtils {
     return response.body().string();
   }
 
+  /** Posts JSON with custom headers. The caller must close the returned response. */
+  public Response httpPostJson(String url, String json, Map<String, String> headers)
+      throws IOException {
+    RequestBody body = RequestBody.create(MediaType.parse("application/json;charset=UTF-8"), json);
+    Request.Builder builder = new Request.Builder().url(url).post(body);
+    if (headers != null) {
+      headers.forEach(builder::header);
+    }
+    // Share the pool/dispatcher; leave retry decisions to the caller of this method.
+    return okHttpClient.newBuilder().retryOnConnectionFailure(false).build()
+        .newCall(builder.build()).execute();
+  }
+
   public void asyncPostByJson(String url, String json) throws IOException {
     OkHttpClient build = okHttpClient.newBuilder().build();
     MediaType mediaType = MediaType.parse("application/json;charset=UTF-8");

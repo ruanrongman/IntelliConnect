@@ -1,0 +1,5 @@
+laya==0.3.7
+transformers==4.57.6
+fastapi==0.135.1
+uvicorn==0.41.0
+psutil==7.0.0

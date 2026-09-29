@@ -38,3 +38,7 @@ build/
 /web/package-lock.json
 .m2/
 .home/
+
+### Local Laya Jev runtime (models, CUDA wheels, caches and logs) ###
+laya-jev/.runtime/
+laya-jev/.venv/

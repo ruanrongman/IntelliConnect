@@ -53,4 +53,8 @@ public class EmotionManager {
   public static String getCurrentEmotion(String currentEmotion) {
     return EMOTIONS.getOrDefault(currentEmotion, "😶");
   }
+
+  public static Map<String, String> getEmotionMap() {
+    return EMOTIONS;
+  }
 }

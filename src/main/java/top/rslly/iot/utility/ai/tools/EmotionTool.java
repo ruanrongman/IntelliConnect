@@ -31,6 +31,10 @@ import top.rslly.iot.utility.EmotionManager;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.utility.ai.jev.JevClient;
+import top.rslly.iot.utility.ai.jev.JevException;
+import top.rslly.iot.utility.ai.jev.JevQuestion;
+import top.rslly.iot.utility.ai.jev.JevResponse;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.EmotionToolPrompt;
@@ -41,6 +45,8 @@ import java.util.*;
 @Component
 @Slf4j
 public class EmotionTool implements BaseTool<Map<String, String>> {
+  @Autowired
+  private JevClient jevClient;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
   @Autowired
@@ -60,7 +66,6 @@ public class EmotionTool implements BaseTool<Map<String, String>> {
 
   @Override
   public Map<String, String> run(String question, Map<String, Object> globalMessage) {
-    LLM llm = LLMFactory.getLLM(llmName);
     Map<String, String> responseMap = new HashMap<>();
     String chatId = GlobalMessageContext.memoryChatId(globalMessage);
     List<AgentMemoryEntity> agentMemoryEntities = agentMemoryService.findAllByChatId(chatId);
@@ -88,17 +93,55 @@ public class EmotionTool implements BaseTool<Map<String, String>> {
     messages.add(userMessage);
     responseMap.put("text", "neutral");
     responseMap.put("emoji", EmotionManager.getCurrentEmotion("neutral"));
-    try {
-      JSONObject llmResponse = llm.jsonChat(question, messages, true);
-      JSONObject obj = llmResponse == null ? null : llmResponse.getJSONObject("action");
-      if (obj == null) {
+    if (llmName.equals("jev-latest")) {
+      try {
+        var res = jevClient.evaluate(
+            Map.of("Current_Conversation", memory, "memory", currentMemory, "question", question),
+            Map.of(
+                "emotion", JevQuestion.choice(emotionToolPrompt.getJevEmotionInstructions(),
+                    EmotionManager.getEmotionMap())));
+        if (res == null || res.answers() == null
+            || !(res.answers().get("emotion")instanceof JevResponse.ChoiceAnswer choiceAnswer)) {
+          throw new IllegalStateException("Missing or invalid Jev emotion answer");
+        }
+        String selected = choiceAnswer.choice();
+        if (selected == null || selected.isBlank()
+            || !EmotionManager.getEmotionMap().containsKey(selected)) {
+          throw new IllegalStateException("Jev returned an unsupported emotion");
+        }
+        String emoji = EmotionManager.getCurrentEmotion(selected);
+        log.info("jev res{}", choiceAnswer);
+        responseMap.put("text", selected);
+        responseMap.put("emoji", emoji);
+      } catch (JevException e) {
+        if (e.getStatusCode() != null && e.getStatusCode() == 529
+            && e.getResponseBody() != null && e.getResponseBody().contains("capacity is busy")) {
+          log.warn(
+              "Jev emotion recognition capacity is busy, falling back to neutral, chatId={}",
+              chatId);
+        } else {
+          log.error(
+              "Jev emotion recognition failed, falling back to neutral, chatId={}, statusCode={}",
+              chatId, e.getStatusCode(), e);
+        }
+      } catch (Exception e) {
+        log.error("Jev emotion recognition failed, falling back to neutral, chatId={}", chatId, e);
+      }
+    } else {
+      LLM llm = LLMFactory.getLLM(llmName);
+      try {
+        JSONObject llmResponse = llm.jsonChat(question, messages, true);
+        JSONObject obj = llmResponse == null ? null : llmResponse.getJSONObject("action");
+        if (obj == null) {
+          return responseMap;
+        }
+        return process_llm_result(obj);
+      } catch (Exception e) {
+        log.error(e.getMessage());
         return responseMap;
       }
-      return process_llm_result(obj);
-    } catch (Exception e) {
-      log.error(e.getMessage());
-      return responseMap;
     }
+    return responseMap;
   }
 
   private Map<String, String> process_llm_result(JSONObject llmObject) {
