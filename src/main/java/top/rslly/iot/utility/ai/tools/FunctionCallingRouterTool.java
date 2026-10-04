@@ -256,7 +256,8 @@ public class FunctionCallingRouterTool {
     String knowledgeGraphic = knowledgeGraphicService.queryKnowledgeGraphic(question, productId);
     String prompt = functionCallingRouterPrompt.build(assistantName, userName, role,
         roleIntroduction, memoryMap, voice,
-        limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS));
+        limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS),
+        GlobalMessageContext.youthProtectionEnabled(globalMessage));
     String userContext = functionCallingRouterPrompt.buildUserContext(
         question, currentMemory, knowledgeGraphic);
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt);

@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.dao;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -37,9 +39,14 @@ public interface HistoryMessageRepository
   Page<HistoryMessageEntity> findAllByChatIdStartingWithOrderByTimeDesc(String chatId,
       Pageable pageable);
 
+  List<HistoryMessageEntity> findAllByChatId(String chatId);
+
   Page<HistoryMessageEntity> findAllByChatId(String chatId, Pageable pageable);
 
   List<HistoryMessageEntity> findAllByChatIdStartingWith(String chatId);
+
+  Long countByChatIdAndMessageTypeAndTimeBetween(@Size(max = 255) @NotNull String chatId,
+      @Size(max = 255) @NotNull String messageType, @NotNull Long time, @NotNull Long time2);
 
   @Transactional
   List<HistoryMessageEntity> deleteAllById(int id);

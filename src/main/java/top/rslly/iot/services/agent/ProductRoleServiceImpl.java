@@ -21,6 +21,7 @@ package top.rslly.iot.services.agent;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +32,9 @@ import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.prompt.ProductRoleDescription;
 import top.rslly.iot.param.request.ProductRole;
 import top.rslly.iot.services.agent.ProductRoleService;
+import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
+import top.rslly.iot.utility.ai.tools.YouthProtectionTool;
 import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -45,6 +48,8 @@ import java.util.List;
 @Service
 @Slf4j
 public class ProductRoleServiceImpl implements ProductRoleService {
+  private static final String YOUTH_PROTECTION_CONFIG_KEY = "youth-protection.enabled";
+
   @Value("${ai.minimax.tts.enabled:false}")
   private boolean minimaxTtsEnabled;
 
@@ -60,6 +65,10 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
+  @Autowired
+  private YouthProtectionTool youthProtectionTool;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
 
   @Override
   public List<ProductRoleEntity> findAllById(int id) {
@@ -162,10 +171,12 @@ public class ProductRoleServiceImpl implements ProductRoleService {
     }
     if (result.isEmpty() || !p1.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    else {
-      ProductRoleEntity productRoleEntity1 = productRoleRepository.save(productRoleEntity);
-      return ResultTool.success(productRoleEntity1);
+    if (isYouthProtectionEnabled(productRole.getProductId())
+        && !youthProtectionTool.run(buildRoleSafetyContent(productRole))) {
+      return ResultTool.fail(ResultCode.YOUTH_HARMFUL);
     }
+    ProductRoleEntity productRoleEntity1 = productRoleRepository.save(productRoleEntity);
+    return ResultTool.success(productRoleEntity1);
   }
 
   @Override
@@ -181,6 +192,10 @@ public class ProductRoleServiceImpl implements ProductRoleService {
     if (!minimaxTtsEnabled && productRole.getVoice().startsWith("minimax-")) {
       log.warn("MiniMax TTS is not enabled, cannot set minimax voice: {}", productRole.getVoice());
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    if (isYouthProtectionEnabled(productRole.getProductId())
+        && !youthProtectionTool.run(buildRoleSafetyContent(productRole))) {
+      return ResultTool.fail(ResultCode.YOUTH_HARMFUL);
     }
     if (productRoleEntityList.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
@@ -203,5 +218,20 @@ public class ProductRoleServiceImpl implements ProductRoleService {
       List<ProductRoleEntity> result = productRoleRepository.deleteById(id);
       return ResultTool.success(result);
     }
+  }
+
+  private boolean isYouthProtectionEnabled(int productId) {
+    try {
+      String value = userConfigService.getConfigValue(productId, YOUTH_PROTECTION_CONFIG_KEY);
+      return value != null && "true".equals(value.trim());
+    } catch (RuntimeException e) {
+      log.warn("读取青少年模式配置失败，按关闭处理，productId={}", productId, e);
+      return false;
+    }
+  }
+
+  private String buildRoleSafetyContent(ProductRole productRole) {
+    return "Role: " + productRole.getRole()
+        + "\nRole introduction: " + productRole.getRoleIntroduction();
   }
 }

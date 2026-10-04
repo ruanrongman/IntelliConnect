@@ -60,7 +60,8 @@ public enum ResultCode {
   DEVICE_ABANDON(3003,
       "设备被禁用"),
   DEVICE_TIMEOUT(3004, "设备响应超时"),
-  ENTITY_EXIST(3005, "保存实体已经存在");
+  ENTITY_EXIST(3005, "保存实体已经存在"),
+  YOUTH_HARMFUL(3006, "青少年危害");
 
   private Integer code;
   private String message;

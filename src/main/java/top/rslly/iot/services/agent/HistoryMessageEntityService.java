@@ -29,6 +29,8 @@ public interface HistoryMessageEntityService {
 
   List<HistoryMessageEntity> findRecentByChatId(String chatId, int limit);
 
+  boolean youthProtectForTimeOut(int productId, String chatId);
+
   JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId);
 
   List<HistoryMessageEntity> deleteAllByChatId(String chatId);

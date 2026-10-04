@@ -44,6 +44,9 @@ import java.util.Map;
 @Component
 @Slf4j
 public class ClassifierToolPrompt {
+  private static final String YOUTH_PROTECTION_PROMPT =
+      "Teen Mode is enabled: for age-inappropriate or dangerous requests, select Common chat or fallback, which will handle the request with a safe refusal.\n";
+
   @Autowired
   private McpServerServiceImpl mcpServerService;
   @Autowired
@@ -96,12 +99,18 @@ public class ClassifierToolPrompt {
              }
            }
            {router_set_section}Available tasks(JSON): {task_map}
+           {youth_protection}
            {memory_map_section}
            Recent conversation:
            {recent_conversation}
           """;
 
   public String getClassifierTool(int productId, String chatId, String recentConversation) {
+    return getClassifierTool(productId, chatId, recentConversation, false);
+  }
+
+  public String getClassifierTool(int productId, String chatId, String recentConversation,
+      boolean youthProtectionEnabled) {
     List<String> banTools = productToolsBanService.getProductToolsBanList(productId);
     Map<String, String> classifierMap = new LinkedHashMap<>();
     classifierMap.put("1", "Query weather");
@@ -141,6 +150,8 @@ public class ClassifierToolPrompt {
         buildSection("Long-term memory labels",
             defaultText(descriptionUtil.getAgentLongMemory(productId), "")));
     params.put("recent_conversation", defaultText(recentConversation, "none"));
+    params.put("youth_protection",
+        youthProtectionEnabled ? YOUTH_PROTECTION_PROMPT : "");
     if (getIncludeThoughtConfig()) {
       params.put("thought", "  \"thought\": \"Brief reason in Chinese.\",\n");
     } else {

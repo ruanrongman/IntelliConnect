@@ -19,6 +19,7 @@
  */
 package top.rslly.iot.utility.ai.prompts;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -74,5 +75,18 @@ class ClassifierKnowledgeRouteTest {
     String result = prompt.getClassifierTool(12, "chatProduct12", "");
 
     assertTrue(result.contains("Complex multi-step task | knowledge coverage"));
+  }
+
+  @Test
+  void addsYouthProtectionRoutingGuidanceOnlyWhenEnabled() {
+    when(productToolsBanService.getProductToolsBanList(12)).thenReturn(List.of());
+    when(knowledgeTool.getRoutingDescription(12)).thenReturn("");
+
+    String disabled = prompt.getClassifierTool(12, "chatProduct12", "", false);
+    String enabled = prompt.getClassifierTool(12, "chatProduct12", "", true);
+
+    assertFalse(disabled.contains("青少年模式已开启"));
+    assertTrue(enabled.contains("青少年模式已开启"));
+    assertTrue(enabled.contains("Common chat or fallback"));
   }
 }

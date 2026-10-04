@@ -243,15 +243,26 @@
           :rules="runtimeConfigRules"
           layout="vertical"
         >
-          <a-form-item name="webSearchEnabled">
-            <template #label>
-              <span>联网搜索</span>
-              <a-tooltip title="影响 FunctionCallingRouter、Router（Classifier/Chat 路径）、ChatTool、Agent 和 MCP Agent；不是所有模型都支持联网搜索，开启后仍可能因模型能力限制而调用失败。">
-                <QuestionCircleOutlined class="web-search-help" />
-              </a-tooltip>
-            </template>
-            <a-switch v-model:checked="runtimeConfigForm.webSearchEnabled" />
-          </a-form-item>
+          <div class="runtime-toggle-row">
+            <a-form-item name="webSearchEnabled" class="runtime-toggle-item">
+              <template #label>
+                <span>联网搜索</span>
+                <a-tooltip title="影响 FunctionCallingRouter、Router（Classifier/Chat 路径）、ChatTool、Agent 和 MCP Agent；不是所有模型都支持联网搜索，开启后仍可能因模型能力限制而调用失败。">
+                  <QuestionCircleOutlined class="web-search-help" />
+                </a-tooltip>
+              </template>
+              <a-switch v-model:checked="runtimeConfigForm.webSearchEnabled" />
+            </a-form-item>
+            <a-form-item name="youthProtectionEnabled" class="runtime-toggle-item">
+              <template #label>
+                <span>青少年模式</span>
+                <a-tooltip title="开启后，保存产品角色时会检查角色名称和角色介绍是否适合未成年人。">
+                  <QuestionCircleOutlined class="web-search-help" />
+                </a-tooltip>
+              </template>
+              <a-switch v-model:checked="runtimeConfigForm.youthProtectionEnabled" />
+            </a-form-item>
+          </div>
           <a-form-item label="长期记忆">
             <div class="long-memory-init-actions">
               <a-button
@@ -329,6 +340,15 @@
               placeholder="请输入 1 到 100 的整数"
               @input="validateRuntimeConfigField('memoryRecentTurns')"
               @blur="validateRuntimeConfigField('memoryRecentTurns')"
+            />
+          </a-form-item>
+          <a-form-item label="青少年模式最大对话轮次" name="youthProtectionTalkMaxLimit">
+            <a-input
+              v-model:value="runtimeConfigForm.youthProtectionTalkMaxLimit"
+              inputmode="numeric"
+              placeholder="请输入 1 到 3000 的整数"
+              @input="validateRuntimeConfigField('youthProtectionTalkMaxLimit')"
+              @blur="validateRuntimeConfigField('youthProtectionTalkMaxLimit')"
             />
           </a-form-item>
         </a-form>
@@ -486,12 +506,14 @@ const longMemoryCity = ref('')
 let runtimeConfigRequestSequence = 0
 const runtimeConfigForm = ref({
   webSearchEnabled: false,
+  youthProtectionEnabled: false,
   agentEpochLimit: 5,
   mcpAgentEpochLimit: 5,
   mcpTimeOutLimit: 12,
   memoryContextWindowTokens: 2000,
   memorySummaryThresholdRatio: 0.5,
-  memoryRecentTurns: 4
+  memoryRecentTurns: 4,
+  youthProtectionTalkMaxLimit: 1000
 })
 const runtimeConfigTitle = computed(() => {
   const product = currentRuntimeProduct.value
@@ -511,6 +533,14 @@ const runtimeConfigItems = [
     valueType: 'boolean',
     label: '联网搜索',
     des: 'Enable web search for FunctionCallingRouter, Router and Chat'
+  },
+  {
+    field: 'youthProtectionEnabled',
+    key: 'youth-protection.enabled',
+    defaultValue: 'false',
+    valueType: 'boolean',
+    label: '青少年模式',
+    des: 'Enable youth protection checks when saving product roles'
   },
   {
     field: 'agentEpochLimit',
@@ -571,6 +601,16 @@ const runtimeConfigItems = [
     valueType: 'integer',
     label: '保留最近对话轮次',
     des: 'Recent memory turns to retain'
+  },
+  {
+    field: 'youthProtectionTalkMaxLimit',
+    key: 'youth-protection-talk.maxLimit',
+    defaultValue: '1000',
+    min: '1',
+    max: '3000',
+    valueType: 'integer',
+    label: '青少年模式最大对话轮次',
+    des: 'Maximum youth-protection conversation epochs within the timeout window'
   }
 ]
 
@@ -1118,12 +1158,14 @@ const handleRuntimeConfig = async (record) => {
   runtimeConfigLoading.value = true
   runtimeConfigForm.value = {
     webSearchEnabled: false,
+    youthProtectionEnabled: false,
     agentEpochLimit: 5,
     mcpAgentEpochLimit: 5,
     mcpTimeOutLimit: 12,
     memoryContextWindowTokens: 2000,
     memorySummaryThresholdRatio: 0.5,
-    memoryRecentTurns: 4
+    memoryRecentTurns: 4,
+    youthProtectionTalkMaxLimit: 1000
   }
 
   try {
@@ -1452,6 +1494,38 @@ const handleDelete = (record) => {
   margin-left: 6px;
   color: #d48806;
   cursor: help;
+}
+
+.runtime-toggle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 32px;
+}
+
+.runtime-toggle-item {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row !important;
+  align-items: center;
+  width: auto;
+  margin-bottom: 16px;
+}
+
+.runtime-toggle-item :deep(.ant-form-item-label) {
+  flex: 0 0 auto;
+  padding: 0;
+  line-height: 32px;
+}
+
+.runtime-toggle-item :deep(.ant-form-item-control) {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  width: auto;
+}
+
+.runtime-toggle-item :deep(.ant-form-item-control-input) {
+  min-height: 32px;
 }
 
 .table-container {    

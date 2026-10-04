@@ -21,6 +21,8 @@ package top.rslly.iot.services.agent;
 
 import jakarta.annotation.Resource;
 import jakarta.persistence.criteria.Predicate;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,13 +30,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import top.rslly.iot.dao.HistoryMessageRepository;
-import top.rslly.iot.dao.UserProductBindRepository;
-import top.rslly.iot.dao.UserRepository;
-import top.rslly.iot.dao.WxProductBindRepository;
-import top.rslly.iot.dao.WxUserRepository;
+import top.rslly.iot.dao.*;
 import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.models.WxUserEntity;
+import top.rslly.iot.services.UserConfigServiceImpl;
+import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -47,8 +47,15 @@ import java.util.List;
 import java.util.Set;
 
 @Service
+@Slf4j
 public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityService {
   private static final int MAX_CONTENT_LENGTH = 6144;
+  private static final String YOUTH_PROTECTION_CONFIG_KEY = "youth-protection.enabled";
+  private static final String YOUTH_PROTECTION_TALK_MAX_LIMIT = "youth-protection-talk.maxLimit";
+  private static final String USER_MESSAGE_TYPE = "user";
+  private static final long YOUTH_PROTECTION_WINDOW_MILLIS = 2 * 60 * 60 * 1000L;
+  private static final int MAX_EPOCH_LIMIT = 3000;
+  private static final int epochLimit = 1000;
 
   @Resource
   private HistoryMessageRepository historyMessageRepository;
@@ -60,6 +67,12 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   private WxUserRepository wxUserRepository;
   @Resource
   private UserRepository userRepository;
+  @Autowired
+  private UserConfigServiceImpl userConfigService;
+  @Autowired
+  private ProductServiceImpl productServiceImpl;
+  @Autowired
+  private ProductRepository productRepository;
 
   @Override
   public List<HistoryMessageEntity> findAllById(int id) {
@@ -79,6 +92,21 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
     history.sort(Comparator.comparing(HistoryMessageEntity::getTime)
         .thenComparing(HistoryMessageEntity::getSequenceNum));
     return history;
+  }
+
+  @Override
+  public boolean youthProtectForTimeOut(int productId, String chatId) {
+    if (productRepository.findAllById(productId).isEmpty()) {
+      return false;
+    }
+    if (!isYouthProtectionEnabled(productId)) {
+      return false;
+    }
+    long now = System.currentTimeMillis();
+    long windowStart = now - YOUTH_PROTECTION_WINDOW_MILLIS;
+    Long talkCount = historyMessageRepository.countByChatIdAndMessageTypeAndTimeBetween(
+        chatId, USER_MESSAGE_TYPE, windowStart, now);
+    return talkCount >= youthProtectionTalkMaxLimit(productId);
   }
 
   @Override
@@ -217,6 +245,37 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       } else {
         return ResultTool.success(historyMessageEntityList);
       }
+    }
+  }
+
+  private boolean isYouthProtectionEnabled(int productId) {
+    try {
+      String value = userConfigService.getConfigValue(productId, YOUTH_PROTECTION_CONFIG_KEY);
+      return value != null && "true".equals(value.trim());
+    } catch (RuntimeException e) {
+      log.warn("读取青少年模式配置失败，按关闭处理，productId={}", productId, e);
+      return false;
+    }
+  }
+
+  private Integer youthProtectionTalkMaxLimit(int productId) {
+    try {
+      String value = userConfigService.getConfigValue(productId, YOUTH_PROTECTION_TALK_MAX_LIMIT);
+      if (value == null || value.isBlank()) {
+        return epochLimit;
+      }
+      int configuredEpochLimit = Integer.parseInt(value.trim());
+      if (configuredEpochLimit < 1) {
+        return epochLimit;
+      }
+      return Math.min(MAX_EPOCH_LIMIT, configuredEpochLimit);
+    } catch (NumberFormatException e) {
+      log.warn("Invalid YouthProtection config: productId={}, key={}", productId,
+          YOUTH_PROTECTION_TALK_MAX_LIMIT, e);
+      return epochLimit;
+    } catch (Exception e) {
+      log.error("从用户配置获取YouthProtection MAX_LIMIT失败", e);
+      return epochLimit;
     }
   }
 }

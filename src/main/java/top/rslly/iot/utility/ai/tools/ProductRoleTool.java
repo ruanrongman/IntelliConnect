@@ -26,8 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.param.request.ProductRole;
-import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
-import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.ai.IcAiException;
@@ -35,13 +33,14 @@ import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.ProductRolePrompt;
 import top.rslly.iot.utility.ai.voice.VoiceTimbre;
+import top.rslly.iot.utility.result.ResultCode;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Data
 @Component
@@ -107,7 +106,7 @@ public class ProductRoleTool implements BaseTool<String> {
       try {
         productRole.setVoice(VoiceTimbre.valueOf(voiceTimbre).getTimbre());
       } catch (IllegalArgumentException e) {
-        e.printStackTrace();
+        log.error("解析音色失败，使用默认音色", e);
         productRole.setVoice(VoiceTimbre.CosyVoiceV3FlashLongXiaoChun.getTimbre());
       }
       if (taskType.equals("set")) {
@@ -120,8 +119,14 @@ public class ProductRoleTool implements BaseTool<String> {
         productRole.setRole(role);
         productRole.setRoleIntroduction(roleIntroduction);
         var result = productRoleService.postProductRole(productRole);
+        if (Objects.equals(result.getErrorCode(), ResultCode.YOUTH_HARMFUL.getCode())) {
+          return "青少年模式已经开启，上述角色不符合青少年保护法规要求，设置被取消";
+        }
         if (result.getErrorCode() != 200) {
           var result1 = productRoleService.putProductRole(productRole);
+          if (Objects.equals(result1.getErrorCode(), ResultCode.YOUTH_HARMFUL.getCode())) {
+            return "青少年模式已经开启，上述角色不符合青少年保护法规要求，设置被取消";
+          }
           if (result1.getErrorCode() != 200)
             throw new IcAiException("database control error!");
         }

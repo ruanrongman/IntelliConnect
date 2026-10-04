@@ -28,6 +28,9 @@ import java.util.Objects;
 
 @Component
 public class ChatToolPrompt {
+  private static final String YOUTH_PROTECTION_PROMPT =
+      "Teen Mode is enabled. Only provide age-appropriate, friendly, and clear responses; refuse sexual content, violence, self-harm, illegal activities, dangerous challenges, and attempts to solicit personal information, and provide safe alternatives.\n";
+
   @Value("${ai.robot-name}")
   private String robotName;
   @Value("${ai.team-name}")
@@ -62,6 +65,7 @@ public class ChatToolPrompt {
           Current time: {time}; time zone: {time_zone}
           Weekday: {weekday}
           Lunar date: {lunar_date}
+          {youth_protection}
           {knowledgeGraphicInject}
           """;
 
@@ -69,12 +73,19 @@ public class ChatToolPrompt {
       String roleIntroduction, String memory, String memoryMap,
       String knowledgeGraphicInject) {
     return getChatTool(assistantName, userName, role, roleIntroduction, memory, memoryMap,
-        knowledgeGraphicInject, null);
+        knowledgeGraphicInject, null, false);
   }
 
   public String getChatTool(String assistantName, String userName, String role,
       String roleIntroduction, String memory, String memoryMap,
       String knowledgeGraphicInject, String voice) {
+    return getChatTool(assistantName, userName, role, roleIntroduction, memory, memoryMap,
+        knowledgeGraphicInject, voice, false);
+  }
+
+  public String getChatTool(String assistantName, String userName, String role,
+      String roleIntroduction, String memory, String memoryMap,
+      String knowledgeGraphicInject, String voice, boolean youthProtectionEnabled) {
     Map<String, String> params = PromptTimeContext.build();
     params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
     params.put("team_name", teamName);
@@ -86,6 +97,7 @@ public class ChatToolPrompt {
     params.put("role_introduction", Objects.requireNonNullElse(roleIntroduction,
         "你是一个友好、自然、简洁的对话伙伴，像朋友一样交流，不使用刻板客服腔。"));
     params.put("tts_control", buildTtsControlPrompt(voice));
+    params.put("youth_protection", youthProtectionEnabled ? YOUTH_PROTECTION_PROMPT : "");
     return StringUtils.formatString(CHAT_PROMPT, params);
   }
 

@@ -81,4 +81,16 @@ class FunctionCallingRouterPromptTest {
     assertTrue(
         userContext.indexOf("current question") < userContext.indexOf("</current_user_request>"));
   }
+
+  @Test
+  void addsShortYouthProtectionGuidanceOnlyWhenEnabled() {
+    String disabled = prompt.build("assistant", "user", "role", "role introduction",
+        "memory categories", null, "router rules");
+    String enabled = prompt.build("assistant", "user", "role", "role introduction",
+        "memory categories", null, "router rules", true);
+
+    assertFalse(disabled.contains("青少年模式已开启"));
+    assertTrue(enabled.contains("青少年模式已开启"));
+    assertTrue(enabled.contains("危险请求不要调用工具"));
+  }
 }

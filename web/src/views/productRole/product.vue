@@ -142,37 +142,39 @@ const filterOption = (input, option) => {
   return option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0;
 };  
 
-const handleSubmit = () => {  
-  postProductRole(toRaw(formState))  
-    .then((res) => {  
-      const { data, errorCode } = res.data;  
-      console.log('auth', data);  
-      if (errorCode != 200) {  
-        message.error("创建失败!");  
-        console.log("error");  
-      } else {  
-        message.success("创建成功!");  
-        console.log(data);  
-        // 重置表单  
-        formState.productId = '';
-        formState.assistantName = '';  
-        formState.userName = '';
-        formState.role = '';
-        formState.roleIntroduction = '';
-        formState.voice = '';
-      }  
-    })  
-    .catch((err) => {  
-      console.log(err);  
-      message.error("创建失败，请重试!");  
-    });  
-};  
+const handleSubmit = async () => {
+  try {
+    const res = await postProductRole(toRaw(formState));
+    const { data, errorCode } = res.data;
+    console.log('auth', data);
+    if (Number(errorCode) === 200) {
+      message.success("创建成功!");
+      console.log(data);
+      // 重置表单
+      formState.productId = '';
+      formState.assistantName = '';
+      formState.userName = '';
+      formState.role = '';
+      formState.roleIntroduction = '';
+      formState.voice = '';
+      visible.value = false;
+    } else if (Number(errorCode) === 3006) {
+      message.error("青少年模式已开启，该角色内容不符合未成年人保护要求，请修改后重试");
+    } else if (Number(errorCode) === 2001) {
+      message.error("登录已失效，请重新登录");
+    } else {
+      message.error("创建失败!");
+    }
+  } catch (err) {
+    console.log(err);
+    message.error("创建失败，请重试!");
+  }
+};
 
-const onFinish = values => {  
+const onFinish = values => {
   console.log('Success:', values);  
   handleSubmit();  
-  visible.value = false;  
-};  
+};
 
 const onFinishFailed = errorInfo => {  
   console.log('Failed:', errorInfo);  

@@ -89,7 +89,8 @@ public class ClassifierTool {
     String recentConversation = memory.isEmpty() ? "" : buildRecentConversationWindow(memory);
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
-            classifierToolPrompt.getClassifierTool(productId, chatId, recentConversation));
+            classifierToolPrompt.getClassifierTool(productId, chatId, recentConversation,
+                GlobalMessageContext.youthProtectionEnabled(globalMessage)));
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);

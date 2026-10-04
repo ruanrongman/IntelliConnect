@@ -127,7 +127,8 @@ public class ChatTool implements BaseTool<String> {
     ModelMessage systemMessage =
         new ModelMessage(ModelMessageRole.SYSTEM.value(),
             chatToolPrompt.getChatTool(assistantName, userName, role, roleIntroduction,
-                currentMemory, memoryMap, knowledgeGraphic, voice));
+                currentMemory, memoryMap, knowledgeGraphic, voice,
+                GlobalMessageContext.youthProtectionEnabled(globalMessage)));
     log.info(llmName);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.addAll(buildConversationMessages(memory, systemMessage, userMessage));

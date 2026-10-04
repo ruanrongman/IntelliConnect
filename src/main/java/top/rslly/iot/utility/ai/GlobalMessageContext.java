@@ -30,6 +30,7 @@ public final class GlobalMessageContext {
   public static final String REASONING_QUEUE = "reasoningQueue";
   public static final String MEMORY = "memory";
   public static final String MEMORY_REVISION = "memoryRevision";
+  public static final String YOUTH_PROTECTION_ENABLED = "youthProtectionEnabled";
 
   private GlobalMessageContext() {}
 
@@ -62,6 +63,16 @@ public final class GlobalMessageContext {
       return (Queue<String>) queue;
     }
     return null;
+  }
+
+  public static boolean youthProtectionEnabled(Map<String, Object> globalMessage) {
+    if (globalMessage == null) {
+      return false;
+    }
+    Object value = globalMessage.get(YOUTH_PROTECTION_ENABLED);
+    return value instanceof Boolean
+        ? (Boolean) value
+        : Boolean.parseBoolean(String.valueOf(value));
   }
 
   public static String memoryRevisionKey(String chatId) {

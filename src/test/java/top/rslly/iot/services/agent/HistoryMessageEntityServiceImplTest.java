@@ -20,7 +20,9 @@
 package top.rslly.iot.services.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -37,14 +39,45 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import top.rslly.iot.dao.HistoryMessageRepository;
+import top.rslly.iot.dao.ProductRepository;
 import top.rslly.iot.models.HistoryMessageEntity;
+import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.services.UserConfigServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class HistoryMessageEntityServiceImplTest {
   @Mock
   private HistoryMessageRepository historyMessageRepository;
+  @Mock
+  private ProductRepository productRepository;
+  @Mock
+  private UserConfigServiceImpl userConfigService;
   @InjectMocks
   private HistoryMessageEntityServiceImpl historyMessageService;
+
+  @Test
+  void blocksWhenRecentUserTalksReachConfiguredLimit() {
+    when(productRepository.findAllById(1)).thenReturn(List.of(new ProductEntity()));
+    when(userConfigService.getConfigValue(1, "youth-protection.enabled")).thenReturn("true");
+    when(userConfigService.getConfigValue(1, "youth-protection-talk.maxLimit"))
+        .thenReturn("4");
+    when(historyMessageRepository.countByChatIdAndMessageTypeAndTimeBetween(
+        eq("chat-1"), eq("user"), any(Long.class), any(Long.class))).thenReturn(4L);
+
+    assertTrue(historyMessageService.youthProtectForTimeOut(1, "chat-1"));
+  }
+
+  @Test
+  void allowsWhenRecentUserTalksAreBelowConfiguredLimit() {
+    when(productRepository.findAllById(1)).thenReturn(List.of(new ProductEntity()));
+    when(userConfigService.getConfigValue(1, "youth-protection.enabled")).thenReturn("true");
+    when(userConfigService.getConfigValue(1, "youth-protection-talk.maxLimit"))
+        .thenReturn("4");
+    when(historyMessageRepository.countByChatIdAndMessageTypeAndTimeBetween(
+        eq("chat-1"), eq("user"), any(Long.class), any(Long.class))).thenReturn(3L);
+
+    assertFalse(historyMessageService.youthProtectForTimeOut(1, "chat-1"));
+  }
 
   @Test
   void returnsLimitedRecentHistoryInConversationOrder() {

@@ -567,7 +567,9 @@ const handleEditSubmit = async () => {
       message.success('角色信息修改成功')  
       editModalVisible.value = false  
       fetchProductRole() // 刷新数据  
-    } else if (errorCode === 2001) {  
+    } else if (Number(errorCode) === 3006) {
+      message.error('青少年模式已开启，该角色内容不符合未成年人保护要求，请修改后重试')
+    } else if (Number(errorCode) === 2001) {
       router.push('/login')  
     } else {  
       message.error('修改失败，请重试')  

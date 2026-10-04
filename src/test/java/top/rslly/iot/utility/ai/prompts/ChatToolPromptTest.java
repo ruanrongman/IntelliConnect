@@ -20,6 +20,7 @@
 package top.rslly.iot.utility.ai.prompts;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -37,5 +38,21 @@ class ChatToolPromptTest {
 
     assertFalse(result.contains("Reference information:"));
     assertFalse(result.contains("{information}"));
+  }
+
+  @Test
+  void addsShortYouthProtectionGuidanceOnlyWhenEnabled() {
+    ChatToolPrompt prompt = new ChatToolPrompt();
+    ReflectionTestUtils.setField(prompt, "robotName", "robot");
+    ReflectionTestUtils.setField(prompt, "teamName", "team");
+
+    String disabled = prompt.getChatTool("assistant", "user", "role", "introduction",
+        "memory", "memory map", "graph", null);
+    String enabled = prompt.getChatTool("assistant", "user", "role", "introduction",
+        "memory", "memory map", "graph", null, true);
+
+    assertFalse(disabled.contains("青少年模式已开启"));
+    assertTrue(enabled.contains("青少年模式已开启"));
+    assertTrue(enabled.contains("给出安全替代"));
   }
 }

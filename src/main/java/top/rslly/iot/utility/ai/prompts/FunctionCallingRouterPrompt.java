@@ -29,6 +29,9 @@ import java.util.Objects;
 
 @Component
 public class FunctionCallingRouterPrompt {
+  private static final String YOUTH_PROTECTION_PROMPT =
+      "Teen Mode is enabled: provide age-appropriate, friendly, and clear responses; for dangerous requests, do not use tools, briefly refuse, and provide a safe alternative.\n";
+
   @Value("${ai.robot-name}")
   private String robotName;
   @Value("${ai.team-name}")
@@ -60,6 +63,7 @@ public class FunctionCallingRouterPrompt {
           Context:
           {router_rules}
           Memory categories: {memory_map}
+          {youth_protection}
           {tts_control}
           """;
 
@@ -80,6 +84,12 @@ public class FunctionCallingRouterPrompt {
 
   public String build(String assistantName, String userName, String role, String roleIntroduction,
       String memoryMap, String voice, String routerRules) {
+    return build(assistantName, userName, role, roleIntroduction, memoryMap, voice, routerRules,
+        false);
+  }
+
+  public String build(String assistantName, String userName, String role, String roleIntroduction,
+      String memoryMap, String voice, String routerRules, boolean youthProtectionEnabled) {
     Map<String, String> params = new HashMap<>();
     params.put("agent_name", Objects.requireNonNullElse(assistantName, robotName));
     params.put("team_name", teamName);
@@ -89,6 +99,7 @@ public class FunctionCallingRouterPrompt {
     params.put("user_name", Objects.requireNonNullElse(userName, "user"));
     params.put("router_rules", formatRouterRules(routerRules));
     params.put("memory_map", defaultText(memoryMap, "none"));
+    params.put("youth_protection", youthProtectionEnabled ? YOUTH_PROTECTION_PROMPT : "");
     params.put("tts_control", buildTtsControlPrompt(voice));
     return StringUtils.formatString(PROMPT, params);
   }

@@ -59,6 +59,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @Component
 @Slf4j
 public class Router {
+  private static final String YOUTH_PROTECTION_CONFIG_KEY = "youth-protection.enabled";
+
   @Autowired
   private ClassifierTool classifierTool;
   @Autowired
@@ -143,6 +145,8 @@ public class Router {
     String toolResult = "";
     Map<String, Object> globalMessage = new HashMap<>();
     globalMessage.put(GlobalMessageContext.PRODUCT_ID, productId);
+    globalMessage.put(GlobalMessageContext.YOUTH_PROTECTION_ENABLED,
+        isYouthProtectionEnabled(productId));
     GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
     globalMessage.put(GlobalMessageContext.QUEUE_MAP, queueMap);
     if (reasoningQueue != null) {
@@ -174,6 +178,9 @@ public class Router {
     globalMessage.put(GlobalMessageContext.MEMORY_REVISION,
         currentMemoryRevision(conversationChatId));
     globalMessage.put(GlobalMessageContext.MEMORY, memory);
+    if (historyMessageEntityService.youthProtectForTimeOut(productId, conversationChatId)) {
+      return "小朋友，是时候休息一下啰。";
+    }
     if (isFunctionRouterMode()) {
       RouteExecutionResult routeExecutionResult =
           resolveFunctionRoute(content, globalMessage, productId, streamChatId, dataArgs);
@@ -361,6 +368,16 @@ public class Router {
     redisUtil.set("memory" + conversationChatId, memory, 48 * 3600);
     recordHistoryMessage(conversationChatId, historyContent, answer);
     return answer;
+  }
+
+  private boolean isYouthProtectionEnabled(int productId) {
+    try {
+      return "true".equalsIgnoreCase(
+          userConfigService.getConfigValue(productId, YOUTH_PROTECTION_CONFIG_KEY));
+    } catch (Exception e) {
+      log.warn("读取青少年模式配置失败，提示词按关闭处理，productId={}", productId, e);
+      return false;
+    }
   }
 
   static Queue<String> createResponseQueue() {

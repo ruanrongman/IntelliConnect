@@ -1,6 +1,6 @@
-# Jev 独立客户端
+# Jev 独立客户端与内置工具接入
 
-Jev 使用 TypeSafe 的同步评估接口 `POST /v1/systemone`，支持判断（noul）、分类（choice）和评分（score）。本封装供 Java 业务注入使用，尚未接入现有聊天、分类或路由流程。
+Jev 使用 TypeSafe 的同步评估接口 `POST /v1/systemone`，支持判断（noul）、分类（choice）和评分（score）。Java 封装既可以由业务自行注入，也已经被内置的 `EmotionTool` 和 `YouthProtectionTool` 使用。
 
 参考：[API](https://docs.typesafe.ai/api)、[模型](https://docs.typesafe.ai/models)。
 
@@ -19,6 +19,20 @@ ai:
 三个字段通过 Spring 绑定到 `JevProperties`。Key 可由环境变量 `JEV_API_KEY` 提供；未配置时不影响应用启动，但调用会抛出 `IllegalStateException`。模型可改为官方支持的具体版本，以固定模型行为。配置在应用启动时读取，修改后重启生效。
 
 `base-url` 可为服务根地址或以 `/v1` 结尾的地址，均可带末尾斜杠；不要填写完整 `/systemone` 地址。代理地址可带路径前缀。
+
+## 内置工具
+
+当配置值为 `jev-latest` 时，内置工具会使用类型安全的 Jev 客户端：
+
+```yaml
+ai:
+  emotionTool-llm: jev-latest
+  youthProtectionTool-llm: jev-latest
+```
+
+`EmotionTool` 根据当前问题优先级、最近对话和长期记忆选择情绪；异常、服务繁忙、空答案或未知情绪会回退到 `neutral`。`YouthProtectionTool` 使用 `allow`、`block`、`guardian_consent` 三种决定审核角色内容；调用失败或返回不合规时按保护性策略拒绝。青少年审核与最近两小时会话限制的配置、范围和行为详见 [青少年保护、Jev 与 Laya 情绪能力](ai_safety_and_emotion.md)。
+
+`laya-jev` 提供兼容同一协议的本地服务，因此可以将 `ai.jev.base-url` 指向 `http://127.0.0.1:8001`，继续使用 `jev-latest` 为 EmotionTool 提供本地 Laya 情绪识别。具体安装、CPU/GPU 启动和健康检查见 [Laya Jev 兼容服务](../laya-jev/README.md)。
 
 ## 调用示例
 
