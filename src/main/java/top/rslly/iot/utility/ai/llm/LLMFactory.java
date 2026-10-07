@@ -34,10 +34,14 @@ public class LLMFactory {
   public static final int MIN_THINKING_BUDGET = 0;
   public static final int MAX_THINKING_BUDGET = 8192;
 
+  public static final String DEFAULT_DASHSCOPE_BASE_URL =
+      "https://dashscope.aliyuncs.com/compatible-mode";
+
   private static String deepSeekApiKey;
   private static String siliconFlowApiKey;
   private static String uniApiKey;
   private static String dashScopeApiKey;
+  private static String dashScopeBaseUrl = DEFAULT_DASHSCOPE_BASE_URL;
   private static String glmKey;
   private static String customLLMProviderUrl;
   private static String customKey;
@@ -68,6 +72,13 @@ public class LLMFactory {
   @Value("${ai.dashscope-key}")
   public void setDashScopeApiKey(String apiKey) {
     dashScopeApiKey = apiKey;
+  }
+
+  @Value("${ai.dashscope-base-url:https://dashscope.aliyuncs.com/compatible-mode}")
+  public void setDashScopeBaseUrl(String baseUrl) {
+    if (baseUrl != null && !baseUrl.isBlank()) {
+      dashScopeBaseUrl = baseUrl.trim();
+    }
   }
 
   @Value("${ai.custom-key}")
@@ -156,11 +167,11 @@ public class LLMFactory {
               finalEnableThinking, finalThinkingBudget, temperature, topP, webSearchEnabled));
     } else if (lowerCaseLlmName.startsWith("dashscope-")) {
       String modelName = baseLlmName.substring("dashscope-".length());
-      return cached(cacheKey("https://dashscope.aliyuncs.com/compatible-mode", modelName,
+      return cached(cacheKey(dashScopeBaseUrl, modelName,
           dashScopeApiKey, finalEnableThinking, finalThinkingBudget, webSearchEnabled),
-          () -> new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode", modelName,
+          () -> new DeepSeek(dashScopeBaseUrl, modelName,
               dashScopeApiKey, finalEnableThinking, finalThinkingBudget, temperature, topP,
-              webSearchEnabled));
+              webSearchEnabled, true));
     } else if (lowerCaseLlmName.startsWith("uniapi-")) {
       String modelName = baseLlmName.substring("uniapi-".length());
       return cached(cacheKey("https://hk.uniapi.io", modelName, uniApiKey, finalEnableThinking,

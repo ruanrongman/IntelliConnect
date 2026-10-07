@@ -62,9 +62,9 @@ public class JevClient {
 
   public JevResponse evaluate(Object state, Map<String, JevQuestion> questions) {
     checkInterrupted();
-    String key = requiredConfig(properties.getKey(), "ai.jev.key");
-    String model = requiredConfig(properties.getModel(), "ai.jev.model");
-    String url = endpoint(requiredConfig(properties.getBaseUrl(), "ai.jev.base-url"));
+    String key = requiredConfig(properties.getKey(), "ai.decision-model.key");
+    String model = requiredConfig(properties.getModel(), "ai.decision-model.model");
+    String url = endpoint(requiredConfig(properties.getBaseUrl(), "ai.decision-model.base-url"));
     ObjectNode request = buildRequest(state, questions, model);
     String json = request.toString();
     for (int attempt = 0; attempt < 3; attempt++) {
@@ -145,7 +145,13 @@ public class JevClient {
 
   private JevResponse parseResponse(String body, int status, JsonNode questions) {
     try {
-      JevResponse result = mapper.readValue(body, JevResponse.class);
+      JsonNode responseJson = mapper.readTree(body);
+      JsonNode usageJson = responseJson == null ? null : responseJson.get("usage");
+      if (usageJson instanceof ObjectNode usage && !usage.has("output_tokens")) {
+        // Decision-only providers such as Bailian do not generate text and omit this field.
+        usage.put("output_tokens", 0);
+      }
+      JevResponse result = mapper.treeToValue(responseJson, JevResponse.class);
       require(result != null && result.model() != null && !result.model().isBlank(),
           "Missing response model");
       require(result.answers() != null && result.answers().size() == questions.size(),
@@ -225,7 +231,7 @@ public class JevClient {
   private static String endpoint(String baseUrl) {
     HttpUrl url = HttpUrl.parse(baseUrl);
     require(url != null && url.username().isEmpty() && url.password().isEmpty()
-        && url.query() == null && url.fragment() == null, "Invalid ai.jev.base-url");
+        && url.query() == null && url.fragment() == null, "Invalid ai.decision-model.base-url");
     String path = url.encodedPath().replaceAll("/+$", "");
     if (!path.endsWith("/v1")) {
       path += "/v1";

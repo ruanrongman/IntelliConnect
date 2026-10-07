@@ -10,10 +10,10 @@ Jev 使用 TypeSafe 的同步评估接口 `POST /v1/systemone`，支持判断（
 
 ```yaml
 ai:
-  jev:
+  decision-model:
     base-url: https://api.typesafe.ai
     key: ${JEV_API_KEY:}
-    model: jev-latest
+    model: decision-model-preview
 ```
 
 三个字段通过 Spring 绑定到 `JevProperties`。Key 可由环境变量 `JEV_API_KEY` 提供；未配置时不影响应用启动，但调用会抛出 `IllegalStateException`。模型可改为官方支持的具体版本，以固定模型行为。配置在应用启动时读取，修改后重启生效。
@@ -22,17 +22,17 @@ ai:
 
 ## 内置工具
 
-当配置值为 `jev-latest` 时，内置工具会使用类型安全的 Jev 客户端：
+当工具配置值为 `decision-model` 时，内置工具会使用类型安全的决策模型客户端：
 
 ```yaml
 ai:
-  emotionTool-llm: jev-latest
-  youthProtectionTool-llm: jev-latest
+  emotionTool-llm: decision-model
+  youthProtectionTool-llm: decision-model
 ```
 
 `EmotionTool` 根据当前问题优先级、最近对话和长期记忆选择情绪；异常、服务繁忙、空答案或未知情绪会回退到 `neutral`。`YouthProtectionTool` 使用 `allow`、`block`、`guardian_consent` 三种决定审核角色内容；调用失败或返回不合规时按保护性策略拒绝。青少年审核与最近两小时会话限制的配置、范围和行为详见 [青少年保护、Jev 与 Laya 情绪能力](ai_safety_and_emotion.md)。
 
-`laya-jev` 提供兼容同一协议的本地服务，因此可以将 `ai.jev.base-url` 指向 `http://127.0.0.1:8001`，继续使用 `jev-latest` 为 EmotionTool 提供本地 Laya 情绪识别。具体安装、CPU/GPU 启动和健康检查见 [Laya Jev 兼容服务](../laya-jev/README.md)。
+`laya-jev` 提供兼容同一协议的本地服务，因此可以将 `ai.decision-model.base-url` 指向 `http://127.0.0.1:8001`，继续使用 `decision-model` 为 EmotionTool 提供本地 Laya 情绪识别。具体安装、CPU/GPU 启动和健康检查见 [Laya Jev 兼容服务](../laya-jev/README.md)。
 
 ## 调用示例
 
@@ -86,6 +86,8 @@ long inputTokens = result.usage().inputTokens();
 long outputTokens = result.usage().outputTokens();
 ```
 
+纯决策模型可能不生成文本并省略 `usage.output_tokens`。客户端会将缺失字段兼容为 `0`；显式 `null` 或负数仍会被视为无效响应。
+
 `state` 和 `instructions` 支持字符串、对象（如 Map）和数组（如 List）；内容应是文本或文本的结构化表示。choice 的 criteria 支持 1–255 个选项，描述可为字符串、对象、数组或 null；含 null 时请用 `LinkedHashMap` 等允许 null 的容器，不能用 `Map.of`。score 接受 2–10 个有序等级。noul 的可选 criteria 使用字符串键 `"true"`、`"false"`。
 
 ## 错误与重试
@@ -102,7 +104,7 @@ long outputTokens = result.usage().outputTokens();
 
 `JevClientLiveTest` 默认跳过，显式设置 `-Djev.live=true` 后才会调用配置的真实服务。测试读取正常的 `application.yaml` 配置及 Spring 环境覆盖值，只初始化 Jev 相关组件，不连接数据库或 MQTT。
 
-配置好 `ai.jev.key`（默认来自 `JEV_API_KEY`）后，用 JDK 21 在项目根目录执行：
+配置好 `ai.decision-model.key`（默认来自 `JEV_API_KEY`）后，用 JDK 21 在项目根目录执行：
 
 ```powershell
 $env:JAVA_HOME='C:\Users\Lenovo\.jdks\ms-21.0.9'

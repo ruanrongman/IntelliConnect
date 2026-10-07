@@ -61,7 +61,8 @@ public enum ResultCode {
       "设备被禁用"),
   DEVICE_TIMEOUT(3004, "设备响应超时"),
   ENTITY_EXIST(3005, "保存实体已经存在"),
-  YOUTH_HARMFUL(3006, "青少年危害");
+  YOUTH_HARMFUL(3006, "青少年危害"),
+  ROLE_REVIEW_REJECTED(3007, "角色审核未通过");
 
   private Integer code;
   private String message;

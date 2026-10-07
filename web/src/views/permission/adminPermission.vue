@@ -106,10 +106,10 @@
                 <a-textarea  
                   v-model:value="item.setValue"  
                   :placeholder="`请输入${item.label}`"  
-                  :rows="4"
+                  :rows="item.setKey === 'global-role-review.requirements' ? 7 : 4"
                   :disabled="loading"
                   class="custom-textarea"
-                  :maxlength="255"
+                  :maxlength="item.setKey === 'global-role-review.requirements' ? 2000 : 255"
                   show-count
                 />  
               </template>
@@ -188,6 +188,8 @@ const allowedKeys = [
   { value: 'ai_agent_include_thought', label: 'Agent 深度思考', buttonText: '保存设置' },
   { value: 'ai_mcp_agent_include_thought', label: 'MCP Agent 深度思考', buttonText: '保存设置' },
   { value: 'ai_detect_random', label: '小智唤醒词随机问候', buttonText: '保存设置' },
+  { value: 'global-role-review.enabled', label: '全局角色审核', buttonText: '保存设置' },
+  { value: 'global-role-review.requirements', label: '角色审核要求', buttonText: '保存设置' },
   { value: 'ai_mcp_endpoint_count', label: '每产品 MCP 端点数量', buttonText: '保存设置' },
   { value: 'mcp_tools_limit', label: '每端点 MCP 工具数量上限', buttonText: '保存设置' },
 ];
@@ -197,6 +199,7 @@ const booleanConfigKeys = [
   'ai_agent_include_thought',
   'ai_mcp_agent_include_thought',
   'ai_detect_random',
+  'global-role-review.enabled',
 ];
 
 // 判断是否为布尔配置
@@ -242,6 +245,8 @@ const defaultConfigValues = {
   'ai_agent_include_thought': 'false',
   'ai_mcp_agent_include_thought': 'false',
   'ai_detect_random': 'false',
+  'global-role-review.enabled': 'false',
+  'global-role-review.requirements': '审核角色名称和角色介绍，拒绝黄色、色情、性暗示、暴力、自残、违法犯罪、诈骗、毒品、赌博、恐怖主义、仇恨、骚扰、隐私索取、诱导未成年人危险行为等内容；正常教育、科普、健康、安全和普通陪伴内容可以通过。',
   'ai_mcp_endpoint_count': '5',
   'mcp_tools_limit': '50',
 };
@@ -257,6 +262,8 @@ const getIconForKey = (key) => {
     'ai_agent_include_thought': '🤖',
     'ai_mcp_agent_include_thought': '🔌',
     'ai_detect_random': '🎲',
+    'global-role-review.enabled': '🛡️',
+    'global-role-review.requirements': '📋',
     'ai_mcp_endpoint_count': '🔢',
     'mcp_tools_limit': '🔧',
   };
@@ -269,6 +276,7 @@ const getTypeText = (key) => {
   if (key === 'ai_mcp_endpoint_count' || key === 'mcp_tools_limit') return 'MCP配置';
   if (key.includes('keyword')) return '关键词配置';
   if (key.includes('message')) return '消息模板';
+  if (key.startsWith('global-role-review')) return '安全审核';
   if (key.startsWith('ai_')) return 'AI配置';
   return '系统配置';
 };
@@ -284,6 +292,8 @@ const getDescriptionForKey = (key) => {
     'ai_agent_include_thought': '控制 ai.agent.include-thought，关闭可减少 Agent 简单任务延时',
     'ai_mcp_agent_include_thought': '控制 ai.mcp.agent-include-thought，关闭可减少 MCP Agent 简单任务延时',
     'ai_detect_random': '小智唤醒词随机问候',
+    'global-role-review.enabled': '开启后，所有产品创建或修改角色时都会执行全局内容审核',
+    'global-role-review.requirements': '追加到默认安全规则的审核要求，最多 2000 个字符',
     'ai_mcp_endpoint_count': '设置每个产品可用的 MCP endpoint 数量，保存后立即生效',
     'mcp_tools_limit': '设置每个 MCP 端点允许注册的最大工具数量，超出部分将被截断',
   };

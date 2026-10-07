@@ -41,7 +41,7 @@ Built by RSLLY
 * 支持微信小程序和微信服务号
 * 支持小智AI硬件
 * 支持AI文本调试界面，实时流式对话和历史消息持久化
-* 支持产品级青少年保护：角色内容审核、适龄回答提示及最近两小时会话限制
+* 支持系统级全局角色审核和产品级青少年保护：可编辑审核要求，支持 Jev/普通 LLM、适龄回答提示及最近两小时会话限制
 * 支持 TypeSafe Jev 结构化评估，以及本地 Laya 多语言模型情绪识别
 * 使用常见的mysql和redis数据库，上手简单
 * 支持时序数据库influxdb
@@ -82,6 +82,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 | **定时Agent**          | ✅ | 重磅功能，实现类似openclaw的7*24小时定时调用智能体 |
 | **AI文本调试**          | ✅ | SSE流式文本对话调试界面，历史消息持久化，支持实时Agent交互调试 |
 | **青少年保护**         | ✅ | 产品级角色安全审核、适龄回答提示、监护人同意判断，以及按 chatId 统计最近两小时用户消息并限制对话 |
+| **全局角色审核**       | ✅ | 管理员级开关和可编辑审核要求，默认审核黄色、色情、暴力、自残、违法犯罪等不适宜内容，支持 Jev 与普通 LLM |
 | **Jev 结构化评估**     | ✅ | 支持 TypeSafe Jev 的 noul、choice、score 问题类型及有限重试 |
 | **Laya 情绪识别**      | ✅ | 通过本地 Laya Jev 兼容服务为 EmotionTool 提供 CPU/GPU 情绪识别 |
 | **高质量音频**          | ✅ | 支持16/24/48kHz采样率，20/40/60ms帧时长，按连接动态协商 |
@@ -111,7 +112,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 
 ## 项目文档和视频演示
 * 项目文档和视频演示地址https://ruanrongman.github.io/IntelliConnect/
-* [青少年保护、Jev 与 Laya 情绪能力](docs/ai_safety_and_emotion.md)
+* [全局角色审核、青少年保护、Jev 与 Laya 情绪能力](docs/ai_safety_and_emotion.md)
 * [Jev 独立客户端](docs/jev-client.md)
 * [Laya Jev 兼容服务](laya-jev/README.md)
 * 技术博客地址https://wordpress.rslly.top
@@ -132,7 +133,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，有机会获取项目的免费部署咨询，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/1b0b0ae350b7a529124c19e3ae55382a.jpg" width="250px"/>
+    <img src="./docs/images/7645bdcffba22d29bd7fc148a1880b89.jpg" width="250px"/>
 </div>
 
 ## 致谢

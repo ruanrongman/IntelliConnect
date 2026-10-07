@@ -30,6 +30,6 @@ public class AdminConfig {
   @Size(min = 1, max = 255, message = "setKey 长度必须在 1 到 255 之间")
   private String setKey;
   @NotBlank(message = "setValue 不能为空")
-  @Size(min = 1, max = 255, message = "setValue 长度必须在 1 到 255 之间")
+  @Size(min = 1, max = 2000, message = "setValue 长度必须在 1 到 2000 之间")
   private String setValue;
 }

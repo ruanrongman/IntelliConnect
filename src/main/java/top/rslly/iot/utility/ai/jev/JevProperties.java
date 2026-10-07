@@ -27,9 +27,9 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 @Component
-@ConfigurationProperties(prefix = "ai.jev")
+@ConfigurationProperties(prefix = "ai.decision-model")
 public class JevProperties {
   private String baseUrl = "https://api.typesafe.ai";
   private String key = "";
-  private String model = "jev-latest";
+  private String model = "decision-model-preview";
 }

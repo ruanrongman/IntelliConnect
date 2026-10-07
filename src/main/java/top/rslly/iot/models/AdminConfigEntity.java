@@ -51,7 +51,7 @@ public class AdminConfigEntity {
   }
 
   @Basic
-  @Column(name = "set_value")
+  @Column(name = "set_value", length = 2000)
   public String getSetValue() {
     return setValue;
   }

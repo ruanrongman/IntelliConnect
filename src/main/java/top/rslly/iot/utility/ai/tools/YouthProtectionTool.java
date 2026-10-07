@@ -46,7 +46,7 @@ import top.rslly.iot.utility.ai.prompts.YouthProtectionToolPrompt;
 @Component
 @Slf4j
 public class YouthProtectionTool implements BaseTool<Boolean> {
-  private static final String JEV_MODEL = "jev-latest";
+  private static final String DECISION_MODEL = "decision-model";
   private static final String JEV_QUESTION_ID = "youthProtection";
   private static final String ALLOW_DECISION = "allow";
 
@@ -55,7 +55,7 @@ public class YouthProtectionTool implements BaseTool<Boolean> {
   @Autowired
   private JevClient jevClient;
 
-  @Value("${ai.youthProtectionTool-llm:jev-latest}")
+  @Value("${ai.youthProtectionTool-llm:decision-model}")
   private String llmName;
 
   private String name = "youthProtectionTool";
@@ -78,7 +78,7 @@ public class YouthProtectionTool implements BaseTool<Boolean> {
     }
 
     try {
-      if (JEV_MODEL.equals(llmName)) {
+      if (DECISION_MODEL.equalsIgnoreCase(llmName)) {
         return evaluateWithJev(question);
       }
       LLM llm = LLMFactory.getLLM(llmName);

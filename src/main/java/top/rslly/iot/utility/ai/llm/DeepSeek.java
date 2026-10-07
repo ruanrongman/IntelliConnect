@@ -84,6 +84,7 @@ public class DeepSeek implements LLM {
   private final double temperature;
   private final double topP;
   private final boolean webSearchEnabled;
+  private final boolean dashscopeCompatible;
 
   public DeepSeek(String apiKey) {
     this(DEFAULT_URL, DEFAULT_MODEL, apiKey);
@@ -105,6 +106,13 @@ public class DeepSeek implements LLM {
 
   public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
       int thinkingBudget, double temperature, double topP, boolean webSearchEnabled) {
+    this(url, model, apiKey, enableThinking, thinkingBudget, temperature, topP, webSearchEnabled,
+        isDashScopeHost(url));
+  }
+
+  public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
+      int thinkingBudget, double temperature, double topP, boolean webSearchEnabled,
+      boolean dashscopeCompatible) {
     this.baseUrl = normalizeBaseUrl(url);
     this.model = model;
     this.enableThinking = enableThinking;
@@ -112,6 +120,7 @@ public class DeepSeek implements LLM {
     this.temperature = temperature;
     this.topP = topP;
     this.webSearchEnabled = webSearchEnabled;
+    this.dashscopeCompatible = dashscopeCompatible;
     this.client = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .baseUrl(this.baseUrl)
@@ -356,14 +365,24 @@ public class DeepSeek implements LLM {
   }
 
   private boolean isDashScopeProvider() {
+    return dashscopeCompatible;
+  }
+
+  /**
+   * Detects DashScope-compatible hosts, including regional endpoints such as
+   * {@code dashscope-intl.aliyuncs.com}. Custom proxy domains cannot be detected here; callers that
+   * know the backend is DashScope should pass the explicit flag instead.
+   */
+  private static boolean isDashScopeHost(String url) {
     try {
-      String host = URI.create(baseUrl).getHost();
+      String host = URI.create(url).getHost();
       if (host == null) {
         return false;
       }
       String normalizedHost = host.toLowerCase(Locale.ROOT);
       return "dashscope.aliyuncs.com".equals(normalizedHost)
-          || normalizedHost.endsWith(".maas.aliyuncs.com");
+          || normalizedHost.endsWith(".maas.aliyuncs.com")
+          || (normalizedHost.startsWith("dashscope") && normalizedHost.endsWith(".aliyuncs.com"));
     } catch (IllegalArgumentException e) {
       return false;
     }

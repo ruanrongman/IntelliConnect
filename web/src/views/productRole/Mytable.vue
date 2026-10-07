@@ -569,6 +569,8 @@ const handleEditSubmit = async () => {
       fetchProductRole() // 刷新数据  
     } else if (Number(errorCode) === 3006) {
       message.error('青少年模式已开启，该角色内容不符合未成年人保护要求，请修改后重试')
+    } else if (Number(errorCode) === 3007) {
+      message.warning('全局角色审核未通过，该角色包含不适宜或违法违规内容，请修改后重试')
     } else if (Number(errorCode) === 2001) {
       router.push('/login')  
     } else {  

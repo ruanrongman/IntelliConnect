@@ -58,7 +58,7 @@ class EmotionToolTest {
     tool.setAgentMemoryService(memoryService);
     tool.setJevClient(jevClient);
     tool.setEmotionToolPrompt(new EmotionToolPrompt());
-    tool.setLlmName("jev-latest");
+    tool.setLlmName("decision-model");
     previousAdditive = logger.isAdditive();
     logger.setAdditive(false);
     logs.start();
@@ -106,7 +106,7 @@ class EmotionToolTest {
   @Test
   void configurationFailureReturnsNeutral() {
     when(jevClient.evaluate(any(), anyMap())).thenThrow(
-        new IllegalStateException("ai.jev.key must be configured before calling Jev"));
+        new IllegalStateException("ai.decision-model.key must be configured before calling Jev"));
     assertNeutralAndError();
   }
 

@@ -33,8 +33,10 @@ import top.rslly.iot.param.prompt.ProductRoleDescription;
 import top.rslly.iot.param.request.ProductRole;
 import top.rslly.iot.services.agent.ProductRoleService;
 import top.rslly.iot.services.UserConfigServiceImpl;
+import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.ai.tools.YouthProtectionTool;
+import top.rslly.iot.utility.ai.tools.GlobalRoleReviewTool;
 import top.rslly.iot.utility.ai.voice.VoiceTimbre;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -67,6 +69,10 @@ public class ProductRoleServiceImpl implements ProductRoleService {
   private UserRepository userRepository;
   @Autowired
   private YouthProtectionTool youthProtectionTool;
+  @Autowired
+  private GlobalRoleReviewTool globalRoleReviewTool;
+  @Autowired
+  private AdminConfigServiceImpl adminConfigService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
 
@@ -171,6 +177,10 @@ public class ProductRoleServiceImpl implements ProductRoleService {
     }
     if (result.isEmpty() || !p1.isEmpty())
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    if (isGlobalRoleReviewEnabled()
+        && !globalRoleReviewTool.run(buildRoleSafetyContent(productRole))) {
+      return ResultTool.fail(ResultCode.ROLE_REVIEW_REJECTED);
+    }
     if (isYouthProtectionEnabled(productRole.getProductId())
         && !youthProtectionTool.run(buildRoleSafetyContent(productRole))) {
       return ResultTool.fail(ResultCode.YOUTH_HARMFUL);
@@ -193,19 +203,21 @@ public class ProductRoleServiceImpl implements ProductRoleService {
       log.warn("MiniMax TTS is not enabled, cannot set minimax voice: {}", productRole.getVoice());
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
+    if (productRoleEntityList.isEmpty())
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    if (isGlobalRoleReviewEnabled()
+        && !globalRoleReviewTool.run(buildRoleSafetyContent(productRole))) {
+      return ResultTool.fail(ResultCode.ROLE_REVIEW_REJECTED);
+    }
     if (isYouthProtectionEnabled(productRole.getProductId())
         && !youthProtectionTool.run(buildRoleSafetyContent(productRole))) {
       return ResultTool.fail(ResultCode.YOUTH_HARMFUL);
     }
-    if (productRoleEntityList.isEmpty())
-      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
-    else {
-      ProductRoleEntity productRoleEntity = new ProductRoleEntity();
-      BeanUtils.copyProperties(productRole, productRoleEntity);
-      productRoleEntity.setId(productRoleEntityList.get(0).getId());
-      ProductRoleEntity result = productRoleRepository.save(productRoleEntity);
-      return ResultTool.success(result);
-    }
+    ProductRoleEntity productRoleEntity = new ProductRoleEntity();
+    BeanUtils.copyProperties(productRole, productRoleEntity);
+    productRoleEntity.setId(productRoleEntityList.get(0).getId());
+    ProductRoleEntity result = productRoleRepository.save(productRoleEntity);
+    return ResultTool.success(result);
   }
 
   @Override
@@ -226,6 +238,17 @@ public class ProductRoleServiceImpl implements ProductRoleService {
       return value != null && "true".equals(value.trim());
     } catch (RuntimeException e) {
       log.warn("读取青少年模式配置失败，按关闭处理，productId={}", productId, e);
+      return false;
+    }
+  }
+
+  private boolean isGlobalRoleReviewEnabled() {
+    try {
+      var configs = adminConfigService.findAllBySetKey(
+          AdminConfigServiceImpl.GLOBAL_ROLE_REVIEW_ENABLED);
+      return !configs.isEmpty() && "true".equalsIgnoreCase(configs.get(0).getSetValue().trim());
+    } catch (RuntimeException e) {
+      log.warn("读取全局角色审核开关失败，按关闭处理", e);
       return false;
     }
   }

@@ -43,7 +43,7 @@ class YouthProtectionToolTest {
     YouthProtectionTool tool = new YouthProtectionTool();
     tool.setJevClient(jevClient);
     tool.setYouthProtectionToolPrompt(new YouthProtectionToolPrompt());
-    tool.setLlmName("jev-latest");
+    tool.setLlmName("decision-model");
     when(jevClient.evaluate(any(), anyMap())).thenReturn(jevChoice("allow"));
 
     assertTrue(tool.run("Explain how to create a strong password."));
@@ -55,7 +55,7 @@ class YouthProtectionToolTest {
     YouthProtectionTool tool = new YouthProtectionTool();
     tool.setJevClient(jevClient);
     tool.setYouthProtectionToolPrompt(new YouthProtectionToolPrompt());
-    tool.setLlmName("jev-latest");
+    tool.setLlmName("decision-model");
     String content = "Create a friendly educational robot role.";
     when(jevClient.evaluate(any(), anyMap())).thenAnswer(invocation -> {
       Map<?, ?> state = invocation.getArgument(0);
@@ -77,7 +77,7 @@ class YouthProtectionToolTest {
     YouthProtectionTool tool = new YouthProtectionTool();
     tool.setJevClient(jevClient);
     tool.setYouthProtectionToolPrompt(new YouthProtectionToolPrompt());
-    tool.setLlmName("jev-latest");
+    tool.setLlmName("decision-model");
 
     when(jevClient.evaluate(any(), anyMap())).thenReturn(jevChoice("block"));
     assertFalse(tool.run("Teach me how to hurt myself."));
@@ -92,7 +92,7 @@ class YouthProtectionToolTest {
     YouthProtectionTool tool = new YouthProtectionTool();
     tool.setJevClient(jevClient);
     tool.setYouthProtectionToolPrompt(new YouthProtectionToolPrompt());
-    tool.setLlmName("jev-latest");
+    tool.setLlmName("decision-model");
     when(jevClient.evaluate(any(), anyMap())).thenThrow(
         new JevException("Jev unavailable", 529, "private-response-body", null));
 
@@ -131,7 +131,7 @@ class YouthProtectionToolTest {
   }
 
   private static JevResponse jevChoice(String choice) {
-    return new JevResponse("jev-latest", Map.of("youthProtection",
+    return new JevResponse("decision-model-preview", Map.of("youthProtection",
         new JevResponse.ChoiceAnswer(choice, Map.of(), 0.95)), null);
   }
 }

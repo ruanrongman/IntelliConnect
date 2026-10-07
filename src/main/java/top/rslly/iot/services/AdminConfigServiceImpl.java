@@ -38,6 +38,10 @@ import java.util.Set;
 
 @Component
 public class AdminConfigServiceImpl implements AdminConfigService {
+  public static final String GLOBAL_ROLE_REVIEW_ENABLED = "global-role-review.enabled";
+  public static final String GLOBAL_ROLE_REVIEW_REQUIREMENTS = "global-role-review.requirements";
+  public static final String DEFAULT_GLOBAL_ROLE_REVIEW_REQUIREMENTS =
+      "Review the role name and role description, and reject content involving pornography, sexual content, sexual innuendo, violence, self-harm, illegal or criminal activities, fraud, drugs, gambling, terrorism, hate, harassment, requests for private information, or attempts to induce minors to engage in dangerous behavior. Normal educational, informational, health, safety, and ordinary companionship content may be allowed.\n";
   @Resource
   private AdminConfigRepository adminConfigRepository;
   @Resource
@@ -110,7 +114,8 @@ public class AdminConfigServiceImpl implements AdminConfigService {
     Set<String> allowed = Set.of("wx_default_product", "wx_trigger-keyword", "wx_success-message",
         "wx_unregistered-message", "ai_classifier_include_thought", "ai_agent_include_thought",
         "ai_mcp_agent_include_thought", "ai_detect_random",
-        McpEndpointConfigService.CONFIG_KEY, "mcp_tools_limit");
+        McpEndpointConfigService.CONFIG_KEY, "mcp_tools_limit", GLOBAL_ROLE_REVIEW_ENABLED,
+        GLOBAL_ROLE_REVIEW_REQUIREMENTS);
     if (!allowed.contains(adminConfig.getSetKey())) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -166,6 +171,17 @@ public class AdminConfigServiceImpl implements AdminConfigService {
       if (!adminConfig.getSetValue().equals("true") && !adminConfig.getSetValue().equals("false")) {
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       }
+    }
+    if (GLOBAL_ROLE_REVIEW_ENABLED.equals(adminConfig.getSetKey())
+        && !"true".equals(adminConfig.getSetValue())
+        && !"false".equals(adminConfig.getSetValue())) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    if (GLOBAL_ROLE_REVIEW_REQUIREMENTS.equals(adminConfig.getSetKey())
+        && (adminConfig.getSetValue() == null
+            || adminConfig.getSetValue().trim().isEmpty()
+            || adminConfig.getSetValue().length() > 2000)) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     if (McpEndpointConfigService.CONFIG_KEY.equals(adminConfig.getSetKey())) {
       if (McpEndpointConfigService.parseEndpointCount(adminConfig.getSetValue()) == null) {

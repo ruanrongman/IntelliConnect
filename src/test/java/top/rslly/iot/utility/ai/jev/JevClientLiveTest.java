@@ -51,7 +51,7 @@ class JevClientLiveTest {
           assertNull(context.getStartupFailure(), "Jev test configuration failed to start");
           JevProperties properties = context.getBean(JevProperties.class);
           assertTrue(properties.getKey() != null && !properties.getKey().isBlank(),
-              "Configure ai.jev.key in application.yaml or set JEV_API_KEY before the live test");
+              "Configure ai.decision-model.key in application.yaml or set JEV_API_KEY before the live test");
 
           JevResponse result = context.getBean(JevClient.class).evaluate(
               Map.of("ticket", "My payment has failed for three days. Please fix my billing "

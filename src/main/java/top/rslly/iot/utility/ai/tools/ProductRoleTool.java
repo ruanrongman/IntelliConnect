@@ -122,10 +122,16 @@ public class ProductRoleTool implements BaseTool<String> {
         if (Objects.equals(result.getErrorCode(), ResultCode.YOUTH_HARMFUL.getCode())) {
           return "青少年模式已经开启，上述角色不符合青少年保护法规要求，设置被取消";
         }
+        if (Objects.equals(result.getErrorCode(), ResultCode.ROLE_REVIEW_REJECTED.getCode())) {
+          return "全局角色审核未通过，上述角色包含不适宜或违法违规内容，设置被取消";
+        }
         if (result.getErrorCode() != 200) {
           var result1 = productRoleService.putProductRole(productRole);
           if (Objects.equals(result1.getErrorCode(), ResultCode.YOUTH_HARMFUL.getCode())) {
             return "青少年模式已经开启，上述角色不符合青少年保护法规要求，设置被取消";
+          }
+          if (Objects.equals(result1.getErrorCode(), ResultCode.ROLE_REVIEW_REJECTED.getCode())) {
+            return "全局角色审核未通过，上述角色包含不适宜或违法违规内容，设置被取消";
           }
           if (result1.getErrorCode() != 200)
             throw new IcAiException("database control error!");

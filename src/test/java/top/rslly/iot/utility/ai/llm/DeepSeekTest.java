@@ -130,6 +130,46 @@ class DeepSeekTest {
   }
 
   @Test
+  void regionalDashScopeHostIsDetectedAsDashScopeProvider() throws Exception {
+    DeepSeek intl = new DeepSeek("https://dashscope-intl.aliyuncs.com/compatible-mode", "qwen-plus",
+        "test-key", false, 128, 0.6, 0.85, true);
+
+    Assertions.assertEquals(Boolean.TRUE,
+        buildTextParams(intl, true)._additionalBodyProperties().get("enable_search")
+            .convert(Boolean.class));
+  }
+
+  @Test
+  void explicitDashScopeFlagWorksForCustomBaseUrl() throws Exception {
+    DeepSeek proxied = new DeepSeek("https://dashscope-proxy.example.com", "qwen-plus", "test-key",
+        false, 128, 0.6, 0.85, true, true);
+    DeepSeek notDashScope = new DeepSeek("https://dashscope-proxy.example.com", "qwen-plus",
+        "test-key", false, 128, 0.6, 0.85, true);
+
+    Assertions.assertEquals(Boolean.TRUE,
+        buildTextParams(proxied, true)._additionalBodyProperties().get("enable_search")
+            .convert(Boolean.class));
+    Assertions.assertFalse(buildTextParams(notDashScope, true)._additionalBodyProperties()
+        .containsKey("enable_search"));
+  }
+
+  @Test
+  void factoryDashScopeBranchUsesConfiguredBaseUrl() throws Exception {
+    LLMFactory factory = new LLMFactory();
+    factory.setDashScopeApiKey("test-key");
+    factory.setDashScopeBaseUrl("https://dashscope-proxy.example.com/compatible-mode");
+    try {
+      LLM llm = LLMFactory.getLLM("dashscope-factory-custom-url-model", true);
+      Assertions.assertInstanceOf(DeepSeek.class, llm);
+      Assertions.assertEquals(Boolean.TRUE,
+          buildTextParams((DeepSeek) llm, true)._additionalBodyProperties().get("enable_search")
+              .convert(Boolean.class));
+    } finally {
+      factory.setDashScopeBaseUrl(LLMFactory.DEFAULT_DASHSCOPE_BASE_URL);
+    }
+  }
+
+  @Test
   void functionParamsCarrySearchParameterAndKeepRouterTools() throws Exception {
     DeepSeek deepSeek = new DeepSeek("https://dashscope.aliyuncs.com/compatible-mode",
         "qwen-plus", "test-key", false, 128, 0.6, 0.85, true);

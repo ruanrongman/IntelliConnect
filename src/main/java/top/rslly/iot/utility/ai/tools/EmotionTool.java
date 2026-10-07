@@ -93,7 +93,7 @@ public class EmotionTool implements BaseTool<Map<String, String>> {
     messages.add(userMessage);
     responseMap.put("text", "neutral");
     responseMap.put("emoji", EmotionManager.getCurrentEmotion("neutral"));
-    if (llmName.equals("jev-latest")) {
+    if ("decision-model".equalsIgnoreCase(llmName)) {
       try {
         var res = jevClient.evaluate(
             Map.of("Current_Conversation", memory, "memory", currentMemory, "question", question),

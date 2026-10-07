@@ -156,7 +156,7 @@ weather:
     # Ed25519私钥 (PKCS8格式，Base64编码，不含-----BEGIN PRIVATE KEY-----等标记)
     private-key: XXX
 ai:
-  jev:
+  decision-model:
     base-url: http://127.0.0.1:8001
     key: XXX
     model: jev-latest
@@ -226,6 +226,12 @@ ai:
   siliconFlow-Key: XXX
   uniApi-Key: XXX
   dashscope-key: XXX
+  # LLM 对话用的 DashScope OpenAI 兼容地址，默认官方大陆站
+  # 国际站（新加坡）示例: https://dashscope-intl.aliyuncs.com/compatible-mode
+  dashscope-base-url: https://dashscope.aliyuncs.com/compatible-mode
+  # 原生语音 SDK（TTS/ASR/多模态语音）的 DashScope 域名根地址，留空使用官方默认
+  # 国际站（新加坡）示例: https://dashscope-intl.aliyuncs.com
+  dashscope-sdk-base-url:
   robot-name: 小创
   team-name: 创万联
   custom-key: XXX
@@ -233,7 +239,9 @@ ai:
   agent-epoch-limit: 5
   chatTool-llm: dashscope-deepseek-v4.1-flash
   chatTool-speedUp: true
-  emotionTool-llm: dashscope-qwen3.8-flash
+  emotionTool-llm: decision-model
+  youthProtectionTool-llm: decision-model
+  globalRoleReview-llm: decision-model
   memoryTool-llm: dashscope-qwen3.8-flash
   classifierTool-llm: dashscope-deepseek-v4.1-flash
   classifierTool-speedUp: true

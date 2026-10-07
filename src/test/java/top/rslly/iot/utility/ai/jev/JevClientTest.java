@@ -156,6 +156,20 @@ class JevClientTest {
     assertTrue(body.at("/questions/department/criteria/technical").isNull());
   }
 
+  @Test
+  void treatsMissingOutputTokensAsZeroForDecisionOnlyProviders() {
+    replies.add(new Reply(200, """
+        {"model":"decision-model-preview","answers":{
+          "urgent":{"type":"noul","noul":0.95}},
+          "usage":{"input_tokens":296},"latency_ms":52.9}
+        """, null));
+
+    JevResponse result = evaluateNoul();
+
+    assertEquals(296L, result.usage().inputTokens());
+    assertEquals(0L, result.usage().outputTokens());
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"", "/", "/v1", "/v1/", "/proxy/", "/proxy/v1/"})
   void normalizesBaseUrl(String suffix) {
@@ -170,7 +184,7 @@ class JevClientTest {
   void bindsAllThreeSettingsFromYamlInSpring() {
     String yaml = """
         ai:
-          jev:
+          decision-model:
             base-url: %s/v1/
             key: yaml-test-key
             model: jev-yaml-model
@@ -190,17 +204,17 @@ class JevClientTest {
   void propertiesDeclareDefaultsWithoutRequiringCredentials() {
     JevProperties defaults = new JevProperties();
     assertEquals("https://api.typesafe.ai", defaults.getBaseUrl());
-    assertEquals("jev-latest", defaults.getModel());
+    assertEquals("decision-model-preview", defaults.getModel());
     assertTrue(defaults.getKey().isEmpty());
   }
 
   @Test
   void emptyKeyAllowsStartupButFailsBeforeNetworkCall() {
-    context("ai:\n  jev:\n    key: ''\n").run(ctx -> {
+    context("ai:\n  decision-model:\n    key: ''\n").run(ctx -> {
       assertNull(ctx.getStartupFailure());
       IllegalStateException error = assertThrows(IllegalStateException.class,
           () -> ctx.getBean(JevClient.class).evaluate("help", noulQuestions()));
-      assertTrue(error.getMessage().contains("ai.jev.key"));
+      assertTrue(error.getMessage().contains("ai.decision-model.key"));
     });
     assertTrue(requests.isEmpty());
   }
@@ -277,7 +291,9 @@ class JevClientTest {
         NOUL_RESPONSE.replace("\"noul\":0.95", "\"noul\":1.2"),
         NOUL_RESPONSE.replace("\"noul\":0.95", "\"noul\":null"),
         NOUL_RESPONSE.replace("\"type\":\"noul\"", "\"type\":\"choice\""),
-        NOUL_RESPONSE.replace("\"input_tokens\":296", "\"input_tokens\":null"));
+        NOUL_RESPONSE.replace("\"input_tokens\":296", "\"input_tokens\":null"),
+        NOUL_RESPONSE.replace("\"output_tokens\":20", "\"output_tokens\":null"),
+        NOUL_RESPONSE.replace("\"output_tokens\":20", "\"output_tokens\":-1"));
     for (String body : invalid) {
       replies.add(new Reply(200, body, null));
       assertThrows(JevException.class, this::evaluateNoul);

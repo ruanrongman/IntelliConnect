@@ -1,6 +1,21 @@
-# 青少年保护、Jev 与 Laya 情绪能力
+# 全局角色审核、青少年保护、Jev 与 Laya 情绪能力
 
-本文说明 IntelliConnect 当前提供的青少年保护审核、会话使用限制、Jev 接入以及本地 Laya 情绪识别能力。
+本文说明 IntelliConnect 当前提供的全局角色审核、青少年保护审核、会话使用限制、Jev 接入以及本地 Laya 情绪识别能力。
+
+## 全局角色审核
+
+全局角色审核是独立于青少年模式的系统级能力。管理员可以在系统配置页开启或关闭
+`global-role-review.enabled`，并编辑 `global-role-review.requirements`。开关默认关闭；要求文本默认审核角色名称和角色介绍中的黄色、色情、性暗示、暴力、自残、违法犯罪、诈骗、毒品、赌博、恐怖主义、仇恨、骚扰、隐私索取和诱导未成年人危险行为等内容，同时允许正常教育、科普、健康、安全和普通陪伴内容。
+
+自定义要求只会追加到默认安全规则，不能通过编辑框删除基础规则。编辑框最多 2000 个字符，配置保存后立即生效，不需要重启应用。角色创建和修改按“基础参数/音色校验 → 全局审核 → 青少年审核 → 保存”的顺序执行；全局开关关闭时不会调用审核模型，也不会增加普通角色保存延迟。明确返回 `block` 时拒绝保存并返回 `ROLE_REVIEW_REJECTED`（3007）。
+
+审核模型由独立配置 `ai.globalRoleReview-llm` 选择，默认值为 `decision-model`：
+
+- Jev 路径使用 `JevClient` 的 `choice` 结果，`allow` 放行、`block` 拒绝，并复用 Jev 的重试、响应校验和脱敏日志机制。
+- 普通 LLM 路径使用 `LLMFactory.getLLM(...)` 和 JSON 审核提示词，严格解析 `allow`/`block` 决定。
+- 网络异常、空响应、格式错误或未知决定不会被误判为“审核通过”；按已确认策略记录告警并放行角色，只有模型明确返回 `block` 才拒绝。
+
+全局审核只检查角色配置中的角色名称、角色设定和角色介绍，不审核普通聊天消息。青少年模式若同时开启，仍会独立执行其更严格的角色审核与会话限制。
 
 ## 青少年保护能力
 
@@ -52,19 +67,19 @@
 
 ## Jev 接入
 
-Jev 客户端通过 TypeSafe 的 `POST /v1/systemone` 接口提供结构化评估，支持 `noul`、`choice` 和 `score` 三种问题类型。配置位于 `application.yaml` 的 `ai.jev`：
+决策模型客户端通过 TypeSafe 的 `POST /v1/systemone` 接口提供结构化评估，支持 `noul`、`choice` 和 `score` 三种问题类型。配置位于 `application.yaml` 的 `ai.decision-model`：
 
 ```yaml
 ai:
-  jev:
+  decision-model:
     base-url: https://api.typesafe.ai
     key: ${JEV_API_KEY:}
-    model: jev-latest
-  emotionTool-llm: jev-latest
-  youthProtectionTool-llm: jev-latest
+    model: decision-model-preview
+  emotionTool-llm: decision-model
+  youthProtectionTool-llm: decision-model
 ```
 
-内置工具使用 `jev-latest` 时走类型安全的 Jev 客户端：
+内置工具使用 `decision-model` 时走类型安全的决策模型客户端：
 
 - `EmotionTool`：根据当前问题、最近对话和长期记忆选择情绪名称，再映射为设备/前端表情；
 - `YouthProtectionTool`：使用 `allow`、`block`、`guardian_consent` 三类决定审核内容；
@@ -80,15 +95,15 @@ Key 可以通过 `JEV_API_KEY` 注入。未配置 Key 不影响应用启动，�
 
 ## 本地 Laya 情绪识别
 
-仓库中的 `laya-jev` 是一个 FastAPI 本地服务，加载 `convaiinnovations/laya-multilingual`，并提供兼容 Jev 的 `POST /v1/systemone` 接口。因此 IntelliConnect 不需要新增另一套情绪协议，只需把 `ai.jev.base-url` 指向本地服务，并保持 `emotionTool-llm: jev-latest`：
+仓库中的 `laya-jev` 是一个 FastAPI 本地服务，加载 `convaiinnovations/laya-multilingual`，并提供兼容决策模型的 `POST /v1/systemone` 接口。因此 IntelliConnect 不需要新增另一套情绪协议，只需把 `ai.decision-model.base-url` 指向本地服务，并保持 `emotionTool-llm: decision-model`：
 
 ```yaml
 ai:
-  jev:
+  decision-model:
     base-url: http://127.0.0.1:8001
     key: ${JEV_API_KEY:local-placeholder}
-    model: jev-latest
-  emotionTool-llm: jev-latest
+    model: decision-model-preview
+  emotionTool-llm: decision-model
 ```
 
 Windows 启动：

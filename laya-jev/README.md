@@ -252,11 +252,11 @@ IntelliConnect 的配置示例：
 
 ```yaml
 ai:
-  jev:
+  decision-model:
     base-url: http://127.0.0.1:8001
     key: ${JEV_API_KEY}
     model: jev-latest
-  emotionTool-llm: jev-latest
+  emotionTool-llm: decision-model
 ```
 
 Java 客户端要求非空 Key。默认本地服务不校验 Key，可将 `JEV_API_KEY` 设为非空的本地占位值；启用服务端 `LAYA_API_KEY` 后，Java 的 Key 必须与之相同，其他调用方需发送 `Authorization: Bearer <key>`。
