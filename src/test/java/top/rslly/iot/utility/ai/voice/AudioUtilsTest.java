@@ -22,6 +22,13 @@ package top.rslly.iot.utility.ai.voice;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -72,5 +79,114 @@ class AudioUtilsTest {
 
     assertTrue(result.cancelled());
     assertFalse(queue.isEmpty());
+  }
+  @Test
+  void extractsPcmFromCanonicalWav() throws Exception {
+    byte[] pcm = {1, 2, 3, 4};
+    assertArrayEquals(pcm, AudioUtils.wavBytesToPcm(wav(chunk("data", pcm))));
+  }
+
+  @Test
+  void ignoresDataMarkerInsideMetadata() throws Exception {
+    byte[] pcm = {1, 2, 3, 4};
+    byte[] metadata = "metadata contains data marker".getBytes(StandardCharsets.US_ASCII);
+    assertArrayEquals(pcm,
+        AudioUtils.wavBytesToPcm(wav(chunk("JUNK", metadata), chunk("data", pcm))));
+  }
+
+  @Test
+  void excludesChunksAfterPcmData() throws Exception {
+    byte[] pcm = {1, 2, 3, 4};
+    assertArrayEquals(pcm, AudioUtils.wavBytesToPcm(
+        wav(chunk("data", pcm), chunk("JUNK", new byte[] {5, 6}))));
+  }
+
+  @Test
+  void skipsOddSizedChunkPadding() throws Exception {
+    byte[] pcm = {1, 2, 3, 4};
+    assertArrayEquals(pcm, AudioUtils.wavBytesToPcm(
+        wav(chunk("JUNK", new byte[] {9}), chunk("data", pcm))));
+  }
+
+  @Test
+  void excludesDataChunkPadding() throws Exception {
+    byte[] pcm = {1, 2, 3};
+    assertArrayEquals(pcm, AudioUtils.wavBytesToPcm(wav(chunk("data", pcm))));
+  }
+
+  @Test
+  void preservesEmptyDataChunk() throws Exception {
+    assertArrayEquals(new byte[0], AudioUtils.wavBytesToPcm(
+        wav(chunk("data", new byte[0]), chunk("JUNK", new byte[] {1, 2}))));
+  }
+
+  @Test
+  void rejectsTruncatedDataPayload() {
+    byte[] input = wav(chunk("data", new byte[] {1, 2}));
+    ByteBuffer.wrap(input).order(ByteOrder.LITTLE_ENDIAN).putInt(40, 4);
+    assertThrows(IOException.class, () -> AudioUtils.wavBytesToPcm(input));
+  }
+
+  @Test
+  void rejectsTruncatedChunkHeader() {
+    byte[] input = wav(chunk("JUNK", new byte[8]), new byte[] {'d', 'a', 't', 'a', 0, 0});
+    assertThrows(IOException.class, () -> AudioUtils.wavBytesToPcm(input));
+  }
+
+  @Test
+  void rejectsUnsignedChunkSizeBeyondInput() {
+    byte[] input = wav(chunk("data", new byte[] {1, 2}));
+    ByteBuffer.wrap(input).order(ByteOrder.LITTLE_ENDIAN).putInt(40, -1);
+    assertThrows(IOException.class, () -> AudioUtils.wavBytesToPcm(input));
+  }
+
+  @Test
+  void doesNotReadDataOutsideRiffContainer() {
+    byte[] input = wav(chunk("data", new byte[] {1, 2}));
+    ByteBuffer.wrap(input).order(ByteOrder.LITTLE_ENDIAN).putInt(4, 28);
+    assertThrows(IOException.class, () -> AudioUtils.wavBytesToPcm(input));
+  }
+
+  @Test
+  void rejectsTruncatedRiffContainer() {
+    byte[] input = wav(chunk("data", new byte[] {1, 2}));
+    ByteBuffer.wrap(input).order(ByteOrder.LITTLE_ENDIAN).putInt(4, input.length);
+    assertThrows(IOException.class, () -> AudioUtils.wavBytesToPcm(input));
+  }
+
+  @Test
+  void rejectsMissingDataPadding() {
+    byte[] input = wav(chunk("data", new byte[] {1}));
+    byte[] truncated = java.util.Arrays.copyOf(input, input.length - 1);
+    ByteBuffer.wrap(truncated).order(ByteOrder.LITTLE_ENDIAN).putInt(4, truncated.length - 8);
+    assertThrows(IOException.class, () -> AudioUtils.wavBytesToPcm(truncated));
+  }
+
+  @Test
+  void rejectsMissingDataChunk() {
+    assertThrows(IOException.class,
+        () -> AudioUtils.wavBytesToPcm(wav(chunk("JUNK", new byte[8]))));
+  }
+
+  private static byte[] wav(byte[]... chunks) {
+    ByteArrayOutputStream body = new ByteArrayOutputStream();
+    body.writeBytes("WAVE".getBytes(StandardCharsets.US_ASCII));
+    // PCM, mono, 16 kHz, 8-bit samples (allows odd-sized audio payloads).
+    body.writeBytes(chunk("fmt ", new byte[] {
+        1, 0, 1, 0, (byte) 0x80, 0x3e, 0, 0,
+        (byte) 0x80, 0x3e, 0, 0, 1, 0, 8, 0}));
+    for (byte[] chunk : chunks) {
+      body.writeBytes(chunk);
+    }
+    return chunk("RIFF", body.toByteArray());
+  }
+
+  private static byte[] chunk(String id, byte[] payload) {
+    ByteBuffer buffer = ByteBuffer.allocate(8 + payload.length + payload.length % 2)
+        .order(ByteOrder.LITTLE_ENDIAN);
+    buffer.put(id.getBytes(StandardCharsets.US_ASCII));
+    buffer.putInt(payload.length);
+    buffer.put(payload);
+    return buffer.array();
   }
 }

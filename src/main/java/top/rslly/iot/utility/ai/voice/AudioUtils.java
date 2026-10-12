@@ -31,8 +31,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.BooleanSupplier;
@@ -177,28 +179,30 @@ public class AudioUtils {
       throw new IOException("不是有效的WAV文件格式");
     }
 
-    // 查找data子块
-    int dataOffset = -1;
-    for (int i = 12; i < wavData.length - 4; i++) {
-      if (wavData[i] == 'd' && wavData[i + 1] == 'a' && wavData[i + 2] == 't'
-          && wavData[i + 3] == 'a') {
-        dataOffset = i + 8; // 跳过"data"和数据大小字段
-        break;
+    ByteBuffer buffer = ByteBuffer.wrap(wavData).order(ByteOrder.LITTLE_ENDIAN);
+    long riffEnd = 8L + Integer.toUnsignedLong(buffer.getInt(4));
+    if (riffEnd < 12 || riffEnd > wavData.length) {
+      throw new IOException("无效或不完整的RIFF数据");
+    }
+
+    // 按子块边界遍历，避免把元数据中的data文本当成音频块。
+    int offset = 12;
+    while (offset + 8L <= riffEnd) {
+      long chunkSize = Integer.toUnsignedLong(buffer.getInt(offset + 4));
+      int dataOffset = offset + 8;
+      long dataEnd = dataOffset + chunkSize;
+      long nextOffset = dataEnd + (chunkSize & 1L); // 奇数长度子块包含一个填充字节
+      if (nextOffset > riffEnd) {
+        throw new IOException("不完整的WAV子块");
       }
+      if (wavData[offset] == 'd' && wavData[offset + 1] == 'a'
+          && wavData[offset + 2] == 't' && wavData[offset + 3] == 'a') {
+        return Arrays.copyOfRange(wavData, dataOffset, (int) dataEnd);
+      }
+      offset = (int) nextOffset;
     }
 
-    if (dataOffset == -1) {
-      throw new IOException("在WAV文件中找不到data子块");
-    }
-
-    // 计算PCM数据大小
-    int dataSize = wavData.length - dataOffset;
-
-    // 提取PCM数据
-    byte[] pcmData = new byte[dataSize];
-    System.arraycopy(wavData, dataOffset, pcmData, 0, dataSize);
-
-    return pcmData;
+    throw new IOException("在WAV文件中找不到data子块");
   }
 
   public static ByteBuffer byte2Bytebuffer(byte[] byteArray) {
