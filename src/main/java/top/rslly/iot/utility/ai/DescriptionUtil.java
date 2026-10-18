@@ -32,6 +32,7 @@ import top.rslly.iot.services.thingsModel.ProductDeviceServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductFunctionServiceImpl;
 import top.rslly.iot.services.thingsModel.ProductModelServiceImpl;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.*;
 
 import java.util.LinkedHashMap;
@@ -57,6 +58,12 @@ public class DescriptionUtil {
   private McpAgent mcpAgent;
   @Autowired
   private KnowledgeTool knowledgeTool;
+  @Autowired
+  private SandboxService sandboxService;
+  @Autowired
+  private BashTool bashTool;
+  @Autowired
+  private EditTool editTool;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
@@ -133,6 +140,11 @@ public class DescriptionUtil {
       toolDescriptions.put(knowledgeTool.getName(), knowledgeDescription);
     }
     toolDescriptions.put(mcpAgent.getName(), mcpAgent.getDescription(productId, chatId));
+    // 沙箱可用时, legacy agent 路径也可调用 bash/edit 工具(Manage.runTool 按 bean 名派发)
+    if (sandboxService.isAvailable()) {
+      toolDescriptions.put(bashTool.getName(), bashTool.getDescription());
+      toolDescriptions.put(editTool.getName(), editTool.getDescription());
+    }
     return toolDescriptions;
   }
 }

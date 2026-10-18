@@ -29,7 +29,7 @@
           v-model:file-list="formState.file"
           :before-upload="beforeUpload"
           :max-count="1"
-          accept=".md"
+          accept=".md,.zip"
         >
           <a-button>
             <template #icon><UploadOutlined /></template>
@@ -37,7 +37,9 @@
           </a-button>
         </a-upload>
         <div style="color: #999; font-size: 12px; margin-top: 8px;">
-          请上传包含技能定义的 Markdown (.md) 文件，大小不超过50MB
+          支持两种格式（大小不超过50MB）：<br />
+          1. Markdown (.md) 技能定义文件；<br />
+          2. zip 技能包，包内须包含 SKILL.md（位于根目录或唯一顶层文件夹内），调用时需沙箱服务已启用
         </div>
       </a-form-item>
     </a-form>
@@ -102,9 +104,9 @@ const beforeUpload = (file) => {
 
   // Check file type
   const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
-  const allowedExtensions = ['.md']
+  const allowedExtensions = ['.md', '.zip']
   if (!allowedExtensions.includes(fileExtension)) {
-    message.error('只允许上传 Markdown (.md) 文件')
+    message.error('只允许上传 Markdown (.md) 文件或 zip 技能包')
     return false
   }
 

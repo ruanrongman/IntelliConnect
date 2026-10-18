@@ -38,12 +38,12 @@ public class Manage {
     if (!isInterfaceImplemented(obj.getClass(), BaseTool.class))
       throw new IllegalArgumentException("the tool not implement the interface");
     try {
-      // Class<?>[] parameterTypes = obj.getClass().getParameterTypes();
-      Method method = obj.getClass().getDeclaredMethod("run", String.class);
-      var res = method.invoke(obj, question);
+      // 优先调用 run(String, Map) 保证会话上下文(chatId等)传入工具, 结果为 null 时再回退 run(String)
+      Method method = obj.getClass().getDeclaredMethod("run", String.class, Map.class);
+      var res = method.invoke(obj, question, globalMessage);
       if (res == null) {
-        method = obj.getClass().getDeclaredMethod("run", String.class, Map.class);
-        res = method.invoke(obj, question, globalMessage);
+        method = obj.getClass().getDeclaredMethod("run", String.class);
+        res = method.invoke(obj, question);
       }
       if (res instanceof String)
         return (String) res;

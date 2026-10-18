@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//tmp/**)",
+      "Bash(\"C:/Users/Lenovo/.jdks/ms-21.0.9/bin/javap.exe\" -v -classpath . com.alibaba.opensandbox.sandbox.pool.SandboxPool)",
+      "Read(//public synchronized void shutdown/\\(java.lang.Boolean/\\)|public synchronized void shutdown/\\(boolean/\\)/{found=1} found && /MethodParameters:/{p=1;next} p && /Name/{getline; print; exit} p && /^$/**)",
+      "Bash(\"C:/Users/Lenovo/.jdks/ms-21.0.9/bin/javap.exe\" -p -classpath . com.alibaba.opensandbox.sandbox.pool.SandboxPool)"
+    ]
+  }
+}

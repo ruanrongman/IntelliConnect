@@ -34,6 +34,7 @@ import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 
 class FunctionCallingRouterKnowledgeRouteTest {
   private FunctionCallingRouterTool routerTool;
@@ -54,6 +55,8 @@ class FunctionCallingRouterKnowledgeRouteTest {
     ReflectionTestUtils.setField(routerTool, "mcpWebsocket", Mockito.mock(McpWebsocket.class));
     ReflectionTestUtils.setField(routerTool, "mcpEndpointConfigService",
         Mockito.mock(McpEndpointConfigService.class));
+    ReflectionTestUtils.setField(routerTool, "sandboxService",
+        Mockito.mock(SandboxService.class));
   }
 
   @Test

@@ -34,6 +34,7 @@ import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
 
 import java.util.HashMap;
@@ -65,6 +66,8 @@ public class ClassifierToolPrompt {
   private McpEndpointConfigService mcpEndpointConfigService;
   @Autowired
   private KnowledgeTool knowledgeTool;
+  @Autowired
+  private SandboxService sandboxService;
   @Value("${ai.classifier.include.thought:true}")
   private boolean includeThought;
   private static final int MAX_ROUTER_RULES_CHARS = 1200;
@@ -117,6 +120,11 @@ public class ClassifierToolPrompt {
     classifierMap.put("2", "Control and query electrical, excluding music and xiaozhi_device");
     classifierMap.put("3", "Play or recommend music");
     String agentDescription = "Complex multi-step task";
+    if (sandboxService.isAvailable()) {
+      agentDescription +=
+          " | A cloud computer is available here, bash and edit are its tools and you have"
+              + " full permission to use them";
+    }
     String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);
     if (!knowledgeDescription.isBlank()) {
       agentDescription += " | " + knowledgeDescription;

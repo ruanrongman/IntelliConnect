@@ -46,9 +46,10 @@ public class ProductSkillsEntity {
   @Column(name = "name", nullable = false)
   private String name;
 
-  @Size(max = 255)
+  /** 技能描述, 支持较长的 Claude skill front-matter 描述(上限 6144 字符) */
+  @Size(max = 6144)
   @NotNull
-  @Column(name = "description", nullable = false)
+  @Column(name = "description", nullable = false, length = 6144)
   private String description;
 
   @Size(max = 255)

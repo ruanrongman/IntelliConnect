@@ -45,6 +45,7 @@ import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.prompts.FunctionCallingRouterPrompt;
 
 import java.util.ArrayList;
@@ -102,6 +103,8 @@ public class FunctionCallingRouterTool {
   private McpWebsocket mcpWebsocket;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
+  @Autowired
+  private SandboxService sandboxService;
 
   private final Map<String, Lock> lockMap = new ConcurrentHashMap<>();
   private final Map<String, Condition> conditionMap = new ConcurrentHashMap<>();
@@ -275,6 +278,11 @@ public class FunctionCallingRouterTool {
     availableRoutes.put(FunctionRouterRoute.MUSIC,
         FunctionRouterRoute.MUSIC.getDefaultDescription());
     String agentDescription = FunctionRouterRoute.AGENT.getDefaultDescription();
+    if (sandboxService.isAvailable()) {
+      agentDescription +=
+          " | A cloud computer is available here, bash and edit are its tools and you have"
+              + " full permission to use them";
+    }
     String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);
     if (!knowledgeDescription.isBlank()) {
       agentDescription += " | " + knowledgeDescription;

@@ -76,8 +76,15 @@ public class ClaudeSkillMarkdownParser {
     try {
       yamlMap = yaml.load(yamlText);
     } catch (Exception e) {
-      log.error("Failed to parse YAML", e);
-      throw new IllegalArgumentException("Invalid YAML syntax: " + e.getMessage());
+      // 技能作者常在 description 等值中写裸冒号(如 "Use when: ..."), 这不是合法 YAML;
+      // 先尝试把普通标量值加引号后重试
+      try {
+        yamlMap = new Yaml(new SafeConstructor(loaderOptions))
+            .load(quoteRiskyScalarValues(yamlText));
+      } catch (Exception retryError) {
+        log.error("Failed to parse YAML", e);
+        throw new IllegalArgumentException("Invalid YAML syntax: " + e.getMessage());
+      }
     }
 
     if (yamlMap == null || yamlMap.isEmpty()) {
@@ -103,5 +110,44 @@ public class ClaudeSkillMarkdownParser {
     meta.setDescription(description.trim());
 
     return meta;
+  }
+
+  /** front-matter 的 key: value 行 */
+  private static final java.util.regex.Pattern KEY_VALUE_PATTERN =
+      java.util.regex.Pattern.compile("^(\\s*[A-Za-z0-9_-]+\\s*):(.*)$");
+
+  /**
+   * 把 front-matter 中含裸冒号的普通标量值加单引号, 兼容技能作者未按 YAML 规范加引号的写法.
+   *
+   * <p>
+   * 仅处理形如 {@code key: value} 的行; 值已是引号/块/流集合写法时不处理。
+   */
+  private static String quoteRiskyScalarValues(String yamlText) {
+    StringBuilder sb = new StringBuilder(yamlText.length() + 32);
+    for (String line : yamlText.split("\n", -1)) {
+      var matcher = KEY_VALUE_PATTERN.matcher(line);
+      if (matcher.matches()) {
+        String value = matcher.group(2).trim();
+        if (needsQuoting(value)) {
+          sb.append(matcher.group(1)).append(": '")
+              .append(value.replace("'", "''")).append("'\n");
+          continue;
+        }
+      }
+      sb.append(line).append('\n');
+    }
+    return sb.toString();
+  }
+
+  private static boolean needsQuoting(String value) {
+    if (value.isEmpty()) {
+      return false;
+    }
+    char first = value.charAt(0);
+    if (first == '"' || first == '\'' || first == '[' || first == '{' || first == '|'
+        || first == '>' || first == '&' || first == '*') {
+      return false;
+    }
+    return value.contains(": ") || value.endsWith(":") || value.contains(" #");
   }
 }

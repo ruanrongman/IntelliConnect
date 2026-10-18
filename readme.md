@@ -35,6 +35,7 @@ Built by RSLLY
 * 支持ReAct提示词和Function Calling双模式Agent工具调用
 * 支持知识库技术，可以针对专有领域构建知识库使得智能体更贴心
 * 支持MCP协议（模型上下文协议），支持多端点WebSocket连接，可自由扩展智能体能力
+* 支持云电脑（基于OpenSandbox沙箱），智能体可执行shell命令和文件编辑，会话级隔离，完成代码运行等复杂多步任务
 * 支持快速构建智能语音应用，支持语音识别和语音合成，支持高质量音频（16/24/48kHz采样率）
 * 支持多种iot协议，使用emqx exhook作为mqtt通讯，可扩展性强
 * 支持OTA空中升级技术，支持设备昵称管理
@@ -66,6 +67,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 | **角色配置和语义路由设置**      | ✅ | 角色设置和语义路由设置分离，用户体验更佳            |
 | **MCP接入点**           | ✅ | 基于角色的MCP工具接入点，支持多端点WebSocket连接，扩展功能接入 |
 | **MCP服务**            | ✅ | SSE MCP接入方式，支持更多第三方服务集成         |
+| **云电脑**              | ✅ | 基于OpenSandbox沙箱的智能体云电脑，支持bash命令执行和文件编辑，会话级隔离与预热池 |
 | **Function Calling**  | ✅ | 支持ReAct提示词和原生Function Calling双模式工具调用 |
 | **Function Call安抚词** | ✅ | 工具调用前置安抚词，提升用户体验                |
 | **长期记忆**             | ✅ | 根据用户对话，提取关键信息记录，智能记忆管理          |
@@ -113,6 +115,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 ## 项目文档和视频演示
 * 项目文档和视频演示地址https://ruanrongman.github.io/IntelliConnect/
 * [全局角色审核、青少年保护、Jev 与 Laya 情绪能力](docs/ai_safety_and_emotion.md)
+* [云电脑（OpenSandbox 沙箱）](docs/sandbox/cloud_computer.md)
 * [Jev 独立客户端](docs/jev-client.md)
 * [Laya Jev 兼容服务](laya-jev/README.md)
 * 技术博客地址https://wordpress.rslly.top
@@ -133,7 +136,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，有机会获取项目的免费部署咨询，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./docs/images/7645bdcffba22d29bd7fc148a1880b89.jpg" width="250px"/>
+    <img src="./docs/images/28271fbdd5f243683eae1e367c639ab8.jpg" width="250px"/>
 </div>
 
 ## 致谢

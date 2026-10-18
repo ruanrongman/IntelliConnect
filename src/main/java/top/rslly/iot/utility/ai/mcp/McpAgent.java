@@ -49,14 +49,19 @@ import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
+import top.rslly.iot.utility.ai.sandbox.SandboxResult;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
+import top.rslly.iot.utility.ai.tools.BashTool;
 import top.rslly.iot.utility.ai.tools.BaseTool;
+import top.rslly.iot.utility.ai.tools.EditTool;
 import top.rslly.iot.utility.ai.tools.JsExecuteTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -98,6 +103,12 @@ public class McpAgent implements BaseTool<String> {
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private JsExecuteTool jsExecuteTool;
+  @Autowired
+  private SandboxService sandboxService;
+  @Autowired
+  private BashTool bashTool;
+  @Autowired
+  private EditTool editTool;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
   @Autowired
@@ -259,6 +270,7 @@ public class McpAgent implements BaseTool<String> {
       if (!productSkillsService.findAllByProductId(productId).isEmpty()) {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
+      toolDescriptions += sandboxToolDescription();
       system = reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
           includeThoughtEnabled);
     } catch (Exception e) {
@@ -362,13 +374,17 @@ public class McpAgent implements BaseTool<String> {
           } else if (serverKey.equals("skills")) {
             if (toolName.equals(jsExecuteTool.getName())) {
               toolResult = jsExecuteTool.run(args, globalMessage);
+            } else if (sandboxService.isAvailable() && toolName.equals(bashTool.getName())) {
+              toolResult = bashTool.run(args, globalMessage);
+            } else if (sandboxService.isAvailable() && toolName.equals(editTool.getName())) {
+              toolResult = editTool.run(args, globalMessage);
             } else {
               List<ProductSkillsEntity> skillsEntity =
                   productSkillsService.findAllByProductIdAndName(productId, toolName);
               if (skillsEntity.isEmpty()) {
-                toolResult = "调用skills失败";
+                toolResult = "Failed to invoke skill: unknown skill \"" + toolName + "\"";
               } else {
-                toolResult = productSkillsService.readSkills(skillsEntity.get(0).getFilePath());
+                toolResult = invokeSkill(skillsEntity.get(0), globalMessage);
               }
             }
           } else {
@@ -817,6 +833,13 @@ public class McpAgent implements BaseTool<String> {
     }
     addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", jsExecuteTool.getName(),
         jsExecuteTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+    if (sandboxService.isAvailable()) {
+      // 沙箱可用时, bash/edit 工具挂在 skills 伪服务下, 供模型执行技能包内容
+      addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", bashTool.getName(),
+          bashTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+      addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", editTool.getName(),
+          editTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+    }
     return new FunctionToolRegistry(toolSpecs, refMap);
   }
 
@@ -998,12 +1021,18 @@ public class McpAgent implements BaseTool<String> {
         if (toolName.equals(jsExecuteTool.getName())) {
           return jsExecuteTool.run(args, globalMessage);
         }
+        if (sandboxService.isAvailable() && toolName.equals(bashTool.getName())) {
+          return bashTool.run(args, globalMessage);
+        }
+        if (sandboxService.isAvailable() && toolName.equals(editTool.getName())) {
+          return editTool.run(args, globalMessage);
+        }
         List<ProductSkillsEntity> skillsEntity =
             productSkillsService.findAllByProductIdAndName(productId, toolName);
         if (skillsEntity.isEmpty()) {
-          return "调用skills失败";
+          return "Failed to invoke skill: unknown skill \"" + toolName + "\"";
         }
-        return productSkillsService.readSkills(skillsEntity.get(0).getFilePath());
+        return invokeSkill(skillsEntity.get(0), globalMessage);
       }
       McpSyncClient client = clientMap.get(serverKey);
       if (client == null) {
@@ -1127,6 +1156,74 @@ public class McpAgent implements BaseTool<String> {
       }
     }
     return builder.toString();
+  }
+
+  /**
+   * 沙箱可用时, 在 ReAct 描述中追加 bash/edit 工具(挂在 skills 伪服务下), 供模型执行技能包内容.
+   */
+  private String sandboxToolDescription() {
+    if (!sandboxService.isAvailable()) {
+      return "";
+    }
+    StringBuilder builder = new StringBuilder();
+    builder.append("Tool: ").append("skills").append(":").append(bashTool.getName()).append("\n");
+    builder.append("  Description: ").append(bashTool.getDescription()).append("\n");
+    builder.append("  Input Schema: ").append("args:string").append("\n");
+    builder.append("\n");
+    builder.append("Tool: ").append("skills").append(":").append(editTool.getName()).append("\n");
+    builder.append("  Description: ").append(editTool.getDescription()).append("\n");
+    builder.append("  Input Schema: ").append("args:string").append("\n");
+    builder.append("\n");
+    return builder.toString();
+  }
+
+  /**
+   * 触发技能: md 技能直接返回内容; zip 技能懒加载解压进当前会话沙箱后返回执行指引.
+   *
+   * <p>
+   * 覆盖文字调试 / 微信聊天 / 语音定时任务三条链路(均经 Router 进入 McpAgent), chatId 隔离各自的沙箱实例。
+   */
+  private String invokeSkill(ProductSkillsEntity skill, Map<String, Object> globalMessage) {
+    String filePath = skill.getFilePath();
+    try {
+      if (filePath == null || !filePath.endsWith(".zip")) {
+        return productSkillsService.readSkillMarkdown(filePath);
+      }
+      String chatId = extractChatId(globalMessage);
+      if (!sandboxService.isAvailable()) {
+        return "Error: zip skill packages require the sandbox. "
+            + "Enable the sandbox service (ai.sandbox.enabled) to use this skill.";
+      }
+      if (!sandboxService.isSkillExtracted(chatId, filePath)) {
+        SandboxResult result = sandboxService.uploadAndExtract(chatId,
+            productSkillsService.readSkillFileBytes(filePath), filePath,
+            SandboxService.WORKSPACE_DIR + "/skills");
+        if (!result.ok()) {
+          return "Error: failed to extract skill \"" + skill.getName()
+              + "\" into the sandbox: " + result.summary();
+        }
+        sandboxService.markSkillExtracted(chatId, filePath);
+      }
+      SandboxResult listing = sandboxService.runCommand(chatId,
+          "ls -R " + SandboxService.WORKSPACE_DIR + "/skills | head -50");
+      return "Skill \"" + skill.getName() + "\" extracted into the sandbox at "
+          + SandboxService.WORKSPACE_DIR + "/skills. Use the bashTool to run shell commands and "
+          + "the editTool to read/write files inside the sandbox working directory "
+          + SandboxService.WORKSPACE_DIR + ".\nDirectory layout:\n" + listing.summary()
+          + "\nSkill instructions (SKILL.md):\n" + productSkillsService.readSkillMarkdown(filePath);
+    } catch (IOException e) {
+      log.error("invokeSkill failed: {}", e.getMessage());
+      return "Error: failed to read skill \"" + skill.getName() + "\": " + e.getMessage();
+    }
+  }
+
+  /** 从会话上下文取 chatId, 缺省时落到共享默认实例 */
+  private String extractChatId(Map<String, Object> globalMessage) {
+    if (globalMessage == null) {
+      return SandboxService.DEFAULT_CHAT_ID;
+    }
+    Object chatId = globalMessage.get("chatId");
+    return chatId == null ? SandboxService.DEFAULT_CHAT_ID : chatId.toString();
   }
 
   private record FunctionToolRegistry(List<FunctionToolSpec> toolSpecs,

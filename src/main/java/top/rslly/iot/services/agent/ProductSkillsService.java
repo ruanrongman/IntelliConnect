@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.services.agent;
 
+import java.io.IOException;
+
 import org.springframework.web.multipart.MultipartFile;
 import top.rslly.iot.models.ProductSkillsEntity;
 import top.rslly.iot.param.request.ProductSkills;
@@ -34,6 +36,16 @@ public interface ProductSkillsService {
   List<ProductSkillsEntity> findAllByProductIdAndName(int productId, String name);
 
   String readSkills(String filePath);
+
+  /**
+   * 读取技能文件的原始字节内容(md 与 zip 均可).
+   */
+  byte[] readSkillFileBytes(String filePath) throws IOException;
+
+  /**
+   * 读取技能的 markdown 内容: md 文件直接返回文本; zip 包返回其中 SKILL.md 的文本.
+   */
+  String readSkillMarkdown(String filePath) throws IOException;
 
   JsonResult<?> getProductSkill(String token);
 
