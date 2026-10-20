@@ -21,6 +21,8 @@ package top.rslly.iot.utility.ai.sandbox;
 
 import com.alibaba.opensandbox.sandbox.Sandbox;
 import com.alibaba.opensandbox.sandbox.config.ConnectionConfig;
+import com.alibaba.opensandbox.sandbox.domain.exceptions.SandboxApiException;
+import com.alibaba.opensandbox.sandbox.domain.exceptions.SandboxNotFoundException;
 import com.alibaba.opensandbox.sandbox.domain.models.execd.executions.Execution;
 import com.alibaba.opensandbox.sandbox.domain.models.execd.executions.ExecutionError;
 import com.alibaba.opensandbox.sandbox.domain.models.execd.executions.RunCommandRequest;
@@ -29,18 +31,24 @@ import com.alibaba.opensandbox.sandbox.domain.pool.PoolCreationSpec;
 import com.alibaba.opensandbox.sandbox.infrastructure.pool.InMemoryPoolStateStore;
 import com.alibaba.opensandbox.sandbox.pool.SandboxPool;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 
 /**
  * OpenSandbox 远程沙箱服务, 供 bash 执行 / 文件编辑类 AI 工具复用.
@@ -52,8 +60,8 @@ import org.springframework.stereotype.Service;
  * <li><b>按 chatId 隔离</b>: 每个会话(chatId)独占一个 Sandbox 实例, 会话之间互不可见对方的文件系统与执行状态; 没有会话上下文的调用落入
  * {@value #DEFAULT_CHAT_ID} 默认实例。
  * <li>懒创建 + 常驻复用: 实例跨调用保留, 空闲超过 {@code ai.sandbox.idle-timeout} 由定时任务回收, 下次调用再重建。
- * <li><b>执行租约</b>: 执行类操作(命令/文件读写)在分段锁内取得实例并递增租约计数, 持租约期间空闲清扫与 LRU 驱逐都不得终止该实例; 释放租约只递减计数, 无需持锁。
- * 长命令执行中不再出现被 {@code sweepIdle()} 或容量驱逐杀掉实例的竞态。
+ * <li><b>执行租约</b>: 执行类操作在分段锁内获取和释放租约, 持租约期间空闲清扫与 LRU 驱逐都不得终止该实例。 长命令执行中不再出现被 {@code sweepIdle()}
+ * 或容量驱逐杀掉实例的竞态。
  * <li><b>容量名额</b>: 创建名额由全局信号量控制(名额数即 {@code ai.sandbox.max-instances}, 启动后固定), 检查-创建原子化, 不存在跨会话的
  * check-then-act 竞态。 kill <b>确认成功</b>才释放名额; kill 失败转入延后重试队列期间名额继续占用, 远端容器总数因此不会突破上限; 名额不足时先驱逐空闲的
  * LRU 实例, 全忙或 kill 通道异常时拒绝创建。
@@ -62,7 +70,8 @@ import org.springframework.stereotype.Service;
  * <li><b>元数据生命周期</b>: 会话的全部状态(实例/租约计数/时间戳/技能清单)收敛在 {@code sessions} 单一 map 中,
  * 无实例且长期未用的死状态由定时清扫在锁内校验后安全移除, 不随 chatId 数量无限增长。
  * <li>回收时 kill 失败的沙箱转入延后重试队列, 由定时任务重试, 避免远端容器泄漏; 超过 30 分钟仍失败则放弃、释放名额并输出沙箱 ID 供人工清理。
- * <li>调用失败(如沙箱被外部杀死导致连接失效)时回收该实例并重建重试一次。
+ * <li>仅 SDK 明确确认沙箱不存在时使该代实例失效, 租约排空后回收并重建重试一次; 普通操作错误保留原实例与文件。
+ * <li>同会话只有一个创建者, 技能准备全程使用同一实例租约; 维护任务使用独立调度器, 关闭后拒绝新租约并在在途操作完成后回收。
  * <li>公开 API 均不向外抛异常, 以 {@link SandboxResult} / null / false 表达结果, 方便上层 AI 工具以纯字符串形式返回给大模型。
  * </ul>
  *
@@ -101,6 +110,8 @@ public class SandboxService {
 
   private final SandboxProperty property;
 
+  private final AtomicBoolean closing = new AtomicBoolean();
+
   /** chatId -> 会话状态(实例/租约计数/时间戳/技能清单), 唯一的会话元数据入口 */
   private final ConcurrentHashMap<String, ChatState> sessions = new ConcurrentHashMap<>();
 
@@ -137,10 +148,16 @@ public class SandboxService {
   }
 
   /**
-   * 沙箱服务是否可用(配置开关).
+   * 沙箱服务是否启用且尚未关闭.
    */
   public boolean isAvailable() {
-    return property.isEnabled();
+    return property.isEnabled() && !closing.get();
+  }
+
+  /** 沙箱归属稳定对话, 不能使用每次流式请求都会变化的 chatId. */
+  public static String resolveChatId(Map<String, Object> globalMessage) {
+    String chatId = GlobalMessageContext.memoryChatId(globalMessage);
+    return chatId == null || chatId.isBlank() ? DEFAULT_CHAT_ID : chatId.trim();
   }
 
   /**
@@ -150,20 +167,15 @@ public class SandboxService {
    * @param filePath 技能文件在服务端的存储路径(唯一)
    */
   public boolean isSkillExtracted(String chatId, String filePath) {
-    ChatState state = sessions.get(normalizeChatId(chatId));
-    return state != null && state.extractedSkills.contains(filePath);
-  }
-
-  /**
-   * 标记技能文件已解压进该会话的沙箱(仅在解压成功后调用).
-   *
-   * <p>
-   * best-effort 语义: 若会话状态恰逢清扫, 标记丢失后下次会重新解压, 不影响正确性.
-   */
-  public void markSkillExtracted(String chatId, String filePath) {
-    ChatState state = sessions.get(normalizeChatId(chatId));
-    if (state != null) {
-      state.extractedSkills.add(filePath);
+    String key = normalizeChatId(chatId);
+    ReentrantLock lock = lockFor(key);
+    lock.lock();
+    try {
+      ChatState state = sessions.get(key);
+      return state != null && state.sandbox != null && !state.invalid
+          && !isIdleExpired(state) && state.extractedSkills.contains(filePath);
+    } finally {
+      lock.unlock();
     }
   }
 
@@ -171,44 +183,44 @@ public class SandboxService {
    * 在指定会话的沙箱中执行一条 shell 命令.
    *
    * <p>
-   * 失败时自动回收旧实例并重试一次; 二次失败返回 exitCode 为 -1 的结果, 不抛异常。
+   * 仅确认沙箱不存在时重建重试一次; 普通错误保留实例, 返回 exitCode 为 -1 的结果。
    *
    * @param chatId 会话标识, null/空 使用默认实例
    * @param command 完整 shell 命令字符串
    * @return 执行结果, 永不为 null
    */
   public SandboxResult runCommand(String chatId, String command) {
-    Leased current = lease(chatId);
-    if (current == null) {
-      return new SandboxResult(-1, "", "",
-          "Sandbox is unavailable (disabled, at capacity, or failed to create)", 0);
-    }
-    try {
+    for (int attempt = 0; attempt < 2; attempt++) {
+      Leased current = lease(chatId);
+      if (current == null) {
+        return commandFailure(
+            "Sandbox is unavailable (disabled, closing, at capacity, or failed to create)");
+      }
       try {
-        return executeCommand(current.sandbox(), command);
+        renewBeforeUse(current.sandbox());
+        SandboxResult result = executeCommand(current.sandbox(), command);
+        if (attempt > 0) {
+          return new SandboxResult(result.exitCode(), result.stdout(),
+              "[notice] the previous sandbox no longer existed; files from earlier calls were lost\n"
+                  + result.stderr(),
+              result.error(), result.durationMillis());
+        }
+        return result;
+      } catch (Exception e) {
+        if (!isSandboxNotFound(e)) {
+          log.warn("沙箱命令执行失败, 保留实例, chatId: {}, 原因: {}", chatId, e.getMessage());
+          return commandFailure("Sandbox command execution failed: " + e.getMessage());
+        }
+        invalidate(current);
       } finally {
         release(current);
       }
-    } catch (Exception first) {
-      log.warn("沙箱命令执行失败, 尝试重建沙箱重试: {}", first.getMessage());
-      recycleNow(chatId);
-      Leased fresh = lease(chatId);
-      if (fresh == null) {
-        return new SandboxResult(-1, "", "", "Sandbox recreation failed: " + first.getMessage(), 0);
-      }
-      try {
-        try {
-          return executeCommand(fresh.sandbox(), command);
-        } finally {
-          release(fresh);
-        }
-      } catch (Exception second) {
-        log.warn("沙箱命令重试仍失败: {}", second.getMessage());
-        recycleNow(chatId);
-        return new SandboxResult(-1, "",
-            "", "Sandbox command execution failed: " + second.getMessage(), 0);
-      }
     }
+    return commandFailure("Sandbox no longer exists after retry");
+  }
+
+  private SandboxResult commandFailure(String message) {
+    return new SandboxResult(-1, "", "", message, 0);
   }
 
   /**
@@ -217,8 +229,8 @@ public class SandboxService {
    * @return 是否成功
    */
   public boolean writeFile(String chatId, String path, String content) {
-    return executeWithRetry(chatId, "写文件", sandbox -> {
-      sandbox.files().writeFile(path, content);
+    return executeWithRetry(chatId, "写文件", leased -> {
+      leased.sandbox().files().writeFile(path, content);
       return Boolean.TRUE;
     }, Boolean.FALSE);
   }
@@ -229,8 +241,8 @@ public class SandboxService {
    * @return 是否成功
    */
   public boolean writeFile(String chatId, String path, byte[] data) {
-    return executeWithRetry(chatId, "写二进制文件", sandbox -> {
-      sandbox.files().writeFile(path, data);
+    return executeWithRetry(chatId, "写二进制文件", leased -> {
+      leased.sandbox().files().writeFile(path, data);
       return Boolean.TRUE;
     }, Boolean.FALSE);
   }
@@ -241,14 +253,14 @@ public class SandboxService {
    * @return 文件内容, 失败返回 null
    */
   public String readFile(String chatId, String path) {
-    return executeWithRetry(chatId, "读文件", sandbox -> sandbox.files().readFile(path), null);
+    return executeWithRetry(chatId, "读文件", leased -> leased.sandbox().files().readFile(path), null);
   }
 
   /**
    * 上传压缩包到指定会话的沙箱并解压到指定目录, 供后续 skills 等功能把资源包传递进沙箱.
    *
    * <p>
-   * 压缩包先写入沙箱内 {@code /tmp/<fileName>}, 再按后缀选择 unzip / tar 解压到 targetDir (unzip 不存在时 fallback 到
+   * 压缩包先写入沙箱内唯一的临时文件, 再按后缀选择 unzip / tar 解压到 targetDir (unzip 不存在时 fallback 到
    * {@code python3 -m zipfile}), 完成后清理临时压缩包。
    *
    * @param chatId 会话标识, null/空 使用默认实例
@@ -259,38 +271,60 @@ public class SandboxService {
    */
   public SandboxResult uploadAndExtract(String chatId, byte[] archive, String fileName,
       String targetDir) {
+    return executeWithRetry(chatId, "解压文件",
+        leased -> extractArchive(leased.sandbox(), archive, fileName, targetDir),
+        commandFailure("Failed to upload or extract archive"));
+  }
+
+  /** 技能检查、上传、解压、标记和目录查询在同一实例的租约内完成. */
+  public SandboxResult prepareSkill(String chatId, String filePath, String targetDir,
+      Callable<byte[]> archiveSupplier) {
+    return executeWithRetry(chatId, "准备技能", leased -> {
+      synchronized (leased.state().extractedSkills) {
+        if (!leased.state().extractedSkills.contains(filePath)) {
+          SandboxResult extracted =
+              extractArchive(leased.sandbox(), archiveSupplier.call(), filePath, targetDir);
+          if (!extracted.ok()) {
+            return extracted;
+          }
+          leased.state().extractedSkills.add(filePath);
+        }
+        renewBeforeUse(leased.sandbox());
+        return executeCommand(leased.sandbox(), "ls -R " + shellQuote(targetDir) + " | head -50");
+      }
+    }, commandFailure("Failed to prepare skill in sandbox"));
+  }
+
+  private SandboxResult extractArchive(Sandbox sandbox, byte[] archive, String fileName,
+      String targetDir) throws Exception {
     String safeName = fileName == null ? "" : fileName.replace('\\', '/');
     safeName = safeName.substring(safeName.lastIndexOf('/') + 1);
     String suffix = detectArchiveSuffix(safeName);
     if (suffix == null) {
-      return new SandboxResult(-1, "", "",
-          "Unsupported archive format, only zip/tar.gz/tgz/tar are allowed", 0);
+      return commandFailure("Unsupported archive format, only zip/tar.gz/tgz/tar are allowed");
     }
     if (targetDir == null || !targetDir.startsWith("/")) {
-      return new SandboxResult(-1, "", "", "targetDir must be an absolute path inside the sandbox",
-          0);
+      return commandFailure("targetDir must be an absolute path inside the sandbox");
     }
-    String archivePath = ARCHIVE_TMP_DIR + "/" + safeName;
-    if (!writeFile(chatId, archivePath, archive)) {
-      return new SandboxResult(-1, "", "", "Failed to upload archive into the sandbox", 0);
-    }
+    String rawArchivePath = ARCHIVE_TMP_DIR + "/" + UUID.randomUUID() + suffix;
+    sandbox.files().writeFile(rawArchivePath, archive);
+    String archivePath = shellQuote(rawArchivePath);
+    String destination = shellQuote(targetDir);
     String extractCommand;
     if (".zip".equals(suffix)) {
-      // unzip 不存在时 fallback 到 python3 内置 zipfile 模块
-      extractCommand = String.format(
-          "unzip -o -q '%s' -d '%s' 2>/dev/null || python3 -m zipfile -e '%s' '%s'",
-          archivePath, targetDir, archivePath, targetDir);
-    } else if (".tar.gz".equals(suffix) || ".tgz".equals(suffix)) {
-      extractCommand = String.format("tar -xzf '%s' -C '%s'", archivePath, targetDir);
+      extractCommand = "unzip -o -q " + archivePath + " -d " + destination
+          + " 2>/dev/null || python3 -m zipfile -e " + archivePath + " " + destination;
     } else {
-      extractCommand = String.format("tar -xf '%s' -C '%s'", archivePath, targetDir);
+      extractCommand = "tar " + (".tar".equals(suffix) ? "-xf " : "-xzf ")
+          + archivePath + " -C " + destination;
     }
-    SandboxResult result = runCommand(chatId,
-        "mkdir -p '" + targetDir + "' && " + extractCommand + " && rm -f '" + archivePath + "'");
-    if (!result.ok()) {
-      log.warn("压缩包解压失败: {}", result.summary());
-    }
-    return result;
+    renewBeforeUse(sandbox);
+    return executeCommand(sandbox,
+        "mkdir -p " + destination + " && (" + extractCommand + ") && rm -f " + archivePath);
+  }
+
+  private String shellQuote(String path) {
+    return "'" + path.replace("'", "'\\''") + "'";
   }
 
   /**
@@ -301,136 +335,183 @@ public class SandboxService {
   }
 
   /**
-   * 在租约保护下执行沙箱操作, 失败时回收旧实例并重建重试一次.
+   * 在租约保护下执行沙箱操作, 仅确认实例不存在时重建重试一次.
    *
    * @param action 操作名称, 仅用于日志
    * @param op 沙箱操作
    * @param failure 不可用或重试仍失败时的兜底返回值
    */
   private <T> T executeWithRetry(String chatId, String action, SandboxOp<T> op, T failure) {
-    Leased current = lease(chatId);
-    if (current == null) {
-      return failure;
-    }
-    try {
+    for (int attempt = 0; attempt < 2; attempt++) {
+      Leased current = lease(chatId);
+      if (current == null) {
+        return failure;
+      }
       try {
-        return op.apply(current.sandbox());
+        renewBeforeUse(current.sandbox());
+        return op.apply(current);
+      } catch (Exception e) {
+        if (!isSandboxNotFound(e)) {
+          log.warn("沙箱{}失败, 保留实例, chatId: {}, 原因: {}", action, chatId, e.getMessage());
+          return failure;
+        }
+        invalidate(current);
       } finally {
         release(current);
       }
-    } catch (Exception first) {
-      log.warn("沙箱{}失败, 尝试重建沙箱重试: {}", action, first.getMessage());
-      recycleNow(chatId);
-      Leased fresh = lease(chatId);
-      if (fresh == null) {
-        return failure;
-      }
-      try {
-        try {
-          return op.apply(fresh.sandbox());
-        } finally {
-          release(fresh);
-        }
-      } catch (Exception second) {
-        log.warn("沙箱{}重试仍失败: {}", action, second.getMessage());
-        recycleNow(chatId);
-        return failure;
-      }
     }
+    return failure;
   }
 
-  /** 在 {@link Sandbox} 实例上执行且可能抛异常的操作 */
   @FunctionalInterface
   private interface SandboxOp<T> {
-    T apply(Sandbox sandbox) throws Exception;
+    T apply(Leased leased) throws Exception;
   }
 
-  /**
-   * 获取指定会话的沙箱实例并授予执行租约.
-   *
-   * <p>
-   * 三段式流程, 任何时刻至多持有一把分段锁:
-   *
-   * <ol>
-   * <li>锁内: 校验状态未被清扫重建, 刷新使用时间, 空闲超时的旧实例先摘除(锁外终止)并重试, 存活实例直接授予租约.
-   * <li>锁外: 获取创建名额(容量不足时驱逐空闲 LRU 实例); 必须先放下自己的锁, 避免驱逐触及其他会话的锁造成锁序死锁.
-   * <li>锁内: 创建并挂载新实例(同一会话的并发创建由分段锁串行化); 并发线程抢先建好则复用之并归还多占的名额.
-   * </ol>
-   *
-   * <p>
-   * 返回 null 表示不可用(容量不足且无可回收实例, 或创建失败).
-   */
+  /** 同会话只有一个创建者; 等待创建或失效实例租约排空时释放分段锁. */
   private Leased lease(String chatId) {
     String key = normalizeChatId(chatId);
-    while (true) {
-      ChatState state = sessions.computeIfAbsent(key, k -> new ChatState());
+    ReentrantLock lock = lockFor(key);
+    while (isAvailable()) {
+      ChatState state = sessions.computeIfAbsent(key, k -> new ChatState(lock.newCondition()));
       Sandbox doomed = null;
-      ReentrantLock lock = lockFor(key);
+      boolean create = false;
       lock.lock();
       try {
-        // 状态条目可能已被清扫重建, 校验失败则换新状态重试
+        if (!isAvailable()) {
+          return null;
+        }
         if (sessions.get(key) != state) {
           continue;
         }
-        long previousNanos = state.lastUsedNanos;
-        state.lastUsedNanos = System.nanoTime();
+        if (state.creating || state.retiring || (state.invalid && state.inFlight.get() > 0)) {
+          try {
+            state.changed.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+          }
+          continue;
+        }
         Sandbox existing = state.sandbox;
         if (existing != null) {
-          if (System.nanoTime() - previousNanos > property.getIdleTimeout().toNanos()) {
+          if (state.invalid || (state.inFlight.get() == 0 && isIdleExpired(state))) {
             doomed = detachUnderLock(state);
-          }
-          if (doomed == null) {
-            // 实例存活(或正被其他租约占用), 直接复用
+          } else {
+            state.lastUsedNanos = System.nanoTime();
             state.inFlight.incrementAndGet();
-            return new Leased(state, existing);
+            return new Leased(key, state, existing);
           }
+        } else {
+          state.creating = true;
+          state.lastUsedNanos = System.nanoTime();
+          create = true;
         }
       } finally {
         lock.unlock();
       }
       if (doomed != null) {
-        log.info("会话沙箱空闲超过 {}, 重建前回收, chatId: {}", property.getIdleTimeout(), key);
-        terminate(doomed, key);
-        continue;
+        finishRetirement(key, state, doomed);
+      } else if (create) {
+        return createAndLease(key, state);
       }
-      break;
     }
-    if (!acquireCapacityWithEviction()) {
-      log.warn("沙箱实例名额不足且无可回收实例, 拒绝创建, chatId: {}", key);
-      return null;
+    return null;
+  }
+
+  private Leased createAndLease(String key, ChatState state) {
+    boolean reserved = false;
+    Sandbox created = null;
+    boolean attached = false;
+    try {
+      reserved = acquireCapacityWithEviction();
+      if (reserved && isAvailable()) {
+        created = acquireSandbox(key);
+      }
+    } catch (Exception e) {
+      log.warn("沙箱创建失败, chatId: {}, 原因: {}", key, e.getMessage());
+    } finally {
+      // 创建失败时先归还名额, 再唤醒等待者, 避免后继请求抢在归还之前误判满额.
+      if (reserved && created == null) {
+        capacity.release();
+      }
+      ReentrantLock lock = lockFor(key);
+      lock.lock();
+      try {
+        if (created != null && isAvailable()) {
+          state.sandbox = created;
+          state.invalid = false;
+          state.lastUsedNanos = System.nanoTime();
+          state.inFlight.incrementAndGet();
+          attached = true;
+        }
+        state.creating = false;
+        state.changed.signalAll();
+      } finally {
+        lock.unlock();
+      }
+      if (!attached && created != null) {
+        terminate(created, key);
+      }
     }
-    ReentrantLock lock = lockFor(key);
+    return attached ? new Leased(key, state, created) : null;
+  }
+
+  /** 最近使用时间与最后一次租约释放在同一把锁内更新, 关闭/失效时补做回收. */
+  private void release(Leased leased) {
+    Sandbox doomed = null;
+    ReentrantLock lock = lockFor(leased.chatId());
     lock.lock();
     try {
-      ChatState state = sessions.computeIfAbsent(key, k -> new ChatState());
+      ChatState state = leased.state();
       state.lastUsedNanos = System.nanoTime();
-      Sandbox existing = state.sandbox;
-      if (existing != null) {
-        // 并发线程已抢先建好, 复用之并归还多占的名额
-        capacity.release();
-        state.inFlight.incrementAndGet();
-        return new Leased(state, existing);
+      if (state.inFlight.decrementAndGet() == 0 && (closing.get() || state.invalid)) {
+        doomed = detachUnderLock(state);
       }
-      Sandbox created = acquireSandbox(key);
-      if (created == null) {
-        capacity.release();
-        return null;
+      state.changed.signalAll();
+    } finally {
+      lock.unlock();
+    }
+    if (doomed != null) {
+      finishRetirement(leased.chatId(), leased.state(), doomed);
+    }
+  }
+
+  /** 只使失败租约对应的实例失效, 最后一个租约释放后才终止. */
+  private void invalidate(Leased leased) {
+    ReentrantLock lock = lockFor(leased.chatId());
+    lock.lock();
+    try {
+      ChatState state = leased.state();
+      if (sessions.get(leased.chatId()) == state && state.sandbox == leased.sandbox()) {
+        state.invalid = true;
+        state.changed.signalAll();
       }
-      state.sandbox = created;
-      state.inFlight.incrementAndGet();
-      return new Leased(state, created);
     } finally {
       lock.unlock();
     }
   }
 
-  /** 释放执行租约: inFlight 大于 0 期间状态条目不可能被清扫, 持引用递减即可, 无需分段锁 */
-  private void release(Leased leased) {
-    leased.state().inFlight.decrementAndGet();
+  /** 远端有效期覆盖一次操作及随后完整的空闲窗口, 避免服务端先于本地回收. */
+  private Duration sandboxLifetime() {
+    return property.getIdleTimeout().plus(property.getCommandTimeout())
+        .plus(property.getRequestTimeout()).plusMinutes(1);
+  }
+
+  private void renewBeforeUse(Sandbox sandbox) {
+    try {
+      sandbox.renew(sandboxLifetime());
+    } catch (Exception e) {
+      if (isSandboxNotFound(e)) {
+        throw e;
+      }
+      // 短暂的续期失败不代表容器失效, 继续原实例上的操作, 避免直接重建导致文件丢失.
+      log.warn("沙箱续期失败, 保留原实例继续执行, ID: {}, 原因: {}", sandbox.getId(), e.getMessage());
+    }
   }
 
   /** 已授予租约的沙箱, state 记录租约计数归属 */
-  private record Leased(ChatState state, Sandbox sandbox) {}
+  private record Leased(String chatId, ChatState state, Sandbox sandbox) {}
 
   /**
    * 获取一个创建名额, 容量不足时驱逐空闲的 LRU 实例再试.
@@ -461,7 +542,7 @@ public class SandboxService {
     long oldestNanos = Long.MAX_VALUE;
     for (Map.Entry<String, ChatState> entry : sessions.entrySet()) {
       ChatState state = entry.getValue();
-      if (state.sandbox != null && state.inFlight.get() == 0) {
+      if (state.sandbox != null && !state.creating && state.inFlight.get() == 0) {
         long last = state.lastUsedNanos;
         if (last < oldestNanos) {
           oldestNanos = last;
@@ -478,7 +559,7 @@ public class SandboxService {
     lock.lock();
     try {
       // 锁内复核: 期间可能被其他租约/回收抢先
-      if (sessions.get(victimKey) == victimState) {
+      if (sessions.get(victimKey) == victimState && victimState.lastUsedNanos == oldestNanos) {
         doomed = detachUnderLock(victimState);
       }
     } finally {
@@ -488,7 +569,7 @@ public class SandboxService {
       return false;
     }
     log.info("沙箱实例名额不足, 回收最久未使用的空闲实例, chatId: {}", victimKey);
-    terminate(doomed, victimKey);
+    finishRetirement(victimKey, victimState, doomed);
     return true;
   }
 
@@ -501,9 +582,27 @@ public class SandboxService {
     }
     Sandbox doomed = state.sandbox;
     state.sandbox = null;
+    state.invalid = false;
+    state.retiring = true;
     // 沙箱销毁后文件不复存在, 技能解压标记一并清除
     state.extractedSkills.clear();
     return doomed;
+  }
+
+  /** 旧实例的名额完成释放或转入重试队列后, 才唤醒同会话的创建者. */
+  private void finishRetirement(String key, ChatState state, Sandbox sandbox) {
+    try {
+      terminate(sandbox, key);
+    } finally {
+      ReentrantLock lock = lockFor(key);
+      lock.lock();
+      try {
+        state.retiring = false;
+        state.changed.signalAll();
+      } finally {
+        lock.unlock();
+      }
+    }
   }
 
   private Sandbox createSandbox(String key) {
@@ -511,6 +610,8 @@ public class SandboxService {
       Sandbox created = Sandbox.builder()
           .connectionConfig(buildConnectionConfig())
           .image(property.getImage())
+          .timeout(sandboxLifetime())
+          .readyTimeout(property.getRequestTimeout())
           .skipHealthCheck(property.isSkipHealthCheck())
           .build();
       log.info("沙箱创建成功, chatId: {}, ID: {}", key, created.getId());
@@ -532,7 +633,8 @@ public class SandboxService {
   private Sandbox acquireSandbox(String key) {
     if (pool != null) {
       try {
-        Sandbox acquired = pool.acquire(property.getRequestTimeout(),
+        // acquire 的第一个参数是取出后沙箱的有效期, 不是 HTTP 请求超时.
+        Sandbox acquired = pool.acquire(sandboxLifetime(),
             AcquirePolicy.RETRY_NEXT_IDLE_THEN_CREATE);
         log.info("沙箱预热池取用成功, chatId: {}, ID: {}", key, acquired.getId());
         return acquired;
@@ -540,7 +642,7 @@ public class SandboxService {
         log.warn("沙箱预热池取用失败, 回退直接创建, chatId: {}, 原因: {}", key, e.getMessage());
       }
     }
-    return createSandbox(key);
+    return isAvailable() ? createSandbox(key) : null;
   }
 
   private ConnectionConfig buildConnectionConfig() {
@@ -599,27 +701,6 @@ public class SandboxService {
   }
 
   /**
-   * 回收指定会话的沙箱实例(执行失败重建路径); 存在未释放租约时跳过, 由持租约方自行触发.
-   */
-  private void recycleNow(String chatId) {
-    String key = normalizeChatId(chatId);
-    Sandbox doomed = null;
-    ReentrantLock lock = lockFor(key);
-    lock.lock();
-    try {
-      ChatState state = sessions.get(key);
-      if (state != null) {
-        doomed = detachUnderLock(state);
-      }
-    } finally {
-      lock.unlock();
-    }
-    if (doomed != null) {
-      terminate(doomed, key);
-    }
-  }
-
-  /**
    * 终止一个已从会话摘除的沙箱实例(调用方不得持有任何分段锁).
    *
    * <p>
@@ -639,25 +720,36 @@ public class SandboxService {
       }
       String pendingKey = chatId + ":" + sandboxId;
       log.warn("终止沙箱失败, 转入延后重试, chatId: {}, ID: {}, 原因: {}", chatId, sandboxId, e.getMessage());
-      pendingKills.put(pendingKey, sandbox);
       pendingKillSinceNanos.put(pendingKey, System.nanoTime());
+      pendingKills.put(pendingKey, sandbox);
       return;
     }
     onKilled(chatId + ":" + sandboxId, sandbox);
   }
 
-  /** kill 确认成功(含 404 已不存在)后的统一释放动作: 释放名额并关闭客户端连接 */
+  /** kill 确认成功(含明确的沙箱不存在错误)后的统一释放动作: 释放名额并关闭客户端连接 */
   private void onKilled(String sandboxKey, Sandbox sandbox) {
     capacity.release();
     closeQuietly(sandboxKey, sandbox);
   }
 
   /**
-   * 判断异常是否为远端沙箱已不存在的 404 错误(OpenSandbox 返回 {@code DOCKER::SANDBOX_NOT_FOUND}).
+   * 仅使用 SDK 异常类型或错误码确认实例不存在, 文件 404 和普通消息均不能作为依据.
    */
   private boolean isSandboxNotFound(Exception e) {
-    String message = e.getMessage();
-    return message != null && message.contains("SANDBOX_NOT_FOUND");
+    for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+      if (cause instanceof SandboxNotFoundException) {
+        return true;
+      }
+      if (cause instanceof SandboxApiException api && api.getError() != null) {
+        String code = api.getError().getCode();
+        if ("SANDBOX_NOT_FOUND".equals(code)
+            || (code != null && code.endsWith("::SANDBOX_NOT_FOUND"))) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private void closeQuietly(String sandboxKey, Sandbox sandbox) {
@@ -671,6 +763,9 @@ public class SandboxService {
   private SandboxResult executeCommand(Sandbox target, String command) throws Exception {
     RunCommandRequest request = RunCommandRequest.builder()
         .command(command)
+        // 显式落位工作目录, 与 BashTool/EditTool 对模型的声明保持一致;
+        // 不设置时命令跑在容器默认目录(如 /root), 相对路径写出的文件会"消失"
+        .workingDirectory(WORKSPACE_DIR)
         .timeout(property.getCommandTimeout())
         .build();
     long start = System.nanoTime();
@@ -731,7 +826,8 @@ public class SandboxService {
   }
 
   /** 定时清扫各会话中空闲超时的沙箱实例, 并安全移除长期无实例的死状态 */
-  @Scheduled(fixedDelayString = "${ai.sandbox.sweep-interval-ms:60000}")
+  @Scheduled(fixedDelayString = "${ai.sandbox.sweep-interval-ms:60000}",
+      scheduler = "sandboxTaskScheduler")
   public void sweepIdle() {
     for (Map.Entry<String, ChatState> entry : sessions.entrySet()) {
       String key = entry.getKey();
@@ -745,7 +841,8 @@ public class SandboxService {
         ReentrantLock lock = lockFor(key);
         lock.lock();
         try {
-          if (sessions.get(key) == state) {
+          if (sessions.get(key) == state && !state.creating && !state.retiring
+              && isIdleExpired(state)) {
             doomed = detachUnderLock(state);
           }
         } finally {
@@ -753,7 +850,7 @@ public class SandboxService {
         }
         if (doomed != null) {
           log.info("会话沙箱空闲超过 {}, 自动回收, chatId: {}", property.getIdleTimeout(), key);
-          terminate(doomed, key);
+          finishRetirement(key, state, doomed);
         }
       }
     }
@@ -770,7 +867,8 @@ public class SandboxService {
     lock.lock();
     try {
       ChatState current = sessions.get(key);
-      if (current == state && state.sandbox == null && state.inFlight.get() == 0
+      if (current == state && !state.creating && !state.retiring
+          && state.sandbox == null && state.inFlight.get() == 0
           && isIdleExpired(state)) {
         sessions.remove(key);
       }
@@ -780,7 +878,8 @@ public class SandboxService {
   }
 
   /** 定时重试 kill 失败的沙箱; 超过最大存活时长仍未成功则放弃、释放名额并输出沙箱 ID 供人工清理 */
-  @Scheduled(fixedDelayString = "${ai.sandbox.sweep-interval-ms:60000}")
+  @Scheduled(fixedDelayString = "${ai.sandbox.sweep-interval-ms:60000}",
+      scheduler = "sandboxTaskScheduler")
   public void retryPendingKills() {
     for (Map.Entry<String, Sandbox> entry : pendingKills.entrySet()) {
       String pendingKey = entry.getKey();
@@ -799,18 +898,17 @@ public class SandboxService {
           killed = false;
         }
       }
-      if (killed) {
-        pendingKills.remove(pendingKey);
+      if (killed && pendingKills.remove(pendingKey, sandbox)) {
         pendingKillSinceNanos.remove(pendingKey);
         capacity.release();
         closeQuietly(pendingKey, sandbox);
         continue;
       }
       Long since = pendingKillSinceNanos.get(pendingKey);
-      if (since != null && System.nanoTime() - since > PENDING_KILL_MAX_AGE_NANOS) {
+      if (!killed && since != null && System.nanoTime() - since > PENDING_KILL_MAX_AGE_NANOS
+          && pendingKills.remove(pendingKey, sandbox)) {
         log.error("沙箱 kill 重试超过 {} 分钟仍失败, 放弃重试并释放名额, 请在沙箱宿主机手动清理容器, sandboxKey: {}",
             TimeUnit.NANOSECONDS.toMinutes(PENDING_KILL_MAX_AGE_NANOS), pendingKey);
-        pendingKills.remove(pendingKey);
         pendingKillSinceNanos.remove(pendingKey);
         capacity.release();
         closeQuietly(pendingKey, sandbox);
@@ -821,6 +919,9 @@ public class SandboxService {
   /** 应用关闭时释放全部沙箱资源(含 kill 失败待重试的实例) */
   @PreDestroy
   public void shutdown() {
+    if (!closing.compareAndSet(false, true)) {
+      return;
+    }
     for (Map.Entry<String, ChatState> entry : sessions.entrySet()) {
       String key = entry.getKey();
       ChatState state = entry.getValue();
@@ -829,26 +930,20 @@ public class SandboxService {
       lock.lock();
       try {
         if (sessions.get(key) == state) {
+          state.changed.signalAll();
           doomed = detachUnderLock(state);
         }
       } finally {
         lock.unlock();
       }
       if (doomed != null) {
-        terminate(doomed, key);
+        finishRetirement(key, state, doomed);
       }
     }
-    for (Map.Entry<String, Sandbox> entry : pendingKills.entrySet()) {
-      try {
-        entry.getValue().kill();
-      } catch (Exception e) {
-        log.error("应用关闭时终止沙箱失败, 请在沙箱宿主机手动清理容器, sandboxKey: {}, 原因: {}",
-            entry.getKey(), e.getMessage());
-      }
-      closeQuietly(entry.getKey(), entry.getValue());
+    retryPendingKills();
+    if (!pendingKills.isEmpty()) {
+      log.error("应用关闭时仍有沙箱终止失败, 请在宿主机清理: {}", pendingKills.keySet());
     }
-    pendingKills.clear();
-    pendingKillSinceNanos.clear();
     if (pool != null) {
       try {
         // 先把 maxIdle 归零, 停止 reconcile 后台线程的预热补充,
@@ -871,6 +966,15 @@ public class SandboxService {
 
   /** 单个会话的全部运行时状态 */
   private static final class ChatState {
+    final Condition changed;
+    volatile boolean creating;
+    volatile boolean retiring;
+    volatile boolean invalid;
+
+    ChatState(Condition changed) {
+      this.changed = changed;
+    }
+
     /** 当前沙箱实例, null 表示无实例(已回收或尚未创建) */
     volatile Sandbox sandbox;
     /** 执行租约计数, 大于 0 时回收/清扫/驱逐均不得终止当前实例 */

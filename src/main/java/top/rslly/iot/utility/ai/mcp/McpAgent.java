@@ -1189,25 +1189,34 @@ public class McpAgent implements BaseTool<String> {
       if (filePath == null || !filePath.endsWith(".zip")) {
         return productSkillsService.readSkillMarkdown(filePath);
       }
-      String chatId = extractChatId(globalMessage);
+      // 每个 Skill 解压到独立子目录, 避免不同 ZIP 内的同名文件互相覆盖
+      String skillDirName = sanitizeSkillDirName(skill.getName());
+      if (skillDirName == null) {
+        // 中文名清洗后为空时退回 zip 文件名(去扩展名), 保证解压不被跳过
+        String base = filePath.replace('\\', '/');
+        base = base.substring(base.lastIndexOf('/') + 1);
+        int dot = base.lastIndexOf('.');
+        skillDirName = sanitizeSkillDirName(dot > 0 ? base.substring(0, dot) : base);
+      }
+      if (skillDirName == null) {
+        return "Error: skill \"" + skill.getName()
+            + "\" has an invalid name, only letters, digits, '-', '_' and '.' are allowed "
+            + "for zip skills";
+      }
+      String chatId = SandboxService.resolveChatId(globalMessage);
       if (!sandboxService.isAvailable()) {
         return "Error: zip skill packages require the sandbox. "
             + "Enable the sandbox service (ai.sandbox.enabled) to use this skill.";
       }
-      if (!sandboxService.isSkillExtracted(chatId, filePath)) {
-        SandboxResult result = sandboxService.uploadAndExtract(chatId,
-            productSkillsService.readSkillFileBytes(filePath), filePath,
-            SandboxService.WORKSPACE_DIR + "/skills");
-        if (!result.ok()) {
-          return "Error: failed to extract skill \"" + skill.getName()
-              + "\" into the sandbox: " + result.summary();
-        }
-        sandboxService.markSkillExtracted(chatId, filePath);
+      String skillDir = SandboxService.WORKSPACE_DIR + "/skills/" + skillDirName;
+      SandboxResult listing = sandboxService.prepareSkill(chatId, filePath, skillDir,
+          () -> productSkillsService.readSkillFileBytes(filePath));
+      if (!listing.ok()) {
+        return "Error: failed to prepare skill \"" + skill.getName()
+            + "\" in the sandbox: " + listing.summary();
       }
-      SandboxResult listing = sandboxService.runCommand(chatId,
-          "ls -R " + SandboxService.WORKSPACE_DIR + "/skills | head -50");
       return "Skill \"" + skill.getName() + "\" extracted into the sandbox at "
-          + SandboxService.WORKSPACE_DIR + "/skills. Use the bashTool to run shell commands and "
+          + skillDir + ". Use the bashTool to run shell commands and "
           + "the editTool to read/write files inside the sandbox working directory "
           + SandboxService.WORKSPACE_DIR + ".\nDirectory layout:\n" + listing.summary()
           + "\nSkill instructions (SKILL.md):\n" + productSkillsService.readSkillMarkdown(filePath);
@@ -1217,13 +1226,25 @@ public class McpAgent implements BaseTool<String> {
     }
   }
 
-  /** 从会话上下文取 chatId, 缺省时落到共享默认实例 */
-  private String extractChatId(Map<String, Object> globalMessage) {
-    if (globalMessage == null) {
-      return SandboxService.DEFAULT_CHAT_ID;
+  /**
+   * 清洗技能名为可安全用作沙箱内解压子目录名的形式: 保留 Unicode 字母/数字(含中文)及 '-'/'_'/'.', 去除引号/斜杠/控制字符等会破坏 shell
+   * 单引号拼接或造成路径穿越的字符; 清洗后为空或为 "."/".." 时返回 null.
+   */
+  private String sanitizeSkillDirName(String name) {
+    if (name == null) {
+      return null;
     }
-    Object chatId = globalMessage.get("chatId");
-    return chatId == null ? SandboxService.DEFAULT_CHAT_ID : chatId.toString();
+    StringBuilder sb = new StringBuilder();
+    name.codePoints().forEach(cp -> {
+      if (Character.isLetterOrDigit(cp) || cp == '-' || cp == '_' || cp == '.') {
+        sb.appendCodePoint(cp);
+      }
+    });
+    String cleaned = sb.toString().trim();
+    if (cleaned.isEmpty() || cleaned.equals(".") || cleaned.equals("..")) {
+      return null;
+    }
+    return cleaned;
   }
 
   private record FunctionToolRegistry(List<FunctionToolSpec> toolSpecs,

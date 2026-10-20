@@ -75,7 +75,7 @@ public class EditTool implements BaseTool<String> {
 
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
-    String chatId = extractChatId(globalMessage);
+    String chatId = SandboxService.resolveChatId(globalMessage);
     if (!sandboxService.isAvailable()) {
       return "Error: sandbox service is disabled, cannot operate on files.";
     }
@@ -102,15 +102,6 @@ public class EditTool implements BaseTool<String> {
       return "Error: sandbox file operation failed unexpectedly: " + e.getMessage()
           + ". The sandbox instance may be broken, please retry or report this issue.";
     }
-  }
-
-  /** 从会话上下文取 chatId, 缺省时落到共享默认实例 */
-  private String extractChatId(Map<String, Object> globalMessage) {
-    if (globalMessage == null) {
-      return SandboxService.DEFAULT_CHAT_ID;
-    }
-    Object chatId = globalMessage.get("chatId");
-    return chatId == null ? SandboxService.DEFAULT_CHAT_ID : chatId.toString();
   }
 
   private JsonNode parseArgs(String question) {
