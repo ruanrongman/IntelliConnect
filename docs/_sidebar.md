@@ -12,6 +12,7 @@
   - [:speech_balloon: AI文本调试](ai_chat/ai_chat.md#AI文本调试)
   - [:shield: 全局角色审核、青少年保护、Jev 与 Laya 情绪](ai_safety_and_emotion.md#全局角色审核青少年保护jev-与-laya-情绪能力)
   - [:computer: 云电脑（OpenSandbox 沙箱）](sandbox/cloud_computer.md#云电脑opensandbox-沙箱)
+  - [:file_folder: 会话工作区](ai_chat/workspace.md)
 - 接入小智
   - [:bookmark_tabs: 小智接入](xiaozhi/xiaozhi.md#小智接入)
 - Ota

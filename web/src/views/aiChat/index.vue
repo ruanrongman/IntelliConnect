@@ -42,14 +42,26 @@
         :selected-files="selectedFiles"
         :streaming="streaming"
         :can-send="canSend"
+        :workspace-enabled="Boolean(selectedProductId && activeChatId)"
         :accepted-file-extensions="acceptedFileExtensions"
         @submit="sendMessage"
         @stop="stopStream"
         @select-file="selectFile"
         @paste="handlePaste"
         @remove-file="removeSelectedFile"
+        @open-workspace="openWorkspace"
       />
     </main>
+    <a-modal v-model:open="workspaceOpen" title="会话工作区" :footer="null" :width="960"
+      :style="{ top: '6vh' }" :body-style="{ maxHeight: '78vh', overflowY: 'auto' }"
+      :destroy-on-close="true">
+      <div class="workspace-context">
+        <strong>{{ workspaceScope.productName }} · {{ workspaceScope.conversationTitle }}</strong>
+        <span>当前会话的文件会持久保留，可在此上传、预览、下载和删除。</span>
+      </div>
+      <ConversationWorkspace v-if="workspaceOpen" embedded
+        :product-id="workspaceScope.productId" :chat-id="workspaceScope.chatId" />
+    </a-modal>
   </div>
 </template>
 
@@ -68,7 +80,21 @@ import { postKnowledgeChatRecall } from '@/api/productKnowledge'
 import ChatComposer from './ChatComposer.vue'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatSidebar from './ChatSidebar.vue'
+import ConversationWorkspace from '../workspace/index.vue'
 import { acceptedFileExtensions, acceptedFileLabel, getClipboardFiles, getFileIdentity, isAcceptedFile } from './fileUpload'
+
+const workspaceOpen = ref(false)
+const workspaceScope = ref({})
+function openWorkspace() {
+  if (!selectedProductId.value || !activeChatId.value) return
+  workspaceScope.value = {
+    productId: selectedProductId.value,
+    chatId: activeChatId.value,
+    productName: activeProductName.value,
+    conversationTitle: conversations.value.find((item) => item.chatId === activeChatId.value)?.title || '当前对话',
+  }
+  workspaceOpen.value = true
+}
 
 const products = ref([])
 const selectedProductId = ref()
@@ -1020,6 +1046,24 @@ function getMessagePane() {
     display: block;
     margin-top: 4px;
     color: #66736f;
+    font-size: 12px;
+  }
+}
+
+.workspace-context {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 20px;
+
+  strong {
+    color: #34423e;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  span {
+    color: #7c8798;
     font-size: 12px;
   }
 }

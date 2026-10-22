@@ -22,6 +22,8 @@ package top.rslly.iot.utility.ai.sandbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -41,6 +43,7 @@ import com.alibaba.opensandbox.sandbox.domain.services.Filesystem;
 import com.alibaba.opensandbox.sandbox.pool.SandboxPool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -218,6 +221,83 @@ class SandboxServiceTest {
   private Object state(String chatId) {
     Map<?, ?> sessions = (Map<?, ?>) ReflectionTestUtils.getField(service, "sessions");
     return sessions.get(chatId);
+  }
+
+  @Test
+  void exportingMissingOrExpiredInstanceNeverCreatesReplacement() {
+    assertNull(service.exportWorkspaceFile("conversation-1", "a.bin", 100));
+    verify(pool, never()).acquire(any(Duration.class), any(AcquirePolicy.class));
+    service.writeFile("conversation-1", "/workspace/a.bin", new byte[] {1});
+    ReflectionTestUtils.setField(state("conversation-1"), "lastUsedNanos",
+        System.nanoTime() - TimeUnit.MINUTES.toNanos(11));
+    assertNull(service.exportWorkspaceFile("conversation-1", "a.bin", 100));
+    verify(pool).acquire(any(Duration.class), any(AcquirePolicy.class));
+  }
+
+  @Test
+  void rejectsTraversalAndOutsidePathsBeforeCallingSandbox() {
+    for (String path : java.util.List.of("../secret", "/etc/passwd", "a/../../secret",
+        "/workspace/../secret", "C:\\secret", "a//b")) {
+      assertNull(service.exportWorkspaceFile("conversation-1", path, 100));
+      assertFalse(service.importWorkspaceFile("conversation-1", path,
+          new ByteArrayInputStream(new byte[] {1}), 100));
+    }
+    verify(pool, never()).acquire(any(Duration.class), any(AcquirePolicy.class));
+  }
+
+  @Test
+  void holdsLeaseUntilExportStreamIsClosedAndReturnsExactBytes() {
+    service.writeFile("conversation-1", "/workspace/a.bin", new byte[] {1});
+    byte[] data = {0, 1, (byte) 255};
+    java.util.concurrent.atomic.AtomicBoolean closed =
+        new java.util.concurrent.atomic.AtomicBoolean();
+    when(sandbox.files().readStream(anyString()))
+        .thenAnswer(call -> new ByteArrayInputStream(data) {
+          @Override
+          public void close() throws IOException {
+            assertEquals(1, ((java.util.concurrent.atomic.AtomicInteger) ReflectionTestUtils
+                .getField(state("conversation-1"), "inFlight")).get());
+            ReflectionTestUtils.setField(state("conversation-1"), "lastUsedNanos",
+                System.nanoTime() - TimeUnit.MINUTES.toNanos(11));
+            service.sweepIdle();
+            verify(sandbox, never()).kill();
+            closed.set(true);
+            super.close();
+          }
+        });
+    assertArrayEquals(data, service.exportWorkspaceFile("conversation-1", "reports/a.bin", 100));
+    assertTrue(closed.get());
+    assertEquals(0, ((java.util.concurrent.atomic.AtomicInteger) ReflectionTestUtils
+        .getField(state("conversation-1"), "inFlight")).get());
+    ArgumentCaptor<RunCommandRequest> command = ArgumentCaptor.forClass(RunCommandRequest.class);
+    verify(sandbox.commands()).run(command.capture());
+    assertTrue(command.getValue().getCommand().contains("os.O_NOFOLLOW"));
+    assertTrue(command.getValue().getCommand().contains("dir_fd=descriptor"));
+    verify(sandbox.files()).deleteFiles(any());
+  }
+
+  @Test
+  void closesOversizedExportAndDoesNotRetryAnotherInstance() {
+    service.writeFile("conversation-1", "/workspace/a.bin", new byte[] {1});
+    when(sandbox.files().readStream(anyString()))
+        .thenReturn(new ByteArrayInputStream(new byte[10]));
+    assertNull(service.exportWorkspaceFile("conversation-1", "a.bin", 5));
+    verify(pool).acquire(any(Duration.class), any(AcquirePolicy.class));
+    assertEquals(0, ((java.util.concurrent.atomic.AtomicInteger) ReflectionTestUtils
+        .getField(state("conversation-1"), "inFlight")).get());
+  }
+
+  @Test
+  void importsBinaryWithinOneLeaseAndRejectsOversizedInput() {
+    assertTrue(service.importWorkspaceFile("conversation-1", "/workspace/imports/file/a.bin",
+        new ByteArrayInputStream(new byte[] {0, 1, (byte) 255}), 10));
+    assertFalse(service.importWorkspaceFile("conversation-1", "/workspace/imports/file/b.bin",
+        new ByteArrayInputStream(new byte[11]), 10));
+    verify(pool).acquire(any(Duration.class), any(AcquirePolicy.class));
+    ArgumentCaptor<RunCommandRequest> command = ArgumentCaptor.forClass(RunCommandRequest.class);
+    verify(sandbox.commands()).run(command.capture());
+    assertTrue(command.getValue().getCommand().contains("os.O_EXCL"));
+    verify(sandbox.files(), times(2)).deleteFiles(any());
   }
 
   private Map<String, Object> context(String streamId, String conversationId) {

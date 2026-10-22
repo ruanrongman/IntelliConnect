@@ -59,6 +59,7 @@ const product ={
   productPage: '产品页面',
   productXiaoZhi:'小智绑定',
   aiChat:'智能体对话调试',
+  workspace: '会话工作区',
   productRole:'角色设置',
   agentMemory:'对话数据管理',
   agentLongMemory:'长期记忆设置',

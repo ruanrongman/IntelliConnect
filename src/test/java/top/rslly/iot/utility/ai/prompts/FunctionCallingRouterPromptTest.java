@@ -89,8 +89,8 @@ class FunctionCallingRouterPromptTest {
     String enabled = prompt.build("assistant", "user", "role", "role introduction",
         "memory categories", null, "router rules", true);
 
-    assertFalse(disabled.contains("青少年模式已开启"));
-    assertTrue(enabled.contains("青少年模式已开启"));
-    assertTrue(enabled.contains("危险请求不要调用工具"));
+    assertFalse(disabled.contains("Teen Mode is enabled"));
+    assertTrue(enabled.contains("Teen Mode is enabled"));
+    assertTrue(enabled.contains("for dangerous requests, do not use tools"));
   }
 }

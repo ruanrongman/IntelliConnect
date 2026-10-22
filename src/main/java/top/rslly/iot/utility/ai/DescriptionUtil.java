@@ -64,6 +64,8 @@ public class DescriptionUtil {
   private BashTool bashTool;
   @Autowired
   private EditTool editTool;
+  @Autowired
+  private WorkspaceTool workspaceTool;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
@@ -135,6 +137,7 @@ public class DescriptionUtil {
     toolDescriptions.put(controlTool.getName(), controlTool.getDescription());
     toolDescriptions.put(weatherTool.getName(), weatherTool.getDescription());
     toolDescriptions.put(musicTool.getName(), musicTool.getDescription());
+    toolDescriptions.put(workspaceTool.getName(), workspaceTool.getDescription());
     String knowledgeDescription = knowledgeTool.getDescription(productId);
     if (!knowledgeDescription.isBlank()) {
       toolDescriptions.put(knowledgeTool.getName(), knowledgeDescription);

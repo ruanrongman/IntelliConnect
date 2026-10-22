@@ -287,7 +287,8 @@ public class FunctionCallingRouterTool {
     if (!knowledgeDescription.isBlank()) {
       agentDescription += " | " + knowledgeDescription;
     }
-    availableRoutes.put(FunctionRouterRoute.AGENT, agentDescription);
+    availableRoutes.put(FunctionRouterRoute.AGENT,
+        agentDescription + " | " + WorkspaceTool.ROUTING_DESCRIPTION);
     if (!chatId.startsWith("chatProduct")) {
       availableRoutes.put(FunctionRouterRoute.WX_BOUND_PRODUCT,
           FunctionRouterRoute.WX_BOUND_PRODUCT.getDefaultDescription());
@@ -340,7 +341,8 @@ public class FunctionCallingRouterTool {
           mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
     }
     appendEndpointIntentions(builder, productId);
-    return limitText(builder.toString(), MAX_MCP_DESCRIPTION_CHARS);
+    return WorkspaceTool.ROUTING_DESCRIPTION + " | "
+        + limitText(builder.toString(), MAX_MCP_DESCRIPTION_CHARS);
   }
 
   private boolean hasRunningEndpoint(int productId) {

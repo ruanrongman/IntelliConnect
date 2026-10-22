@@ -35,6 +35,9 @@ public interface WxProductBindRepository extends JpaRepository<WxProductBindEnti
 
   List<WxProductBindEntity> findAllByProductId(int productId);
 
+  @Query("select count(b) > 0 from WxProductBindEntity b where b.productId = :productId and concat(b.appid, b.openid) = :chatId")
+  boolean existsConversationByProductId(int productId, String chatId);
+
   @Query("SELECT new top.rslly.iot.param.response.WxBindProductResponse(e.id, e.productId) FROM WxProductBindEntity e WHERE e.appid = ?1 AND e.openid = ?2")
   List<WxBindProductResponse> findProductIdByAppidAndOpenid(String appid, String openid);
 

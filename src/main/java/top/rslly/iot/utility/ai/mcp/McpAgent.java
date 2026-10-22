@@ -43,6 +43,7 @@ import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LlmJsonResponseParser;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
 import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
@@ -57,6 +58,7 @@ import top.rslly.iot.utility.ai.tools.BaseTool;
 import top.rslly.iot.utility.ai.tools.EditTool;
 import top.rslly.iot.utility.ai.tools.JsExecuteTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
+import top.rslly.iot.utility.ai.tools.WorkspaceTool;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
 
 import java.time.Duration;
@@ -110,6 +112,8 @@ public class McpAgent implements BaseTool<String> {
   @Autowired
   private EditTool editTool;
   @Autowired
+  private WorkspaceTool workspaceTool;
+  @Autowired
   private AdminConfigServiceImpl adminConfigService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
@@ -156,7 +160,7 @@ public class McpAgent implements BaseTool<String> {
     var productSkillsEntities = productSkillsService.findAllByProductId(productId);
     if (mcpServerEntities.isEmpty() && productSkillsEntities.isEmpty() && !mcpWebSocketRunning
         && !mcpEndpointRunning) {
-      return "工具无效，请勿调用";
+      return WorkspaceTool.ROUTING_DESCRIPTION;
     }
     StringBuilder toolDescriptions = new StringBuilder();
     for (var mcpServerEntity : mcpServerEntities) {
@@ -167,7 +171,7 @@ public class McpAgent implements BaseTool<String> {
     }
     toolDescriptions.append(mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
     appendEndpointIntentions(toolDescriptions, productId);
-    return toolDescriptions.toString();
+    return WorkspaceTool.ROUTING_DESCRIPTION + " | " + toolDescriptions;
   }
 
   public void initClients(int productId, Map<String, McpSyncClient> clientMap)
@@ -229,11 +233,6 @@ public class McpAgent implements BaseTool<String> {
     boolean mcpIsTool = false;
     if (globalMessage.containsKey("mcpIsTool"))
       mcpIsTool = (boolean) globalMessage.get("mcpIsTool");
-    if (mcpServerService.findAllByProductId(productId).isEmpty()
-        && productSkillsService.findAllByProductId(productId).isEmpty()
-        && !mcpWebsocket.isRunning(McpWebsocket.DEVICE_SERVER_NAME, chatId)
-        && !hasRunningEndpoint(productId))
-      return "产品下面没有任何mcp服务器或者skills，请先绑定mcp服务器或者skills";
     if (!mcpServerService.findAllByProductId(productId).isEmpty()) {
       try {
         initClients(productId, clientMap);
@@ -271,6 +270,7 @@ public class McpAgent implements BaseTool<String> {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
       toolDescriptions += sandboxToolDescription();
+      toolDescriptions += workspaceToolDescription();
       system = reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
           includeThoughtEnabled);
     } catch (Exception e) {
@@ -308,6 +308,7 @@ public class McpAgent implements BaseTool<String> {
       messages.clear();
       messages
           .add(new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt.toString()));
+      messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
       messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
 
       var obj =
@@ -372,7 +373,9 @@ public class McpAgent implements BaseTool<String> {
             toolResult = mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
                 McpWebsocketEndpoint.clients.get(endpointChatId), productId, true);
           } else if (serverKey.equals("skills")) {
-            if (toolName.equals(jsExecuteTool.getName())) {
+            if (toolName.equals(workspaceTool.getName())) {
+              toolResult = workspaceTool.run(args, globalMessage);
+            } else if (toolName.equals(jsExecuteTool.getName())) {
               toolResult = jsExecuteTool.run(args, globalMessage);
             } else if (sandboxService.isAvailable() && toolName.equals(bashTool.getName())) {
               toolResult = bashTool.run(args, globalMessage);
@@ -504,8 +507,7 @@ public class McpAgent implements BaseTool<String> {
         }
 
         try {
-          return JSON.parseObject(data.replace("```json", "")
-              .replace("```JSON", "").replace("```", ""));
+          return LlmJsonResponseParser.parse(data);
         } catch (Exception e) {
           log.error("解析LLM响应JSON失败: {}, data: {}", e.getMessage(), data);
           return null;
@@ -636,6 +638,7 @@ public class McpAgent implements BaseTool<String> {
     List<ModelMessage> messages = new ArrayList<>();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
         reactPrompt.getFunctionCalling(question, productId)));
+    messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
     String finalAnswer = null;
     List<String> toolObservations = new ArrayList<>();
@@ -833,6 +836,8 @@ public class McpAgent implements BaseTool<String> {
     }
     addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", jsExecuteTool.getName(),
         jsExecuteTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+    addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", workspaceTool.getName(),
+        workspaceTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
     if (sandboxService.isAvailable()) {
       // 沙箱可用时, bash/edit 工具挂在 skills 伪服务下, 供模型执行技能包内容
       addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", bashTool.getName(),
@@ -1018,6 +1023,9 @@ public class McpAgent implements BaseTool<String> {
         return mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
             McpWebsocketEndpoint.clients.get(endpointChatId), productId, true);
       } else if (serverKey.equals("skills")) {
+        if (toolName.equals(workspaceTool.getName())) {
+          return workspaceTool.run(args, globalMessage);
+        }
         if (toolName.equals(jsExecuteTool.getName())) {
           return jsExecuteTool.run(args, globalMessage);
         }
@@ -1158,9 +1166,13 @@ public class McpAgent implements BaseTool<String> {
     return builder.toString();
   }
 
-  /**
-   * 沙箱可用时, 在 ReAct 描述中追加 bash/edit 工具(挂在 skills 伪服务下), 供模型执行技能包内容.
-   */
+  /** Persistent workspace tools remain available even when the sandbox is disabled. */
+  private String workspaceToolDescription() {
+    return "Tool: skills:" + workspaceTool.getName() + "\n  Description: "
+        + workspaceTool.getDescription() + "\n  Input Schema: args:string\n\n";
+  }
+
+  /** 沙箱可用时, 在 ReAct 描述中追加 bash/edit 工具(挂在 skills 伪服务下). */
   private String sandboxToolDescription() {
     if (!sandboxService.isAvailable()) {
       return "";

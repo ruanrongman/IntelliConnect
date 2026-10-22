@@ -71,6 +71,9 @@ class FunctionCallingRouterKnowledgeRouteTest {
         .filter(spec -> spec.name().equals("route_agent"))
         .findFirst().orElseThrow();
     assertTrue(agentRoute.description().contains("knowledge coverage"));
+    assertTrue(agentRoute.description().contains("workspaceTool"));
+    assertTrue(agentRoute.description()
+        .contains("List/read/write work even when the sandbox is disabled"));
   }
 
   @Test

@@ -29,6 +29,8 @@ import {
   Avatar,
   Statistic,
   Alert,
+  Empty,
+  Progress,
   Result,
   Upload,
   InputNumber,
@@ -41,6 +43,8 @@ import TimePicker from 'ant-design-vue/es/time-picker'
 import * as AntdIcon from '@ant-design/icons-vue'
 import 'ant-design-vue/dist/reset.css'
 export function setupAntd(app) {
+  app.use(Empty)
+  app.use(Progress)
   app.use(Button)
   app.use(Table)
   app.use(Dropdown)

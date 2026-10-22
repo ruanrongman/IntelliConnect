@@ -49,10 +49,14 @@ public class BashTool implements BaseTool<String> {
           Run a shell command in a remote Ubuntu 24.04 sandbox and return its stdout/stderr/exit code.
           Environment notes:
           - Each chat session has its own isolated sandbox instance; other sessions cannot see its files
-          - Full dev runtimes are preinstalled, do NOT reinstall basics: Python 3.12 (no pip),
+          - Full dev runtimes are preinstalled, do NOT reinstall basics: Python 3.12 (pip available),
             Node.js 22 (npm 10), Go 1.25, OpenJDK 21 (javac available), gcc/g++ 13.3,
             plus common tools like git/curl/vim/unzip/tar
-          - Filesystem state persists between calls within the same session; working directory is /workspace
+          - /workspace is the sandbox's temporary working directory, not the persistent conversation workspace
+          - Files persist between calls only while this sandbox instance exists; they are lost when it
+            shuts down, is recycled, or expires
+          - For permanent storage, use workspaceTool (export_from_sandbox) to save artifacts before
+            the sandbox is lost; use import_to_sandbox to load previously saved workspace files
           - Commands run in an isolated container with a per-command timeout
           Args: the full shell command to execute (str)
           """;

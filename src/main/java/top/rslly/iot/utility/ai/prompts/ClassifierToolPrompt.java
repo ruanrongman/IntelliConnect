@@ -36,6 +36,7 @@ import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
+import top.rslly.iot.utility.ai.tools.WorkspaceTool;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -83,6 +84,7 @@ public class ClassifierToolPrompt {
            4. Switch phrases like "等一下", "先别", "不用了", "算了", "换个话题", "别查了" mean the previous task should not be continued - start fresh.
            5. Specifically regarding weather (task 1):
               - ONLY keep task 1 when this is a FOLLOW-UP question about weather.
+              - A confirmation accepting a proposed weather lookup is a weather follow-up.
               - If the latest request is ANYTHING ELSE NOT ABOUT WEATHER → YOU MUST NOT CHOOSE TASK 1, EVEN IF THE LAST TOPIC WAS WEATHER.
            6. Examples (study these carefully):
               - Correct: Previous topic was *Query weather* → Current request: "讲个故事" → NEW TOPIC → route to *Common chat or fallback*, NOT *Query weather*
@@ -90,7 +92,17 @@ public class ClassifierToolPrompt {
               - Correct: Previous topic was *Control and query electrical* → Current request: "讲个笑话" → NEW TOPIC → route to *Common chat or fallback*
               - Correct: Previous topic was *Play or recommend music* → Current request: "推荐另一首" → FOLLOW-UP → keep *Play or recommend music*
            Additional rules:
-           - Args must be short, normalized, and minimal. Do not copy the user's wording or include filler.
+           - A short confirmation ("好的", "好", "可以", "行", "嗯", "yes", "ok") after the assistant
+             offers a concrete next action accepts that action. Resolve it from the most recent USER/ASSISTANT
+             exchange, select the task that can perform it, and put the action and target in args.
+             If the accepted action requires a tool, do not route this to common chat or goodbye,
+             and do not ask for the same confirmation again.
+             Example: assistant "需要我打开 part1.txt 看看内容吗？" -> user "好的" -> task 4,
+             args "读取当前会话工作区的 part1.txt 并展示内容".
+           - Acknowledgment after an already completed task does not request another action. Explicit
+             cancellation or goodbye wins. If several actions were offered without a clear choice, clarify.
+           - Args must be concise but self-contained, retaining the requested action, target, file IDs/names,
+             and necessary constraints resolved from conversation history. Do not pass a bare "好的" as args.
            - Task 2 must not be used for xiaozhi_device operations.
            - If task 10 exists and the request is about xiaozhi_device or seeing what is in front of the user, choose task 10.
            - Output JSON only. No markdown and no explanation.
@@ -129,7 +141,7 @@ public class ClassifierToolPrompt {
     if (!knowledgeDescription.isBlank()) {
       agentDescription += " | " + knowledgeDescription;
     }
-    classifierMap.put("4", agentDescription);
+    classifierMap.put("4", agentDescription + " | " + WorkspaceTool.ROUTING_DESCRIPTION);
     classifierMap.put("5", "Common chat or fallback");
     if (!chatId.startsWith("chatProduct")) {
       classifierMap.put("6", "Bind or unbind products");
@@ -192,7 +204,8 @@ public class ClassifierToolPrompt {
           mcpWebsocket.getIntention(McpWebsocket.DEVICE_SERVER_NAME, chatId));
     }
     appendEndpointIntentions(mcpServerString, productId);
-    return limitText(mcpServerString.toString(), MAX_MCP_DESCRIPTION_CHARS);
+    return WorkspaceTool.ROUTING_DESCRIPTION + " | "
+        + limitText(mcpServerString.toString(), MAX_MCP_DESCRIPTION_CHARS);
   }
 
   private boolean hasRunningEndpoint(int productId) {

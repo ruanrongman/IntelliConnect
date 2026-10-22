@@ -64,8 +64,11 @@ public class EditTool implements BaseTool<String> {
           {"action": "write|read|list|delete", "path": "target path", "content": "content to write (required for write)"}
           - write: create/overwrite a file; read: read file content; list: list a directory;
             delete: remove a file or directory
-          - Relative paths are resolved under the /workspace working directory
-          - Filesystem state persists between calls within the same session
+          - Relative paths are resolved under /workspace, the sandbox's temporary working directory
+          - This is not the persistent conversation workspace. Files persist between calls only while
+            this sandbox instance exists and are lost when it shuts down, is recycled, or expires
+          - For permanent storage, use workspaceTool (export_from_sandbox) before the sandbox is lost,
+            or workspaceTool (write) to save generated text directly to the persistent workspace
           """;
 
   @Override

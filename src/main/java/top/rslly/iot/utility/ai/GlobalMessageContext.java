@@ -19,6 +19,8 @@
  */
 package top.rslly.iot.utility.ai;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
@@ -73,6 +75,22 @@ public final class GlobalMessageContext {
     return value instanceof Boolean
         ? (Boolean) value
         : Boolean.parseBoolean(String.valueOf(value));
+  }
+
+  /** Copy native conversation turns so agents can resolve follow-ups without mutating memory. */
+  public static List<ModelMessage> conversationHistory(Map<String, Object> globalMessage) {
+    List<ModelMessage> history = new ArrayList<>();
+    if (globalMessage == null || !(globalMessage.get(MEMORY)instanceof List<?> memory)) {
+      return history;
+    }
+    for (Object item : memory) {
+      if (item instanceof ModelMessage message && message.getContent() != null
+          && (ModelMessageRole.USER.value().equals(message.getRole())
+              || ModelMessageRole.ASSISTANT.value().equals(message.getRole()))) {
+        history.add(new ModelMessage(message.getRole(), message.getContent()));
+      }
+    }
+    return history;
   }
 
   public static String memoryRevisionKey(String chatId) {

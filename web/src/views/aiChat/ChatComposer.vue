@@ -17,18 +17,6 @@
       </div>
     </div>
     <div class="input-shell">
-      <a-upload
-        :before-upload="beforeUploadFile"
-        :show-upload-list="false"
-        multiple
-        :accept="acceptedFileExtensions.join(',')"
-      >
-        <a-tooltip title="上传文件">
-          <a-button class="attach-button" type="text" shape="circle" html-type="button" :disabled="streaming">
-            <template #icon><PaperClipOutlined /></template>
-          </a-button>
-        </a-tooltip>
-      </a-upload>
       <a-textarea
         :value="modelValue"
         :auto-size="{ minRows: 1, maxRows: 5 }"
@@ -40,6 +28,29 @@
         @keydown.enter.exact="handleEnter"
         @paste="$emit('paste', $event)"
       />
+    </div>
+    <div class="composer-tools">
+      <a-upload
+        :before-upload="beforeUploadFile"
+        :show-upload-list="false"
+        multiple
+        :accept="acceptedFileExtensions.join(',')"
+      >
+        <a-tooltip title="上传文件">
+          <a-button class="attach-button" type="text" html-type="button" :disabled="streaming"
+            aria-label="上传聊天附件">
+            <template #icon><PaperClipOutlined /></template>
+            附件
+          </a-button>
+        </a-tooltip>
+      </a-upload>
+      <a-tooltip title="管理当前会话的工作区文件">
+        <a-button class="workspace-button" type="text" html-type="button"
+          :disabled="!workspaceEnabled" @click="$emit('open-workspace')">
+          <template #icon><FolderOpenOutlined /></template>
+          工作区
+        </a-button>
+      </a-tooltip>
     </div>
     <a-button
       v-if="!streaming"
@@ -75,13 +86,17 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  workspaceEnabled: {
+    type: Boolean,
+    default: false,
+  },
   acceptedFileExtensions: {
     type: Array,
     default: () => [],
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'submit', 'stop', 'select-file', 'paste', 'remove-file'])
+const emit = defineEmits(['update:modelValue', 'submit', 'stop', 'select-file', 'paste', 'remove-file', 'open-workspace'])
 let isComposing = false
 
 function handleCompositionStart() {
@@ -150,6 +165,7 @@ function beforeUploadFile(file) {
 }
 
 .input-shell {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -182,7 +198,16 @@ function beforeUploadFile(file) {
   }
 }
 
-.attach-button {
+.composer-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attach-button,
+.workspace-button {
   color: #66736f;
 
   &:hover {
@@ -193,7 +218,8 @@ function beforeUploadFile(file) {
 
 @media (max-width: 840px) {
   .composer {
-    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 8px;
   }
 }
 </style>

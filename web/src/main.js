@@ -35,6 +35,8 @@ router.beforeEach((to, from, next) => {
         store.commit('auth/GENERATE_ROUTES', auth)
         next({
           path: to.path,
+          query: to.query,
+          hash: to.hash,
           replace: true,
         })
         // next()

@@ -42,8 +42,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.models.WorkspaceFileEntity;
 import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.param.request.AiControl;
 import top.rslly.iot.services.SafetyServiceImpl;
@@ -64,6 +66,8 @@ class AiServiceImplTest {
   private SafetyServiceImpl safetyService;
   @Mock
   private AgentMemoryServiceImpl agentMemoryService;
+  @Mock
+  private WorkspaceService workspaceService;
   @InjectMocks
   private AiServiceImpl aiService;
 
@@ -167,6 +171,78 @@ class AiServiceImplTest {
 
     assertEquals(200, result.getErrorCode());
     assertQueuesRemoved(streamChatId);
+  }
+
+  @Test
+  void savesOriginalAttachmentToStableConversationBeforeModelAndPassesFileReference()
+      throws Exception {
+    AiControl control = validStreamControl();
+    control.setChatId(CHAT_ID);
+    when(agentMemoryService.isChatIdValidForProduct(1, CHAT_ID)).thenReturn(true);
+    MockMultipartFile attachment = new MockMultipartFile("file", "报告.txt", "text/plain",
+        "original content".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    WorkspaceFileEntity saved = new WorkspaceFileEntity();
+    saved.setId("saved-file-id");
+    saved.setName("报告.txt");
+    saved.setSize(attachment.getSize());
+    when(workspaceService.upload(org.mockito.ArgumentMatchers.eq(1),
+        org.mockito.ArgumentMatchers.eq(CHAT_ID), any(), org.mockito.ArgumentMatchers.eq("chat")))
+            .thenReturn(List.of(saved));
+    when(router.responseDebugStream(any(), any(), any(), any(), anyInt(), any())).thenReturn("完成");
+    Method method = AiServiceImpl.class.getDeclaredMethod("handleAiResponseStream",
+        AiControl.class, String.class, MultipartFile[].class, String.class, SseEmitter.class);
+    method.setAccessible(true);
+    method.invoke(aiService, control, "attachment", new MultipartFile[] {attachment}, "token",
+        org.mockito.Mockito.mock(SseEmitter.class));
+    var order = org.mockito.Mockito.inOrder(workspaceService, router);
+    order.verify(workspaceService).upload(org.mockito.ArgumentMatchers.eq(1),
+        org.mockito.ArgumentMatchers.eq(CHAT_ID), any(), org.mockito.ArgumentMatchers.eq("chat"));
+    order.verify(router).responseDebugStream(
+        org.mockito.ArgumentMatchers.argThat(
+            value -> value.contains("saved-file-id") && value.contains("original content")),
+        org.mockito.ArgumentMatchers.argThat(value -> value.contains("saved-file-id")),
+        org.mockito.ArgumentMatchers.eq(streamChatId("attachment")),
+        org.mockito.ArgumentMatchers.eq(CHAT_ID), org.mockito.ArgumentMatchers.eq(1), any());
+  }
+
+  @Test
+  void attachmentSaveFailureEmitsErrorAndDoesNotCallModel() throws Exception {
+    AiControl control = validStreamControl();
+    MockMultipartFile attachment =
+        new MockMultipartFile("file", "a.txt", "text/plain", new byte[] {65});
+    when(workspaceService.upload(anyInt(), any(), any(), any()))
+        .thenThrow(new IllegalArgumentException("Workspace capacity exceeded"));
+    SseEmitter emitter = org.mockito.Mockito.mock(SseEmitter.class);
+    Method method = AiServiceImpl.class.getDeclaredMethod("handleAiResponseStream",
+        AiControl.class, String.class, MultipartFile[].class, String.class, SseEmitter.class);
+    method.setAccessible(true);
+    method.invoke(aiService, control, "save-failure", new MultipartFile[] {attachment}, "token",
+        emitter);
+    org.mockito.Mockito.verifyNoInteractions(router);
+    ArgumentCaptor<SseEmitter.SseEventBuilder> eventCaptor =
+        ArgumentCaptor.forClass(SseEmitter.SseEventBuilder.class);
+    verify(emitter, atLeastOnce()).send(eventCaptor.capture());
+    assertTrue(eventCaptor.getAllValues().stream().flatMap(builder -> builder.build().stream())
+        .map(item -> item.getData()).filter(item -> item instanceof JsonResult<?>)
+        .map(item -> (JsonResult<?>) item)
+        .anyMatch(result -> result.getErrorMsg().contains("capacity exceeded")));
+  }
+
+  @Test
+  void modelFailureDoesNotDeleteAlreadySavedAttachment() throws Exception {
+    AiControl control = validStreamControl();
+    MockMultipartFile attachment =
+        new MockMultipartFile("file", "a.txt", "text/plain", new byte[] {65});
+    when(workspaceService.upload(anyInt(), any(), any(), any())).thenReturn(List.of());
+    when(router.responseDebugStream(any(), any(), any(), any(), anyInt(), any()))
+        .thenThrow(new IllegalStateException("model failed"));
+    Method method = AiServiceImpl.class.getDeclaredMethod("handleAiResponseStream",
+        AiControl.class, String.class, MultipartFile[].class, String.class, SseEmitter.class);
+    method.setAccessible(true);
+    method.invoke(aiService, control, "model-failure", new MultipartFile[] {attachment}, "token",
+        org.mockito.Mockito.mock(SseEmitter.class));
+    verify(workspaceService).upload(anyInt(), any(), any(), any());
+    org.mockito.Mockito.verifyNoMoreInteractions(workspaceService);
   }
 
   private AiControl validStreamControl() throws Exception {

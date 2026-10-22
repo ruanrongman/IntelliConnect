@@ -33,6 +33,7 @@ import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
 import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.ai.*;
 import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.LlmJsonResponseParser;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
 import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
@@ -186,6 +187,7 @@ public class Agent implements BaseTool<String> {
           new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt);
       ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
       messages.add(systemMessage);
+      messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
       messages.add(userMessage);
       var obj =
           callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled,
@@ -311,8 +313,7 @@ public class Agent implements BaseTool<String> {
         }
 
         try {
-          return JSON.parseObject(data.replace("```json", "")
-              .replace("```JSON", "").replace("```", ""));
+          return LlmJsonResponseParser.parse(data);
         } catch (Exception e) {
           log.error("解析LLM响应JSON失败: {}, data: {}", e.getMessage(), data);
           return null;
@@ -419,6 +420,7 @@ public class Agent implements BaseTool<String> {
     List<ModelMessage> messages = new ArrayList<>();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
         reactPrompt.getFunctionCalling(question, productId)));
+    messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
     messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
     String finalAnswer = null;
     List<String> toolObservations = new ArrayList<>();

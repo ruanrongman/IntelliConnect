@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.utility.ai.llm;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.openai.client.OpenAIClient;
@@ -135,12 +134,7 @@ public class DeepSeek implements LLM {
       String response =
           extractText(client.chat().completions().create(buildTextParams(messages, search)));
       log.debug("model output:{} ", response);
-      String temp = stripMarkdownFence(response);
-      JSONObject jsonResponse = JSON.parseObject(temp);
-      if (jsonResponse == null) {
-        throw new IllegalStateException("json parse error");
-      }
-      return jsonResponse;
+      return LlmJsonResponseParser.parse(response);
     } catch (Exception e) {
       log.error("model error", e);
       JSONObject action = new JSONObject();
@@ -581,10 +575,6 @@ public class DeepSeek implements LLM {
     choices.add(choice);
     root.put("choices", choices);
     return root.toJSONString();
-  }
-
-  private String stripMarkdownFence(String raw) {
-    return raw.replace("```json", "").replace("```JSON", "").replace("```", "").trim();
   }
 
   private static String normalizeBaseUrl(String url) {

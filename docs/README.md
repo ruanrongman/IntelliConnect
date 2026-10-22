@@ -113,6 +113,7 @@ mysql,redis,emqx和influxdb环境。
 
 - [全局角色审核、青少年保护、Jev 与 Laya 情绪能力](ai_safety_and_emotion.md)
 - [云电脑（OpenSandbox 沙箱）](sandbox/cloud_computer.md)
+- [会话工作区](ai_chat/workspace.md)
 - [Jev 独立客户端](jev-client.md)
 - [Laya Jev 兼容服务](../laya-jev/README.md)
 

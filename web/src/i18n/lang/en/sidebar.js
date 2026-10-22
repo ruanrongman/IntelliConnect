@@ -52,6 +52,7 @@ const product ={
   productPage: 'productPage',
   productXiaoZhi:'productXiaoZhi',
   aiChat:'Agent Chat Debug',
+  workspace: 'Conversation Workspace',
   productRole:'productRole',
   agentMemory:'Conversation Data',
   agentLongMemory:'agentLongMemory',

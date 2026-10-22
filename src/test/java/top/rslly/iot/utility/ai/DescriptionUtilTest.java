@@ -27,12 +27,15 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
+import top.rslly.iot.utility.ai.tools.WorkspaceTool;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 
 @ExtendWith(MockitoExtension.class)
 class DescriptionUtilTest {
@@ -40,9 +43,19 @@ class DescriptionUtilTest {
   private KnowledgeTool knowledgeTool;
   @Mock
   private McpAgent mcpAgent;
+  @Mock
+  private WorkspaceTool workspaceTool;
+  @Mock
+  private SandboxService sandboxService;
 
   @InjectMocks
   private DescriptionUtil descriptionUtil;
+
+  @BeforeEach
+  void workspaceMetadata() {
+    when(workspaceTool.getName()).thenReturn("workspaceTool");
+    when(workspaceTool.getDescription()).thenReturn("persistent workspace");
+  }
 
   @Test
   void exposesSameStableKnowledgeMetadataToReactAndFunctionCalling() {
@@ -55,7 +68,9 @@ class DescriptionUtilTest {
         descriptionUtil.getToolDescriptions(12, "chatProduct12");
     String reactDescriptions = descriptionUtil.getTools(12, "chatProduct12");
 
-    assertEquals(List.of("controlTool", "weatherTool", "musicTool", "knowledgeTool", "mcpAgent"),
+    assertEquals(
+        List.of("controlTool", "weatherTool", "musicTool", "workspaceTool", "knowledgeTool",
+            "mcpAgent"),
         List.copyOf(toolDescriptions.keySet()));
     assertEquals("knowledge description", toolDescriptions.get("knowledgeTool"));
     assertTrue(reactDescriptions.indexOf("controlTool") < reactDescriptions.indexOf("weatherTool"));

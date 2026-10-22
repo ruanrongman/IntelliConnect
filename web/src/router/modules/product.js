@@ -40,6 +40,15 @@ export default [
           },
         },
         {
+          path: '/workspace',
+          name: 'workspace',
+          component: () => import('@/views/workspace/index.vue'),
+          meta: {
+            title: 'workspace',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/productRole',
           name: 'productRole',
           component: () => import('@/views/productRole/index.vue'),

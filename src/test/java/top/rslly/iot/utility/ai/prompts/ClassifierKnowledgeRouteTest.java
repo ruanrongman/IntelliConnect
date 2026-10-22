@@ -36,6 +36,7 @@ import top.rslly.iot.services.agent.ProductSkillsServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
+import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
 
 class ClassifierKnowledgeRouteTest {
@@ -63,6 +64,7 @@ class ClassifierKnowledgeRouteTest {
     ReflectionTestUtils.setField(prompt, "mcpWebsocket", Mockito.mock(McpWebsocket.class));
     ReflectionTestUtils.setField(prompt, "mcpEndpointConfigService",
         Mockito.mock(McpEndpointConfigService.class));
+    ReflectionTestUtils.setField(prompt, "sandboxService", Mockito.mock(SandboxService.class));
     ReflectionTestUtils.setField(prompt, "includeThought", false);
     when(descriptionUtil.getAgentLongMemory(12)).thenReturn("");
   }
@@ -75,6 +77,8 @@ class ClassifierKnowledgeRouteTest {
     String result = prompt.getClassifierTool(12, "chatProduct12", "");
 
     assertTrue(result.contains("Complex multi-step task | knowledge coverage"));
+    assertTrue(result.contains("workspaceTool"));
+    assertTrue(result.contains("List/read/write work even when the sandbox is disabled"));
   }
 
   @Test
@@ -85,8 +89,8 @@ class ClassifierKnowledgeRouteTest {
     String disabled = prompt.getClassifierTool(12, "chatProduct12", "", false);
     String enabled = prompt.getClassifierTool(12, "chatProduct12", "", true);
 
-    assertFalse(disabled.contains("青少年模式已开启"));
-    assertTrue(enabled.contains("青少年模式已开启"));
+    assertFalse(disabled.contains("Teen Mode is enabled"));
+    assertTrue(enabled.contains("Teen Mode is enabled"));
     assertTrue(enabled.contains("Common chat or fallback"));
   }
 }

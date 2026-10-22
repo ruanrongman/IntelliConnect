@@ -78,18 +78,28 @@ public class ReactPrompt {
           ```
 
           ## Termination Rules
-          1. Default: complete the task in **1 step**. Use additional steps only when the first result is genuinely insufficient.
+          1. Complete the user's entire requested task using as many steps as needed within max_steps.
           2. Use `current_step` and `max_steps` from Runtime Context.
           3. If `current_step == max_steps`, you **MUST** call `finish` regardless.
           4. If a tool returns an error or empty result, either retry with different arguments or call `finish` with an explanation.
           5. Choose exactly ONE tool per step.
-          6. If the Observation shows the task was executed successfully (e.g. success, ok, done, value set), you MUST call `finish` immediately — do NOT call the same tool again or call another tool for the same intent.
+          6. Finish when the whole requested task is complete. A successful intermediate operation is not completion: listing files may need a subsequent read, and generating a sandbox artifact may need an export to the persistent workspace. Do not repeat completed operations.
           7. Do NOT re-attempt a tool call with the same arguments. Only retry with genuinely different arguments if the previous result was clearly wrong or incomplete.
 
           ## Constraints
           - Output ONLY the JSON object. No markdown fences, no comments, no extra text.
           - Final answer should match your role's style.
           - No emojis in output.
+
+          ## Follow-up Requests
+          - The latest user request controls the task. History supplies context, not a backlog of actions to repeat.
+          - Use the native USER/ASSISTANT conversation history to resolve short confirmations.
+          - If you offered a concrete next action and the user says "好的", "可以", "行", "yes", or "ok",
+            perform that action now using the appropriate tools. Do not stop at an acknowledgment,
+            say goodbye, or ask for the same confirmation again. For example, after offering to open
+            part1.txt, "好的" means read that file and show its contents; listing alone is insufficient.
+          - Respect explicit cancellation, changed requests, and actual missing information. An acknowledgment
+            after a completed task does not authorize unrelated work. Ask only when the target is unclear.
 
           ## Tools
           You have access to the following tools:
@@ -125,6 +135,14 @@ public class ReactPrompt {
           - Final answer should match your role's style.
           - Final answers must not include internal tool traces such as `Called function`, function names, arguments, MCP server or endpoint names, or tool result metadata.
           - No emojis in output.
+          - The latest user request controls the task. History supplies context, not a backlog of actions to repeat.
+          - Use native USER/ASSISTANT history to resolve short confirmations. If you offered a concrete
+            next action and the user says "好的", "可以", "行", "yes", or "ok", execute the accepted action
+            with tools now and return the result. Do not stop at an acknowledgment, say goodbye, or ask
+            for the same confirmation again. An acknowledgment after a completed task does not request
+            unrelated work; respect explicit cancellation and clarify only when the target is unclear.
+          - Complete all requested steps: listing a file is not reading it, and creating a sandbox artifact
+            is not saving it permanently. Continue with read/export operations when the task requires them.
           ## Time and Freshness Rules
           - Use the current time and time zone from Runtime Context; never infer the current date from model knowledge.
           - Before time-sensitive function calls, convert relative periods to explicit boundaries. Unless the user specifies otherwise: "过去一周"/"最近一周"/"近7天"/"周报"/weekly report = [now - 7 days, now]; "本周" = [Monday 00:00, now]; "上周" = [previous Monday 00:00, this Monday 00:00). Historical or current ranges must not end after now; future ranges require explicit user intent.

@@ -31,6 +31,8 @@ import com.alibaba.opensandbox.sandbox.domain.pool.PoolCreationSpec;
 import com.alibaba.opensandbox.sandbox.infrastructure.pool.InMemoryPoolStateStore;
 import com.alibaba.opensandbox.sandbox.pool.SandboxPool;
 import jakarta.annotation.PreDestroy;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
@@ -254,6 +256,175 @@ public class SandboxService {
    */
   public String readFile(String chatId, String path) {
     return executeWithRetry(chatId, "读文件", leased -> leased.sandbox().files().readFile(path), null);
+  }
+
+  /** Copy files with no-follow directory descriptors; never follow a sandbox symlink. */
+  private static final String WORKSPACE_TRANSFER_SCRIPT =
+      """
+          import os, sys, stat
+          action, relative, temporary, maximum = sys.argv[1:]
+          maximum = int(maximum)
+          def copy_limited(src, dst):
+              total = 0
+              while True:
+                  chunk = src.read(65536)
+                  if not chunk: break
+                  total += len(chunk)
+                  if total > maximum: raise ValueError('File size limit exceeded')
+                  dst.write(chunk)
+          parts = relative.split('/')
+          descriptor = os.open('/workspace', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+          try:
+              for part in parts[:-1]:
+                  if action == 'import':
+                      try: os.mkdir(part, dir_fd=descriptor)
+                      except FileExistsError: pass
+                  child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+                  os.close(descriptor)
+                  descriptor = child
+              if action == 'export':
+                  source = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
+                  info = os.fstat(source)
+                  if not stat.S_ISREG(info.st_mode) or info.st_size > maximum:
+                      os.close(source)
+                      raise ValueError('Not a regular file or size limit exceeded')
+                  with os.fdopen(source, 'rb') as src, open(temporary, 'xb') as dst:
+                      copy_limited(src, dst)
+              else:
+                  target = os.open(parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=descriptor)
+                  try:
+                      with open(temporary, 'rb') as src, os.fdopen(target, 'wb') as dst:
+                          copy_limited(src, dst)
+                  except BaseException:
+                      os.unlink(parts[-1], dir_fd=descriptor)
+                      raise
+          finally:
+              os.close(descriptor)
+          """;
+
+  public boolean importWorkspaceFile(String chatId, String path, InputStream input, long maximum) {
+    String relative = workspaceRelativePath(path);
+    if (relative == null || chatId == null || chatId.isBlank() || maximum < 1) {
+      return false;
+    }
+    Leased current = lease(chatId);
+    if (current == null) {
+      return false;
+    }
+    String temporary = "/tmp/workspace-import-" + UUID.randomUUID();
+    try {
+      renewBeforeUse(current.sandbox());
+      // Bounded even when this API is called outside WorkspaceService.
+      byte[] bytes = boundedBytes(input, maximum);
+      current.sandbox().files().writeFile(temporary, bytes);
+      return executeCommand(current.sandbox(),
+          transferCommand("import", relative, temporary, maximum)).ok();
+    } catch (Exception e) {
+      if (isSandboxNotFound(e)) {
+        invalidate(current);
+      }
+      log.warn("Workspace sandbox import failed, chatId: {}", chatId);
+      return false;
+    } finally {
+      removeTransferTemporary(current, temporary);
+      release(current);
+    }
+  }
+
+  /** Export must never create/retry with an empty replacement instance. */
+  public byte[] exportWorkspaceFile(String chatId, String path, long maximum) {
+    String relative = workspaceRelativePath(path);
+    if (relative == null || chatId == null || chatId.isBlank() || maximum < 1) {
+      return null;
+    }
+    Leased current = leaseExisting(chatId);
+    if (current == null) {
+      return null;
+    }
+    String temporary = "/tmp/workspace-export-" + UUID.randomUUID();
+    try {
+      renewBeforeUse(current.sandbox());
+      if (!executeCommand(current.sandbox(),
+          transferCommand("export", relative, temporary, maximum)).ok()) {
+        return null;
+      }
+      try (InputStream input = current.sandbox().files().readStream(temporary)) {
+        return boundedBytes(input, maximum);
+      }
+    } catch (Exception e) {
+      if (isSandboxNotFound(e)) {
+        invalidate(current);
+      }
+      log.warn("Workspace sandbox export failed, chatId: {}", chatId);
+      return null;
+    } finally {
+      removeTransferTemporary(current, temporary);
+      release(current);
+    }
+  }
+
+  private String workspaceRelativePath(String path) {
+    if (path == null || path.isBlank() || path.contains("\\")
+        || path.chars().anyMatch(Character::isISOControl)) {
+      return null;
+    }
+    String relative = path.startsWith(WORKSPACE_DIR + "/")
+        ? path.substring(WORKSPACE_DIR.length() + 1)
+        : path;
+    if (relative.startsWith("/") || relative.length() > 2048) {
+      return null;
+    }
+    for (String part : relative.split("/", -1)) {
+      if (part.isEmpty() || part.equals(".") || part.equals("..")) {
+        return null;
+      }
+    }
+    return relative;
+  }
+
+  private byte[] boundedBytes(InputStream input, long maximum) throws java.io.IOException {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    byte[] buffer = new byte[8192];
+    int count;
+    while ((count = input.read(buffer)) != -1) {
+      if (count > maximum - output.size()) {
+        throw new java.io.IOException("Workspace file size limit exceeded");
+      }
+      output.write(buffer, 0, count);
+    }
+    return output.toByteArray();
+  }
+
+  private String transferCommand(String action, String relative, String temporary, long maximum) {
+    return "python3 -c " + shellQuote(WORKSPACE_TRANSFER_SCRIPT) + " " + action + " "
+        + shellQuote(relative) + " " + shellQuote(temporary) + " " + maximum;
+  }
+
+  private void removeTransferTemporary(Leased current, String temporary) {
+    try {
+      current.sandbox().files().deleteFiles(java.util.List.of(temporary));
+    } catch (Exception e) {
+      log.debug("Unable to remove sandbox transfer temporary file");
+    }
+  }
+
+  private Leased leaseExisting(String chatId) {
+    String key = normalizeChatId(chatId);
+    ReentrantLock lock = lockFor(key);
+    lock.lock();
+    try {
+      ChatState state = sessions.get(key);
+      if (!isAvailable() || state == null || state.sandbox == null || state.invalid
+          || state.creating || state.retiring
+          || (state.inFlight.get() == 0 && isIdleExpired(state))) {
+        return null;
+      }
+      state.lastUsedNanos = System.nanoTime();
+      state.inFlight.incrementAndGet();
+      return new Leased(key, state, state.sandbox);
+    } finally {
+      lock.unlock();
+    }
   }
 
   /**

@@ -69,6 +69,8 @@ public class ClassifierTool {
       Args: user question(str)
       """;
   private static final int CLASSIFIER_HISTORY_WINDOW = 6;
+  private static final int RECENT_MESSAGE_MAX_CHARS = 8000;
+  private static final int EARLIER_MESSAGE_MAX_CHARS = 600;
 
   public Map<String, Object> run(String question, Map<String, Object> globalMessage) {
     int productId = (int) globalMessage.get("productId");
@@ -196,7 +198,9 @@ public class ClassifierTool {
       historyBuilder.append("- ")
           .append(normalizeRole(modelMessage.getRole()))
           .append(": ")
-          .append(safeContent(modelMessage.getContent()))
+          .append(safeContent(modelMessage.getContent(), i >= memory.size() - 2
+              ? RECENT_MESSAGE_MAX_CHARS
+              : EARLIER_MESSAGE_MAX_CHARS))
           .append("\n");
     }
     return historyBuilder.toString();
@@ -215,13 +219,16 @@ public class ClassifierTool {
     return role == null ? "unknown" : role;
   }
 
-  private String safeContent(Object content) {
+  private String safeContent(Object content, int maxChars) {
     if (content == null) {
       return "";
     }
     String text = String.valueOf(content).replace("\r", " ").replace("\n", " ").trim();
-    if (text.length() > 120) {
-      return text.substring(0, 120) + "...";
+    if (text.length() > maxChars) {
+      String marker = " ...[truncated]... ";
+      int headLength = (maxChars - marker.length()) / 2;
+      int tailLength = maxChars - marker.length() - headLength;
+      return text.substring(0, headLength) + marker + text.substring(text.length() - tailLength);
     }
     return text;
   }
