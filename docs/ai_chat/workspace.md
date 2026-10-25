@@ -7,8 +7,8 @@
 ## 部署
 
 启动新版后端前，在应用使用的 MySQL 数据库中执行
-[`20261020_agent_workspace.sql`](../sql/20261020_agent_workspace.sql)。项目使用
-`ddl-auto: none`，不会自动建表。该 SQL 不改变现有对话数据。
+[`20261020_agent_workspace.sql`](../sql/20261020_agent_workspace.sql)。若部署环境使用
+`ddl-auto: none` 或 `validate`，需先完成建表；当前仓库配置为 `update`。该 SQL 不改变现有对话数据。
 
 默认配置如下，可合并到现有 `application.yaml` 的 `ai` 节点：
 
@@ -70,6 +70,8 @@ ai:
 因此智能体应在交付前显式导出产物。远程 MCP 服务本地路径的文件提取不在首版范围内。
 
 `/workspace` 是沙箱内的临时工作目录，文件仅在该沙箱实例存活期间保留；沙箱关闭、回收或过期会丢失。
+工作区与沙箱之间通过显式导入、导出复制文件，不自动挂载或同步。沙箱部署、镜像构建及完整文件处理流程见
+[云电脑文档](../sandbox/cloud_computer.md)。
 Router 的普通模式及 Function Calling 模式都在 Agent 路由中描述 `workspaceTool`，有 MCP 路由时也提供该描述。
 工作区文本读写不依赖沙箱或远程 MCP 服务。执行智能体会接收原始会话历史：例如助手提出“打开 part1.txt”，
 用户回复“好的”后应继续读取并展示内容。明确取消、结束对话或完成任务后的普通确认不会触发额外操作。
