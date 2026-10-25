@@ -21,6 +21,11 @@ package top.rslly.iot.utility.ai.llm;
 
 import com.openai.core.JsonValue;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
+import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
+import com.openai.models.chat.completions.ChatCompletionMessageParam;
+import org.springframework.test.util.ReflectionTestUtils;
+import top.rslly.iot.utility.ai.ConversationHistoryCodec;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -32,6 +37,50 @@ import java.util.List;
 import java.util.Map;
 
 class DeepSeekTest {
+
+  @Test
+  void nonStreamingToolResultKeepsProviderIdRawArgumentsAndAssistantContent() {
+    DeepSeek deepSeek =
+        new DeepSeek("https://api.deepseek.com", "deepseek-chat", "test-key", false, 128);
+    String arguments = "{\"args\":\" untouched \"}";
+    var toolCall =
+        ChatCompletionMessageToolCall.ofFunction(ChatCompletionMessageFunctionToolCall.builder()
+            .id("real-provider-call-id")
+            .function(ChatCompletionMessageFunctionToolCall.Function.builder()
+                .name("route_weather").arguments(arguments).build())
+            .build());
+
+    FunctionResult result = ReflectionTestUtils.invokeMethod(deepSeek, "toToolCallResult", toolCall,
+        "assistant preamble", "reasoning content");
+
+    Assertions.assertEquals("real-provider-call-id", result.getToolCallId());
+    Assertions.assertEquals("route_weather", result.getFunctionName());
+    Assertions.assertEquals(arguments, result.getArguments());
+    Assertions.assertEquals("assistant preamble", result.getReply());
+    Assertions.assertEquals("reasoning content", result.getReasoningContent());
+  }
+
+  @Test
+  void restoredProtocolBecomesMatchedLlmMessagesAndRetainsFinalAnswer() {
+    DeepSeek deepSeek =
+        new DeepSeek("https://api.deepseek.com", "deepseek-chat", "test-key", false, 128);
+    List<ModelMessage> restored = ConversationHistoryCodec.restoreCache(List.of(
+        Map.of("role", "user", "content", "question"),
+        Map.of("role", "assistant", "content",
+            Map.of("toolCallId", "real-id", "functionName", "route_weather", "arguments", "{}")),
+        Map.of("role", "tool", "content", Map.of("toolCallId", "real-id", "content", "sunny")),
+        Map.of("role", "assistant", "content", "visible final answer")));
+
+    List<ChatCompletionMessageParam> messages =
+        ReflectionTestUtils.invokeMethod(deepSeek, "toMessageParams", restored);
+
+    Assertions.assertEquals(4, messages.size());
+    Assertions.assertEquals("real-id",
+        messages.get(1).asAssistant().toolCalls().orElseThrow().getFirst().asFunction().id());
+    Assertions.assertEquals("real-id", messages.get(2).asTool().toolCallId());
+    Assertions.assertEquals("visible final answer",
+        messages.get(3).asAssistant().content().orElseThrow().asText());
+  }
 
   @Test
   void officialDeepSeekDisablesThinkingWithOfficialParameter() throws Exception {

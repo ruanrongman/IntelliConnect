@@ -472,7 +472,8 @@ public class DeepSeek implements LLM {
               .get("reasoning_content"));
           var toolCalls = choice.message().toolCalls().orElse(List.of());
           if (!toolCalls.isEmpty()) {
-            return toToolCallResult(toolCalls.get(0), reasoningContent);
+            return toToolCallResult(toolCalls.get(0), choice.message().content().orElse(""),
+                reasoningContent);
           }
           return FunctionResult.directReply(choice.message().content().orElse(""));
         })
@@ -480,13 +481,13 @@ public class DeepSeek implements LLM {
   }
 
   private FunctionResult toToolCallResult(ChatCompletionMessageToolCall toolCall,
-      String reasoningContent) {
+      String content, String reasoningContent) {
     if (toolCall == null || !toolCall.isFunction()) {
       return FunctionResult.error(FALLBACK_MESSAGE);
     }
     var functionToolCall = toolCall.asFunction();
     return FunctionResult.toolCall(functionToolCall.id(), functionToolCall.function().name(),
-        functionToolCall.function().arguments(), reasoningContent);
+        functionToolCall.function().arguments(), content, reasoningContent);
   }
 
   private void appendReasoningContent(StringBuilder builder, JsonValue reasoningValue) {

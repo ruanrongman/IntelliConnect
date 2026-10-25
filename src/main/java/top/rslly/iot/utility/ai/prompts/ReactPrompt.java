@@ -59,6 +59,7 @@ public class ReactPrompt {
 
           - `action.name` must be one of the provided tool names, or `"finish"`.
           - `action.args` must be a JSON object matching the tool's parameter schema.
+          - For `bashTool`, use `{"action":{"name":"bashTool","args":{"command":"<full shell command>"}}}`.
 
           After each tool call, the system will return:
           ```
@@ -128,6 +129,8 @@ public class ReactPrompt {
           ## Rules
           - If needed,briefly inform the user what you're doing.Do not expose internal reasoning, but it is only progress text and not the final answer.
           - Use a function only when it helps complete the user's request.
+          - Use the exact function names and parameter schemas supplied by the API. Do not shorten `bashTool` to `bash` or `editTool` to `edit`.
+          - For `bashTool`, supply `{"command":"<full shell command>"}`. For other functions, follow their supplied schemas.
           - Do not repeatedly call the same function with identical arguments without making meaningful progress.
           - If you output progress text because a function is needed, you must still call the function in the same turn. Do not stop after progress text.
           - After a tool result is provided, use it to decide whether another function is needed or whether to answer.

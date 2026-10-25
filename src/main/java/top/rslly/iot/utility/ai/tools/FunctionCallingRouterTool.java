@@ -177,9 +177,16 @@ public class FunctionCallingRouterTool {
       }
 
       @Override
-      public void onToolCall(String functionName, String arguments) {
+      public void onToolCall(String toolCallId, String functionName, String arguments) {
+        onToolCall(toolCallId, functionName, arguments, "");
+      }
+
+      @Override
+      public void onToolCall(String toolCallId, String functionName, String arguments,
+          String reasoningContent) {
         responseStarted.set(true);
-        finish(FunctionResult.toolCall(functionName, arguments), false);
+        finish(FunctionResult.toolCall(toolCallId, functionName, arguments,
+            replyBuffer.toString(), reasoningContent), false);
       }
 
       @Override
@@ -280,7 +287,7 @@ public class FunctionCallingRouterTool {
     String agentDescription = FunctionRouterRoute.AGENT.getDefaultDescription();
     if (sandboxService.isAvailable()) {
       agentDescription +=
-          " | A cloud computer is available here, bash and edit are its tools and you have"
+          " | A cloud computer is available here, bashTool and editTool are its tools and you have"
               + " full permission to use them";
     }
     String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);

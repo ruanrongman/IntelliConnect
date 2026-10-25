@@ -30,6 +30,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import top.rslly.iot.dao.*;
 import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.models.WxUserEntity;
@@ -41,7 +42,6 @@ import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -49,7 +49,6 @@ import java.util.Set;
 @Service
 @Slf4j
 public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityService {
-  private static final int MAX_CONTENT_LENGTH = 6144;
   private static final String YOUTH_PROTECTION_CONFIG_KEY = "youth-protection.enabled";
   private static final String YOUTH_PROTECTION_TALK_MAX_LIMIT = "youth-protection-talk.maxLimit";
   private static final String USER_MESSAGE_TYPE = "user";
@@ -84,14 +83,14 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
     if (chatId == null || chatId.isBlank() || limit <= 0) {
       return List.of();
     }
-    Pageable pageable = PageRequest.of(0, limit,
-        Sort.by(Sort.Direction.DESC, "time")
-            .and(Sort.by(Sort.Direction.DESC, "sequenceNum")));
-    List<HistoryMessageEntity> history =
-        new ArrayList<>(historyMessageRepository.findAllByChatId(chatId, pageable).getContent());
-    history.sort(Comparator.comparing(HistoryMessageEntity::getTime)
-        .thenComparing(HistoryMessageEntity::getSequenceNum));
-    return history;
+    // The legacy limit counts user/assistant rows. Select whole requests before loading events.
+    List<String> requestIds = historyMessageRepository.findRecentRequestIds(chatId,
+        PageRequest.of(0, Math.max(1, (limit + 1) / 2)));
+    if (requestIds.isEmpty()) {
+      return List.of();
+    }
+    return historyMessageRepository.findAllByChatIdAndRequestIdIn(chatId, requestIds,
+        Sort.by("time").and(Sort.by("sequenceNum")).and(Sort.by("id")));
   }
 
   @Override
@@ -122,7 +121,16 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   }
 
   @Override
-  public JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId) {
+  @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+  public void recordHistoryEvent(String chatId, String requestId, int sequenceNum,
+      String messageType, String content, long time) {
+    historyMessageRepository.saveAndFlush(
+        buildHistoryMessage(chatId, requestId, sequenceNum, messageType, content, time));
+  }
+
+  @Override
+  public JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId,
+      boolean includeToolEvents) {
     if (pageNum < 1 || pageSize < 1) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
@@ -132,7 +140,12 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
     Pageable pageable = PageRequest.of(
         pageNum - 1,
         pageSize,
-        Sort.by(Sort.Direction.DESC, "time"));
+        Sort.by(Sort.Direction.DESC, "time")
+            .and(Sort.by(Sort.Direction.DESC, "sequenceNum"))
+            .and(Sort.by(Sort.Direction.DESC, "id")));
+    Specification<HistoryMessageEntity> visibleMessages =
+        (root, query, cb) -> includeToolEvents ? cb.conjunction()
+            : root.get("messageType").in("user", "assistant");
     Page<HistoryMessageEntity> result;
     if (role.equals("ROLE_" + "wx_user")) {
       List<WxUserEntity> wxUserEntityList = wxUserRepository.findAllByName(username);
@@ -153,7 +166,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
         chatIds.add(s.getAppid() + s.getOpenid());
       }
       result = historyMessageRepository
-          .findAll(buildChatIdSpec(chatIdPrefixes, chatIds, chatId), pageable);
+          .findAll(buildChatIdSpec(chatIdPrefixes, chatIds, chatId).and(visibleMessages), pageable);
     } else if (!role.equals("[ROLE_admin]")) {
       var userList = userRepository.findAllByUsername(username);
       if (userList.isEmpty()) {
@@ -169,12 +182,14 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
         chatIdPrefixes.add("chatProduct" + s.getProductId());
       }
       result = historyMessageRepository
-          .findAll(buildChatIdSpec(chatIdPrefixes, Set.of(), chatId), pageable);
+          .findAll(buildChatIdSpec(chatIdPrefixes, Set.of(), chatId).and(visibleMessages),
+              pageable);
     } else {
       if (chatId == null || chatId.isBlank()) {
-        result = historyMessageRepository.findAll(pageable);
+        result = historyMessageRepository.findAll(visibleMessages, pageable);
       } else {
-        result = historyMessageRepository.findAllByChatId(chatId, pageable);
+        result = historyMessageRepository.findAll(visibleMessages.and(
+            (root, query, cb) -> cb.equal(root.get("chatId"), chatId)), pageable);
       }
     }
     if (result.isEmpty()) {
@@ -211,19 +226,9 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
     historyMessageEntity.setRequestId(requestId);
     historyMessageEntity.setSequenceNum(sequenceNum);
     historyMessageEntity.setMessageType(messageType);
-    historyMessageEntity.setContent(limitContent(content));
+    historyMessageEntity.setContent(content == null ? "" : content);
     historyMessageEntity.setTime(time);
     return historyMessageEntity;
-  }
-
-  private String limitContent(String content) {
-    if (content == null) {
-      return "";
-    }
-    if (content.length() <= MAX_CONTENT_LENGTH) {
-      return content;
-    }
-    return content.substring(0, MAX_CONTENT_LENGTH);
   }
 
   @Override

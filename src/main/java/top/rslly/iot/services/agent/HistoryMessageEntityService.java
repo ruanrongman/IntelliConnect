@@ -31,7 +31,8 @@ public interface HistoryMessageEntityService {
 
   boolean youthProtectForTimeOut(int productId, String chatId);
 
-  JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId);
+  JsonResult<?> getHistoryMessage(String token, int pageNum, int pageSize, String chatId,
+      boolean includeToolEvents);
 
   List<HistoryMessageEntity> deleteAllByChatId(String chatId);
 
@@ -39,4 +40,7 @@ public interface HistoryMessageEntityService {
 
   void recordHistoryMessage(String chatId, String requestId, String userContent,
       String assistantContent);
+
+  void recordHistoryEvent(String chatId, String requestId, int sequenceNum,
+      String messageType, String content, long time);
 }

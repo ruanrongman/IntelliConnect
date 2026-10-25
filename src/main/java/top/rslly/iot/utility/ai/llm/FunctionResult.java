@@ -69,11 +69,16 @@ public final class FunctionResult {
 
   public static FunctionResult toolCall(String toolCallId, String functionName, String arguments,
       String reasoningContent) {
+    return toolCall(toolCallId, functionName, arguments, "", reasoningContent);
+  }
+
+  public static FunctionResult toolCall(String toolCallId, String functionName, String arguments,
+      String content, String reasoningContent) {
     return new FunctionResult(Type.TOOL_CALL,
         normalizeToolCallId(toolCallId),
         functionName,
         arguments,
-        "",
+        content,
         "",
         reasoningContent);
   }

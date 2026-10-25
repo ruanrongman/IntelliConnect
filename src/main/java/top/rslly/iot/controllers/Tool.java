@@ -202,7 +202,7 @@ public class Tool {
     aiControl.setContent(content);
     aiControl.setChatId(chatId);
     return ResponseEntity.ok()
-        .header(HttpHeaders.CACHE_CONTROL, "no-cache")
+        .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform")
         .header("X-Accel-Buffering", "no")
         .contentType(MediaType.TEXT_EVENT_STREAM)
         .body(aiService.getAiResponseStream(aiControl, streamId, multipartFiles, header));
@@ -884,8 +884,10 @@ public class Tool {
       @RequestParam("pageNum") @Min(value = 1, message = "pageNum 必须大于等于 1") int pageNum,
       @RequestParam("pageSize") @Min(value = 1, message = "pageSize 必须大于等于 1") int pageSize,
       @RequestParam(value = "chatId", required = false) String chatId,
+      @RequestParam(value = "includeToolEvents", defaultValue = "false") boolean includeToolEvents,
       @RequestHeader("Authorization") String header) {
-    return historyMessageEntityService.getHistoryMessage(header, pageNum, pageSize, chatId);
+    return historyMessageEntityService.getHistoryMessage(header, pageNum, pageSize, chatId,
+        includeToolEvents);
   }
 
   @Operation(summary = "删除历史消息", description = "根据ID删除历史消息")

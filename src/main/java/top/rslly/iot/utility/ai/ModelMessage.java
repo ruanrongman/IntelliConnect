@@ -31,5 +31,10 @@ import java.io.Serializable;
 public class ModelMessage implements Serializable {
   private String role;
   private Object content;
+  private String requestId;
+
+  public ModelMessage(String role, Object content) {
+    this(role, content, null);
+  }
 
 }

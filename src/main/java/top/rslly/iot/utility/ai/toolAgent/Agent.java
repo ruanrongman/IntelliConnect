@@ -136,11 +136,15 @@ public class Agent implements BaseTool<String> {
 
   public String run(String question, Map<String, Object> globalMessage) {
     if (isFunctionAgentMode()) {
-      String functionResult = runFunctionCalling(question, globalMessage);
+      String functionResult;
+      try {
+        functionResult = runFunctionCalling(question, globalMessage);
+      } finally {
+        cleanupResources((String) globalMessage.get("chatId"));
+      }
       if (functionResult != null) {
         return functionResult;
       }
-      log.info("Agent function calling unavailable, fallback to ReAct prompt mode");
     }
     StringBuilder conversationPrompt = new StringBuilder();
     int productId = (int) globalMessage.get("productId");
@@ -216,8 +220,9 @@ public class Agent implements BaseTool<String> {
           }
           return content;
         }
-        toolResult =
-            manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
+        toolResult = "bashTool".equals(res.get("action_name"))
+            ? runBashTool(res.get("action_parameters"), globalMessage)
+            : manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
         conversationPrompt.append(String.format(
             "%s\nAction: %s(%s)\nObservation: %s\n",
             buildThoughtLine(res.get("thought")), res.get("action_name"),
@@ -408,6 +413,8 @@ public class Agent implements BaseTool<String> {
     Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
     LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "4", true);
     if (!llm.supportsFunctionCalling()) {
+      log.info("Agent adapter does not support function calling, fallback to ReAct, chatId={}",
+          chatId);
       return null;
     }
     globalMessage.put("mcpIsTool", true);
@@ -431,7 +438,21 @@ public class Agent implements BaseTool<String> {
       FunctionResult result = callFunctionLlm(question, messages, toolSpecs, queueMap, chatId, llm,
           GlobalMessageContext.reasoningQueue(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
-        return null;
+        if (iteration == 0 && result != null && result.isUnsupported()) {
+          log.info("Agent function calling reported unsupported, fallback to ReAct, chatId={}",
+              chatId);
+          return null;
+        }
+        log.warn("Agent function calling stopped, chatId={}, step={}, reason={}", chatId,
+            iteration + 1, result == null ? "empty result"
+                : result.getType() + ": "
+                    + result.getErrorMessage());
+        String failure = "模型工具调用中断，任务未能完成。已执行的操作不会自动重试。";
+        if (queue != null) {
+          queue.add(failure);
+          queue.add("[DONE]");
+        }
+        return failure;
       }
       if (result.isDirectReply()) {
         finalAnswer = result.getReply();
@@ -450,27 +471,37 @@ public class Agent implements BaseTool<String> {
         return finalAnswer;
       }
       if (!result.isToolCall()) {
-        return null;
+        throw new IllegalStateException("Unexpected Agent function result: " + result.getType());
       }
       String functionName = result.getFunctionName();
-      String assistantText = extractAssistantText(result.getArguments());
+      String assistantText = result.getReply().isBlank()
+          ? extractAssistantText(result.getArguments())
+          : result.getReply();
       String toolArgs = extractFunctionArgs(result.getArguments());
       String toolCallArguments = normalizeToolCallArguments(result.getArguments());
+      String observation;
       if (!isKnownAgentFunction(functionName, toolSpecs)) {
-        log.warn("Unknown Agent function call: {}", functionName);
-        return null;
+        String availableNames =
+            String.join(", ", toolSpecs.stream().map(FunctionToolSpec::name).toList());
+        log.warn("Unknown Agent function call: {}, available={}, chatId={}", functionName,
+            availableNames, chatId);
+        observation = "Error: unknown function '" + functionName
+            + "'. Use an exact provided function name: " + availableNames;
+      } else {
+        if (queue != null) {
+          queue.add(ToolPrefix.getToolCallPrefix(functionName));
+        }
+        observation = "bashTool".equals(functionName)
+            ? runBashTool(toolCallArguments, globalMessage)
+            : manage.runTool(functionName, toolArgs, globalMessage);
+        addToolObservation(toolObservations, observation);
+        finalAnswer = observation;
       }
-      if (queue != null) {
-        queue.add(ToolPrefix.getToolCallPrefix(functionName));
-      }
-      String observation = manage.runTool(functionName, toolArgs, globalMessage);
-      addToolObservation(toolObservations, observation);
       messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
           new FunctionToolCallMessage(result.getToolCallId(), functionName, toolCallArguments,
               assistantText, result.getReasoningContent())));
       messages.add(new ModelMessage(ModelMessageRole.TOOL.value(),
           new FunctionToolResultMessage(result.getToolCallId(), observation)));
-      finalAnswer = observation;
     }
 
     String summary = summarizeFunctionConversation(question, productId, toolObservations,
@@ -539,10 +570,6 @@ public class Agent implements BaseTool<String> {
       @Override
       public void onFailure(Throwable throwable) {
         log.error("Agent function calling stream failed, chatId={}", chatId, throwable);
-        if (!replyBuffer.isEmpty()) {
-          finish(FunctionResult.directReply(replyBuffer.toString()));
-          return;
-        }
         finish(FunctionResult.error("function calling stream failed"));
       }
 
@@ -593,7 +620,11 @@ public class Agent implements BaseTool<String> {
       }
       toolSpecs.add(new FunctionToolSpec(toolName,
           description.isBlank() ? toolName : description,
-          FunctionToolSpec.defaultStringArgsSchema()));
+          "bashTool".equals(toolName)
+              ? Map.of("type", "object", "properties", Map.of("command",
+                  Map.of("type", "string", "description", "The full shell command to execute.")),
+                  "required", List.of("command"), "additionalProperties", false)
+              : FunctionToolSpec.defaultStringArgsSchema()));
     }
     return toolSpecs;
   }
@@ -603,6 +634,20 @@ public class Agent implements BaseTool<String> {
       return false;
     }
     return toolSpecs.stream().anyMatch(toolSpec -> functionName.equals(toolSpec.name()));
+  }
+
+  private String runBashTool(String arguments, Map<String, Object> globalMessage) {
+    String command;
+    try {
+      JSONObject object = JSON.parseObject(arguments);
+      if (object == null || !(object.get("command")instanceof String value) || value.isBlank()) {
+        return "Error: bashTool requires a non-empty string field 'command'.";
+      }
+      command = value;
+    } catch (Exception e) {
+      return "Error: bashTool arguments must be a JSON object with a string field 'command'.";
+    }
+    return manage.runTool("bashTool", command, globalMessage);
   }
 
   private String extractFunctionArgs(String arguments) {
@@ -629,9 +674,6 @@ public class Agent implements BaseTool<String> {
     try {
       JSONObject object = JSON.parseObject(arguments);
       object.remove("_assistant_text");
-      if (!object.containsKey("args")) {
-        object.put("args", "");
-      }
       return object.toJSONString();
     } catch (Exception ignored) {
       JSONObject object = new JSONObject();

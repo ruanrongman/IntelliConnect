@@ -1,8 +1,8 @@
 import store from '@/store'
 import { joinUrl } from '@/utils/url'
+import { readAiEventStream } from '@/utils/aiEventStream.mjs'
 
 const { VITE_BASE_URL } = import.meta.env
-const DONE_SEPARATOR = /\r?\n\r?\n/
 
 export const streamAiControl = async ({
   productId,
@@ -14,7 +14,6 @@ export const streamAiControl = async ({
   onMessage,
   onReasoning,
   onComplete,
-  onError,
 }) => {
   const headers = {
     Authorization: store.getters['auth/token'],
@@ -39,21 +38,11 @@ export const streamAiControl = async ({
   if (!response.ok || !response.body) {
     throw new Error(`请求失败：${response.status}`)
   }
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) {
-      break
-    }
-    buffer += decoder.decode(value, { stream: true })
-    buffer = consumeSseBuffer(buffer, onMessage, onReasoning, onComplete, onError)
+  if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.errorMsg || '未收到流式响应，请检查登录状态后重试。')
   }
-  buffer += decoder.decode()
-  if (buffer.trim()) {
-    consumeSseBuffer(`${buffer}\n\n`, onMessage, onReasoning, onComplete, onError)
-  }
+  await readAiEventStream(response.body, { onMessage, onReasoning, onComplete })
 }
 
 export const stopAiControlStream = async (productId, streamId) => {
@@ -74,52 +63,4 @@ export const stopAiControlStream = async (productId, streamId) => {
     throw new Error(`停止失败：${response.status}`)
   }
   return response.json()
-}
-
-function consumeSseBuffer(buffer, onMessage, onReasoning, onComplete, onError) {
-  const parts = buffer.split(DONE_SEPARATOR)
-  const rest = parts.pop() || ''
-  parts.forEach((part) => {
-    const event = parseSseEvent(part)
-    if (!event.data) {
-      return
-    }
-    if (event.name === 'error') {
-      onError?.(parseErrorMessage(event.data))
-    } else if (event.name === 'complete') {
-      onComplete?.(event.data)
-    } else if (event.name === 'reasoning') {
-      onReasoning?.(event.data)
-    } else {
-      onMessage?.(event.data)
-    }
-  })
-  return rest
-}
-
-function parseSseEvent(raw) {
-  const lines = raw.split(/\r?\n/)
-  let name = 'message'
-  const data = []
-  lines.forEach((line) => {
-    if (line.startsWith('event:')) {
-      name = line.slice(6).trim() || 'message'
-    } else if (line.startsWith('data:')) {
-      // Spring's SseEmitter writes the payload directly after "data:".
-      data.push(line.slice(5))
-    }
-  })
-  return {
-    name,
-    data: data.join('\n'),
-  }
-}
-
-function parseErrorMessage(data) {
-  try {
-    const payload = JSON.parse(data)
-    return payload.errorMsg || '请求失败'
-  } catch (error) {
-    return data || '请求失败'
-  }
 }

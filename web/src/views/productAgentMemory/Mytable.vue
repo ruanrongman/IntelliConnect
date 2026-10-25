@@ -144,6 +144,13 @@
       <template #title>
         <span class="history-modal-title">{{ historyModalTitle }}</span>
       </template>
+      <a-checkbox
+        v-model:checked="includeToolEvents"
+        class="history-events-toggle"
+        @change="handleHistoryFilterChange"
+      >
+        显示工具调用及结果
+      </a-checkbox>
       <a-table
         :columns="historyColumns"
         :data-source="historyDataSource"
@@ -151,17 +158,21 @@
         :loading="historyLoading"
         row-key="id"
         class="history-table"
-        :scroll="{ x: 900 }"
+        :scroll="{ x: 1200 }"
         @change="handleHistoryTableChange"
       >
         <template #messageType="{ record }">
-          <a-tag :color="record.messageType === 'user' ? 'blue' : 'green'">
+          <a-tag :color="messageTypeColor(record.messageType)">
             {{ formatMessageType(record.messageType) }}
           </a-tag>
         </template>
+        <template #request="{ record }">
+          <div class="history-request-cell">{{ record.requestId || '-' }}</div>
+          <small>顺序 {{ record.sequenceNum ?? '-' }}</small>
+        </template>
         <template #historyContent="{ record }">
           <div class="history-content-cell">
-            {{ record.content }}
+            {{ formatHistoryContent(record) }}
           </div>
         </template>
         <template #time="{ record }">
@@ -240,6 +251,7 @@ const viewModalVisible = ref(false);
 const editModalVisible = ref(false);
 const historyModalVisible = ref(false);
 const historyLoading = ref(false);
+const includeToolEvents = ref(true);
 const historyDataSource = ref<HistoryRecord[]>([]);
 const selectedHistoryChatId = ref('');
 const currentRecord = ref<MemoryRecord>({
@@ -315,8 +327,14 @@ const historyColumns = [
     title: '角色',
     dataIndex: 'messageType',
     key: 'messageType',
-    width: 90,
+    width: 110,
     slots: { customRender: 'messageType' },
+  },
+  {
+    title: '请求 / 顺序',
+    key: 'request',
+    width: 180,
+    slots: { customRender: 'request' },
   },
   {
     title: '内容',
@@ -340,7 +358,17 @@ const historyColumns = [
   },
 ];
 
-let intervalId: NodeJS.Timeout;
+let pollTimer: ReturnType<typeof setTimeout> | undefined;
+let pollingEnabled = true;
+let memoryRequestSequence = 0;
+let memoryErrorShown = false;
+let historyRequestSequence = 0;
+
+const stopMemoryPolling = () => {
+  pollingEnabled = false;
+  clearTimeout(pollTimer);
+  memoryRequestSequence += 1;
+};
 
 const filterOption = (input: string, option: any) => {
   return option.label.toLowerCase().indexOf(input.toLowerCase()) >= 0;
@@ -369,36 +397,50 @@ const fetchProductList = () => {
 onMounted(() => {
   fetchProductList();
   fetchMemory();
-  intervalId = setInterval(fetchMemory, 1000);
 });
 
 onUnmounted(() => {
-  clearInterval(intervalId);
+  stopMemoryPolling();
 });
 
-const fetchMemory = () => {
-  getAgentMemory()
-    .then((res) => {
-      const { data, errorCode } = res.data;
-      if(errorCode == 2001){
-        router.push('/login');
-      }
-      if(errorCode == 200 && data && Array.isArray(data)){
-        dataSource.value = data.map((item: any) => ({
-          key: item.id,
-          id: item.id,
-          chatId: item.chatId,
-          deviceName: item.deviceName || '未知设备',
-          content: item.content
-        }));
-      } else {
-        dataSource.value = [];
-      }
-    })
-    .catch((err) => {
-      console.error('获取记忆列表失败:', err);
-      message.error('获取记忆列表失败');
-    });
+const fetchMemory = async () => {
+  clearTimeout(pollTimer);
+  const requestSequence = ++memoryRequestSequence;
+  let retryDelay = 5000;
+  try {
+    const res = await getAgentMemory();
+    if (requestSequence !== memoryRequestSequence) return;
+    const { data, errorCode } = res.data;
+    if (errorCode == 2001) {
+      stopMemoryPolling();
+      router.push('/login');
+      return;
+    }
+    memoryErrorShown = false;
+    if (errorCode == 200 && data && Array.isArray(data)) {
+      dataSource.value = data.map((item: any) => ({
+        key: item.id,
+        id: item.id,
+        chatId: item.chatId,
+        deviceName: item.deviceName || '未知设备',
+        content: item.content
+      }));
+    } else {
+      dataSource.value = [];
+    }
+  } catch (err) {
+    if (requestSequence !== memoryRequestSequence) return;
+    console.error('获取记忆列表失败:', err);
+    retryDelay = 15000;
+    if (!memoryErrorShown) {
+      message.error({ key: 'memory-load-error', content: '获取记忆列表失败，稍后将自动重试' });
+      memoryErrorShown = true;
+    }
+  } finally {
+    if (pollingEnabled && !historyModalVisible.value && requestSequence === memoryRequestSequence) {
+      pollTimer = setTimeout(fetchMemory, retryDelay);
+    }
+  }
 };
 
 const handleSearch = () => {
@@ -407,7 +449,7 @@ const handleSearch = () => {
     return;
   }
   // Stop polling during search
-  clearInterval(intervalId);
+  stopMemoryPolling();
   const params: Record<string, any> = { productId: searchForm.productId };
   if (searchForm.nickName && searchForm.nickName.trim()) {
     params.nickName = searchForm.nickName.trim();
@@ -440,10 +482,8 @@ const handleReset = () => {
   searchForm.productId = null;
   searchForm.nickName = '';
   dataSource.value = [];
+  pollingEnabled = true;
   fetchMemory();
-  // Resume polling
-  clearInterval(intervalId);
-  intervalId = setInterval(fetchMemory, 1000);
 };
 
 // 查看记忆详情
@@ -536,6 +576,8 @@ const historyModalTitle = computed(() => {
 });
 
 const openHistoryModal = (chatId = '') => {
+  clearTimeout(pollTimer);
+  memoryRequestSequence += 1;
   selectedHistoryChatId.value = chatId;
   historyModalVisible.value = true;
   historyPagination.current = 1;
@@ -543,21 +585,32 @@ const openHistoryModal = (chatId = '') => {
 };
 
 const handleHistoryCancel = () => {
+  historyRequestSequence += 1;
+  historyLoading.value = false;
   historyModalVisible.value = false;
   selectedHistoryChatId.value = '';
+  if (pollingEnabled) fetchMemory();
+};
+
+const handleHistoryFilterChange = () => {
+  historyPagination.current = 1;
+  fetchHistoryMessages();
 };
 
 const fetchHistoryMessages = () => {
+  const requestSequence = ++historyRequestSequence;
   historyLoading.value = true;
   const params: Record<string, any> = {
     pageNum: historyPagination.current,
-    pageSize: historyPagination.pageSize
+    pageSize: historyPagination.pageSize,
+    includeToolEvents: includeToolEvents.value
   };
   if (selectedHistoryChatId.value) {
     params.chatId = selectedHistoryChatId.value;
   }
   getHistoryMessage(params)
     .then((res) => {
+      if (requestSequence !== historyRequestSequence) return;
       const { data, errorCode } = res.data;
       if (errorCode == 2001) {
         router.push('/login');
@@ -584,11 +637,12 @@ const fetchHistoryMessages = () => {
       }
     })
     .catch((err) => {
+      if (requestSequence !== historyRequestSequence) return;
       console.error('获取消息历史失败:', err);
       message.error('获取消息历史失败');
     })
     .finally(() => {
-      historyLoading.value = false;
+      if (requestSequence === historyRequestSequence) historyLoading.value = false;
     });
 };
 
@@ -633,7 +687,37 @@ const formatMessageType = (messageType: string) => {
   if (messageType === 'assistant') {
     return '助手';
   }
+  if (messageType === 'assistant_tool_call') {
+    return '工具调用';
+  }
+  if (messageType === 'tool_result' || messageType === 'tool') {
+    return '工具结果';
+  }
   return messageType || '-';
+};
+
+const messageTypeColor = (type: string) => ({
+  user: 'blue', assistant: 'green', assistant_tool_call: 'orange', tool_result: 'purple', tool: 'purple'
+} as Record<string, string>)[type] || 'default';
+
+const formatHistoryContent = (record: HistoryRecord) => {
+  if (!['assistant_tool_call', 'tool_result', 'tool'].includes(record.messageType)) {
+    return record.content;
+  }
+  try {
+    const event = JSON.parse(record.content);
+    const callId = `调用 ID：${event.toolCallId || '-'}`;
+    if (record.messageType === 'assistant_tool_call') {
+      let args = event.arguments || '';
+      try { args = JSON.stringify(JSON.parse(args), null, 2); } catch { /* raw tool input */ }
+      return `函数：${event.functionName || '-'}\n${callId}\n参数：\n${args}`
+        + (event.content ? `\n说明：${event.content}` : '');
+    }
+    return `${callId}\n结果：\n${typeof event.content === 'string'
+      ? event.content : JSON.stringify(event.content, null, 2)}`;
+  } catch {
+    return record.content;
+  }
 };
 
 const formatTime = (time: number) => {
@@ -694,16 +778,25 @@ const formatTime = (time: number) => {
     }
   }
 
-  .history-table {
-    .history-content-cell {
-      min-width: 320px;
-      max-height: 220px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      line-height: 1.6;
-    }
-  }
+}
+
+.history-request-cell {
+  overflow-wrap: anywhere;
+  font-family: monospace;
+}
+
+// The modal is teleported outside .table-container.
+.history-content-cell {
+  min-width: 320px;
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.history-events-toggle {
+  margin-bottom: 16px;
 }
 
 .history-modal-title {

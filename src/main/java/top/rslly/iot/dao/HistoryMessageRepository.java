@@ -23,9 +23,12 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import top.rslly.iot.models.HistoryMessageEntity;
 
@@ -42,6 +45,13 @@ public interface HistoryMessageRepository
   List<HistoryMessageEntity> findAllByChatId(String chatId);
 
   Page<HistoryMessageEntity> findAllByChatId(String chatId, Pageable pageable);
+
+  @Query("select h.requestId from HistoryMessageEntity h where h.chatId = :chatId "
+      + "group by h.requestId order by max(h.time) desc, max(h.id) desc")
+  List<String> findRecentRequestIds(@Param("chatId") String chatId, Pageable pageable);
+
+  List<HistoryMessageEntity> findAllByChatIdAndRequestIdIn(String chatId, List<String> requestIds,
+      Sort sort);
 
   List<HistoryMessageEntity> findAllByChatIdStartingWith(String chatId);
 

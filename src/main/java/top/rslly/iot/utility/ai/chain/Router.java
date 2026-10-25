@@ -39,10 +39,13 @@ import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
+import top.rslly.iot.utility.ai.ConversationHistoryCodec;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
+import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
+import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
@@ -181,9 +184,14 @@ public class Router {
     if (historyMessageEntityService.youthProtectForTimeOut(productId, conversationChatId)) {
       return "小朋友，是时候休息一下啰。";
     }
+    HistoryTurn historyTurn = new HistoryTurn(conversationChatId, historyContent);
     if (isFunctionRouterMode()) {
+      // Summarize prior turns before routing: a routed tool result is already the final answer.
+      maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory,
+          memoryPolicy, initializeMemorySummary);
       RouteExecutionResult routeExecutionResult =
-          resolveFunctionRoute(content, globalMessage, productId, streamChatId, dataArgs);
+          resolveFunctionRoute(content, globalMessage, productId, streamChatId, historyTurn,
+              dataArgs);
       answer = routeExecutionResult.answer();
       toolResult = routeExecutionResult.toolResult();
     } else {
@@ -323,15 +331,37 @@ public class Router {
             streamChatId);
       }
     }
-    if (toolResult == null || toolResult.equals(""))
-      toolResult = answer;
-    ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), content);
-    ModelMessage chatMessage = new ModelMessage(ChatMessageRole.ASSISTANT.value(), toolResult);
+    ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), historyContent,
+        historyTurn.requestId);
+    ModelMessage chatMessage = new ModelMessage(ChatMessageRole.ASSISTANT.value(), answer,
+        historyTurn.requestId);
     memory.add(userContent);
+    memory.addAll(historyTurn.protocolMessages);
     memory.add(chatMessage);
+    historyTurn.finish(answer);
+    if (!isFunctionRouterMode()) {
+      maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory,
+          memoryPolicy, initializeMemorySummary);
+    }
+    try {
+      redisUtil.set("memory" + conversationChatId, memory, 48 * 3600);
+    } catch (Exception e) {
+      log.warn("save conversation memory failed, chatId={}", conversationChatId, e);
+    }
+    return answer;
+  }
+
+  private void maintainConversationMemory(String content, String conversationChatId, int productId,
+      Map<String, Object> globalMessage, List<ModelMessage> memory,
+      ConversationMemoryPolicy memoryPolicy, boolean initializeMemorySummary) {
+    if (memory.isEmpty()) {
+      return;
+    }
+    // Auxiliary models only need the original user text and the visible final answers.
+    List<ModelMessage> visibleMemory = ConversationHistoryCodec.visibleMessages(memory);
     if (memory.size() > 6) {
       List<ModelMessage> sideEffectSnapshot =
-          memoryPolicy.recentMessagesSnapshot(memory);
+          memoryPolicy.recentMessagesSnapshot(visibleMemory);
       Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
       sideEffectMessage.remove(GlobalMessageContext.REASONING_QUEUE);
       sideEffectMessage.put(GlobalMessageContext.MEMORY, sideEffectSnapshot);
@@ -349,13 +379,15 @@ public class Router {
 
       Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
       summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
-      summaryMessage.put(GlobalMessageContext.MEMORY, compactionPrefix);
-      memoryTool.run(compactionPrefix, summaryMessage);
+      List<ModelMessage> summarySnapshot =
+          ConversationHistoryCodec.visibleMessages(compactionPrefix);
+      summaryMessage.put(GlobalMessageContext.MEMORY, summarySnapshot);
+      memoryTool.run(summarySnapshot, summaryMessage);
       memoryPolicy.retainRecentTurns(memory);
     }
     if (!compacted && initializeMemorySummary
         && markMemorySummaryInProgress(conversationChatId)) {
-      List<ModelMessage> summarySnapshot = memoryPolicy.copyMessages(memory);
+      List<ModelMessage> summarySnapshot = memoryPolicy.copyMessages(visibleMemory);
       Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
       summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
       summaryMessage.put(GlobalMessageContext.MEMORY, summarySnapshot);
@@ -365,9 +397,6 @@ public class Router {
         userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle"))) {
       knowledgeGraphicService.clearNode(productId);
     }
-    redisUtil.set("memory" + conversationChatId, memory, 48 * 3600);
-    recordHistoryMessage(conversationChatId, historyContent, answer);
-    return answer;
   }
 
   private boolean isYouthProtectionEnabled(int productId) {
@@ -390,15 +419,34 @@ public class Router {
 
   private RouteExecutionResult resolveFunctionRoute(String content,
       Map<String, Object> globalMessage,
-      int productId, String chatId, String... dataArgs) {
+      int productId, String chatId, HistoryTurn historyTurn, String... dataArgs) {
     FunctionResult result = functionCallingRouterTool.run(content, globalMessage);
     if (result.isToolCall()) {
       Optional<FunctionRouterRoute> route =
           FunctionRouterRoute.fromFunctionName(result.getFunctionName());
       if (route.isPresent()) {
         FunctionRouterRoute matchedRoute = route.get();
-        return executeToolRoute(matchedRoute.getTaskId(), content, result.getArguments(),
-            globalMessage, dataArgs);
+        if (matchedRoute == FunctionRouterRoute.SCHEDULE
+            && dataArgs.length > 0 && "false".equals(dataArgs[0])) {
+          return executeToolRoute(matchedRoute.getTaskId(), content, result.getArguments(),
+              globalMessage, dataArgs);
+        }
+        historyTurn.startToolCall(result);
+        RouteExecutionResult execution;
+        try {
+          execution = executeToolRoute(matchedRoute.getTaskId(), content, result.getArguments(),
+              globalMessage, dataArgs);
+        } catch (Exception e) {
+          // Never fall back or retry once a possibly side-effecting route has been entered.
+          log.error("Function route execution failed, requestId={}, function={}",
+              historyTurn.requestId, result.getFunctionName(), e);
+          String error = ConversationHistoryCodec.encode(Map.of("error", Map.of(
+              "type", e.getClass().getName(), "message", Objects.toString(e.getMessage(), ""))));
+          execution = new RouteExecutionResult("工具执行失败：" + Objects.toString(e.getMessage(),
+              e.getClass().getSimpleName()), error);
+        }
+        historyTurn.finishToolCall(result.getToolCallId(), execution.toolResult());
+        return execution;
       }
       log.error("Unknown function router target {}, fallback to legacy router, chatId={}",
           result.getFunctionName(), chatId);
@@ -554,10 +602,7 @@ public class Router {
     Object memoryCache = redisUtil.get("memory" + chatId);
     if (memoryCache != null) {
       try {
-        List<ModelMessage> cachedMemory = Cast.castList(memoryCache, ModelMessage.class);
-        if (cachedMemory != null) {
-          memory.addAll(cachedMemory);
-        }
+        memory.addAll(ConversationHistoryCodec.restoreCache(memoryCache));
       } catch (Exception e) {
         log.warn("load cached memory failed, chatId={}", chatId, e);
       }
@@ -569,16 +614,7 @@ public class Router {
       List<HistoryMessageEntity> recentHistory =
           historyMessageEntityService.findRecentByChatId(
               chatId, memoryPolicy.retainedMessageCount());
-      for (HistoryMessageEntity history : recentHistory) {
-        if (history == null || history.getContent() == null) {
-          continue;
-        }
-        String messageType = history.getMessageType();
-        if (ModelMessageRole.USER.value().equals(messageType)
-            || ModelMessageRole.ASSISTANT.value().equals(messageType)) {
-          memory.add(new ModelMessage(messageType, history.getContent()));
-        }
-      }
+      memory.addAll(ConversationHistoryCodec.restore(recentHistory));
       if (!memory.isEmpty()) {
         log.debug("restored {} memory messages from history, chatId={}", memory.size(), chatId);
       }
@@ -608,12 +644,58 @@ public class Router {
         GlobalMessageContext.memoryBootstrapKey(chatId), UUID.randomUUID().toString(), 300);
   }
 
-  private void recordHistoryMessage(String chatId, String content, String answer) {
-    try {
-      historyMessageEntityService.recordHistoryMessage(chatId, UUID.randomUUID().toString(),
-          content, answer);
-    } catch (Exception e) {
-      log.warn("record history message failed, chatId={}", chatId, e);
+  /** Per-request event writer. Persistence failures never cause execution retries. */
+  private final class HistoryTurn {
+    private final String chatId;
+    private final String requestId = UUID.randomUUID().toString();
+    private final String userContent;
+    private final List<ModelMessage> protocolMessages = new ArrayList<>();
+    private int sequence;
+    private long lastTime;
+
+    private HistoryTurn(String chatId, String userContent) {
+      this.chatId = chatId;
+      this.userContent = userContent;
+    }
+
+    private void startToolCall(FunctionResult result) {
+      FunctionToolCallMessage call = new FunctionToolCallMessage(result.getToolCallId(),
+          result.getFunctionName(), result.getArguments(), result.getReply(),
+          result.getReasoningContent());
+      append("user", userContent);
+      append(ConversationHistoryCodec.TOOL_CALL_TYPE, ConversationHistoryCodec.encode(call));
+      protocolMessages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(), call, requestId));
+    }
+
+    private void finishToolCall(String toolCallId, String result) {
+      FunctionToolResultMessage toolResult = new FunctionToolResultMessage(toolCallId, result);
+      append(ConversationHistoryCodec.TOOL_RESULT_TYPE,
+          ConversationHistoryCodec.encode(toolResult));
+      protocolMessages.add(new ModelMessage(ModelMessageRole.TOOL.value(), toolResult, requestId));
+    }
+
+    private void finish(String answer) {
+      if (!protocolMessages.isEmpty()) {
+        append("assistant", answer);
+      } else {
+        try {
+          historyMessageEntityService.recordHistoryMessage(chatId, requestId, userContent, answer);
+        } catch (Exception e) {
+          log.warn("record history failed, chatId={}, requestId={}", chatId, requestId, e);
+        }
+      }
+    }
+
+    private void append(String messageType, String content) {
+      sequence++;
+      lastTime = Math.max(System.currentTimeMillis(), lastTime + 1);
+      try {
+        historyMessageEntityService.recordHistoryEvent(chatId, requestId, sequence, messageType,
+            content, lastTime);
+      } catch (Exception e) {
+        log.warn("record history event failed, chatId={}, requestId={}, sequence={}, type={}",
+            chatId, requestId, sequence, messageType, e);
+      }
     }
   }
 

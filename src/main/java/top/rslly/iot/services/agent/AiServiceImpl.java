@@ -59,6 +59,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @Slf4j
@@ -96,6 +97,7 @@ public class AiServiceImpl implements AiService {
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
   private static final String SSE_DONE_SIGNAL = "[DONE]";
   private static final long STREAM_POLL_INTERVAL_MS = 10L;
+  private static final long STREAM_HEARTBEAT_INTERVAL_MS = 10_000L;
   private static final int MEMORY_CONTENT_MAX_LENGTH = 1000;
   private final Set<String> stoppedStreamChatIds = ConcurrentHashMap.newKeySet();
   private final Map<String, Queue<String>> reasoningQueueMap = new ConcurrentHashMap<>();
@@ -147,6 +149,11 @@ public class AiServiceImpl implements AiService {
       SseEmitter emitter) {
     String streamChatId = buildStreamChatId(aiControl.getProductId(), streamId);
     boolean sentFromQueue = false;
+    AtomicBoolean connectionClosed = new AtomicBoolean();
+    emitter.onCompletion(() -> connectionClosed.set(true));
+    emitter.onTimeout(() -> connectionClosed.set(true));
+    emitter.onError(error -> connectionClosed.set(true));
+    Thread heartbeat = null;
     stoppedStreamChatIds.remove(streamChatId);
     try {
       if (streamId == null || streamId.isBlank()) {
@@ -167,6 +174,10 @@ public class AiServiceImpl implements AiService {
         sendSseEvent(emitter, "error", ResultTool.fail(ResultCode.PARAM_NOT_VALID));
         return;
       }
+      // Flush headers immediately and keep the connection alive even during file parsing,
+      // tool execution, or the final history/database write after the queue's DONE signal.
+      emitter.send(SseEmitter.event().comment("connected"));
+      heartbeat = startStreamHeartbeat(emitter, connectionClosed, STREAM_HEARTBEAT_INTERVAL_MS);
       DocumentPrompt documentPrompt = buildDocumentPrompt(aiControl.getContent(), multipartFiles);
       if (isStreamInputTooLong(documentPrompt.modelContent())) {
         sendSseEvent(emitter, "error",
@@ -185,7 +196,7 @@ public class AiServiceImpl implements AiService {
               aiControl.getProductId(), reasoningQueue));
       while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)
           || !reasoningQueue.isEmpty()) {
-        if (stoppedStreamChatIds.contains(streamChatId)) {
+        if (connectionClosed.get() || stoppedStreamChatIds.contains(streamChatId)) {
           return;
         }
         String reasoning = reasoningQueue.poll();
@@ -214,16 +225,14 @@ public class AiServiceImpl implements AiService {
         sentFromQueue = true;
       }
 
-      if (stoppedStreamChatIds.contains(streamChatId)) {
+      if (connectionClosed.get() || stoppedStreamChatIds.contains(streamChatId)) {
         return;
       }
       String finalAnswer = responseFuture.get();
       if (!sentFromQueue && finalAnswer != null && !finalAnswer.isBlank()) {
         sendSseEvent(emitter, "message", finalAnswer);
       }
-      if (finalAnswer != null && !finalAnswer.isBlank()) {
-        sendSseEvent(emitter, "complete", finalAnswer);
-      }
+      sendSseEvent(emitter, "complete", finalAnswer == null ? "" : finalAnswer);
     } catch (Exception e) {
       log.error("AI text stream failed, streamChatId={}", streamChatId, e);
       try {
@@ -234,11 +243,35 @@ public class AiServiceImpl implements AiService {
       } catch (Exception ignored) {
       }
     } finally {
+      connectionClosed.set(true);
+      if (heartbeat != null) {
+        heartbeat.interrupt();
+      }
       stoppedStreamChatIds.remove(streamChatId);
       Router.queueMap.remove(streamChatId);
       reasoningQueueMap.remove(streamChatId);
       emitter.complete();
     }
+  }
+
+  private Thread startStreamHeartbeat(SseEmitter emitter, AtomicBoolean connectionClosed,
+      long intervalMillis) {
+    return Thread.ofVirtual().name("ai-stream-heartbeat").start(() -> {
+      while (!connectionClosed.get()) {
+        try {
+          TimeUnit.MILLISECONDS.sleep(intervalMillis);
+          if (!connectionClosed.get()) {
+            emitter.send(SseEmitter.event().comment("heartbeat"));
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        } catch (IOException | IllegalStateException e) {
+          connectionClosed.set(true);
+          return;
+        }
+      }
+    });
   }
 
   private DocumentPrompt saveWorkspaceAttachments(int productId, String conversationChatId,

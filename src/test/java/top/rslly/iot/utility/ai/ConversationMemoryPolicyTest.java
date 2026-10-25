@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ConversationMemoryPolicyTest {
-  private final ConversationMemoryPolicy policy = new ConversationMemoryPolicy(100, 0.5, 4);
+  private final ConversationMemoryPolicy policy = new ConversationMemoryPolicy(100, 0.6, 4);
 
   @Test
   void doesNotSummarizeBelowThreshold() {
@@ -169,7 +169,7 @@ class ConversationMemoryPolicyTest {
   private List<ModelMessage> messages(int count) {
     List<ModelMessage> messages = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      messages.add(new ModelMessage("u", ""));
+      messages.add(new ModelMessage(i % 2 == 0 ? "user" : "assistant", ""));
     }
     return messages;
   }

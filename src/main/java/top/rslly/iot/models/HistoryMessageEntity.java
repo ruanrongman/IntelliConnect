@@ -54,9 +54,8 @@ public class HistoryMessageEntity {
   @Column(name = "message_type", nullable = false)
   private String messageType;
 
-  @Size(max = 6144)
   @NotNull
-  @Column(name = "content", nullable = false)
+  @Column(name = "content", nullable = false, columnDefinition = "LONGTEXT")
   private String content;
 
   @NotNull

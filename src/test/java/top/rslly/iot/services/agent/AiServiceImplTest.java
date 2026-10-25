@@ -35,6 +35,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -134,6 +137,34 @@ class AiServiceImplTest {
     assertTrue(events.stream().anyMatch(event -> isEvent(event, "complete")));
     assertQueuesRemoved(streamChatId);
     verify(emitter).complete();
+  }
+
+  @Test
+  void sendsHeartbeatsWhileNoModelDataIsAvailableAndStopsAfterClosure() throws Exception {
+    SseEmitter emitter = org.mockito.Mockito.mock(SseEmitter.class);
+    AtomicBoolean closed = new AtomicBoolean();
+    CountDownLatch heartbeatSent = new CountDownLatch(1);
+    doAnswer(invocation -> {
+      SseEmitter.SseEventBuilder event = invocation.getArgument(0);
+      assertTrue(event.build().stream()
+          .anyMatch(item -> item.getData().toString().contains(":heartbeat")));
+      closed.set(true);
+      heartbeatSent.countDown();
+      return null;
+    }).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
+    Method start = AiServiceImpl.class.getDeclaredMethod("startStreamHeartbeat",
+        SseEmitter.class, AtomicBoolean.class, long.class);
+    start.setAccessible(true);
+    Thread heartbeat = (Thread) start.invoke(aiService, emitter, closed, 1L);
+    try {
+      assertTrue(heartbeatSent.await(5, TimeUnit.SECONDS));
+      heartbeat.join(1000);
+      assertFalse(heartbeat.isAlive());
+      verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
+    } finally {
+      closed.set(true);
+      heartbeat.interrupt();
+    }
   }
 
   @Test

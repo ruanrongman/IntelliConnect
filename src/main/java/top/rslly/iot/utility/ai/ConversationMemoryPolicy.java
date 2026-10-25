@@ -94,7 +94,7 @@ public class ConversationMemoryPolicy {
 
   public boolean shouldSummarize(List<ModelMessage> messages) {
     return messages != null
-        && messages.size() > retainedMessageCount()
+        && recentTurnsStart(messages) > 0
         && estimateTokens(messages) > summaryThresholdTokens();
   }
 
@@ -102,15 +102,15 @@ public class ConversationMemoryPolicy {
     if (!shouldSummarize(messages)) {
       return List.of();
     }
-    int prefixSize = messages.size() - retainedMessageCount();
+    int prefixSize = recentTurnsStart(messages);
     return Collections.unmodifiableList(new ArrayList<>(messages.subList(0, prefixSize)));
   }
 
   public void retainRecentTurns(List<ModelMessage> messages) {
-    if (messages == null || messages.size() <= retainedMessageCount()) {
+    if (messages == null || messages.isEmpty()) {
       return;
     }
-    messages.subList(0, messages.size() - retainedMessageCount()).clear();
+    messages.subList(0, recentTurnsStart(messages)).clear();
   }
 
   public List<ModelMessage> copyMessages(List<ModelMessage> messages) {
@@ -124,12 +124,31 @@ public class ConversationMemoryPolicy {
     if (messages == null || messages.isEmpty()) {
       return Collections.emptyList();
     }
-    int fromIndex = Math.max(0, messages.size() - retainedMessageCount());
+    int fromIndex = recentTurnsStart(messages);
     return copyMessages(messages.subList(fromIndex, messages.size()));
   }
 
   public int retainedMessageCount() {
     return recentTurns * 2;
+  }
+
+  private int recentTurnsStart(List<ModelMessage> messages) {
+    int turns = 0;
+    for (int index = messages.size() - 1; index >= 0; index--) {
+      ModelMessage message = messages.get(index);
+      if (message == null) {
+        continue;
+      }
+      String requestId = message.getRequestId();
+      boolean start = requestId != null
+          ? index == 0 || messages.get(index - 1) == null
+              || !requestId.equals(messages.get(index - 1).getRequestId())
+          : ModelMessageRole.USER.value().equals(message.getRole());
+      if (start && ++turns == recentTurns) {
+        return index;
+      }
+    }
+    return 0;
   }
 
   public long summaryThresholdTokens() {

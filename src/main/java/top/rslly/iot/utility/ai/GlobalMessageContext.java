@@ -85,6 +85,7 @@ public final class GlobalMessageContext {
     }
     for (Object item : memory) {
       if (item instanceof ModelMessage message && message.getContent() != null
+          && message.getContent() instanceof String
           && (ModelMessageRole.USER.value().equals(message.getRole())
               || ModelMessageRole.ASSISTANT.value().equals(message.getRole()))) {
         history.add(new ModelMessage(message.getRole(), message.getContent()));

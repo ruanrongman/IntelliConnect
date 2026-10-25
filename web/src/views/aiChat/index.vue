@@ -309,6 +309,7 @@ async function loadHistory(page = 1, mode = 'replace') {
       pageNum: historyPagination.current,
       pageSize: historyPagination.pageSize,
       chatId: requestChatId,
+      includeToolEvents: false,
     })
     if (!isCurrentHistoryRequest(requestSequence, requestChatId)) {
       return
@@ -681,10 +682,6 @@ async function sendMessage() {
         assistantMessage.content = finalContent
         scrollActiveConversation(conversationChatId)
       },
-      onError: (errorText) => {
-        assistantMessage.content += errorText
-        updateConversationStatus(conversationChatId, errorText, 'warn')
-      },
     })
     if (!assistantMessage.content.trim()) {
       assistantMessage.content = '请求已结束。'
@@ -696,8 +693,12 @@ async function sendMessage() {
     if (error.name === 'AbortError') {
       updateConversationStatus(conversationChatId, '已停止。')
     } else {
-      const errorText = error.message || '发送失败'
-      assistantMessage.content += errorText
+      const errorText = error instanceof TypeError
+        ? '网络连接中断。请稍后查看历史记录，确认任务进度。'
+        : error.message || '发送失败'
+      if (!assistantMessage.content.trim()) {
+        assistantMessage.content = errorText
+      }
       updateConversationStatus(conversationChatId, errorText, 'warn')
       antMessage.error(errorText)
     }
