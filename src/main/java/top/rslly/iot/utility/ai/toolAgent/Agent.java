@@ -220,9 +220,8 @@ public class Agent implements BaseTool<String> {
           }
           return content;
         }
-        toolResult = "bashTool".equals(res.get("action_name"))
-            ? runBashTool(res.get("action_parameters"), globalMessage)
-            : manage.runTool(res.get("action_name"), res.get("action_parameters"), globalMessage);
+        toolResult = manage.runTool(res.get("action_name"),
+            extractFunctionArgs(res.get("action_parameters")), globalMessage);
         conversationPrompt.append(String.format(
             "%s\nAction: %s(%s)\nObservation: %s\n",
             buildThoughtLine(res.get("thought")), res.get("action_name"),
@@ -491,9 +490,7 @@ public class Agent implements BaseTool<String> {
         if (queue != null) {
           queue.add(ToolPrefix.getToolCallPrefix(functionName));
         }
-        observation = "bashTool".equals(functionName)
-            ? runBashTool(toolCallArguments, globalMessage)
-            : manage.runTool(functionName, toolArgs, globalMessage);
+        observation = manage.runTool(functionName, toolArgs, globalMessage);
         addToolObservation(toolObservations, observation);
         finalAnswer = observation;
       }
@@ -620,11 +617,7 @@ public class Agent implements BaseTool<String> {
       }
       toolSpecs.add(new FunctionToolSpec(toolName,
           description.isBlank() ? toolName : description,
-          "bashTool".equals(toolName)
-              ? Map.of("type", "object", "properties", Map.of("command",
-                  Map.of("type", "string", "description", "The full shell command to execute.")),
-                  "required", List.of("command"), "additionalProperties", false)
-              : FunctionToolSpec.defaultStringArgsSchema()));
+          FunctionToolSpec.defaultStringArgsSchema()));
     }
     return toolSpecs;
   }
@@ -634,20 +627,6 @@ public class Agent implements BaseTool<String> {
       return false;
     }
     return toolSpecs.stream().anyMatch(toolSpec -> functionName.equals(toolSpec.name()));
-  }
-
-  private String runBashTool(String arguments, Map<String, Object> globalMessage) {
-    String command;
-    try {
-      JSONObject object = JSON.parseObject(arguments);
-      if (object == null || !(object.get("command")instanceof String value) || value.isBlank()) {
-        return "Error: bashTool requires a non-empty string field 'command'.";
-      }
-      command = value;
-    } catch (Exception e) {
-      return "Error: bashTool arguments must be a JSON object with a string field 'command'.";
-    }
-    return manage.runTool("bashTool", command, globalMessage);
   }
 
   private String extractFunctionArgs(String arguments) {

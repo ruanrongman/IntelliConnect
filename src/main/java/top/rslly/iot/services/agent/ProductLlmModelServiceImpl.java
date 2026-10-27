@@ -242,7 +242,7 @@ public class ProductLlmModelServiceImpl implements ProductLlmModelService {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     Set<String> allowed = Set.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-        "classifier", "longMemory", "memory", "knowledgeGraphic");
+        "classifier", "longMemory", "memory", "knowledgeGraphic", "image");
     if (!allowed.contains(productLlmModel.getToolsId())) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }

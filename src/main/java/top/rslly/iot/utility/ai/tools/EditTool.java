@@ -33,11 +33,9 @@ import top.rslly.iot.utility.ai.sandbox.SandboxService;
  * 便于模型理解与自纠错.
  *
  * <p>
- * 参数格式: {@code {"action": "write|read|list|delete", "path": "...", "content": "..."}},
+ * 参数格式: {@code {"action": "write|read|list|delete|str_replace|insert", "path": "..."}},
  * 相对路径自动落在沙箱工作目录 /workspace 下.
  *
- * <p>
- * 暂未接入 FunctionRouterRoute 路由, 由后续功能按需调用.
  */
 @Data
 @Component
@@ -47,7 +45,46 @@ public class EditTool implements BaseTool<String> {
   private static final String USAGE =
       """
           Invalid arguments. Expected JSON:
-          {"action": "write|read|list|delete", "path": "target path", "content": "content to write (required for write)"}""";
+          {"action": "write|read|list|delete|str_replace|insert", "path": "target path", ...}
+          str_replace requires old_str and new_str; insert requires insert_line and content.""";
+
+  private static final String EDIT_SCRIPT =
+      """
+          import base64, fcntl, json, sys
+          args = json.loads(base64.b64decode(sys.argv[1]))
+          try:
+              with open(args['path'], 'r+', encoding='utf-8', newline='') as file:
+                  fcntl.flock(file, fcntl.LOCK_EX)
+                  text = file.read()
+                  if args['action'] == 'str_replace':
+                      old = args['old_str']
+                      count = text.count(old)
+                      if count != 1:
+                          print(f'Error: old_str must match exactly once; found {count} matches. Include more context.')
+                          sys.exit(0)
+                      updated = text.replace(old, args['new_str'], 1)
+                  else:
+                      lines = text.splitlines(keepends=True)
+                      line = args['insert_line']
+                      if line > len(lines):
+                          print(f'Error: insert_line must be between 0 and {len(lines)}.')
+                          sys.exit(0)
+                      newline = '\\r\\n' if '\\r\\n' in text else '\\n'
+                      before, after = ''.join(lines[:line]), ''.join(lines[line:])
+                      content = args['content']
+                      if before and not before.endswith(('\\n', '\\r')):
+                          before += newline
+                      if after and not content.endswith(('\\n', '\\r')):
+                          content += newline
+                      updated = before + content + after
+                  file.seek(0)
+                  file.write(updated)
+                  file.truncate()
+              print('Edit succeeded: ' + args['path'])
+          except (OSError, UnicodeError) as error:
+              print('Error: cannot edit file: ' + str(error))
+              sys.exit(1)
+          """;
 
   @Autowired
   private SandboxService sandboxService;
@@ -59,11 +96,18 @@ public class EditTool implements BaseTool<String> {
 
   private String description =
       """
-          Read and write files in the chat session's remote Ubuntu sandbox.
+          Read, write and precisely edit files in the chat session's remote Ubuntu sandbox.
           Args: a JSON string, e.g.
-          {"action": "write|read|list|delete", "path": "target path", "content": "content to write (required for write)"}
+          {"action": "write|read|list|delete|str_replace|insert", "path": "target path", ...}
           - write: create/overwrite a file; read: read file content; list: list a directory;
-            delete: remove a file or directory
+            delete: remove a file or directory. write requires content (string).
+          - str_replace: requires non-empty old_str and new_str (may be empty to delete text).
+            Matches literal text including whitespace, exactly once; zero/multiple matches fail without changes.
+            Example: {"action":"str_replace","path":"app.py","old_str":"return 1","new_str":"return 2"}
+          - insert: requires insert_line (integer) and non-empty content. Insert AFTER that 1-based line;
+            0 inserts at the beginning; the number of lines appends. Out-of-range positions fail.
+            Example: {"action":"insert","path":"app.py","insert_line":0,"content":"import os\\n"}
+          - Read the current file before editing; use grepTool to find the relevant code first.
           - Relative paths are resolved under /workspace, the sandbox's temporary working directory
           - This is not the persistent conversation workspace. Files persist between calls only while
             this sandbox instance exists and are lost when it shuts down, is recycled, or expires
@@ -88,16 +132,23 @@ public class EditTool implements BaseTool<String> {
         return USAGE;
       }
       String action = args.path("action").asText("");
-      String path = resolvePath(args.path("path").asText(null));
+      String path = SandboxFileSupport.resolvePath(args.path("path").isTextual()
+          ? args.path("path").textValue()
+          : null);
       if (path == null) {
         return "Error: missing required parameter \"path\".\n" + USAGE;
       }
       return switch (action) {
-        case "write" -> doWrite(chatId, path, args.path("content").asText(null));
+        case "write" -> doWrite(chatId, path, args.path("content").isTextual()
+            ? args.path("content").textValue()
+            : null);
         case "read" -> doRead(chatId, path);
-        case "list" -> sandboxService.runCommand(chatId, "ls -la '" + path + "'").summary();
-        case "delete" -> sandboxService.runCommand(chatId, "rm -rf '" + path + "'").summary();
-        default -> "Error: unknown action \"" + action + "\". Allowed: write|read|list|delete.\n"
+        case "list" -> sandboxService.runCommand(chatId,
+            "ls -la -- " + SandboxFileSupport.quote(path)).summary();
+        case "delete" -> sandboxService.runCommand(chatId,
+            "rm -rf -- " + SandboxFileSupport.quote(path)).summary();
+        case "str_replace", "insert" -> doEdit(chatId, path, args);
+        default -> "Error: unknown action \"" + action + "\".\n"
             + USAGE;
       };
     } catch (Exception e) {
@@ -120,13 +171,22 @@ public class EditTool implements BaseTool<String> {
     }
   }
 
-  /** 相对路径落到 /workspace 下, 绝对路径原样使用 */
-  private String resolvePath(String path) {
-    if (path == null || path.isBlank()) {
-      return null;
+  private String doEdit(String chatId, String path, JsonNode args) throws Exception {
+    if ("str_replace".equals(args.path("action").asText())) {
+      if (!args.path("old_str").isTextual() || args.path("old_str").textValue().isEmpty()
+          || !args.path("new_str").isTextual()) {
+        return "Error: str_replace requires non-empty old_str and string new_str.";
+      }
+    } else if (!args.path("insert_line").isIntegralNumber()
+        || !args.path("insert_line").canConvertToInt() || args.path("insert_line").intValue() < 0
+        || !args.path("content").isTextual() || args.path("content").textValue().isEmpty()) {
+      return "Error: insert requires insert_line (non-negative integer) and non-empty content.";
     }
-    String trimmed = path.trim();
-    return trimmed.startsWith("/") ? trimmed : SandboxService.WORKSPACE_DIR + "/" + trimmed;
+    var parameters = args.deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) parameters).put("path", path);
+    var result = sandboxService.runCommand(chatId,
+        SandboxFileSupport.pythonCommand(EDIT_SCRIPT, objectMapper.writeValueAsString(parameters)));
+    return result.ok() ? result.summary() : "Error: " + result.summary();
   }
 
   private String doWrite(String chatId, String path, String content) {

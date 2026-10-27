@@ -8,6 +8,7 @@
 
 - `bashTool`：在远程 Ubuntu 24.04 沙箱中执行任意 shell 命令，返回 stdout / stderr / 退出码
 - `editTool`：在沙箱中读写文件（write / read / list / delete），相对路径自动落在 `/workspace` 临时工作目录下
+- `imageTool`：读取当前会话沙箱中的图片，调用多模态视觉模型检查截图、图表或渲染结果，返回文字观察
 - `workspaceTool`：管理当前会话的持久文件，支持列表、读取文本、保存文本，以及在工作区与沙箱之间导入、导出文件；列表和文本读写不依赖沙箱
 
 关键特性：
@@ -28,6 +29,18 @@
 | 沙箱 `/workspace` | 运行代码、安装依赖、处理导入的文件和生成中间结果 | 仅随当前沙箱实例保留，回收或重建后丢失 |
 
 两处通过 `workspaceTool` 显式复制文件，不会自动挂载或同步。上传到工作区的文件需要导入后才能由 `bashTool`、`editTool` 处理；沙箱内的新产物需要导出才能持久保存。
+
+### 视觉检查
+
+先通过 `bashTool` 生成图片或保存页面截图，再调用 `imageTool`，工具输入为 JSON 字符串：
+
+```json
+{"path":"screenshots/page.png","prompt":"检查标题是否被裁切、文字是否重叠、按钮是否对齐，并说明问题位置。"}
+```
+
+`path` 支持 `/workspace` 下的绝对路径或相对路径，`prompt` 可省略，默认进行内容与排版检查。工具支持 PNG、JPEG、WebP、GIF，单张图片最多 4 MiB；SVG、PDF 需先渲染为 PNG。工作区附件需先通过 `workspaceTool` 的 `import_to_sandbox` 导入。工具检查已有图片，不会自动截图；修复代码后应重新截图再检查。
+
+模型默认复用 `ai.vision-model`，也可在产品模型配置中选择“图像视觉检查工具”（`toolsId=image`），指定支持图片输入的模型和提供商。Agent 与 McpAgent 的函数参数统一使用 `args:string`，其中字符串内容为上述 JSON。返回结果为视觉模型的文字观察，不会将 Base64 图片写入对话历史。
 
 ## 1. 安装 OpenSandbox Server
 

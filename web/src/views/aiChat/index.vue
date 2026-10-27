@@ -52,7 +52,7 @@
         @open-workspace="openWorkspace"
       />
     </main>
-    <a-modal v-model:open="workspaceOpen" title="会话工作区" :footer="null" :width="960"
+    <a-modal v-model:open="workspaceOpen" title="会话文件" :footer="null" :width="960"
       :style="{ top: '6vh' }" :body-style="{ maxHeight: '78vh', overflowY: 'auto' }"
       :destroy-on-close="true">
       <div class="workspace-context">

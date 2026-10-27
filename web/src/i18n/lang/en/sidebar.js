@@ -51,8 +51,8 @@ const chart = {
 const product ={
   productPage: 'productPage',
   productXiaoZhi:'productXiaoZhi',
-  aiChat:'Agent Chat Debug',
-  workspace: 'Conversation Workspace',
+  aiChat:'Agent Workbench',
+  workspace: 'Conversation Files',
   productRole:'productRole',
   agentMemory:'Conversation Data',
   agentLongMemory:'agentLongMemory',

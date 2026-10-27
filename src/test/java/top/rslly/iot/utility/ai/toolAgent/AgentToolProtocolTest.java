@@ -53,7 +53,7 @@ import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 class AgentToolProtocolTest {
   private static final String QUESTION = "获取新闻";
   private static final String COMMAND = "curl -s 'https://example.com/' | head -30";
-  private static final String ARGUMENTS = JSON.toJSONString(Map.of("command", COMMAND));
+  private static final String ARGUMENTS = JSON.toJSONString(Map.of("args", COMMAND));
   private Agent agent;
   private LLM llm;
   private Manage manage;
@@ -125,9 +125,11 @@ class AgentToolProtocolTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void invalidCommandObjectIsReturnedToModelInsteadOfExecutedAsShell(boolean stream) {
+  void toolValidationErrorIsReturnedToModelForCorrection(boolean stream) {
+    when(manage.runTool("bashTool", "", context))
+        .thenReturn("Error: empty command. Provide the full shell command to execute.");
     respond(stream,
-        FunctionResult.toolCall("call-invalid", "bashTool", "{\"command\":{\"text\":\"ls\"}}"),
+        FunctionResult.toolCall("call-invalid", "bashTool", "{\"args\":\"\"}"),
         FunctionResult.toolCall("call-valid", "bashTool", ARGUMENTS),
         FunctionResult.directReply("新闻摘要"));
 
@@ -135,17 +137,18 @@ class AgentToolProtocolTest {
 
     FunctionToolResultMessage error =
         (FunctionToolResultMessage) requests.get(1).get(3).getContent();
-    assertTrue(error.content().contains("non-empty string field 'command'"));
+    assertTrue(error.content().contains("empty command"));
+    verify(manage).runTool("bashTool", "", context);
     verify(manage).runTool("bashTool", COMMAND, context);
     verifyNoMoreInteractions(manage);
   }
 
   @Test
-  void reactCommandObjectIsUnwrappedBeforeToolDispatch() {
+  void reactStringArgsAreUnwrappedBeforeToolDispatch() {
     ReflectionTestUtils.setField(agent, "agentMode", "prompt");
     when(llm.jsonChat(eq(QUESTION), anyList(), eq(true))).thenReturn(
         JSON.parseObject(JSON.toJSONString(Map.of("action",
-            Map.of("name", "bashTool", "args", Map.of("command", COMMAND))))),
+            Map.of("name", "bashTool", "args", Map.of("args", COMMAND))))),
         JSON.parseObject("{\"action\":{\"name\":\"finish\",\"args\":{\"content\":\"新闻摘要\"}}}"));
 
     assertEquals("新闻摘要", agent.run(QUESTION, context));
@@ -217,7 +220,7 @@ class AgentToolProtocolTest {
     requests.add(new ArrayList<>(messages));
     FunctionToolSpec bash = specs.stream().filter(spec -> "bashTool".equals(spec.name()))
         .findFirst().orElseThrow();
-    assertEquals(List.of("command"), bash.parameters().get("required"));
-    assertFalse(((Map<?, ?>) bash.parameters().get("properties")).containsKey("args"));
+    assertEquals(List.of("args"), bash.parameters().get("required"));
+    assertFalse(((Map<?, ?>) bash.parameters().get("properties")).containsKey("command"));
   }
 }

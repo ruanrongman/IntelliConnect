@@ -289,7 +289,7 @@ ai:
     api-key: "" # server 未启用 api_key 时可任意填写
     use-server-proxy: true    # 客户端与沙箱随机代理端口段不通时置 true, 流量全部经 server(8080) 转发
     skip-health-check: false   # 跳过创建后的 ping 健康检查(对 server->沙箱连通性敏感, 易误判), 就绪性由首条命令失败重试兜底
-    image: my-code-interpreter:v1.1.0-final
+    image: my-code-interpreter:v1.1.0-cjk
     request-timeout: 300s     # 创建沙箱等待容器就绪的超时
     command-timeout: 120s     # 单条命令执行超时
     idle-timeout: 10m         # 空闲多久后自动回收沙箱

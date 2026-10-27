@@ -287,7 +287,7 @@ public class FunctionCallingRouterTool {
     String agentDescription = FunctionRouterRoute.AGENT.getDefaultDescription();
     if (sandboxService.isAvailable()) {
       agentDescription +=
-          " | A cloud computer is available here, bashTool and editTool are its tools and you have"
+          " | A cloud computer is available here, bashTool, editTool, grepTool and imageTool are its tools and you have"
               + " full permission to use them";
     }
     String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);

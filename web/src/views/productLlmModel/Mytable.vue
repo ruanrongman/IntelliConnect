@@ -142,7 +142,8 @@ const toolsIdMap = {
   'classifier': '分类器工具',
   'longMemory': '长期记忆工具',
   'memory': '记忆工具',
-  'knowledgeGraphic': '知识图谱'
+  'knowledgeGraphic': '知识图谱',
+  'image': '图像视觉检查工具'
 };
 
 // 获取工具名称的辅助函数

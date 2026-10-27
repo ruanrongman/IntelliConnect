@@ -3,7 +3,7 @@
     <a-card :bordered="false">
       <div v-if="!embedded" class="workspace-heading">
         <div>
-          <h2>会话工作区</h2>
+          <h2>会话文件</h2>
           <p>保存上传文件与智能体产物。删除对话或回收沙箱后，文件仍会保留。</p>
         </div>
         <a-button :loading="loading" :disabled="!productId" @click="refresh">刷新</a-button>
@@ -94,7 +94,15 @@ const errorText = ref('')
 const usedBytes = ref(0)
 const maxBytes = ref(500 * 1024 * 1024)
 const maxFileBytes = ref(50 * 1024 * 1024)
-const pagination = reactive({ current: 1, pageSize: 20, total: 0, showSizeChanger: false })
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showSizeChanger: true,
+  showQuickJumper: true,
+  pageSizeOptions: ['10', '20', '50', '100'],
+  showTotal: (total) => `共 ${total} 个文件`,
+})
 const productOptions = computed(() => products.value.map((item) => ({
   value: item.id, label: `${item.productName || '未命名产品'} #${item.id}`,
 })))
@@ -155,7 +163,7 @@ async function refresh() {
     })
     saved.forEach((item) => {
       if (!choices.has(item.chatId)) choices.set(item.chatId, { chatId: item.chatId,
-        label: `已保存工作区 · ${item.chatId}` })
+        label: `已保存会话文件 · ${item.chatId}` })
     })
     // A newly drafted debug conversation may not have a memory row yet.
     const requested = String(route.query.chatId || '')
@@ -163,7 +171,10 @@ async function refresh() {
       choices.set(requested, choices.get(requested) || { chatId: requested, label: requested })
     }
     conversations.value = Array.from(choices.values())
-    if (!choices.has(chatId.value)) chatId.value = choices.has(requested) ? requested : defaultChatId
+    if (!choices.has(chatId.value)) {
+      chatId.value = choices.has(requested) ? requested : defaultChatId
+      pagination.current = 1
+    }
     await loadFiles(current)
   } catch (error) {
     if (current === sequence) errorText.value = await workspaceError(error)
@@ -179,13 +190,24 @@ async function loadFiles(current = ++sequence) {
   try {
     const data = await listWorkspaceFiles({ ...params(), pageNum: pagination.current, pageSize: pagination.pageSize })
     if (current !== sequence) return
-    files.value = data.files?.content || []
-    pagination.total = Number(data.files?.totalElements ?? data.files?.page?.totalElements ?? 0)
+    const filePage = data.files || {}
+    const page = filePage.page || filePage
+    pagination.total = Number(page.totalElements ?? 0)
+    const lastPage = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+    if (pagination.current > lastPage) {
+      pagination.current = lastPage
+      return await loadFiles(current)
+    }
+    files.value = filePage.content || []
     usedBytes.value = data.usedBytes
     maxBytes.value = data.maxBytes
     maxFileBytes.value = data.maxFileBytes
   } catch (error) {
-    if (current === sequence) { files.value = []; errorText.value = await workspaceError(error) }
+    if (current === sequence) {
+      files.value = []
+      pagination.total = 0
+      errorText.value = await workspaceError(error)
+    }
   } finally {
     if (current === sequence) loading.value = false
   }
@@ -196,17 +218,24 @@ function changeProduct() {
   files.value = []
   conversations.value = []
   pagination.current = 1
+  pagination.total = 0
   closePreview()
   router.replace({ path: '/workspace', query: { productId: productId.value } })
   refresh()
 }
 function changeConversation() {
   pagination.current = 1
+  pagination.total = 0
+  files.value = []
   closePreview()
   router.replace({ path: '/workspace', query: params() })
   loadFiles()
 }
-function changePage(page) { pagination.current = page.current; loadFiles() }
+function changePage(page) {
+  pagination.current = page.pageSize === pagination.pageSize ? page.current : 1
+  pagination.pageSize = page.pageSize
+  return loadFiles()
+}
 
 async function upload(event) {
   const selected = Array.from(event.target.files || [])
@@ -217,7 +246,7 @@ async function upload(event) {
     return
   }
   if (selected.reduce((total, file) => total + file.size, usedBytes.value) > maxBytes.value) {
-    message.error('工作区容量不足')
+    message.error('会话文件存储空间不足')
     return
   }
   uploading.value = true
@@ -226,7 +255,7 @@ async function upload(event) {
     await uploadWorkspaceFiles(productId.value, chatId.value, selected, (progress) => {
       uploadPercent.value = Math.min(99, Math.round(progress.loaded / (progress.total || 1) * 100))
     })
-    message.success('文件已保存到工作区')
+    message.success('会话文件已保存')
     pagination.current = 1
     await refresh()
   } catch (error) { message.error(await workspaceError(error)) }

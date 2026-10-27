@@ -31,6 +31,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -50,11 +52,13 @@ import top.rslly.iot.dao.WxProductBindRepository;
 import top.rslly.iot.dao.WxUserRepository;
 import top.rslly.iot.models.LlmProviderInformationEntity;
 import top.rslly.iot.models.ProductLlmModelEntity;
+import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.UserEntity;
 import top.rslly.iot.models.UserProductBindEntity;
 import top.rslly.iot.models.WxProductBindEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.response.ProductLlmModelResponse;
+import top.rslly.iot.param.request.ProductLlmModel;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
 import top.rslly.iot.utility.result.ResultCode;
@@ -207,6 +211,35 @@ class ProductLlmModelServiceImplTest {
 
     assertEquals(ResultCode.PARAM_NOT_VALID.getCode(), response.getErrorCode());
     verify(productLlmModelRepository, never()).findAll(any(Pageable.class));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void savesAndUpdatesProductImageModel(boolean existing) {
+    ProductLlmModel request = new ProductLlmModel();
+    request.setProductId(7);
+    request.setProviderId(5);
+    request.setToolsId("image");
+    request.setModelName("vision-model");
+    when(productRepository.findAllById(7)).thenReturn(List.of(new ProductEntity()));
+    when(llmProviderInformationRepository.findAllById(5))
+        .thenReturn(List.of(provider(5, "vision-provider", null)));
+    when(productLlmModelRepository.findAllByProductIdAndToolsId(7, "image"))
+        .thenReturn(existing ? List.of(model(77, 7, 5)) : List.of());
+    when(productLlmModelRepository.save(any(ProductLlmModelEntity.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    JsonResult<?> response = productLlmModelService.postProductLlmModel(request);
+
+    assertEquals(ResultCode.SUCCESS.getCode(), response.getErrorCode());
+    ProductLlmModelEntity saved = assertInstanceOf(ProductLlmModelEntity.class, response.getData());
+    assertEquals("image", saved.getToolsId());
+    assertEquals("vision-model", saved.getModelName());
+    assertEquals(7, saved.getProductId());
+    assertEquals(5, saved.getProviderId());
+    if (existing) {
+      assertEquals(77, saved.getId());
+    }
   }
 
   private String token(String username, String role) {

@@ -4,7 +4,7 @@ const base = '/api/v2/workspaces'
 
 function unwrap(response) {
   if (response.data?.errorCode !== 200) {
-    throw new Error(response.data?.errorMsg || '工作区操作失败')
+    throw new Error(response.data?.errorMsg || '会话文件操作失败')
   }
   return response.data.data
 }
@@ -49,5 +49,5 @@ export async function workspaceError(error) {
   if (data instanceof Blob) {
     try { data = JSON.parse(await data.text()) } catch { data = null }
   }
-  return data?.errorMsg || error.message || '工作区操作失败'
+  return data?.errorMsg || error.message || '会话文件操作失败'
 }

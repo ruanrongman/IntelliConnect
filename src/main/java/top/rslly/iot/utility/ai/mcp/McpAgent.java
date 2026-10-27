@@ -56,6 +56,8 @@ import top.rslly.iot.utility.ai.toolAgent.AgentEventSourceListener;
 import top.rslly.iot.utility.ai.tools.BashTool;
 import top.rslly.iot.utility.ai.tools.BaseTool;
 import top.rslly.iot.utility.ai.tools.EditTool;
+import top.rslly.iot.utility.ai.tools.GrepTool;
+import top.rslly.iot.utility.ai.tools.ImageTool;
 import top.rslly.iot.utility.ai.tools.JsExecuteTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.tools.WorkspaceTool;
@@ -111,6 +113,10 @@ public class McpAgent implements BaseTool<String> {
   private BashTool bashTool;
   @Autowired
   private EditTool editTool;
+  @Autowired
+  private GrepTool grepTool;
+  @Autowired
+  private ImageTool imageTool;
   @Autowired
   private WorkspaceTool workspaceTool;
   @Autowired
@@ -381,6 +387,10 @@ public class McpAgent implements BaseTool<String> {
               toolResult = bashTool.run(args, globalMessage);
             } else if (sandboxService.isAvailable() && toolName.equals(editTool.getName())) {
               toolResult = editTool.run(args, globalMessage);
+            } else if (sandboxService.isAvailable() && toolName.equals(grepTool.getName())) {
+              toolResult = grepTool.run(args, globalMessage);
+            } else if (sandboxService.isAvailable() && toolName.equals(imageTool.getName())) {
+              toolResult = imageTool.run(args, globalMessage);
             } else {
               List<ProductSkillsEntity> skillsEntity =
                   productSkillsService.findAllByProductIdAndName(productId, toolName);
@@ -839,11 +849,15 @@ public class McpAgent implements BaseTool<String> {
     addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", workspaceTool.getName(),
         workspaceTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
     if (sandboxService.isAvailable()) {
-      // 沙箱可用时, bash/edit 工具挂在 skills 伪服务下, 供模型执行技能包内容
+      // 沙箱工具挂在 skills 伪服务下, 供模型执行技能包内容
       addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", bashTool.getName(),
           bashTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
       addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", editTool.getName(),
           editTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+      addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", grepTool.getName(),
+          grepTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+      addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", imageTool.getName(),
+          imageTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
     }
     return new FunctionToolRegistry(toolSpecs, refMap);
   }
@@ -1035,6 +1049,12 @@ public class McpAgent implements BaseTool<String> {
         if (sandboxService.isAvailable() && toolName.equals(editTool.getName())) {
           return editTool.run(args, globalMessage);
         }
+        if (sandboxService.isAvailable() && toolName.equals(grepTool.getName())) {
+          return grepTool.run(args, globalMessage);
+        }
+        if (sandboxService.isAvailable() && toolName.equals(imageTool.getName())) {
+          return imageTool.run(args, globalMessage);
+        }
         List<ProductSkillsEntity> skillsEntity =
             productSkillsService.findAllByProductIdAndName(productId, toolName);
         if (skillsEntity.isEmpty()) {
@@ -1172,7 +1192,7 @@ public class McpAgent implements BaseTool<String> {
         + workspaceTool.getDescription() + "\n  Input Schema: args:string\n\n";
   }
 
-  /** 沙箱可用时, 在 ReAct 描述中追加 bash/edit 工具(挂在 skills 伪服务下). */
+  /** 沙箱可用时, 在 ReAct 描述中追加沙箱工具(挂在 skills 伪服务下). */
   private String sandboxToolDescription() {
     if (!sandboxService.isAvailable()) {
       return "";
@@ -1186,6 +1206,12 @@ public class McpAgent implements BaseTool<String> {
     builder.append("  Description: ").append(editTool.getDescription()).append("\n");
     builder.append("  Input Schema: ").append("args:string").append("\n");
     builder.append("\n");
+    builder.append("Tool: skills:").append(grepTool.getName()).append("\n");
+    builder.append("  Description: ").append(grepTool.getDescription()).append("\n");
+    builder.append("  Input Schema: args:string\n\n");
+    builder.append("Tool: skills:").append(imageTool.getName()).append("\n");
+    builder.append("  Description: ").append(imageTool.getDescription()).append("\n");
+    builder.append("  Input Schema: args:string\n\n");
     return builder.toString();
   }
 
@@ -1229,7 +1255,7 @@ public class McpAgent implements BaseTool<String> {
       }
       return "Skill \"" + skill.getName() + "\" extracted into the sandbox at "
           + skillDir + ". Use the bashTool to run shell commands and "
-          + "the editTool to read/write files inside the sandbox working directory "
+          + "editTool to read/edit files, grepTool to search code, and imageTool to visually inspect images inside the sandbox working directory "
           + SandboxService.WORKSPACE_DIR + ".\nDirectory layout:\n" + listing.summary()
           + "\nSkill instructions (SKILL.md):\n" + productSkillsService.readSkillMarkdown(filePath);
     } catch (IOException e) {

@@ -65,6 +65,10 @@ public class DescriptionUtil {
   @Autowired
   private EditTool editTool;
   @Autowired
+  private GrepTool grepTool;
+  @Autowired
+  private ImageTool imageTool;
+  @Autowired
   private WorkspaceTool workspaceTool;
 
   public String getElectricalName(int productId) {
@@ -143,10 +147,12 @@ public class DescriptionUtil {
       toolDescriptions.put(knowledgeTool.getName(), knowledgeDescription);
     }
     toolDescriptions.put(mcpAgent.getName(), mcpAgent.getDescription(productId, chatId));
-    // 沙箱可用时, legacy agent 路径也可调用 bash/edit 工具(Manage.runTool 按 bean 名派发)
+    // 沙箱可用时, legacy agent 路径也可调用沙箱工具(Manage.runTool 按 bean 名派发)
     if (sandboxService.isAvailable()) {
       toolDescriptions.put(bashTool.getName(), bashTool.getDescription());
       toolDescriptions.put(editTool.getName(), editTool.getDescription());
+      toolDescriptions.put(grepTool.getName(), grepTool.getDescription());
+      toolDescriptions.put(imageTool.getName(), imageTool.getDescription());
     }
     return toolDescriptions;
   }

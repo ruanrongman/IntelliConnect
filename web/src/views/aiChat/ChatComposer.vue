@@ -44,11 +44,11 @@
           </a-button>
         </a-tooltip>
       </a-upload>
-      <a-tooltip title="管理当前会话的工作区文件">
+      <a-tooltip title="管理当前会话的文件与智能体产物">
         <a-button class="workspace-button" type="text" html-type="button"
           :disabled="!workspaceEnabled" @click="$emit('open-workspace')">
           <template #icon><FolderOpenOutlined /></template>
-          工作区
+          会话文件
         </a-button>
       </a-tooltip>
     </div>

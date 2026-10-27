@@ -155,6 +155,7 @@ const toolsOptions = ref([
   { value: 'longMemory', label: '长期记忆工具' },
   { value: 'memory', label: '记忆工具' },
   { value: 'knowledgeGraphic', label: '知识图谱' },
+  { value: 'image', label: '图像视觉检查工具' },
 ]);
 
 const formState = reactive({

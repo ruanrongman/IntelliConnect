@@ -2,7 +2,7 @@
   <aside class="chat-side">
     <div class="side-title">
       <div>
-        <h2>智能体对话调试</h2>
+        <h2>智能体工作台</h2>
         <span>{{ activeChatId || '未选择产品' }}</span>
       </div>
       <a-tooltip title="刷新产品和对话">
