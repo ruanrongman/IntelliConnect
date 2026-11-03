@@ -237,13 +237,13 @@ ai:
   custom-key: XXX
   custom-llm-provider-url: XXX
   agent-epoch-limit: 5
-  chatTool-llm: dashscope-deepseek-v4.1-flash
+  chatTool-llm: dashscope-deepseek-v4.1-flash-1017
   chatTool-speedUp: true
   emotionTool-llm: decision-model
   youthProtectionTool-llm: decision-model
   globalRoleReview-llm: decision-model
   memoryTool-llm: dashscope-qwen3.8-flash
-  classifierTool-llm: dashscope-deepseek-v4.1-flash
+  classifierTool-llm: dashscope-deepseek-v4.1-flash-1017
   classifierTool-speedUp: true
   router:
     mode: function
@@ -262,11 +262,11 @@ ai:
   scheduleTool-llm: dashscope-qwen3.8-flash
   scheduleTool-llm-speed: true
   searchTool-llm: dashscope-qwen3.8-flash
-  agent-llm: dashscope-deepseek-v4.1-flash
+  agent-llm: dashscope-deepseek-v4.1-flash-1017
   agent-speedUp: true
   longMemoryTool-llm: dashscope-qwen3.8-flash
   wx_smart_robot_llm: glm
-  knowledge_graphic_llm: dashscope-deepseek-v4.1-flash
+  knowledge_graphic_llm: dashscope-deepseek-v4.1-flash-1017
   knowledge_graphic:
     max_graphic_length: 256000
     chunk_chars: 12000
@@ -275,7 +275,7 @@ ai:
     enabled: true
   mcp:
     agent-mode: function
-    agent-llm: dashscope-deepseek-v4.1-flash
+    agent-llm: dashscope-deepseek-v4.1-flash-1017
     agent-speedUp: true
     agent-epoch-limit: 5
     agent-include-thought: false

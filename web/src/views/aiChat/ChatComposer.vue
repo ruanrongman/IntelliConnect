@@ -30,25 +30,21 @@
       />
     </div>
     <div class="composer-tools">
-      <a-upload
-        :before-upload="beforeUploadFile"
-        :show-upload-list="false"
-        multiple
-        :accept="acceptedFileExtensions.join(',')"
-      >
-        <a-tooltip title="上传文件">
-          <a-button class="attach-button" type="text" html-type="button" :disabled="streaming"
-            aria-label="上传聊天附件">
-            <template #icon><PaperClipOutlined /></template>
-            附件
-          </a-button>
-        </a-tooltip>
-      </a-upload>
+      <a-tooltip title="上传文件">
+        <a-button class="attach-button" type="text" html-type="button" :disabled="streaming"
+          aria-label="上传聊天附件" @click="openFilePicker">
+          <template #icon><PaperClipOutlined /></template>
+          附件
+        </a-button>
+      </a-tooltip>
+      <input ref="fileInput" type="file" multiple hidden :disabled="streaming"
+        :accept="acceptedFileExtensions.join(',')" @change="handleFileChange"
+        @cancel="restoreFullscreen" />
       <a-tooltip title="管理当前会话的文件与智能体产物">
         <a-button class="workspace-button" type="text" html-type="button"
           :disabled="!workspaceEnabled" @click="$emit('open-workspace')">
           <template #icon><FolderOpenOutlined /></template>
-          会话文件
+          会话工作区
         </a-button>
       </a-tooltip>
     </div>
@@ -69,6 +65,8 @@
 </template>
 
 <script setup>
+import { useFilePicker } from '@/hooks/useFilePicker'
+
 defineProps({
   modelValue: {
     type: String,
@@ -97,6 +95,7 @@ defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'submit', 'stop', 'select-file', 'paste', 'remove-file', 'open-workspace'])
+const { fileInput, openFilePicker, restoreFullscreen } = useFilePicker()
 let isComposing = false
 
 function handleCompositionStart() {
@@ -115,9 +114,11 @@ function handleEnter(event) {
   emit('submit')
 }
 
-function beforeUploadFile(file) {
-  emit('select-file', file)
-  return false
+function handleFileChange(event) {
+  restoreFullscreen()
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  files.forEach((file) => emit('select-file', file))
 }
 </script>
 

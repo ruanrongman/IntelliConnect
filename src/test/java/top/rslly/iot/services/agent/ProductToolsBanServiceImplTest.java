@@ -45,6 +45,27 @@ class ProductToolsBanServiceImplTest {
   private ProductToolsBanServiceImpl productToolsBanService;
 
   @Test
+  void acceptsMarkdownPdfBanFromToolManagement() {
+    ProductToolsBan request = new ProductToolsBan();
+    request.setProductId(12);
+    request.setToolsName(List.of("markdownToPdf"));
+
+    var response = productToolsBanService.postProductToolsBan(request);
+
+    assertEquals(200, response.getErrorCode());
+    verify(productToolsBanRepository).saveAll(org.mockito.ArgumentMatchers.argThat(
+        entries -> entries.iterator().next().getProductId() == 12
+            && entries.iterator().next().getToolsName().equals("markdownToPdf")));
+  }
+
+  @Test
+  void acceptsSingleMarkdownPdfBan() {
+    assertEquals(200, productToolsBanService.addProductToolBan("markdownToPdf", 12).getErrorCode());
+    verify(productToolsBanRepository).save(org.mockito.ArgumentMatchers.argThat(
+        entry -> entry.getProductId() == 12 && entry.getToolsName().equals("markdownToPdf")));
+  }
+
+  @Test
   void rejectsWebSearchBan() {
     ProductToolsBan request = new ProductToolsBan();
     request.setProductId(12);

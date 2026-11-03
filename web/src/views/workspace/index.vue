@@ -3,23 +3,24 @@
     <a-card :bordered="false">
       <div v-if="!embedded" class="workspace-heading">
         <div>
-          <h2>会话文件</h2>
+          <h2>会话工作区</h2>
           <p>保存上传文件与智能体产物。删除对话或回收沙箱后，文件仍会保留。</p>
         </div>
         <a-button :loading="loading" :disabled="!productId" @click="refresh">刷新</a-button>
       </div>
       <div class="workspace-toolbar">
         <a-select v-if="!embedded" v-model:value="productId" class="product-select" placeholder="选择产品"
+          show-search :filter-option="filterProductOption"
           :options="productOptions" :disabled="uploading" @change="changeProduct" />
         <a-select v-if="!embedded" v-model:value="chatId" class="conversation-select" placeholder="选择会话"
           show-search :options="conversationOptions" :disabled="uploading || !productId"
           @change="changeConversation" />
         <a-button type="primary" :disabled="!chatId || loading" :loading="uploading"
-          @click="fileInput.click()"><template #icon><UploadOutlined /></template>上传文件</a-button>
+          @click="openFilePicker"><template #icon><UploadOutlined /></template>上传文件</a-button>
         <a-button v-if="embedded" :loading="loading" :disabled="uploading" @click="refresh">
           <template #icon><ReloadOutlined /></template>刷新
         </a-button>
-        <input ref="fileInput" type="file" multiple hidden @change="upload" />
+        <input ref="fileInput" type="file" multiple hidden @change="upload" @cancel="restoreFullscreen" />
       </div>
       <div v-if="chatId" class="workspace-usage">
         <span>{{ embedded ? `${pagination.total} 个文件` : chatId }}</span>
@@ -69,6 +70,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getProduct } from '@/api/product'
 import { getAgentMemoryByNickName } from '@/api/agentMemory'
+import { useFilePicker } from '@/hooks/useFilePicker'
 import {
   listWorkspaces, listWorkspaceFiles, uploadWorkspaceFiles, readWorkspaceFile,
   downloadWorkspaceFile, deleteWorkspaceFile, workspaceError,
@@ -89,7 +91,7 @@ const files = ref([])
 const loading = ref(false)
 const uploading = ref(false)
 const uploadPercent = ref(0)
-const fileInput = ref()
+const { fileInput, openFilePicker, restoreFullscreen } = useFilePicker()
 const errorText = ref('')
 const usedBytes = ref(0)
 const maxBytes = ref(500 * 1024 * 1024)
@@ -106,6 +108,9 @@ const pagination = reactive({
 const productOptions = computed(() => products.value.map((item) => ({
   value: item.id, label: `${item.productName || '未命名产品'} #${item.id}`,
 })))
+function filterProductOption(input, option) {
+  return String(option?.label || '').toLowerCase().includes(String(input || '').trim().toLowerCase())
+}
 const conversationOptions = computed(() => conversations.value.map((item) => ({
   value: item.chatId, label: item.label || item.chatId,
 })))
@@ -163,7 +168,7 @@ async function refresh() {
     })
     saved.forEach((item) => {
       if (!choices.has(item.chatId)) choices.set(item.chatId, { chatId: item.chatId,
-        label: `已保存会话文件 · ${item.chatId}` })
+        label: `已保存工作区 · ${item.chatId}` })
     })
     // A newly drafted debug conversation may not have a memory row yet.
     const requested = String(route.query.chatId || '')
@@ -238,6 +243,7 @@ function changePage(page) {
 }
 
 async function upload(event) {
+  restoreFullscreen()
   const selected = Array.from(event.target.files || [])
   event.target.value = ''
   if (!selected.length || uploading.value) return
@@ -246,7 +252,7 @@ async function upload(event) {
     return
   }
   if (selected.reduce((total, file) => total + file.size, usedBytes.value) > maxBytes.value) {
-    message.error('会话文件存储空间不足')
+    message.error('会话工作区存储空间不足')
     return
   }
   uploading.value = true
@@ -255,7 +261,7 @@ async function upload(event) {
     await uploadWorkspaceFiles(productId.value, chatId.value, selected, (progress) => {
       uploadPercent.value = Math.min(99, Math.round(progress.loaded / (progress.total || 1) * 100))
     })
-    message.success('会话文件已保存')
+    message.success('文件已保存到会话工作区')
     pagination.current = 1
     await refresh()
   } catch (error) { message.error(await workspaceError(error)) }

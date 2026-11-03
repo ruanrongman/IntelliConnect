@@ -9,6 +9,7 @@
 - `bashTool`：在远程 Ubuntu 24.04 沙箱中执行任意 shell 命令，返回 stdout / stderr / 退出码
 - `editTool`：在沙箱中读写文件（write / read / list / delete），相对路径自动落在 `/workspace` 临时工作目录下
 - `imageTool`：读取当前会话沙箱中的图片，调用多模态视觉模型检查截图、图表或渲染结果，返回文字观察
+- `markdownToPdfTool`：使用固定排版将 Markdown 转为 PDF，检查 PDF 可解析且有页面后自动保存到会话文件；可在产品“工具管理”中独立禁用
 - `workspaceTool`：管理当前会话的持久文件，支持列表、读取文本、保存文本，以及在工作区与沙箱之间导入、导出文件；列表和文本读写不依赖沙箱
 
 关键特性：
@@ -70,9 +71,9 @@ uvx opensandbox-server
 docker pull sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/code-interpreter:v1.1.0
 ```
 
-## 3. 制作自带 pip 的自定义镜像（推荐）
+## 3. 制作自带中文字体和 pip 的自定义镜像（推荐）
 
-以下步骤直接基于原始 `code-interpreter:v1.1.0` 镜像，为系统 Python 和 OpenSandbox 自带的 Python 补装 pip，配置阿里云 PyPI 镜像，并保留 OpenSandbox 原始入口配置。请在沙箱宿主机的 Bash 中执行：
+以下步骤直接基于原始 `code-interpreter:v1.1.0` 镜像，安装 Noto CJK 中文字体和 Fontconfig，为系统 Python 和 OpenSandbox 自带的 Python 补装 pip，配置阿里云 PyPI 镜像，并保留 OpenSandbox 原始入口配置。请在沙箱宿主机的 Bash 中执行：
 
 ```bash
 set -eu
@@ -81,12 +82,20 @@ mkdir -p ~/opensandbox-final
 cd ~/opensandbox-final
 
 cat > Dockerfile <<'EOF'
-# 直接从原始 OpenSandbox 镜像构建
 FROM sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/code-interpreter:v1.1.0
 
 USER root
 
-# 1. 配置阿里云 PyPI 镜像
+# 1. 安装中文字体及字体发现工具
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        fontconfig \
+        fonts-noto-cjk \
+    && fc-cache -f -v \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. 配置全局 pip：使用阿里云 PyPI 源
 RUN mkdir -p /etc && \
     printf '%s\n' \
       '[global]' \
@@ -97,14 +106,10 @@ RUN mkdir -p /etc && \
       'break-system-packages = true' \
       > /etc/pip.conf
 
-# 2. 为系统 Python 和 OpenSandbox 自带的 Python 安装 pip
-# --break-system-packages 只用于构建阶段的 pip 安装；
-# 普通 pip 命令的默认行为由 /etc/pip.conf 控制。
+# 3. 为系统 Python 和 OpenSandbox 自带的 Python 安装 pip
 RUN set -eux; \
     command -v uv; \
-    for py in \
-      /usr/bin/python3 \
-      /opt/python/versions/cpython-*/bin/python3; do \
+    for py in /usr/bin/python3 /opt/python/versions/cpython-*/bin/python3; do \
       if [ -x "$py" ]; then \
         echo "===== Configure pip for $py ====="; \
         if ! "$py" -m pip --version >/dev/null 2>&1; then \
@@ -117,8 +122,7 @@ RUN set -eux; \
       fi; \
     done
 
-# 3. 确保 pip / pip3 命令存在
-# 使用当前 PATH 中的 python3，以兼容 OpenSandbox 的 Python 版本切换。
+# 4. 提供统一 pip 命令，跟随当前 PATH 中的 python3
 RUN printf '%s\n' \
       '#!/bin/sh' \
       'exec python3 -m pip "$@"' \
@@ -126,10 +130,13 @@ RUN printf '%s\n' \
     chmod +x /usr/local/bin/pip && \
     ln -sf /usr/local/bin/pip /usr/local/bin/pip3
 
-# 4. 验证基础 Python 的 pip
-RUN /usr/bin/python3 -m pip --version
+# 5. 验证字体及系统 Python pip
+RUN set -eux; \
+    fc-match "Noto Sans CJK SC"; \
+    fc-match "sans-serif:lang=zh-cn"; \
+    /usr/bin/python3 -m pip --version
 
-# 5. 保留 OpenSandbox 原始入口配置
+# 保留原镜像默认启动配置
 EOF
 
 # 构建最终镜像
@@ -142,18 +149,63 @@ docker image inspect my-code-interpreter:v1.1.0-final \
   --format 'Image={{.RepoTags}}'
 ```
 
-构建后可验证 Python 3.12 环境中的 pip：
+构建后可验证中文字体匹配，以及 Python 3.12 环境中的 pip：
 
 ```bash
 docker run --rm \
   --entrypoint /bin/bash \
   my-code-interpreter:v1.1.0-final \
-  -c 'source /opt/code-interpreter/code-interpreter-env.sh python 3.12 && python3 --version && pip --version'
+  -c 'fc-match "Noto Sans CJK SC" && fc-match "sans-serif:lang=zh-cn" && source /opt/code-interpreter/code-interpreter-env.sh python 3.12 && python3 --version && pip --version'
 ```
+
+`fonts-noto-cjk` 提供中日韩字体，`fc-cache` 在构建时刷新字体缓存，`fc-match` 用于检查实际匹配的字体。沙箱内生成中文图表或渲染文档时，可在相应程序中指定 `Noto Sans CJK SC`；例如 Matplotlib 可设置 `plt.rcParams['font.sans-serif'] = ['Noto Sans CJK SC']`。安装字体不会替代各渲染程序自身的字体选择配置。
+
+`/etc/pip.conf` 对 pip 全局生效，默认使用阿里云源，并设置超时、重试和 `break-system-packages`。`pip`、`pip3` 都跟随当前 PATH 中的 `python3`，兼容 OpenSandbox 的 Python 版本切换。
+
+新镜像用于之后创建的沙箱实例；已运行的会话沙箱和预热池实例不会自动获得新增字体。更新镜像后应通过新建实例验证字体可用，已有实例中的临时文件如需保留，先导出到会话工作区。
 
 > 如需预装其他运行时或依赖，可在 Dockerfile 中继续追加 `RUN` 层，构建自己的镜像版本。
 
 ## 4. 平台配置
+
+### Markdown 转 PDF（Java 后端）
+
+`markdownToPdfTool` 从当前会话的云电脑读取 Markdown 和本地图片，使用 Java（CommonMark → XHTML → OpenHTMLtoPDF/PDFBox）在后端生成、校验 PDF，再直接保存到会话文件。不需要修改现有沙箱镜像，也不会向沙箱注入转换脚本或安装转换依赖。PDF 不会另外写回沙箱。
+
+**中文字体在执行 Java 后端的机器上配置**。沙箱镜像内的 CJK 字体仍供沙箱内程序使用，不会自动共享到后端进程。Windows 默认尝试系统黑体，Linux 尝试常见的 Noto Sans SC TrueType 字体路径；也可显式配置后端可读取的中文 `.ttf` 文件：
+
+```yaml
+ai:
+  pdf:
+    font-path: /opt/fonts/NotoSansSC-Regular.ttf
+    max-source-bytes: 2097152
+    max-image-bytes: 10485760
+    max-pdf-bytes: 52428800
+```
+
+或者设置环境变量 `AI_PDF_FONT_PATH`。字体应为支持所需文字的 TrueType `.ttf`；缺失、不可读取、不兼容或缺少所需汉字时工具会明确报错，不会把方块字当作成功结果。
+
+工具输入为 JSON 字符串，例如：
+
+```json
+{"path":"reports/周报.md","outputName":"周报.pdf","title":"项目周报"}
+```
+
+- `path` 必填，支持 `/workspace` 下的 `.md`、`.markdown` 文件，编码为 UTF-8，最大 2 MiB。会话文件中的 Markdown 需先通过 `workspaceTool import_to_sandbox` 导入。
+- `outputName` 可省略，默认使用源文件名并将扩展名替换为 `.pdf`。只接受文件名，不接受目录；会话文件按独立 ID 保存，同名文件不会覆盖已有产物。
+- `title` 可省略，默认使用源文件名（不含扩展名），用于 PDF 文档标题。
+- 支持中英文、标题、列表、表格、代码块、本地 PNG/JPEG/GIF/BMP 图片和 A4 分页。图片相对于源 Markdown 文件解析，单张默认最大 10 MiB，最多加载 32 张、合计 30 MiB；远程图片、缺失或越界图片会跳过并在 `warnings` 中说明。需要远程图片时先下载到沙箱。后端渲染器不会直接访问远程 URL 或后端文件路径。原始 HTML 按文本显示；公式、SVG 和 Mermaid 请先渲染成本地 PNG/JPEG 图片。
+- 成功返回 `success`、`pages`、`warnings`、`fileId`、`name`、`size`、`downloadPath`。生成后会重新打开 PDF 并解析页面内容。PDF 已自动保存到“会话文件”，无需重复导出。`downloadPath` 是需要现有登录鉴权的下载接口，不是公开分享链接。
+- 源文件不可读取、编码错误、缺失字体、存储失败等情况会返回 `success: false` 和明确的错误码，不会返回成功下载信息。保存遵循现有会话文件的单文件大小、总容量、产品与会话隔离规则。
+
+在产品列表的“工具管理”中勾选 **Markdown 转 PDF** 并保存，即可禁用当前产品的专用转换工具。默认可用；普通 Agent、MCP Agent 的 ReAct 与函数调用列表均遵循该配置，每次执行也会重新检查禁用状态。禁用不限制 `bashTool` 执行其他文件处理命令。
+
+可使用 JDK 21 运行渲染回归测试（包含中文、分页、表格、代码、本地及缺失图片、原始 HTML、路径隔离和 PDF 内容检查）。通过系统属性指定测试字体：
+
+```bash
+./mvnw -Dtest=MarkdownPdfRendererTest,MarkdownToPdfToolTest \
+  -Dpdf.test.font=/opt/fonts/NotoSansSC-Regular.ttf test
+```
 
 ### 4.1 沙箱配置
 

@@ -36,6 +36,8 @@ public interface WorkspaceService {
 
   WorkspaceFileEntity write(int productId, String chatId, String name, String content);
 
+  WorkspaceFileEntity writeBinary(int productId, String chatId, String name, byte[] content);
+
   TextPage read(int productId, String chatId, String fileId, long offset, int limit);
 
   Download download(int productId, String chatId, String fileId);

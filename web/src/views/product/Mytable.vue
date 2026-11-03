@@ -661,7 +661,8 @@ const availableTools = {
   '8': { name: 'Schedule management', description: '日程管理和提醒任务(微信环境才会自动启用，设备聊天无需手动禁用)' },
   '9': { name: 'Role and voice', description: '所有关于角色和语音的功能' },
   '10': { name: 'MCP', description: '外部MCP总开关' },
-  'knowledge': {name: '知识库', description: '知识库开关'}
+  'knowledge': {name: '知识库', description: '知识库开关'},
+  'markdownToPdf': { name: 'Markdown 转 PDF', description: '将云电脑中的 Markdown 文件转换为 PDF，自动保存到会话工作区' }
 }
 
 // 计算可用工具数量

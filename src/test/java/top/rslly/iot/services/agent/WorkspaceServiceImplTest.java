@@ -107,6 +107,29 @@ class WorkspaceServiceImplTest {
   }
 
   @Test
+  void savesGeneratedBinaryWithExistingIsolationAndQuotaRules() throws Exception {
+    byte[] pdf = "%PDF-1.4\nmock-content".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    var first = service.writeBinary(12, "chatProduct12", "报告.pdf", pdf);
+    var second = service.writeBinary(12, "chatProduct12", "报告.pdf", pdf);
+    assertNotEquals(first.getId(), second.getId());
+    assertEquals("agent", first.getSource());
+    try (var stream = service.download(12, "chatProduct12", first.getId()).stream()) {
+      assertArrayEquals(pdf, stream.readAllBytes());
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> service.download(13, "chatProduct13", first.getId()));
+    property.setMaxFileBytes(pdf.length - 1);
+    assertThrows(IllegalArgumentException.class,
+        () -> service.writeBinary(12, "chatProduct12", "oversized.pdf", pdf));
+    property.setMaxFileBytes(pdf.length);
+    property.setMaxWorkspaceBytes(2L * pdf.length);
+    assertThrows(IllegalArgumentException.class,
+        () -> service.writeBinary(12, "chatProduct12", "overflow.pdf", pdf));
+    assertEquals(2, fileRows.size());
+    assertEquals(2, diskFiles().size());
+  }
+
+  @Test
   void preservesBinaryBytesAndDuplicateChineseNamesWithoutOverwriting() throws Exception {
     byte[] content = {0, 1, 2, (byte) 255, 10};
     MockMultipartFile upload =

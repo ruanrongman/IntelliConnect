@@ -70,6 +70,8 @@ public class DescriptionUtil {
   private ImageTool imageTool;
   @Autowired
   private WorkspaceTool workspaceTool;
+  @Autowired
+  private MarkdownToPdfTool markdownToPdfTool;
 
   public String getElectricalName(int productId) {
     var result = productModelService.getDescription(productId);
@@ -153,6 +155,9 @@ public class DescriptionUtil {
       toolDescriptions.put(editTool.getName(), editTool.getDescription());
       toolDescriptions.put(grepTool.getName(), grepTool.getDescription());
       toolDescriptions.put(imageTool.getName(), imageTool.getDescription());
+      if (markdownToPdfTool.isAvailable(productId)) {
+        toolDescriptions.put(markdownToPdfTool.getName(), markdownToPdfTool.getDescription());
+      }
     }
     return toolDescriptions;
   }

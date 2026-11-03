@@ -180,6 +180,17 @@ public class WorkspaceServiceImpl implements WorkspaceService {
   }
 
   @Override
+  public WorkspaceFileEntity writeBinary(int productId, String chatId, String name,
+      byte[] content) {
+    if (content == null || content.length == 0 || content.length > property.getMaxFileBytes()) {
+      throw invalid("Missing, empty or oversized binary content");
+    }
+    return save(productId, chatId,
+        List.of(new Incoming(filename(name), "agent", () -> new ByteArrayInputStream(content))))
+            .getFirst();
+  }
+
+  @Override
   public TextPage read(int productId, String chatId, String fileId, long offset, int limit) {
     if (offset < 0 || offset > property.getMaxFileBytes() || limit < 1) {
       throw invalid("Invalid text offset or limit");

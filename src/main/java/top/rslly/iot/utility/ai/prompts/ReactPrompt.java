@@ -60,7 +60,7 @@ public class ReactPrompt {
           - `action.name` must be one of the provided tool names, or `"finish"`.
           - `action.args` must be a JSON object matching the tool's parameter schema.
           - Tools use the same `args:string` schema. For example: `{"action":{"name":"bashTool","args":{"args":"<full shell command>"}}}`.
-          - For editTool, grepTool and imageTool, the args string contains the JSON parameters described by the tool.
+          - For editTool, grepTool, imageTool and markdownToPdfTool, the args string contains the JSON parameters described by the tool.
 
           After each tool call, the system will return:
           ```

@@ -36,6 +36,7 @@ import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
+import top.rslly.iot.utility.ai.tools.MarkdownToPdfTool;
 import top.rslly.iot.utility.ai.tools.WorkspaceTool;
 
 import java.util.HashMap;
@@ -136,6 +137,9 @@ public class ClassifierToolPrompt {
       agentDescription +=
           " | A cloud computer is available here, bashTool, editTool, grepTool and imageTool are its tools and you have"
               + " full permission to use them";
+      if (!banTools.contains(MarkdownToPdfTool.BAN_KEY)) {
+        agentDescription += " | " + MarkdownToPdfTool.ROUTING_DESCRIPTION;
+      }
     }
     String knowledgeDescription = knowledgeTool.getRoutingDescription(productId);
     if (!knowledgeDescription.isBlank()) {

@@ -180,6 +180,7 @@ class SandboxFileToolsTest {
     ReflectionTestUtils.setField(agent, "editTool", edit);
     ReflectionTestUtils.setField(agent, "grepTool", grep);
     ReflectionTestUtils.setField(agent, "imageTool", new ImageTool());
+    ReflectionTestUtils.setField(agent, "markdownToPdfTool", mock(MarkdownToPdfTool.class));
     ReflectionTestUtils.setField(agent, "workspaceTool", new WorkspaceTool(
         mock(top.rslly.iot.services.agent.WorkspaceService.class), mapper));
     ReflectionTestUtils.setField(agent, "jsExecuteTool", new JsExecuteTool());

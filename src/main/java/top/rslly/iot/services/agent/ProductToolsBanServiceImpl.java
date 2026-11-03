@@ -74,7 +74,7 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   public JsonResult<?> postProductToolsBan(ProductToolsBan productToolsBan) {
     // 允许值列表（不包含 "5"）
     Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge",
-        "knowledgeGraphic");
+        "knowledgeGraphic", "markdownToPdf");
 
     for (var s : productToolsBan.getToolsName()) {
       if (!allowed.contains(s))
@@ -98,7 +98,7 @@ public class ProductToolsBanServiceImpl implements ProductToolsBanService {
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> addProductToolBan(String toolName, int productId) {
     Set<String> allowed = Set.of("1", "2", "3", "4", "6", "7", "8", "9", "10", "knowledge",
-        "knowledgeGraphic");
+        "knowledgeGraphic", "markdownToPdf");
     if (!allowed.contains(toolName))
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     List<ProductToolsBanEntity> productToolsBanEntityList =

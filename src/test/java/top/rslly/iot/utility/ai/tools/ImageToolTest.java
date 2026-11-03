@@ -184,6 +184,7 @@ class ImageToolTest {
     ReflectionTestUtils.setField(mcp, "editTool", new EditTool());
     ReflectionTestUtils.setField(mcp, "grepTool", new GrepTool());
     ReflectionTestUtils.setField(mcp, "imageTool", tool);
+    ReflectionTestUtils.setField(mcp, "markdownToPdfTool", mock(MarkdownToPdfTool.class));
     WorkspaceTool workspace = new WorkspaceTool(mock(WorkspaceService.class), mapper);
     ReflectionTestUtils.setField(mcp, "workspaceTool", workspace);
     ReflectionTestUtils.setField(mcp, "jsExecuteTool", new JsExecuteTool());
@@ -206,6 +207,7 @@ class ImageToolTest {
     ReflectionTestUtils.setField(descriptions, "editTool", new EditTool());
     ReflectionTestUtils.setField(descriptions, "grepTool", new GrepTool());
     ReflectionTestUtils.setField(descriptions, "imageTool", tool);
+    ReflectionTestUtils.setField(descriptions, "markdownToPdfTool", mock(MarkdownToPdfTool.class));
     ReflectionTestUtils.setField(descriptions, "workspaceTool", workspace);
     KnowledgeTool knowledge = mock(KnowledgeTool.class);
     when(knowledge.getDescription(12)).thenReturn("");

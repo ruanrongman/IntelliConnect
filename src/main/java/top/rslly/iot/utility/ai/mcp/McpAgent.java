@@ -59,6 +59,7 @@ import top.rslly.iot.utility.ai.tools.EditTool;
 import top.rslly.iot.utility.ai.tools.GrepTool;
 import top.rslly.iot.utility.ai.tools.ImageTool;
 import top.rslly.iot.utility.ai.tools.JsExecuteTool;
+import top.rslly.iot.utility.ai.tools.MarkdownToPdfTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.tools.WorkspaceTool;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
@@ -119,6 +120,8 @@ public class McpAgent implements BaseTool<String> {
   private ImageTool imageTool;
   @Autowired
   private WorkspaceTool workspaceTool;
+  @Autowired
+  private MarkdownToPdfTool markdownToPdfTool;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
   @Autowired
@@ -276,6 +279,7 @@ public class McpAgent implements BaseTool<String> {
         toolDescriptions += productSkillsService.combineToolDescription(productId);
       }
       toolDescriptions += sandboxToolDescription();
+      toolDescriptions += markdownPdfToolDescription(productId);
       toolDescriptions += workspaceToolDescription();
       system = reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
           includeThoughtEnabled);
@@ -379,7 +383,9 @@ public class McpAgent implements BaseTool<String> {
             toolResult = mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
                 McpWebsocketEndpoint.clients.get(endpointChatId), productId, true);
           } else if (serverKey.equals("skills")) {
-            if (toolName.equals(workspaceTool.getName())) {
+            if (toolName.equals(MarkdownToPdfTool.NAME)) {
+              toolResult = markdownToPdfTool.run(args, globalMessage);
+            } else if (toolName.equals(workspaceTool.getName())) {
               toolResult = workspaceTool.run(args, globalMessage);
             } else if (toolName.equals(jsExecuteTool.getName())) {
               toolResult = jsExecuteTool.run(args, globalMessage);
@@ -858,6 +864,10 @@ public class McpAgent implements BaseTool<String> {
           grepTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
       addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", imageTool.getName(),
           imageTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+      if (markdownToPdfTool.isAvailable(productId)) {
+        addMcpFunctionTool(toolSpecs, refMap, usedNames, "skills", markdownToPdfTool.getName(),
+            markdownToPdfTool.getDescription(), FunctionToolSpec.defaultStringArgsSchema());
+      }
     }
     return new FunctionToolRegistry(toolSpecs, refMap);
   }
@@ -1037,6 +1047,9 @@ public class McpAgent implements BaseTool<String> {
         return mcpWebsocket.sendToolCall(serverKey, endpointChatId, toolName, args,
             McpWebsocketEndpoint.clients.get(endpointChatId), productId, true);
       } else if (serverKey.equals("skills")) {
+        if (toolName.equals(MarkdownToPdfTool.NAME)) {
+          return markdownToPdfTool.run(args, globalMessage);
+        }
         if (toolName.equals(workspaceTool.getName())) {
           return workspaceTool.run(args, globalMessage);
         }
@@ -1190,6 +1203,14 @@ public class McpAgent implements BaseTool<String> {
   private String workspaceToolDescription() {
     return "Tool: skills:" + workspaceTool.getName() + "\n  Description: "
         + workspaceTool.getDescription() + "\n  Input Schema: args:string\n\n";
+  }
+
+  private String markdownPdfToolDescription(int productId) {
+    if (!sandboxService.isAvailable() || !markdownToPdfTool.isAvailable(productId)) {
+      return "";
+    }
+    return "Tool: skills:" + markdownToPdfTool.getName() + "\n  Description: "
+        + markdownToPdfTool.getDescription() + "\n  Input Schema: args:string\n\n";
   }
 
   /** 沙箱可用时, 在 ReAct 描述中追加沙箱工具(挂在 skills 伪服务下). */
