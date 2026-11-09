@@ -31,6 +31,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.core.env.Environment;
+import java.util.concurrent.CancellationException;
+import top.rslly.iot.utility.ai.AgentTaskContext;
 import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.models.ProductSkillsEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
@@ -49,6 +52,7 @@ import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
 import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
+import top.rslly.iot.utility.ai.prompts.AgentTaskContextPrompt;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.sandbox.SandboxResult;
 import top.rslly.iot.utility.ai.sandbox.SandboxService;
@@ -99,6 +103,8 @@ public class McpAgent implements BaseTool<String> {
   @Autowired
   private ReactPrompt reactPrompt;
   @Autowired
+  private AgentTaskContextPrompt agentTaskContextPrompt;
+  @Autowired
   private McpServerServiceImpl mcpServerService;
   @Autowired
   private McpWebsocket mcpWebsocket;
@@ -127,12 +133,14 @@ public class McpAgent implements BaseTool<String> {
   @Autowired
   private UserConfigServiceImpl userConfigService;
   @Autowired
+  private Environment environment;
+  @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
   @Value("${ai.router.mode:prompt}")
   private String routerMode;
   @Value("${ai.mcp.agent-mode:prompt}")
   private String mcpAgentMode;
-  @Value("${ai.mcp.agent-function-timeout-seconds:60}")
+  @Value("${ai.mcp.agent-function-timeout-seconds:660}")
   private long functionTimeoutSeconds;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
@@ -236,7 +244,41 @@ public class McpAgent implements BaseTool<String> {
   @Override
   public String run(String question, Map<String, Object> globalMessage) {
     Map<String, McpSyncClient> clientMap = new LinkedHashMap<>();
-    StringBuilder conversationPrompt = new StringBuilder();
+    String chatId = (String) globalMessage.get("chatId");
+    int productId = (int) globalMessage.get("productId");
+    Map<String, Queue<String>> queues = (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    AgentTaskContext context = new AgentTaskContext(
+        AgentTaskContext.Settings.resolve("mcp.agent", productId, userConfigService, environment),
+        question, GlobalMessageContext.conversationHistory(globalMessage),
+        () -> llmDiyUtility.getDiyLlm(productId, llmName, "10"),
+        () -> isQueueRemoved(chatId, queues),
+        event -> {
+          Queue<String> queue = queues == null ? null : queues.get(chatId);
+          if (queue != null)
+            queue.add(event);
+        }, functionTimeoutSeconds, agentTaskContextPrompt);
+    try {
+      return runTask(question, globalMessage, clientMap, context);
+    } catch (CancellationException e) {
+      return "操作已取消";
+    } catch (RuntimeException e) {
+      log.error("MCP Agent task failed, chatId={}", chatId, e);
+      String failure = e instanceof IllegalArgumentException ? e.getMessage()
+          : "模型工具调用中断，任务未能完成。已执行的操作不会自动重试。";
+      Queue<String> queue = queues == null ? null : queues.get(chatId);
+      if (queue != null) {
+        queue.add(failure);
+        if (!Boolean.TRUE.equals(globalMessage.get("mcpIsTool")))
+          queue.add("[DONE]");
+      }
+      return failure;
+    } finally {
+      cleanupResources(clientMap, chatId);
+    }
+  }
+
+  private String runTask(String question, Map<String, Object> globalMessage,
+      Map<String, McpSyncClient> clientMap, AgentTaskContext taskContext) {
     String chatId = (String) globalMessage.get("chatId");
     int productId = (int) globalMessage.get("productId");
     boolean mcpIsTool = false;
@@ -251,7 +293,8 @@ public class McpAgent implements BaseTool<String> {
     }
 
     if (isFunctionMcpAgentMode()) {
-      String functionResult = runFunctionCalling(question, globalMessage, clientMap, mcpIsTool);
+      String functionResult =
+          runFunctionCalling(question, globalMessage, clientMap, mcpIsTool, taskContext);
       if (functionResult != null) {
         return functionResult;
       }
@@ -281,14 +324,17 @@ public class McpAgent implements BaseTool<String> {
       toolDescriptions += sandboxToolDescription();
       toolDescriptions += markdownPdfToolDescription(productId);
       toolDescriptions += workspaceToolDescription();
-      system = reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
-          includeThoughtEnabled);
+      system = taskContext.unlimited()
+          ? reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
+              includeThoughtEnabled, true)
+          : reactPrompt.getReact(toolDescriptions, question, productId, 1, currentEpochLimit,
+              includeThoughtEnabled);
     } catch (Exception e) {
       return "获取工具描述失败";
     }
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
-    var queue = queueMap.get(chatId);
+    var queue = queueMap == null ? null : queueMap.get(chatId);
     if (queue != null) {
       queue.add(ToolPrefix.MCP_AGENT.getPrefix());
       if (!isFunctionRouterMode()) {
@@ -299,27 +345,15 @@ public class McpAgent implements BaseTool<String> {
 
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
-    conversationPrompt.setLength(0);
-    conversationPrompt.append(system);
 
     log.info("mcp agent epoch limit{}", currentEpochLimit);
-    int iteration = 0;
-    while (iteration < currentEpochLimit) {
+    long iteration = 0;
+    while (taskContext.unlimited() || iteration < currentEpochLimit) {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(clientMap, chatId);
         return "操作已取消";
       }
-      // 更新当前轮次信息
-      if (iteration > 0) {
-        conversationPrompt
-            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1,
-                currentEpochLimit));
-      }
-      messages.clear();
-      messages
-          .add(new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt.toString()));
-      messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
-      messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
+      messages = taskContext.prepare(ReactPrompt.withCurrentStep(system, iteration + 1), List.of());
 
       var obj =
           callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled,
@@ -347,9 +381,10 @@ public class McpAgent implements BaseTool<String> {
         // 格式: serverKey:toolName
         if (!fullName.contains(":") && !fullName.equals("finish")) {
           toolResult = "Error calling tool, must use format 'serverKey:toolName'";
-          conversationPrompt.append(String.format(
-              "%s\nAction: %s\nObservation: %s\n",
-              buildThoughtLine(thought), fullName, toolResult));
+          taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
+              buildThoughtLine(thought) + "\nAction: " + fullName),
+              new ModelMessage(ModelMessageRole.USER.value(), "Observation: " + toolResult),
+              toolResult);
           if (queue != null) {
             queue.add("调用工具出现小错误");
           }
@@ -420,9 +455,10 @@ public class McpAgent implements BaseTool<String> {
           toolResult = "Error calling tool, please try again";
         }
         // 更新对话
-        conversationPrompt.append(String.format(
-            "%s\nAction: %s(%s)\nObservation: %s\n",
-            buildThoughtLine(thought), fullName, args, toolResult));
+        taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
+            String.format("%s\nAction: %s(%s)", buildThoughtLine(thought), fullName, args)),
+            new ModelMessage(ModelMessageRole.USER.value(), "Observation: " + toolResult),
+            toolResult);
         if (queue != null) {
           queue.add(ToolPrefix.getToolCallPrefix(fullName));
         }
@@ -443,13 +479,15 @@ public class McpAgent implements BaseTool<String> {
       }
       iteration++;
     }
+    taskContext.prepare(system, List.of());
     // 释放mcp客户端
     cleanupResources(clientMap, chatId);
     // 超出迭代轮次，调用模型进行总结
     String summaryPrompt = "请根据以上对话历史和最终观察结果，总结回答最初的问题: " + question;
     messages.clear();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
-    messages.add(new ModelMessage(ModelMessageRole.USER.value(), conversationPrompt.toString()));
+    messages.add(new ModelMessage(ModelMessageRole.USER.value(),
+        String.join("\n\n", taskContext.observations())));
 
     LLM summaryLlm = llmDiyUtility.getDiyLlm(productId, llmName, "10");
     try {
@@ -559,6 +597,7 @@ public class McpAgent implements BaseTool<String> {
 
     // 清理锁和条件变量
     dataMap.remove(chatId);
+    functionDataMap.remove(chatId);
     conditionMap.remove(chatId);
     lockMap.remove(chatId);
   }
@@ -631,7 +670,7 @@ public class McpAgent implements BaseTool<String> {
   }
 
   private String runFunctionCalling(String question, Map<String, Object> globalMessage,
-      Map<String, McpSyncClient> clientMap, boolean mcpIsTool) {
+      Map<String, McpSyncClient> clientMap, boolean mcpIsTool, AgentTaskContext taskContext) {
     String chatId = (String) globalMessage.get("chatId");
     int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
@@ -651,30 +690,32 @@ public class McpAgent implements BaseTool<String> {
       return "产品下面没有任何可调用的mcp工具或者skills";
     }
     int currentEpochLimit = getEpochLimitConfig(productId);
-    List<ModelMessage> messages = new ArrayList<>();
-    messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
-        reactPrompt.getFunctionCalling(question, productId)));
-    messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
-    messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
+    String system = reactPrompt.getFunctionCalling(question, productId);
+    List<ModelMessage> messages;
     String finalAnswer = null;
-    List<String> toolObservations = new ArrayList<>();
-    for (int iteration = 0; iteration < currentEpochLimit; iteration++) {
+    for (long iteration = 0; taskContext.unlimited()
+        || iteration < currentEpochLimit; iteration++) {
       if (isQueueRemoved(chatId, queueMap)) {
-        cleanupResources(clientMap, chatId);
         return "操作已取消";
       }
+      messages = taskContext.prepare(system, registry.toolSpecs());
+      List<String> toolObservations = taskContext.observations();
       FunctionResult result =
           callFunctionLlm(question, messages, registry.toolSpecs(), queueMap, chatId, llm,
               GlobalMessageContext.reasoningQueue(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
-        return null;
+        if (iteration == 0 && result != null && result.isUnsupported()) {
+          return null;
+        }
+        throw new IllegalStateException("MCP Agent model call failed after task execution started");
       }
       if (result.isDirectReply()) {
         String directReply = result.getReply();
         if (shouldSuppressDirectReply(directReply, toolObservations)) {
-          messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(), directReply));
-          messages.add(new ModelMessage(ModelMessageRole.USER.value(),
-              "这只是进度提示，不是最终回答。请继续调用合适的工具，或在确实不需要工具时给出完整答案。"));
+          taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(), directReply),
+              new ModelMessage(ModelMessageRole.USER.value(),
+                  "这只是进度提示，不是最终回答。请继续调用合适的工具，或在确实不需要工具时给出完整答案。"),
+              null);
           continue;
         }
         cleanupResources(clientMap, chatId);
@@ -689,12 +730,12 @@ public class McpAgent implements BaseTool<String> {
         return directReply;
       }
       if (!result.isToolCall()) {
-        return null;
+        throw new IllegalStateException(
+            "Unexpected MCP Agent function result: " + result.getType());
       }
       McpFunctionRef functionRef = registry.refMap().get(result.getFunctionName());
       if (functionRef == null) {
-        log.warn("Unknown MCP function call: {}", result.getFunctionName());
-        return null;
+        throw new IllegalStateException("Unknown MCP function call: " + result.getFunctionName());
       }
       String assistantText = extractAssistantText(result.getArguments());
       String arguments = normalizeToolArguments(result.getArguments());
@@ -703,18 +744,18 @@ public class McpAgent implements BaseTool<String> {
         queue.add(ToolPrefix.getToolCallPrefix(functionRef.fullName()));
       }
       String observation = callMcpFunction(functionRef, arguments, globalMessage, clientMap);
-      addToolObservation(toolObservations, observation);
-      messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
+      taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
           new FunctionToolCallMessage(result.getToolCallId(), result.getFunctionName(),
-              toolCallArguments,
-              assistantText, result.getReasoningContent())));
-      messages.add(new ModelMessage(ModelMessageRole.TOOL.value(),
-          new FunctionToolResultMessage(result.getToolCallId(), observation)));
+              toolCallArguments, assistantText, result.getReasoningContent())),
+          new ModelMessage(ModelMessageRole.TOOL.value(),
+              new FunctionToolResultMessage(result.getToolCallId(), observation)),
+          observation);
       finalAnswer = observation;
     }
 
+    taskContext.prepare(system, registry.toolSpecs());
     cleanupResources(clientMap, chatId);
-    String summary = summarizeFunctionConversation(question, productId, toolObservations,
+    String summary = summarizeFunctionConversation(question, productId, taskContext.observations(),
         finalAnswer);
     if (queue != null) {
       queue.add(summary);

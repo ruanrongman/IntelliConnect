@@ -164,7 +164,7 @@ ai:
   top-p: 0.85
   detectRandom: false
   memory:
-    context-window-tokens: 2000
+    context-window-tokens: 300000
     summary-threshold-ratio: 0.5
     recent-turns: 4
   showThinking: false
@@ -174,10 +174,20 @@ ai:
   stream:
     # /api/v2/aiControl/stream 最终发送给模型的最大字符数，包含用户输入和上传文件解析内容
     max-input-chars: 60000
+  llm:
+    # OpenAI 兼容模型整次 HTTP 请求的总时限，包含思考及流式输出
+    request-timeout-seconds: 600
   agent:
     mode: function
+    # 单轮模型调用完成的等待时限，略大于模型 HTTP 请求总超时
+    function-timeout-seconds: 660
     showThinking: false
     include-thought: false
+    memory:
+      context-window-tokens: 300000
+      summary-threshold-ratio: 0.75
+      recent-turns: 4
+    unlimited: false
   vad:
     timeout: 60
     timeoutRealtime: 120
@@ -275,10 +285,17 @@ ai:
     enabled: true
   mcp:
     agent-mode: function
+    agent-function-timeout-seconds: 660
     agent-llm: dashscope-deepseek-v4.1-flash-1017
     agent-speedUp: true
     agent-epoch-limit: 5
     agent-include-thought: false
+    agent:
+      memory:
+        context-window-tokens: 300000
+        summary-threshold-ratio: 0.75
+        recent-turns: 4
+      unlimited: false
     endpoint-count: 5
     # 每一个endpoint最多允许多少个工具
     tools-limit: 50

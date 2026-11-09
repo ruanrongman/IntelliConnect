@@ -42,6 +42,25 @@ public class ReactPrompt {
   private DescriptionUtil descriptionUtil;
   @Autowired
   private ProductRoleServiceImpl productRoleService;
+  private static final String TASK_CONTINUATION_RULES = """
+      ## Continuing Work After Context Compaction
+      - A task progress summary is a checkpoint of the same ongoing task. Resume from its last
+        confirmed state and combine it with newer tool results. Compaction is not a new request,
+        completion, a tool failure, or evidence that files were lost.
+      - Distinguish intentions from results: a promise to write is not a saved file. Track every
+        requested deliverable separately; preserve existing files, exact paths/IDs and storage
+        location. Mark completion only from real tool results and any required checks/export.
+      - Take the next concrete unfinished action with a tool. Do not repeat the opening plan,
+        announce "start with the first version" again, or restart verified work after compaction.
+        If existing state is uncertain, make one targeted read/check, then act on the result.
+      - Work incrementally: finish/save one artifact, then address the next outstanding item.
+        For large saved files, inspect relevant sections and use targeted edits or supported
+        incremental writes. Do not repeatedly regenerate whole files or batch all variants into
+        one oversized call. Record exact locations and validate/export as the task requires.
+      - Repeated plans or tool calls without a new result are not progress. Inspect the last real
+        result and change the arguments or approach based on evidence. Do not switch tools or
+        repeat writes merely because compaction happened; report a real blocker if unable to act.
+      """;
   private static final String ReactSystem =
       """
           ## ReAct Protocol
@@ -80,9 +99,7 @@ public class ReactPrompt {
           ```
 
           ## Termination Rules
-          1. Complete the user's entire requested task using as many steps as needed within max_steps.
-          2. Use `current_step` and `max_steps` from Runtime Context.
-          3. If `current_step == max_steps`, you **MUST** call `finish` regardless.
+          {step_rules}
           4. If a tool returns an error or empty result, either retry with different arguments or call `finish` with an explanation.
           5. Choose exactly ONE tool per step.
           6. Finish when the whole requested task is complete. A successful intermediate operation is not completion: listing files may need a subsequent read, and generating a sandbox artifact may need an export to the persistent workspace. Do not repeat completed operations.
@@ -102,6 +119,8 @@ public class ReactPrompt {
             part1.txt, "好的" means read that file and show its contents; listing alone is insufficient.
           - Respect explicit cancellation, changed requests, and actual missing information. An acknowledgment
             after a completed task does not authorize unrelated work. Ask only when the target is unclear.
+
+          {task_continuation_rules}
 
           ## Tools
           You have access to the following tools:
@@ -147,6 +166,8 @@ public class ReactPrompt {
             unrelated work; respect explicit cancellation and clarify only when the target is unclear.
           - Complete all requested steps: listing a file is not reading it, and creating a sandbox artifact
             is not saving it permanently. Continue with read/export operations when the task requires them.
+          {task_continuation_rules}
+
           ## Time and Freshness Rules
           - Use the current time and time zone from Runtime Context; never infer the current date from model knowledge.
           - Before time-sensitive function calls, convert relative periods to explicit boundaries. Unless the user specifies otherwise: "过去一周"/"最近一周"/"近7天"/"周报"/weekly report = [now - 7 days, now]; "本周" = [Monday 00:00, now]; "上周" = [previous Monday 00:00, this Monday 00:00). Historical or current ranges must not end after now; future ranges require explicit user intent.
@@ -169,10 +190,22 @@ public class ReactPrompt {
 
   public String getReact(String toolDescriptions, String question, int productId,
       int currentStep, int maxSteps, boolean includeThought) {
+    return getReact(toolDescriptions, question, productId, currentStep, maxSteps, includeThought,
+        false);
+  }
+
+  public String getReact(String toolDescriptions, String question, int productId,
+      int currentStep, int maxSteps, boolean includeThought, boolean unlimited) {
     Map<String, String> params = buildCommonParams(question, productId);
     params.put("tool_descriptions", toolDescriptions);
     params.put("current_step", String.valueOf(currentStep));
-    params.put("max_steps", String.valueOf(maxSteps));
+    params.put("max_steps", unlimited ? "unlimited" : String.valueOf(maxSteps));
+    params.put("step_rules", unlimited
+        ? "Complete the user's entire task. There is no step limit. Finish only when the task is complete or cannot proceed; context compaction is not task completion."
+        : """
+            1. Complete the user's entire requested task using as many steps as needed within max_steps.
+            2. Use `current_step` and `max_steps` from Runtime Context.
+            3. If `current_step == max_steps`, you **MUST** call `finish` regardless.""");
     if (includeThought) {
       params.put("thought_field", "\"thought\": \"<your reasoning in the user's language>\",");
       params.put("finish_thought_field", "\"thought\": \"<brief summary of reasoning>\",");
@@ -189,12 +222,17 @@ public class ReactPrompt {
     return StringUtils.formatString(ReactSystem, params);
   }
 
+  public static String withCurrentStep(String system, long currentStep) {
+    return system.replaceAll("(?m)^Current step: [0-9]+$", "Current step: " + currentStep);
+  }
+
   public String getFunctionCalling(String question, int productId) {
     return StringUtils.formatString(FunctionCallingSystem, buildCommonParams(question, productId));
   }
 
   private Map<String, String> buildCommonParams(String question, int productId) {
     Map<String, String> params = PromptTimeContext.build();
+    params.put("task_continuation_rules", TASK_CONTINUATION_RULES);
     params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
     List<ProductRoleEntity> productRole = productRoleService.findAllByProductId(productId);
     String assistantName = null;

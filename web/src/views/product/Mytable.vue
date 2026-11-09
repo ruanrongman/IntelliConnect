@@ -292,6 +292,31 @@
               placeholder="请输入 1 到 100 的整数"
               @input="validateRuntimeConfigField('agentEpochLimit')"
               @blur="validateRuntimeConfigField('agentEpochLimit')"
+              :disabled="runtimeConfigForm.agentUnlimited"
+            />
+          </a-form-item>
+          <a-form-item label="Agent 取消工具调用次数限制" name="agentUnlimited">
+            <a-switch v-model:checked="runtimeConfigForm.agentUnlimited" />
+          </a-form-item>
+          <a-form-item label="Agent 任务上下文窗口（Tokens）" name="agentMemoryContextWindowTokens">
+            <a-input
+              v-model:value="runtimeConfigForm.agentMemoryContextWindowTokens"
+              inputmode="numeric"
+              placeholder="请输入 1 到 1000000 的整数"
+              @input="validateRuntimeConfigField('agentMemoryContextWindowTokens')"
+              @blur="validateRuntimeConfigField('agentMemoryContextWindowTokens')"
+            />
+          </a-form-item>
+          <a-form-item label="Agent 摘要触发阈值" name="agentMemorySummaryThresholdRatio">
+            <a-slider v-model:value="runtimeConfigForm.agentMemorySummaryThresholdRatio" :min="0.1" :max="1" :step="0.05" />
+          </a-form-item>
+          <a-form-item label="Agent 保留最近工具轮次" name="agentMemoryRecentTurns">
+            <a-input
+              v-model:value="runtimeConfigForm.agentMemoryRecentTurns"
+              inputmode="numeric"
+              placeholder="请输入 1 到 100 的整数"
+              @input="validateRuntimeConfigField('agentMemoryRecentTurns')"
+              @blur="validateRuntimeConfigField('agentMemoryRecentTurns')"
             />
           </a-form-item>
           <a-form-item label="MCP Agent 最大轮次" name="mcpAgentEpochLimit">
@@ -301,6 +326,31 @@
               placeholder="请输入 1 到 100 的整数"
               @input="validateRuntimeConfigField('mcpAgentEpochLimit')"
               @blur="validateRuntimeConfigField('mcpAgentEpochLimit')"
+              :disabled="runtimeConfigForm.mcpAgentUnlimited"
+            />
+          </a-form-item>
+          <a-form-item label="MCP Agent 取消工具调用次数限制" name="mcpAgentUnlimited">
+            <a-switch v-model:checked="runtimeConfigForm.mcpAgentUnlimited" />
+          </a-form-item>
+          <a-form-item label="MCP Agent 任务上下文窗口（Tokens）" name="mcpAgentMemoryContextWindowTokens">
+            <a-input
+              v-model:value="runtimeConfigForm.mcpAgentMemoryContextWindowTokens"
+              inputmode="numeric"
+              placeholder="请输入 1 到 1000000 的整数"
+              @input="validateRuntimeConfigField('mcpAgentMemoryContextWindowTokens')"
+              @blur="validateRuntimeConfigField('mcpAgentMemoryContextWindowTokens')"
+            />
+          </a-form-item>
+          <a-form-item label="MCP Agent 摘要触发阈值" name="mcpAgentMemorySummaryThresholdRatio">
+            <a-slider v-model:value="runtimeConfigForm.mcpAgentMemorySummaryThresholdRatio" :min="0.1" :max="1" :step="0.05" />
+          </a-form-item>
+          <a-form-item label="MCP Agent 保留最近工具轮次" name="mcpAgentMemoryRecentTurns">
+            <a-input
+              v-model:value="runtimeConfigForm.mcpAgentMemoryRecentTurns"
+              inputmode="numeric"
+              placeholder="请输入 1 到 100 的整数"
+              @input="validateRuntimeConfigField('mcpAgentMemoryRecentTurns')"
+              @blur="validateRuntimeConfigField('mcpAgentMemoryRecentTurns')"
             />
           </a-form-item>
           <a-form-item label="MCP 工具调用超时（秒）" name="mcpTimeOutLimit">
@@ -508,9 +558,17 @@ const runtimeConfigForm = ref({
   webSearchEnabled: false,
   youthProtectionEnabled: false,
   agentEpochLimit: 5,
+  agentUnlimited: false,
+  agentMemoryContextWindowTokens: 300000,
+  agentMemorySummaryThresholdRatio: 0.75,
+  agentMemoryRecentTurns: 4,
   mcpAgentEpochLimit: 5,
+  mcpAgentUnlimited: false,
+  mcpAgentMemoryContextWindowTokens: 300000,
+  mcpAgentMemorySummaryThresholdRatio: 0.75,
+  mcpAgentMemoryRecentTurns: 4,
   mcpTimeOutLimit: 12,
-  memoryContextWindowTokens: 2000,
+  memoryContextWindowTokens: 300000,
   memorySummaryThresholdRatio: 0.5,
   memoryRecentTurns: 4,
   youthProtectionTalkMaxLimit: 1000
@@ -553,6 +611,44 @@ const runtimeConfigItems = [
     des: 'Agent maximum epoch limit'
   },
   {
+    field: 'agentUnlimited',
+    key: 'agent.unlimited',
+    defaultValue: 'false',
+    valueType: 'boolean',
+    label: 'Agent 取消工具调用次数限制',
+    des: 'Remove the Agent tool-call epoch limit; task context compaction remains active'
+  },
+  {
+    field: 'agentMemoryContextWindowTokens',
+    key: 'agent.memory.context-window-tokens',
+    defaultValue: '300000',
+    min: '1',
+    max: '1000000',
+    valueType: 'integer',
+    label: 'Agent 任务上下文窗口（Tokens）',
+    des: 'Agent task context token budget'
+  },
+  {
+    field: 'agentMemorySummaryThresholdRatio',
+    key: 'agent.memory.summary-threshold-ratio',
+    defaultValue: '0.75',
+    min: '0.1',
+    max: '1',
+    valueType: 'decimal',
+    label: 'Agent 摘要触发阈值',
+    des: 'Agent task context compaction threshold ratio'
+  },
+  {
+    field: 'agentMemoryRecentTurns',
+    key: 'agent.memory.recent-turns',
+    defaultValue: '4',
+    min: '1',
+    max: '100',
+    valueType: 'integer',
+    label: 'Agent 保留最近工具轮次',
+    des: 'Recent Agent tool turns retained after compaction'
+  },
+  {
     field: 'mcpAgentEpochLimit',
     key: 'mcp.agent.epoch_limit',
     defaultValue: '5',
@@ -561,6 +657,44 @@ const runtimeConfigItems = [
     valueType: 'integer',
     label: 'MCP Agent 最大轮次',
     des: 'MCP Agent maximum epoch limit'
+  },
+  {
+    field: 'mcpAgentUnlimited',
+    key: 'mcp.agent.unlimited',
+    defaultValue: 'false',
+    valueType: 'boolean',
+    label: 'MCP Agent 取消工具调用次数限制',
+    des: 'Remove the MCP Agent tool-call epoch limit; task context compaction remains active'
+  },
+  {
+    field: 'mcpAgentMemoryContextWindowTokens',
+    key: 'mcp.agent.memory.context-window-tokens',
+    defaultValue: '300000',
+    min: '1',
+    max: '1000000',
+    valueType: 'integer',
+    label: 'MCP Agent 任务上下文窗口（Tokens）',
+    des: 'MCP Agent task context token budget'
+  },
+  {
+    field: 'mcpAgentMemorySummaryThresholdRatio',
+    key: 'mcp.agent.memory.summary-threshold-ratio',
+    defaultValue: '0.75',
+    min: '0.1',
+    max: '1',
+    valueType: 'decimal',
+    label: 'MCP Agent 摘要触发阈值',
+    des: 'MCP Agent task context compaction threshold ratio'
+  },
+  {
+    field: 'mcpAgentMemoryRecentTurns',
+    key: 'mcp.agent.memory.recent-turns',
+    defaultValue: '4',
+    min: '1',
+    max: '100',
+    valueType: 'integer',
+    label: 'MCP Agent 保留最近工具轮次',
+    des: 'Recent MCP Agent tool turns retained after compaction'
   },
   {
     field: 'mcpTimeOutLimit',
@@ -575,7 +709,7 @@ const runtimeConfigItems = [
   {
     field: 'memoryContextWindowTokens',
     key: 'memory.context-window-tokens',
-    defaultValue: '2000',
+    defaultValue: '300000',
     min: '1',
     max: '1000000',
     valueType: 'integer',
@@ -1161,9 +1295,17 @@ const handleRuntimeConfig = async (record) => {
     webSearchEnabled: false,
     youthProtectionEnabled: false,
     agentEpochLimit: 5,
+    agentUnlimited: false,
+    agentMemoryContextWindowTokens: 300000,
+    agentMemorySummaryThresholdRatio: 0.75,
+    agentMemoryRecentTurns: 4,
     mcpAgentEpochLimit: 5,
+    mcpAgentUnlimited: false,
+    mcpAgentMemoryContextWindowTokens: 300000,
+    mcpAgentMemorySummaryThresholdRatio: 0.75,
+    mcpAgentMemoryRecentTurns: 4,
     mcpTimeOutLimit: 12,
-    memoryContextWindowTokens: 2000,
+    memoryContextWindowTokens: 300000,
     memorySummaryThresholdRatio: 0.5,
     memoryRecentTurns: 4,
     youthProtectionTalkMaxLimit: 1000

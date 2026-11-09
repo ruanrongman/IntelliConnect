@@ -26,6 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.core.env.Environment;
+import java.util.concurrent.CancellationException;
 import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.UserConfigServiceImpl;
@@ -39,6 +41,7 @@ import top.rslly.iot.utility.ai.llm.FunctionStreamHandler;
 import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
+import top.rslly.iot.utility.ai.prompts.AgentTaskContextPrompt;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
 import top.rslly.iot.utility.ai.tools.BaseTool;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
@@ -71,6 +74,8 @@ public class Agent implements BaseTool<String> {
   @Autowired
   private ReactPrompt reactPrompt;
   @Autowired
+  private AgentTaskContextPrompt agentTaskContextPrompt;
+  @Autowired
   private DescriptionUtil descriptionUtil;
   @Autowired
   private LlmDiyUtility llmDiyUtility;
@@ -84,11 +89,13 @@ public class Agent implements BaseTool<String> {
   private AdminConfigServiceImpl adminConfigService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
+  @Autowired
+  private Environment environment;
   @Value("${ai.router.mode:prompt}")
   private String routerMode;
   @Value("${ai.agent.mode:prompt}")
   private String agentMode;
-  @Value("${ai.agent.function-timeout-seconds:60}")
+  @Value("${ai.agent.function-timeout-seconds:660}")
   private long functionTimeoutSeconds;
 
   // 添加锁和条件变量映射（与ChatTool保持一致）
@@ -135,10 +142,44 @@ public class Agent implements BaseTool<String> {
   }
 
   public String run(String question, Map<String, Object> globalMessage) {
+    String chatId = (String) globalMessage.get("chatId");
+    int productId = (int) globalMessage.get("productId");
+    Map<String, Queue<String>> queues = (Map<String, Queue<String>>) globalMessage.get("queueMap");
+    AgentTaskContext context = new AgentTaskContext(
+        AgentTaskContext.Settings.resolve("agent", productId, userConfigService, environment),
+        question, GlobalMessageContext.conversationHistory(globalMessage),
+        () -> llmDiyUtility.getDiyLlm(productId, llmName, "4"),
+        () -> isQueueRemoved(chatId, queues),
+        event -> {
+          Queue<String> queue = queues == null ? null : queues.get(chatId);
+          if (queue != null)
+            queue.add(event);
+        }, functionTimeoutSeconds, agentTaskContextPrompt);
+    try {
+      return runTask(question, globalMessage, context);
+    } catch (CancellationException e) {
+      return "操作已取消";
+    } catch (RuntimeException e) {
+      log.error("Agent task failed, chatId={}", chatId, e);
+      String failure = e instanceof IllegalArgumentException ? e.getMessage()
+          : "模型工具调用中断，任务未能完成。已执行的操作不会自动重试。";
+      Queue<String> queue = queues == null ? null : queues.get(chatId);
+      if (queue != null) {
+        queue.add(failure);
+        queue.add("[DONE]");
+      }
+      return failure;
+    } finally {
+      cleanupResources(chatId);
+    }
+  }
+
+  private String runTask(String question, Map<String, Object> globalMessage,
+      AgentTaskContext taskContext) {
     if (isFunctionAgentMode()) {
       String functionResult;
       try {
-        functionResult = runFunctionCalling(question, globalMessage);
+        functionResult = runFunctionCalling(question, globalMessage, taskContext);
       } finally {
         cleanupResources((String) globalMessage.get("chatId"));
       }
@@ -146,7 +187,6 @@ public class Agent implements BaseTool<String> {
         return functionResult;
       }
     }
-    StringBuilder conversationPrompt = new StringBuilder();
     int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
@@ -157,7 +197,7 @@ public class Agent implements BaseTool<String> {
       conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
     }
     globalMessage.put("mcpIsTool", true);
-    var queue = queueMap.get(chatId);
+    var queue = queueMap == null ? null : queueMap.get(chatId);
     if (queue != null) {
       queue.add(ToolPrefix.AGENT.getPrefix());
       if (!isFunctionRouterMode()) {
@@ -166,33 +206,23 @@ public class Agent implements BaseTool<String> {
     }
     int currentEpochLimit = getEpochLimitConfig(productId);
     boolean includeThoughtEnabled = getIncludeThoughtConfig();
-    String system =
-        reactPrompt.getReact(descriptionUtil.getTools(productId, chatId), question, productId, 1,
-            currentEpochLimit, includeThoughtEnabled);
+    String tools = descriptionUtil.getTools(productId, chatId);
+    String system = taskContext.unlimited()
+        ? reactPrompt.getReact(tools, question, productId, 1, currentEpochLimit,
+            includeThoughtEnabled, true)
+        : reactPrompt.getReact(tools, question, productId, 1, currentEpochLimit,
+            includeThoughtEnabled);
     List<ModelMessage> messages = new ArrayList<>();
     String toolResult = "";
-    conversationPrompt.append(system);
     // System.out.println("agent epoch limit" + epochLimit);
     log.info("agent epoch limit{}", currentEpochLimit);
-    int iteration = 0;
-    while (iteration < currentEpochLimit) {
+    long iteration = 0;
+    while (taskContext.unlimited() || iteration < currentEpochLimit) {
       if (isQueueRemoved(chatId, queueMap)) {
         cleanupResources(chatId);
         return "操作已取消";
       }
-      // 更新当前轮次信息
-      if (iteration > 0) {
-        conversationPrompt
-            .append(String.format("\n## Current Step: %d of %d\n", iteration + 1,
-                currentEpochLimit));
-      }
-      messages.clear();
-      ModelMessage systemMessage =
-          new ModelMessage(ModelMessageRole.SYSTEM.value(), conversationPrompt);
-      ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
-      messages.add(systemMessage);
-      messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
-      messages.add(userMessage);
+      messages = taskContext.prepare(ReactPrompt.withCurrentStep(system, iteration + 1), List.of());
       var obj =
           callLLMForThought(question, messages, queueMap, chatId, productId, includeThoughtEnabled,
               GlobalMessageContext.reasoningQueue(globalMessage));
@@ -222,10 +252,11 @@ public class Agent implements BaseTool<String> {
         }
         toolResult = manage.runTool(res.get("action_name"),
             extractFunctionArgs(res.get("action_parameters")), globalMessage);
-        conversationPrompt.append(String.format(
-            "%s\nAction: %s(%s)\nObservation: %s\n",
-            buildThoughtLine(res.get("thought")), res.get("action_name"),
-            res.get("action_parameters"), toolResult));
+        taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(), String.format(
+            "%s\nAction: %s(%s)", buildThoughtLine(res.get("thought")), res.get("action_name"),
+            res.get("action_parameters"))),
+            new ModelMessage(ModelMessageRole.USER.value(), "Observation: " + toolResult),
+            toolResult);
         if (queue != null) {
           queue.add(ToolPrefix.getToolCallPrefix(res.get("action_name")));
         }
@@ -241,12 +272,14 @@ public class Agent implements BaseTool<String> {
       }
       iteration += 1;
     }
+    taskContext.prepare(system, List.of());
     cleanupResources(chatId);
     // 超出迭代轮次，调用模型进行总结
     String summaryPrompt = "请根据以上对话历史和最终观察结果，总结回答最初的问题: " + question;
     messages.clear();
     messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(), summaryPrompt));
-    messages.add(new ModelMessage(ModelMessageRole.USER.value(), conversationPrompt.toString()));
+    messages.add(new ModelMessage(ModelMessageRole.USER.value(),
+        String.join("\n\n", taskContext.observations())));
 
     try {
       toolResult = llmDiyUtility.getDiyLlm(productId, llmName, "4")
@@ -343,6 +376,7 @@ public class Agent implements BaseTool<String> {
   private void cleanupResources(String chatId) {
     // 清理锁和条件变量
     dataMap.remove(chatId);
+    functionDataMap.remove(chatId);
     conditionMap.remove(chatId);
     lockMap.remove(chatId);
   }
@@ -404,7 +438,8 @@ public class Agent implements BaseTool<String> {
     return "function".equalsIgnoreCase(agentMode);
   }
 
-  private String runFunctionCalling(String question, Map<String, Object> globalMessage) {
+  private String runFunctionCalling(String question, Map<String, Object> globalMessage,
+      AgentTaskContext taskContext) {
     int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
         (Map<String, Queue<String>>) globalMessage.get("queueMap");
@@ -423,17 +458,16 @@ public class Agent implements BaseTool<String> {
 
     List<FunctionToolSpec> toolSpecs = buildFunctionToolSpecs(productId, chatId);
     int currentEpochLimit = getEpochLimitConfig(productId);
-    List<ModelMessage> messages = new ArrayList<>();
-    messages.add(new ModelMessage(ModelMessageRole.SYSTEM.value(),
-        reactPrompt.getFunctionCalling(question, productId)));
-    messages.addAll(GlobalMessageContext.conversationHistory(globalMessage));
-    messages.add(new ModelMessage(ModelMessageRole.USER.value(), question));
+    String system = reactPrompt.getFunctionCalling(question, productId);
+    List<ModelMessage> messages;
     String finalAnswer = null;
-    List<String> toolObservations = new ArrayList<>();
-    for (int iteration = 0; iteration < currentEpochLimit; iteration++) {
+    for (long iteration = 0; taskContext.unlimited()
+        || iteration < currentEpochLimit; iteration++) {
       if (isQueueRemoved(chatId, queueMap)) {
         return "操作已取消";
       }
+      messages = taskContext.prepare(system, toolSpecs);
+      List<String> toolObservations = taskContext.observations();
       FunctionResult result = callFunctionLlm(question, messages, toolSpecs, queueMap, chatId, llm,
           GlobalMessageContext.reasoningQueue(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
@@ -456,9 +490,10 @@ public class Agent implements BaseTool<String> {
       if (result.isDirectReply()) {
         finalAnswer = result.getReply();
         if (shouldSuppressDirectReply(finalAnswer, toolObservations)) {
-          messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(), finalAnswer));
-          messages.add(new ModelMessage(ModelMessageRole.USER.value(),
-              "这只是进度提示，不是最终回答。请继续调用合适的工具，或在确实不需要工具时给出完整答案。"));
+          taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(), finalAnswer),
+              new ModelMessage(ModelMessageRole.USER.value(),
+                  "这只是进度提示，不是最终回答。请继续调用合适的工具，或在确实不需要工具时给出完整答案。"),
+              null);
           continue;
         }
         if (queue != null) {
@@ -491,17 +526,18 @@ public class Agent implements BaseTool<String> {
           queue.add(ToolPrefix.getToolCallPrefix(functionName));
         }
         observation = manage.runTool(functionName, toolArgs, globalMessage);
-        addToolObservation(toolObservations, observation);
         finalAnswer = observation;
       }
-      messages.add(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
+      taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(),
           new FunctionToolCallMessage(result.getToolCallId(), functionName, toolCallArguments,
-              assistantText, result.getReasoningContent())));
-      messages.add(new ModelMessage(ModelMessageRole.TOOL.value(),
-          new FunctionToolResultMessage(result.getToolCallId(), observation)));
+              assistantText, result.getReasoningContent())),
+          new ModelMessage(ModelMessageRole.TOOL.value(),
+              new FunctionToolResultMessage(result.getToolCallId(), observation)),
+          observation);
     }
 
-    String summary = summarizeFunctionConversation(question, productId, toolObservations,
+    taskContext.prepare(system, toolSpecs);
+    String summary = summarizeFunctionConversation(question, productId, taskContext.observations(),
         finalAnswer);
     if (queue != null) {
       queue.add(summary);

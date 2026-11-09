@@ -34,6 +34,7 @@ public enum ToolPrefix {
   MCP_AGENT(
       "以下是mcp智能体的结果："),
   GOODBYE("以下是byebye插件的结果："),
+  COMPACT("%compact。"),
   ToolCall("%工具。");
 
   private static final String TOOL_CALL_MARKER = "%工具";

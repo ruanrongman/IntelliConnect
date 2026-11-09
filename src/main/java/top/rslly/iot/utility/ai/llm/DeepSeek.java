@@ -67,6 +67,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 public class DeepSeek implements LLM {
+  public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(600);
   private static final String DEFAULT_URL = "https://api.deepseek.com";
   private static final String DEFAULT_MODEL = "deepseek-chat";
   private static final String FALLBACK_MESSAGE =
@@ -112,6 +113,23 @@ public class DeepSeek implements LLM {
   public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
       int thinkingBudget, double temperature, double topP, boolean webSearchEnabled,
       boolean dashscopeCompatible) {
+    this(url, model, apiKey, enableThinking, thinkingBudget, temperature, topP, webSearchEnabled,
+        dashscopeCompatible, DEFAULT_REQUEST_TIMEOUT);
+  }
+
+  public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
+      int thinkingBudget, double temperature, double topP, boolean webSearchEnabled,
+      Duration requestTimeout) {
+    this(url, model, apiKey, enableThinking, thinkingBudget, temperature, topP, webSearchEnabled,
+        isDashScopeHost(url), requestTimeout);
+  }
+
+  public DeepSeek(String url, String model, String apiKey, boolean enableThinking,
+      int thinkingBudget, double temperature, double topP, boolean webSearchEnabled,
+      boolean dashscopeCompatible, Duration requestTimeout) {
+    if (requestTimeout == null || requestTimeout.isZero() || requestTimeout.isNegative()) {
+      throw new IllegalArgumentException("Model request timeout must be positive");
+    }
     this.baseUrl = normalizeBaseUrl(url);
     this.model = model;
     this.enableThinking = enableThinking;
@@ -123,7 +141,7 @@ public class DeepSeek implements LLM {
     this.client = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .baseUrl(this.baseUrl)
-        .timeout(Duration.ofSeconds(60))
+        .timeout(requestTimeout)
         .maxRetries(3)
         .build();
   }

@@ -49,7 +49,7 @@ public class ConversationMemoryPolicy {
   private UserConfigServiceImpl userConfigService;
 
   public ConversationMemoryPolicy(
-      @Value("${ai.memory.context-window-tokens:2000}") long contextWindowTokens,
+      @Value("${ai.memory.context-window-tokens:300000}") long contextWindowTokens,
       @Value("${ai.memory.summary-threshold-ratio:0.5}") double summaryThresholdRatio,
       @Value("${ai.memory.recent-turns:4}") int recentTurns) {
     this.contextWindowTokens = Math.max(1L,
@@ -86,8 +86,8 @@ public class ConversationMemoryPolicy {
         continue;
       }
       tokenCount += MESSAGE_OVERHEAD_TOKENS;
-      tokenCount += estimateText(message.getRole());
-      tokenCount += estimateText(message.getContent());
+      tokenCount += estimateTextTokens(message.getRole());
+      tokenCount += estimateTextTokens(message.getContent());
     }
     return tokenCount;
   }
@@ -200,7 +200,7 @@ public class ConversationMemoryPolicy {
     }
   }
 
-  private long estimateText(Object value) {
+  public long estimateTextTokens(Object value) {
     if (value == null) {
       return 0L;
     }
