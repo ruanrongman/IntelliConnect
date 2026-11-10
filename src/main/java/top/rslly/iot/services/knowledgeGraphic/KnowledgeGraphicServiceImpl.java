@@ -32,6 +32,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.filter.Filter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,7 @@ import top.rslly.iot.utility.result.ResultTool;
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -73,6 +75,23 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
 
   @Autowired
   private EmbeddingStore<TextSegment> embeddingStore;
+
+  private static final int QUERY_MAX_MATCHES = 2;
+  private static final double EXPLICIT_QUERY_MIN_SCORE = 0.6D;
+  private static final int EXPLICIT_QUERY_MAX_DEPTH = 6;
+
+  /**
+   * Per-turn prompt injection. Chroma score is (1 + cosine) / 2; with bge-small-zh unrelated chat
+   * scored up to 0.77 and relevant questions from 0.79, so 0.6 (cosine 0.2) matched everything.
+   */
+  @Value("${ai.knowledge_graphic.query.min-score:0.78}")
+  private double contextMinScore;
+  @Value("${ai.knowledge_graphic.query.max-depth:1}")
+  private int contextMaxDepth;
+  @Value("${ai.knowledge_graphic.query.max-neighbors:10}")
+  private int contextMaxNeighbors;
+  @Value("${ai.knowledge_graphic.query.max-chars:1500}")
+  private int contextMaxChars;
 
   @Autowired
   private UserConfigRepository userConfigRepository;
@@ -144,11 +163,22 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
   }
 
   public String queryKnowledgeGraphic(String query, int productId) {
-    KnowledgeGraphic knowledgeGraphic = queryKnowledgeGraphicData(query, productId);
-    if (knowledgeGraphic == null) {
+    KnowledgeGraphicContextQuery.Limits limits = contextQueryLimits(productId);
+    List<KnowledgeGraphicNodeEntity> matchedNodes =
+        matchNodes(query, productId, limits.minScore());
+    if (matchedNodes == null || matchedNodes.isEmpty()) {
       return null;
     }
-    return JSON.toJSONString(knowledgeGraphic);
+    try {
+      KnowledgeGraphicContextQuery.Result result =
+          KnowledgeGraphicContextQuery.build(matchedNodes, limits, contextGraphAccess());
+      recordContextUse(matchedNodes, result.includedNodes());
+      return JSON.toJSONString(result.graphic());
+    } catch (Exception e) {
+      log.warn("queryKnowledgeGraphic context build failed, productId={}, query={}, reason={}",
+          productId, safeQueryLog(query), e.getMessage());
+      return null;
+    }
   }
 
   @Override
@@ -160,38 +190,18 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
     return ResultTool.success(knowledgeGraphic);
   }
 
+  /** Explicit graph lookups (API, graph agent tool) keep the original wide recall. */
   private KnowledgeGraphic queryKnowledgeGraphicData(String query, int productId) {
-    List<TextSegment> matchSegment;
-    try {
-      Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
-      Embedding queryEmbedding = embeddingModel.embed(query).content();
-      var searchResult = EmbeddingSearchRequest.builder()
-          .queryEmbedding(queryEmbedding)
-          .filter(filterByProductId)
-          .minScore(0.6)
-          .maxResults(2)
-          .build();
-      EmbeddingSearchResult<TextSegment> embeddingSearchResult =
-          embeddingStore.search(searchResult);
-      matchSegment = embeddingSearchResult.matches().stream()
-          .map(EmbeddingMatch::embedded)
-          .toList();
-    } catch (Exception e) {
-      log.warn("queryKnowledgeGraphic degraded, productId={}, query={}, reason={}",
-          productId, safeQueryLog(query), e.getMessage());
-      return null;
-    }
-    if (matchSegment.isEmpty()) {
+    List<KnowledgeGraphicNodeEntity> matchedNodes =
+        matchNodes(query, productId, EXPLICIT_QUERY_MIN_SCORE);
+    if (matchedNodes == null || matchedNodes.isEmpty()) {
       return null;
     }
     KnowledgeGraphic knowledgeGraphic = new KnowledgeGraphic();
-    for (TextSegment segment : matchSegment) {
+    for (KnowledgeGraphicNodeEntity node : matchedNodes) {
       try {
-        Metadata metadata = segment.metadata();
-        long nodeId = metadata.getLong("kgNodeId");
-        KnowledgeGraphicNodeEntity node =
-            knowledgeGraphicNodeRepository.findById(nodeId).orElse(null);
-        KnowledgeGraphic temp = (KnowledgeGraphic) this.getKnowledgeGraphic(node, 6).getData();
+        KnowledgeGraphic temp = (KnowledgeGraphic) this
+            .getKnowledgeGraphic(node, EXPLICIT_QUERY_MAX_DEPTH).getData();
         knowledgeGraphic.nodes.addAll(temp.nodes);
         knowledgeGraphic.relations.addAll(temp.relations);
       } catch (Exception e) {
@@ -199,6 +209,105 @@ public class KnowledgeGraphicServiceImpl implements KnowledgeGraphicService {
       }
     }
     return knowledgeGraphic;
+  }
+
+  /** @return null when retrieval itself failed, empty when nothing passed {@code minScore} */
+  private List<KnowledgeGraphicNodeEntity> matchNodes(String query, int productId,
+      double minScore) {
+    List<EmbeddingMatch<TextSegment>> matches;
+    try {
+      Filter filterByProductId = metadataKey("kgProductId").isEqualTo(String.valueOf(productId));
+      Embedding queryEmbedding = embeddingModel.embed(query).content();
+      var searchResult = EmbeddingSearchRequest.builder()
+          .queryEmbedding(queryEmbedding)
+          .filter(filterByProductId)
+          .minScore(minScore)
+          .maxResults(QUERY_MAX_MATCHES)
+          .build();
+      matches = embeddingStore.search(searchResult).matches();
+    } catch (Exception e) {
+      log.warn("queryKnowledgeGraphic degraded, productId={}, query={}, reason={}",
+          productId, safeQueryLog(query), e.getMessage());
+      return null;
+    }
+    List<KnowledgeGraphicNodeEntity> nodes = new ArrayList<>();
+    for (EmbeddingMatch<TextSegment> match : matches) {
+      try {
+        long nodeId = match.embedded().metadata().getLong("kgNodeId");
+        log.debug("knowledge graph match productId={}, nodeId={}, score={}", productId, nodeId,
+            match.score());
+        knowledgeGraphicNodeRepository.findById(nodeId).ifPresent(nodes::add);
+      } catch (Exception e) {
+        log.warn("skip knowledge graph match, productId={}, reason={}", productId,
+            e.getMessage());
+      }
+    }
+    return nodes;
+  }
+
+  KnowledgeGraphicContextQuery.Limits contextQueryLimits(int productId) {
+    double minScore = readQueryConfig(productId, "knowledge_graph.query.min_score",
+        contextMinScore, Double::parseDouble);
+    int maxDepth = readQueryConfig(productId, "knowledge_graph.query.max_depth",
+        contextMaxDepth, Integer::parseInt);
+    int maxNeighbors = readQueryConfig(productId, "knowledge_graph.query.max_neighbors",
+        contextMaxNeighbors, Integer::parseInt);
+    int maxChars = readQueryConfig(productId, "knowledge_graph.query.max_chars",
+        contextMaxChars, Integer::parseInt);
+    return new KnowledgeGraphicContextQuery.Limits(
+        Math.max(0D, Math.min(1D, minScore)),
+        Math.max(0, Math.min(5, maxDepth)),
+        Math.max(0, Math.min(50, maxNeighbors)),
+        Math.max(200, Math.min(20_000, maxChars)));
+  }
+
+  private <T> T readQueryConfig(int productId, String key, T defaultValue,
+      Function<String, T> parser) {
+    try {
+      UserConfigEntity config = userConfigRepository.getTopByProductIdAndName(productId, key);
+      if (config == null || config.getValue() == null || config.getValue().isBlank()) {
+        return defaultValue;
+      }
+      return parser.apply(config.getValue().trim());
+    } catch (Exception e) {
+      log.warn("invalid knowledge graph query config, productId={}, key={}", productId, key);
+      return defaultValue;
+    }
+  }
+
+  private KnowledgeGraphicContextQuery.GraphAccess contextGraphAccess() {
+    return new KnowledgeGraphicContextQuery.GraphAccess() {
+      @Override
+      public List<KnowledgeGraphicRelationEntity> outgoing(long nodeId) {
+        return knowledgeGraphicRelationRepository.getAllByFrom(nodeId);
+      }
+
+      @Override
+      public KnowledgeGraphicNodeEntity node(long nodeId) {
+        return getNodeById(nodeId);
+      }
+
+      @Override
+      public List<KnowledgeGraphicAttributeEntity> attributes(long nodeId) {
+        return knowledgeGraphicAttributeRepository.getAllByBelong(nodeId);
+      }
+    };
+  }
+
+  /** Hit/search counters feed the forget policy, so only nodes actually injected are counted. */
+  private void recordContextUse(List<KnowledgeGraphicNodeEntity> matchedNodes,
+      List<KnowledgeGraphicNodeEntity> includedNodes) {
+    try {
+      for (KnowledgeGraphicNodeEntity node : matchedNodes) {
+        node.setHitTimes(node.getHitTimes() + 1);
+      }
+      for (KnowledgeGraphicNodeEntity node : includedNodes) {
+        node.setSearchTimes(node.getSearchTimes() + 1);
+      }
+      knowledgeGraphicNodeRepository.saveAll(includedNodes);
+    } catch (Exception e) {
+      log.warn("record knowledge graph usage failed: {}", e.getMessage());
+    }
   }
 
   private String safeQueryLog(String query) {

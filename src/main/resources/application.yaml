@@ -292,6 +292,18 @@ ai:
     max_graphic_length: 256000
     chunk_chars: 12000
     chunk_overlap_chars: 500
+    # 对话时按用户问题召回图谱、注入 Router/ChatTool 提示词的范围（每轮都会发送，且不能命中缓存）
+    # 产品可用 user config 覆盖：knowledge_graph.query.min_score / max_depth / max_neighbors / max_chars
+    # 显式查询（/kg/graphic/query、Agent 图谱工具）不受影响
+    query:
+      # Chroma 分数 = (1 + 余弦) / 2；bge-small-zh 下闲聊最高约 0.77、相关问题从 0.79 起。换 embedding 模型需重新标定
+      min-score: 0.78
+      # 从命中节点向外扩展的跳数，0 表示只要命中节点
+      max-depth: 1
+      # 每个节点最多展开的出边数（防止"中心节点"把几十个邻居全带进来）
+      max-neighbors: 10
+      # 注入内容的字符上限（约 1/3 为 token 数）
+      max-chars: 1500
   branch-prediction:
     enabled: true
   mcp:
