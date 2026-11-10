@@ -40,11 +40,14 @@ class FunctionCallingRouterKnowledgeRouteTest {
   private FunctionCallingRouterTool routerTool;
   private KnowledgeTool knowledgeTool;
   private ProductToolsBanServiceImpl productToolsBanService;
+  private KnowledgeGraphicAgentTool graphTool;
 
   @BeforeEach
   void setUp() {
     routerTool = new FunctionCallingRouterTool();
     knowledgeTool = Mockito.mock(KnowledgeTool.class);
+    graphTool = Mockito.mock(KnowledgeGraphicAgentTool.class);
+    ReflectionTestUtils.setField(routerTool, "knowledgeGraphicAgentTool", graphTool);
     productToolsBanService = Mockito.mock(ProductToolsBanServiceImpl.class);
     ReflectionTestUtils.setField(routerTool, "knowledgeTool", knowledgeTool);
     ReflectionTestUtils.setField(routerTool, "productToolsBanService", productToolsBanService);
@@ -88,5 +91,21 @@ class FunctionCallingRouterKnowledgeRouteTest {
         .filter(spec -> spec.name().equals("route_agent"))
         .findFirst().orElseThrow();
     assertFalse(agentRoute.description().contains("knowledge coverage"));
+  }
+
+  @Test
+  void keepsGraphRouteAndExplainsDisabledSwitch() {
+    when(knowledgeTool.getRoutingDescription(12)).thenReturn("");
+    when(graphTool.getRoutingDescription(12)).thenReturn("knowledgeGraphicAgentTool switch ON");
+    List<FunctionToolSpec> specs = ReflectionTestUtils.invokeMethod(routerTool,
+        "buildToolSpecs", 12, "chatProduct12");
+    assertTrue(specs.stream().filter(s -> s.name().equals("route_agent"))
+        .findFirst().orElseThrow().description().contains("knowledgeGraphicAgentTool"));
+    when(graphTool.getRoutingDescription(12)).thenReturn("knowledgeGraphicAgentTool switch OFF");
+    specs = ReflectionTestUtils.invokeMethod(routerTool, "buildToolSpecs", 12, "chatProduct12");
+    String disabled = specs.stream().filter(s -> s.name().equals("route_agent"))
+        .findFirst().orElseThrow().description();
+    assertTrue(disabled.contains("knowledgeGraphicAgentTool"));
+    assertTrue(disabled.contains("switch OFF"));
   }
 }

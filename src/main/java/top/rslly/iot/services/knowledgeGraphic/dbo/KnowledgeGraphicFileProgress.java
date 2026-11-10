@@ -78,4 +78,20 @@ public class KnowledgeGraphicFileProgress {
     this.errorMessage = message;
     update("error", this.percent, message);
   }
+
+  /** Publish a consistent polling response while the worker updates the progress. */
+  public synchronized KnowledgeGraphicFileProgress snapshot() {
+    KnowledgeGraphicFileProgress copy = new KnowledgeGraphicFileProgress();
+    copy.taskId = taskId;
+    copy.status = status;
+    copy.message = message;
+    copy.fileName = fileName;
+    copy.percent = percent;
+    copy.currentChunk = currentChunk;
+    copy.totalChunks = totalChunks;
+    copy.finished = finished;
+    copy.success = success;
+    copy.errorMessage = errorMessage;
+    return copy;
+  }
 }

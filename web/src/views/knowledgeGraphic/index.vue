@@ -1019,7 +1019,13 @@ onUnmounted(() => {
           >
         </div>
         <div v-if="currentProductId !== null" class="option-item">
-          <label class="option-label" for="connect-toggle"> 知识图谱自动生成开关 </label>
+          <label
+            class="option-label"
+            for="connect-toggle"
+            title="同时控制 Agent 读取、检索、文件导入、清空及 Mermaid/JSON 导出；关闭后停止 Agent 生成任务的后续写入，不影响页面手动操作。"
+          >
+            知识图谱自动生成开关
+          </label>
           <Switch
             id="connect-toggle"
             :checked="knowledgeGraphicEnable"

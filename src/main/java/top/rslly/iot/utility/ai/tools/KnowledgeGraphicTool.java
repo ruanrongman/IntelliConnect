@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.io.InputStreamSource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -50,9 +51,10 @@ import top.rslly.iot.utility.result.ResultCode;
 import top.rslly.iot.utility.result.ResultTool;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -206,14 +208,85 @@ public class KnowledgeGraphicTool {
     return ResultTool.success(progress);
   }
 
+  /** Stage trusted, scoped sources before publishing an Agent task. No host paths are accepted. */
+  public PreparedFiles prepareFiles(List<FileSource> sources, long maximumBytes)
+      throws IOException {
+    if (sources == null || sources.isEmpty() || sources.size() > 100 || maximumBytes < 1) {
+      throw new IllegalArgumentException("Provide between 1 and 100 source files");
+    }
+    for (FileSource source : sources) {
+      String filename = source.fileName();
+      if (filename == null || filename.isBlank()
+          || (!filename.toLowerCase(Locale.ROOT).endsWith(".zip")
+              && !RagUtility.isSupportedKnowledgeFile(filename))) {
+        throw new IllegalArgumentException("Unsupported knowledge graph file: " + filename);
+      }
+    }
+    Path directory = Files.createTempDirectory("kg-agent-");
+    try {
+      List<UploadFile> staged = new ArrayList<>();
+      for (int i = 0; i < sources.size(); i++) {
+        FileSource source = sources.get(i);
+        Path destination = directory.resolve("source-" + i + "."
+            + RagUtility.getFileExtension(source.fileName()).toLowerCase(Locale.ROOT));
+        try (InputStream input = source.content().getInputStream();
+            OutputStream output = Files.newOutputStream(destination)) {
+          long size = copyLimited(input, output, maximumBytes);
+          if (size == 0) {
+            throw new IllegalArgumentException("Source file is empty");
+          }
+        }
+        staged.add(new UploadFile(destination, source.fileName()));
+      }
+      return new PreparedFiles(directory, staged, maximumBytes);
+    } catch (IOException | RuntimeException e) {
+      deleteDirectory(directory);
+      throw e;
+    }
+  }
+
+  public void generateFiles(int productId, PreparedFiles files,
+      KnowledgeGraphicFileProgress progress, Runnable checkEnabled) {
+    processFileGenerationTask(productId, files.files, files.directory, progress, checkEnabled,
+        files.maximumBytes);
+  }
+
+  public record FileSource(String fileName, InputStreamSource content) {}
+
+  public final class PreparedFiles implements AutoCloseable {
+    private final Path directory;
+    private final List<UploadFile> files;
+    private final long maximumBytes;
+
+    private PreparedFiles(Path directory, List<UploadFile> files, long maximumBytes) {
+      this.directory = directory;
+      this.files = files;
+      this.maximumBytes = maximumBytes;
+    }
+
+    @Override
+    public void close() {
+      deleteDirectory(directory);
+    }
+  }
+
   private void processFileGenerationTask(int productId, List<UploadFile> uploadFiles, Path tempDir,
       KnowledgeGraphicFileProgress progress) {
+    processFileGenerationTask(productId, uploadFiles, tempDir, progress, () -> {
+    }, Long.MAX_VALUE);
+  }
+
+  private void processFileGenerationTask(int productId, List<UploadFile> uploadFiles, Path tempDir,
+      KnowledgeGraphicFileProgress progress, Runnable checkEnabled, long maximumBytes) {
     try {
+      checkEnabled.run();
       progress.update("parsing", 5, "正在解析文件");
       List<SourceDocument> documents = new ArrayList<>();
       for (UploadFile uploadFile : uploadFiles) {
+        checkEnabled.run();
         progress.update("parsing", 5, "正在解析文件：" + uploadFile.fileName());
-        documents.addAll(parseSourceDocuments(uploadFile.path(), uploadFile.fileName(), tempDir));
+        documents.addAll(parseSourceDocuments(uploadFile.path(), uploadFile.fileName(), tempDir,
+            maximumBytes, checkEnabled));
       }
       if (documents.isEmpty()) {
         throw new IllegalArgumentException("没有可处理的文件内容");
@@ -233,13 +306,14 @@ public class KnowledgeGraphicTool {
       LLM llm = llmDiyUtility.getDiyLlm(productId, llmName, "knowledgeGraphic");
       GraphMergeResult totalResult = new GraphMergeResult(0, 0);
       for (int i = 0; i < chunks.size(); i++) {
+        checkEnabled.run();
         ChunkDocument chunk = chunks.get(i);
         int percent = 10 + (int) Math.floor((i * 80.0) / chunks.size());
         progress.updateChunk(chunk.fileName(), i + 1, chunks.size(), percent,
             "正在抽取图谱：" + chunk.fileName() + " (" + chunk.indexInFile() + "/"
                 + chunk.totalInFile() + ")");
         totalResult = totalResult.add(generateSingleChunk(productId, chunk.text(), llm, true,
-            false));
+            false, checkEnabled));
       }
       if (totalResult.isEmpty()) {
         throw new IllegalStateException("未从文件中抽取到可写入的节点或关系");
@@ -262,6 +336,12 @@ public class KnowledgeGraphicTool {
 
   private List<SourceDocument> parseSourceDocuments(Path file, String fileName, Path tempDir)
       throws IOException {
+    return parseSourceDocuments(file, fileName, tempDir, Long.MAX_VALUE, () -> {
+    });
+  }
+
+  private List<SourceDocument> parseSourceDocuments(Path file, String fileName, Path tempDir,
+      long maximumBytes, Runnable checkEnabled) throws IOException {
     String extension = RagUtility.getFileExtension(fileName).toLowerCase(Locale.ROOT);
     if (!extension.equals("zip")) {
       String text = RagUtility.parseFile(file.toFile());
@@ -271,16 +351,21 @@ public class KnowledgeGraphicTool {
       return List.of(new SourceDocument(fileName, text));
     }
     List<SourceDocument> documents = new ArrayList<>();
-    Path unzipDir = tempDir.resolve("zip").normalize();
+    Path unzipDir = Files.createTempDirectory(tempDir, "zip-");
     Files.createDirectories(unzipDir);
+    long extractedBytes = 0;
+    int entryCount = 0;
     try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(file))) {
       ZipEntry entry;
       while ((entry = zipInputStream.getNextEntry()) != null) {
-        if (entry.isDirectory()) {
-          continue;
+        checkEnabled.run();
+        if (maximumBytes != Long.MAX_VALUE && ++entryCount > 1000) {
+          throw new IllegalArgumentException("ZIP contains too many entries");
         }
         String entryName = entry.getName();
-        if (!RagUtility.isSupportedKnowledgeFile(entryName)) {
+        if (entry.isDirectory() || !RagUtility.isSupportedKnowledgeFile(entryName)) {
+          extractedBytes += copyLimited(zipInputStream, OutputStream.nullOutputStream(),
+              maximumBytes - extractedBytes);
           continue;
         }
         Path entryPath = unzipDir.resolve(entryName).normalize();
@@ -288,7 +373,9 @@ public class KnowledgeGraphicTool {
           throw new IllegalArgumentException("zip 文件包含非法路径：" + entryName);
         }
         Files.createDirectories(entryPath.getParent());
-        Files.copy(zipInputStream, entryPath, StandardCopyOption.REPLACE_EXISTING);
+        try (OutputStream output = Files.newOutputStream(entryPath)) {
+          extractedBytes += copyLimited(zipInputStream, output, maximumBytes - extractedBytes);
+        }
         String text = RagUtility.parseFile(entryPath.toFile());
         if (text != null && !text.isBlank()) {
           documents.add(new SourceDocument(entryName, text));
@@ -318,6 +405,13 @@ public class KnowledgeGraphicTool {
   private GraphMergeResult generateSingleChunk(int productId, String chunk, LLM llm,
       boolean fileMode,
       boolean allowDelete) {
+    return generateSingleChunk(productId, chunk, llm, fileMode, allowDelete, () -> {
+    });
+  }
+
+  private GraphMergeResult generateSingleChunk(int productId, String chunk, LLM llm,
+      boolean fileMode, boolean allowDelete, Runnable checkEnabled) {
+    checkEnabled.run();
     String systemPrompt = fileMode
         ? knowledgeGraphicPrompt.getKnowledgeGraphicExtractPrompt(productId)
         : knowledgeGraphicPrompt.getKnowledgeGraphicPrompt(productId);
@@ -332,11 +426,12 @@ public class KnowledgeGraphicTool {
         fileMode, allowDelete, systemPrompt, limitContext)));
     JSONObject response = llm.jsonChat(String.valueOf(messages.get(1).getContent()), messages,
         false);
+    checkEnabled.run();
     if (response == null || response.getJSONObject("action") == null) {
       return new GraphMergeResult(0, 0);
     }
     return process_llm_result(response.getJSONObject("action"), productId, allowDelete,
-        limitContext);
+        limitContext, checkEnabled);
   }
 
   private String buildChunkUserMessage(String chunk, boolean fileMode, boolean allowDelete,
@@ -384,6 +479,12 @@ public class KnowledgeGraphicTool {
 
   private GraphMergeResult process_llm_result(JSONObject jsonObject, int productId,
       boolean allowDelete, GraphLimitContext limitContext) {
+    return process_llm_result(jsonObject, productId, allowDelete, limitContext, () -> {
+    });
+  }
+
+  private GraphMergeResult process_llm_result(JSONObject jsonObject, int productId,
+      boolean allowDelete, GraphLimitContext limitContext, Runnable checkEnabled) {
     KnowledgeGraphic graphic =
         normalizeGraphicJson(jsonObject).toJavaObject(KnowledgeGraphic.class);
     if (graphic.nodes == null) {
@@ -396,6 +497,7 @@ public class KnowledgeGraphicTool {
     int nodeCount = 0;
     int relationCount = 0;
     for (KnowledgeGraphic.Node node : graphic.nodes) {
+      checkEnabled.run();
       if (node.name == null || node.name.isBlank()) {
         continue;
       }
@@ -425,12 +527,14 @@ public class KnowledgeGraphicTool {
           currentNodeCount++;
         }
         if (node.attributes != null) {
+          checkEnabled.run();
           knowledgeGraphicService.addAttributes(node.attributes.stream().toList(), nodeDb.getId());
         }
         nodeCount++;
       }
     }
     for (KnowledgeGraphic.Relation relation : graphic.relations) {
+      checkEnabled.run();
       if (relation.name == null || relation.from == null || relation.to == null
           || relation.name.isBlank() || relation.from.isBlank() || relation.to.isBlank()) {
         continue;
@@ -665,6 +769,21 @@ public class KnowledgeGraphicTool {
     } catch (IOException e) {
       log.warn("Failed to clean temp directory: {}", path);
     }
+  }
+
+  private long copyLimited(InputStream input, OutputStream output, long maximum)
+      throws IOException {
+    long total = 0;
+    byte[] buffer = new byte[8192];
+    int count;
+    while ((count = input.read(buffer)) != -1) {
+      if (count > maximum - total) {
+        throw new IllegalArgumentException("Source or extracted ZIP exceeds file size limit");
+      }
+      output.write(buffer, 0, count);
+      total += count;
+    }
+    return total;
   }
 
   private record SourceDocument(String fileName, String text) {}

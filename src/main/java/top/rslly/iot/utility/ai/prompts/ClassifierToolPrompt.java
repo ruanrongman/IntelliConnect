@@ -36,6 +36,7 @@ import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.promptTemplate.StringUtils;
 import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
+import top.rslly.iot.utility.ai.tools.KnowledgeGraphicAgentTool;
 import top.rslly.iot.utility.ai.tools.MarkdownToPdfTool;
 import top.rslly.iot.utility.ai.tools.WorkspaceTool;
 
@@ -68,6 +69,8 @@ public class ClassifierToolPrompt {
   private McpEndpointConfigService mcpEndpointConfigService;
   @Autowired
   private KnowledgeTool knowledgeTool;
+  @Autowired
+  private KnowledgeGraphicAgentTool knowledgeGraphicAgentTool;
   @Autowired
   private SandboxService sandboxService;
   @Value("${ai.classifier.include.thought:true}")
@@ -133,6 +136,9 @@ public class ClassifierToolPrompt {
     classifierMap.put("2", "Control and query electrical, excluding music and xiaozhi_device");
     classifierMap.put("3", "Play or recommend music");
     String agentDescription = "Complex multi-step task";
+    if (knowledgeGraphicAgentTool != null) {
+      agentDescription += " | " + knowledgeGraphicAgentTool.getRoutingDescription(productId);
+    }
     if (sandboxService.isAvailable()) {
       agentDescription +=
           " | A cloud computer is available here, bashTool, editTool, grepTool and imageTool are its tools and you have"

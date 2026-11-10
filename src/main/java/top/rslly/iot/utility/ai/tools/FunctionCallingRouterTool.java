@@ -94,6 +94,8 @@ public class FunctionCallingRouterTool {
   @Autowired
   private KnowledgeTool knowledgeTool;
   @Autowired
+  private KnowledgeGraphicAgentTool knowledgeGraphicAgentTool;
+  @Autowired
   private ProductRouterSetServiceImpl productRouterSetService;
   @Autowired
   private McpServerServiceImpl mcpServerService;
@@ -285,6 +287,9 @@ public class FunctionCallingRouterTool {
     availableRoutes.put(FunctionRouterRoute.MUSIC,
         FunctionRouterRoute.MUSIC.getDefaultDescription());
     String agentDescription = FunctionRouterRoute.AGENT.getDefaultDescription();
+    if (knowledgeGraphicAgentTool != null) {
+      agentDescription += " | " + knowledgeGraphicAgentTool.getRoutingDescription(productId);
+    }
     if (sandboxService.isAvailable()) {
       agentDescription +=
           " | A cloud computer is available here, bashTool, editTool, grepTool and imageTool are its tools and you have"

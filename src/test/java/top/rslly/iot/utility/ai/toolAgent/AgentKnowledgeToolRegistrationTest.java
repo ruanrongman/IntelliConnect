@@ -38,6 +38,7 @@ class AgentKnowledgeToolRegistrationTest {
     Map<String, String> descriptions = new LinkedHashMap<>();
     descriptions.put("controlTool", "control");
     descriptions.put("knowledgeTool", "knowledge description");
+    descriptions.put("knowledgeGraphicAgentTool", "graph description");
     when(descriptionUtil.getToolDescriptions(12, "chatProduct12")).thenReturn(descriptions);
     Agent agent = new Agent();
     ReflectionTestUtils.setField(agent, "descriptionUtil", descriptionUtil);
@@ -45,8 +46,9 @@ class AgentKnowledgeToolRegistrationTest {
     List<FunctionToolSpec> specs = ReflectionTestUtils.invokeMethod(agent,
         "buildFunctionToolSpecs", 12, "chatProduct12");
 
-    assertEquals(List.of("controlTool", "knowledgeTool"),
+    assertEquals(List.of("controlTool", "knowledgeTool", "knowledgeGraphicAgentTool"),
         specs.stream().map(FunctionToolSpec::name).toList());
     assertEquals("knowledge description", specs.get(1).description());
+    assertEquals("graph description", specs.get(2).description());
   }
 }

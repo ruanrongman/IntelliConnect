@@ -59,6 +59,8 @@ public class DescriptionUtil {
   @Autowired
   private KnowledgeTool knowledgeTool;
   @Autowired
+  private KnowledgeGraphicAgentTool knowledgeGraphicAgentTool;
+  @Autowired
   private SandboxService sandboxService;
   @Autowired
   private BashTool bashTool;
@@ -144,6 +146,10 @@ public class DescriptionUtil {
     toolDescriptions.put(weatherTool.getName(), weatherTool.getDescription());
     toolDescriptions.put(musicTool.getName(), musicTool.getDescription());
     toolDescriptions.put(workspaceTool.getName(), workspaceTool.getDescription());
+    if (knowledgeGraphicAgentTool != null) {
+      toolDescriptions.put(knowledgeGraphicAgentTool.getName(),
+          knowledgeGraphicAgentTool.getDescription(productId));
+    }
     String knowledgeDescription = knowledgeTool.getDescription(productId);
     if (!knowledgeDescription.isBlank()) {
       toolDescriptions.put(knowledgeTool.getName(), knowledgeDescription);

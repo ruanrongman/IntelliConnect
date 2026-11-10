@@ -7,7 +7,8 @@
 平台暴露给模型的工具：
 
 - `bashTool`：在远程 Ubuntu 24.04 沙箱中执行任意 shell 命令，返回 stdout / stderr / 退出码
-- `editTool`：在沙箱中读写文件（write / read / list / delete），相对路径自动落在 `/workspace` 临时工作目录下
+- `editTool`：在沙箱中读写文件、精确替换文本或按行插入（write / read / list / delete / str_replace / insert），相对路径自动落在 `/workspace` 临时工作目录下
+- `grepTool`：在沙箱中递归搜索文件内容，支持正则、字面量、文件名过滤和上下文行，返回文件名、行号及匹配文本
 - `imageTool`：读取当前会话沙箱中的图片，调用多模态视觉模型检查截图、图表或渲染结果，返回文字观察
 - `markdownToPdfTool`：使用固定排版将 Markdown 转为 PDF，检查 PDF 可解析且有页面后自动保存到会话文件；可在产品“工具管理”中独立禁用
 - `workspaceTool`：管理当前会话的持久文件，支持列表、读取文本、保存文本，以及在工作区与沙箱之间导入、导出文件；列表和文本读写不依赖沙箱
@@ -21,6 +22,57 @@
 - **容量控制**：全局实例上限 `max-instances`，超限回收最久未用的实例
 
 路由层面，Agent 路由会描述 `workspaceTool` 的文件管理能力；沙箱可用时还会声明云电脑执行能力。即使关闭沙箱，智能体仍可列出、读取和保存工作区文本文件。
+
+### 命令执行与文件编辑
+
+`bashTool` 的输入是完整 shell 命令字符串；其他上述工具的输入为 JSON 字符串。Agent、McpAgent 的 ReAct 和 Function Calling 模式均支持这些工具；Function Calling 的外层参数为 `args:string`，其中 `bashTool` 的 `args` 放命令，其余工具放序列化后的 JSON。例如，调用 `editTool` 写入文件时，外层参数为：
+
+```json
+{"args":"{\"action\":\"write\",\"path\":\"hello.py\",\"content\":\"print('hello')\\n\"}"}
+```
+
+以下示例直接展示工具收到的输入，不包含外层 `args`。例如，交给 `bashTool` 的命令为：
+
+```bash
+python3 /workspace/hello.py
+```
+
+命令从 `/workspace` 执行，受 `command-timeout` 限制，返回退出码和 stdout / stderr。同一实例内文件系统状态保留；后续命令需要的工作目录和环境变量应在命令中明确设置。
+
+`editTool` 的 `path` 必填，相对路径以 `/workspace` 为基准；绝对路径按沙箱内路径使用。操作如下：
+
+| 操作 | 参数示例 | 行为 |
+| --- | --- | --- |
+| `write` | `{"action":"write","path":"hello.py","content":"print('hello')\n"}` | 新建或覆盖文件，`content` 必须是字符串，可为空 |
+| `read` | `{"action":"read","path":"hello.py"}` | 读取文件文本 |
+| `list` | `{"action":"list","path":"."}` | 列出目录，包括隐藏文件和文件属性 |
+| `delete` | `{"action":"delete","path":"results/tmp"}` | 删除文件或递归删除目录 |
+| `str_replace` | `{"action":"str_replace","path":"hello.py","old_str":"print('hello')","new_str":"print('你好')"}` | 精确替换唯一匹配的文本 |
+| `insert` | `{"action":"insert","path":"hello.py","insert_line":0,"content":"import sys\n"}` | 在指定行之后插入文本，`0` 表示文件开头 |
+
+修改已有文件前先读取当前内容。`str_replace` 按字面量匹配，空白和换行也必须一致；`old_str` 不能为空，`new_str` 可为空以删除文本。匹配为零处或多处时不修改文件，应增加上下文后重试。`insert_line` 必须是非负整数：`1` 表示第一行之后，等于文件行数时追加，超过行数则失败；`content` 必须是非空字符串。精确替换和插入要求目标文件已存在且是 UTF-8 文本。
+
+### 搜索文件内容
+
+使用 `grepTool` 先定位相关文件，再用 `editTool` 读取和修改，避免将整个目录内容送入模型。例如，搜索 Java 服务类，并显示匹配位置前后各两行：
+
+```json
+{"pattern":"class .*Service","path":"src","include":"*.java","context_lines":2,"max_results":200}
+```
+
+| 参数 | 说明 | 默认值 |
+| --- | --- | --- |
+| `pattern` | 必填，非空字符串；默认使用 grep 扩展正则表达式 | — |
+| `path` | 文件或目录；目录递归搜索，相对路径以 `/workspace` 为基准 | `/workspace` |
+| `include` | 可选文件名 glob，如 `*.java`、`*.py` | 不过滤文件名 |
+| `literal` | 是否按字面量搜索，关闭正则解析 | `false` |
+| `ignore_case` | 是否忽略大小写 | `false` |
+| `context_lines` | 每处匹配前后的上下文行数，整数 `0..100` | `0` |
+| `max_results` | 最大输出行数，包含上下文行，整数 `1..2000` | `200` |
+
+返回结果带文件名和从 1 开始的行号，跳过二进制文件。单行最多显示 2000 个字符；超过输出行数或单行长度会标记截断，可缩小路径、调整匹配条件或提高 `max_results`。未匹配到内容会返回 `No matches found.`，属于正常空结果；非法正则或不存在的路径会返回错误。例如，按字面量查找 `config.api.key`，可传入 `{"pattern":"config.api.key","path":"src","literal":true}`。
+
+搜索与编辑针对当前会话的临时沙箱文件。持久工作区中的附件需先导入沙箱，修改后的结果需导出后才能在工作区下载。
 
 ### 文件保存在哪里
 
@@ -168,7 +220,7 @@ docker run --rm \
 
 ## 4. 平台配置
 
-### Markdown 转 PDF（Java 后端）
+### 4.1 Markdown 转 PDF（Java 后端）
 
 `markdownToPdfTool` 从当前会话的云电脑读取 Markdown 和本地图片，使用 Java（CommonMark → XHTML → OpenHTMLtoPDF/PDFBox）在后端生成、校验 PDF，再直接保存到会话文件。不需要修改现有沙箱镜像，也不会向沙箱注入转换脚本或安装转换依赖。PDF 不会另外写回沙箱。
 
@@ -191,7 +243,7 @@ ai:
 {"path":"reports/周报.md","outputName":"周报.pdf","title":"项目周报"}
 ```
 
-- `path` 必填，支持 `/workspace` 下的 `.md`、`.markdown` 文件，编码为 UTF-8，最大 2 MiB。会话文件中的 Markdown 需先通过 `workspaceTool import_to_sandbox` 导入。
+- `path` 必填，支持 `/workspace` 下的 `.md`、`.markdown` 文件，编码为 UTF-8，默认最大 2 MiB（可通过 `max-source-bytes` 调整）。会话文件中的 Markdown 需先通过 `workspaceTool import_to_sandbox` 导入。
 - `outputName` 可省略，默认使用源文件名并将扩展名替换为 `.pdf`。只接受文件名，不接受目录；会话文件按独立 ID 保存，同名文件不会覆盖已有产物。
 - `title` 可省略，默认使用源文件名（不含扩展名），用于 PDF 文档标题。
 - 支持中英文、标题、列表、表格、代码块、本地 PNG/JPEG/GIF/BMP 图片和 A4 分页。图片相对于源 Markdown 文件解析，单张默认最大 10 MiB，最多加载 32 张、合计 30 MiB；远程图片、缺失或越界图片会跳过并在 `warnings` 中说明。需要远程图片时先下载到沙箱。后端渲染器不会直接访问远程 URL 或后端文件路径。原始 HTML 按文本显示；公式、SVG 和 Mermaid 请先渲染成本地 PNG/JPEG 图片。
@@ -207,7 +259,7 @@ ai:
   -Dpdf.test.font=/opt/fonts/NotoSansSC-Regular.ttf test
 ```
 
-### 4.1 沙箱配置
+### 4.2 沙箱配置
 
 在 `application.yaml` 中配置 `ai.sandbox.*`：
 
@@ -231,6 +283,8 @@ ai:
 
 **配置项说明**：
 
+下表为配置类的默认值；仓库的 `application.yaml` 已显式启用沙箱和服务端代理，并将镜像设为 `my-code-interpreter:v1.1.0-cjk`。采用上文 Dockerfile 时，应把 `image` 同步改为实际构建的 `my-code-interpreter:v1.1.0-final`；多台沙箱宿主机需分别具备对应镜像。
+
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | `enabled` | 是否启用沙箱服务 | `false` |
@@ -247,7 +301,7 @@ ai:
 | `pool-enabled` | 是否启用预热池 | `true` |
 | `pool-max-idle` | 预热池空闲实例上限 | `2` |
 
-### 4.2 工作区配置与存储
+### 4.3 工作区配置与存储
 
 将以下配置合并到同一个 `ai` 节点；未显式配置时使用这些默认值：
 
@@ -265,6 +319,33 @@ ai:
 生产部署应将 `ai.workspace.root` 指向持久磁盘或映射到后端容器的持久化卷，同时备份该目录和数据库。该目录位于 IntelliConnect 后端，不是 OpenSandbox 容器的 `/workspace`。目录及其父目录不能是符号链接；修改根路径前需停机迁移已有文件。当前实现按单后端实例运行，多实例部署需要共享存储和跨实例并发控制。
 
 上传还受 `spring.servlet.multipart.max-file-size`、`max-request-size` 及反向代理请求大小限制；当前仓库中的两个 multipart 上限均为 `200MB`，单文件仍受工作区的 50 MiB 默认限制。更多部署和接口细节见 [会话工作区文档](../ai_chat/workspace.md)。
+
+### 4.4 多步任务与上下文压缩
+
+普通 Agent 与 MCP Agent 的 ReAct、Function Calling 模式都维护本次任务的上下文。接近配置的 token 阈值时，系统将较早的历史和工具调用压缩为进度摘要，保留近期工具轮次，继续处理剩余步骤。摘要用于记录已完成工作、产物路径、验证或导出状态及下一步；压缩只整理模型上下文，不修改沙箱文件，也不延长文件的保存期限。
+
+可在产品的“运行参数”中分别调整 Agent 与 MCP Agent 的上下文窗口、摘要触发阈值、保留最近工具轮次，以及“取消工具调用次数限制”。产品配置优先于以下后端默认配置，将其合并到现有 `ai` 节点：
+
+```yaml
+ai:
+  agent:
+    memory:
+      context-window-tokens: 300000
+      summary-threshold-ratio: 0.75
+      recent-turns: 4
+    unlimited: false
+  mcp:
+    agent:
+      memory:
+        context-window-tokens: 300000
+        summary-threshold-ratio: 0.75
+        recent-turns: 4
+      unlimited: false
+```
+
+`context-window-tokens` 应按所用模型的实际上下文容量设置，范围为 `1..1000000`；`summary-threshold-ratio` 范围为 `0.1..1`；`recent-turns` 范围为 `1..100`，表示压缩后尽量保留的完整工具调用与结果轮次，超长结果仍可能被压缩或截断。
+
+`unlimited: false` 时仍受 `ai.agent-epoch-limit` 或 `ai.mcp.agent-epoch-limit` 约束；设为 `true` 仅取消轮次上限，上下文压缩、用户取消和调用超时仍生效。任务摘要仅用于本次执行，不是跨请求恢复任务的存档。需要继续处理的文件仍应先保存到持久工作区。
 
 ## 5. 使用会话工作区
 
@@ -288,7 +369,7 @@ ai:
 | `import_to_sandbox` | `{"action":"import_to_sandbox","fileId":"实际文件ID"}` | 将文件复制到沙箱，返回 `sandboxPath` |
 | `export_from_sandbox` | `{"action":"export_from_sandbox","path":"results/报告.pdf"}` | 将沙箱产物保存到持久工作区，供页面下载 |
 
-例如，用户上传表格并要求生成分析报告时，智能体先用 `list` 找到文件，再用 `import_to_sandbox` 导入；根据返回的路径，通过 `bashTool` 运行分析，将报告生成到 `/workspace/results/报告.pdf`，最后用 `export_from_sandbox` 保存。用户在工作区刷新后即可下载报告。如果只是生成 Markdown、HTML 或代码文本，可以直接使用 `write` 保存。
+例如，用户上传表格并要求生成分析报告时，智能体先用 `list` 找到文件，再用 `import_to_sandbox` 导入；根据返回的路径，通过 `bashTool` 运行分析。若生成 Markdown 报告，可调用 `markdownToPdfTool` 转换并自动保存 PDF；若用沙箱内程序生成 `/workspace/results/报告.pdf`，则用 `export_from_sandbox` 保存。用户在工作区刷新后即可下载报告。如果只是生成 Markdown、HTML 或代码文本，可以直接使用 `write` 保存。
 
 导入路径为 `/workspace/imports/<fileId>/<原文件名>`；同一实例内重复导入到相同路径会失败，以免覆盖已加工内容。导出仅支持 `/workspace` 下的普通文件，可传相对路径或 `/workspace/` 开头的绝对路径，拒绝路径穿越和符号链接。导入、导出都需要沙箱可用，且受文件大小和工作区配额限制。
 
@@ -308,4 +389,7 @@ ai:
 - **客户端连不上沙箱代理端口**：容器/集群内部署未发布随机代理端口段时，将 `use-server-proxy` 置为 `true`，全部流量经 server 8080 端口转发
 - **健康检查误判创建失败**：容器冷启动慢或代理路由异常时会误判，可置 `skip-health-check: true`；首条命令的普通连接错误会保留实例并返回失败，可稍后重试
 - **模型不调用 bash/edit**：确认 `enabled: true`，路由描述中"云电脑可用"的声明仅在沙箱可用时注入
+- **搜索结果不完整或替换失败**：`grepTool` 的 `max_results` 限制输出行数（包含上下文），截断时先缩小搜索范围。`str_replace` 要求原文本只出现一次，需先读取最新文件，确认空白、换行并提供足够上下文；按行插入则检查行号是否在 `0..文件行数` 内。
+- **多步任务达到轮次上限**：在产品“运行参数”中调整对应 Agent 的工具调用次数，或开启“取消工具调用次数限制”。上下文压缩与沙箱回收是独立机制，开启无限轮次不会永久保存沙箱文件。
+- **PDF 中中文无法显示或转换失败**：检查 Java 后端机器上的 `ai.pdf.font-path`（或 `AI_PDF_FONT_PATH`），确认字体为可读取且包含所需汉字的 `.ttf`。仅给沙箱镜像安装中文字体不能解决后端 PDF 字体问题；成功生成的 PDF 已直接保存到会话工作区，无需从沙箱导出。
 - **kill 失败的容器残留**：应用会自动延后重试回收；超过 30 分钟仍失败会在日志中输出沙箱 ID，需在宿主机手动清理

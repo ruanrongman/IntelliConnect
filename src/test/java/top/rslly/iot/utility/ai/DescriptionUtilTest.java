@@ -34,6 +34,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.tools.KnowledgeTool;
+import top.rslly.iot.utility.ai.tools.KnowledgeGraphicAgentTool;
 import top.rslly.iot.utility.ai.tools.WorkspaceTool;
 import top.rslly.iot.utility.ai.sandbox.SandboxService;
 
@@ -41,6 +42,8 @@ import top.rslly.iot.utility.ai.sandbox.SandboxService;
 class DescriptionUtilTest {
   @Mock
   private KnowledgeTool knowledgeTool;
+  @Mock
+  private KnowledgeGraphicAgentTool knowledgeGraphicAgentTool;
   @Mock
   private McpAgent mcpAgent;
   @Mock
@@ -55,6 +58,8 @@ class DescriptionUtilTest {
   void workspaceMetadata() {
     when(workspaceTool.getName()).thenReturn("workspaceTool");
     when(workspaceTool.getDescription()).thenReturn("persistent workspace");
+    when(knowledgeGraphicAgentTool.getName()).thenReturn("knowledgeGraphicAgentTool");
+    when(knowledgeGraphicAgentTool.getDescription(12)).thenReturn("graph switch OFF");
   }
 
   @Test
@@ -69,7 +74,8 @@ class DescriptionUtilTest {
     String reactDescriptions = descriptionUtil.getTools(12, "chatProduct12");
 
     assertEquals(
-        List.of("controlTool", "weatherTool", "musicTool", "workspaceTool", "knowledgeTool",
+        List.of("controlTool", "weatherTool", "musicTool", "workspaceTool",
+            "knowledgeGraphicAgentTool", "knowledgeTool",
             "mcpAgent"),
         List.copyOf(toolDescriptions.keySet()));
     assertEquals("knowledge description", toolDescriptions.get("knowledgeTool"));
@@ -89,5 +95,18 @@ class DescriptionUtilTest {
         descriptionUtil.getToolDescriptions(12, "chatProduct12");
 
     assertFalse(toolDescriptions.containsKey("knowledgeTool"));
+  }
+
+  @Test
+  void keepsGraphForBothAgentProtocolsAndUpdatesDisabledDescription() {
+    when(knowledgeTool.getDescription(12)).thenReturn("");
+    when(knowledgeGraphicAgentTool.getDescription(12)).thenReturn("read import clear export graph");
+    assertEquals("read import clear export graph",
+        descriptionUtil.getToolDescriptions(12, "chatProduct12").get("knowledgeGraphicAgentTool"));
+    assertTrue(descriptionUtil.getTools(12, "chatProduct12").contains("knowledgeGraphicAgentTool"));
+    when(knowledgeGraphicAgentTool.getDescription(12)).thenReturn("graph switch OFF");
+    assertEquals("graph switch OFF", descriptionUtil.getToolDescriptions(12, "chatProduct12")
+        .get("knowledgeGraphicAgentTool"));
+    assertTrue(descriptionUtil.getTools(12, "chatProduct12").contains("graph switch OFF"));
   }
 }
