@@ -38,6 +38,8 @@ import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.rag.RagUtility;
 import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
@@ -190,10 +192,15 @@ public class AiServiceImpl implements AiService {
       initializeDebugMemory(aiControl.getProductId(), conversationChatId, aiControl.getContent());
       Queue<String> reasoningQueue = new ConcurrentLinkedQueue<>();
       reasoningQueueMap.put(streamChatId, reasoningQueue);
-      CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(
-          () -> router.responseDebugStream(savedDocumentPrompt.modelContent(),
+      LlmUsageAccumulator turnUsage = new LlmUsageAccumulator();
+      CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(() -> {
+        try (LlmUsageContext.Scope ignored =
+            LlmUsageContext.open(aiControl.getProductId(), conversationChatId, turnUsage)) {
+          return router.responseDebugStream(savedDocumentPrompt.modelContent(),
               savedDocumentPrompt.historyContent(), streamChatId, conversationChatId,
-              aiControl.getProductId(), reasoningQueue));
+              aiControl.getProductId(), reasoningQueue);
+        }
+      });
       while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)
           || !reasoningQueue.isEmpty()) {
         if (connectionClosed.get() || stoppedStreamChatIds.contains(streamChatId)) {
@@ -232,6 +239,7 @@ public class AiServiceImpl implements AiService {
       if (!sentFromQueue && finalAnswer != null && !finalAnswer.isBlank()) {
         sendSseEvent(emitter, "message", finalAnswer);
       }
+      sendUsageEvent(emitter, turnUsage);
       sendSseEvent(emitter, "complete", finalAnswer == null ? "" : finalAnswer);
     } catch (Exception e) {
       log.error("AI text stream failed, streamChatId={}", streamChatId, e);
@@ -375,6 +383,18 @@ public class AiServiceImpl implements AiService {
 
   private void sendSseEvent(SseEmitter emitter, String eventName, Object data) throws IOException {
     emitter.send(SseEmitter.event().name(eventName).data(data));
+  }
+
+  /**
+   * Token usage of the model calls made while answering this turn. Background work that finishes
+   * after the answer (memory, emotion, graph updates) is persisted but not included here.
+   */
+  private void sendUsageEvent(SseEmitter emitter, LlmUsageAccumulator turnUsage)
+      throws IOException {
+    if (turnUsage == null || turnUsage.isEmpty()) {
+      return;
+    }
+    sendSseEvent(emitter, "usage", JSON.toJSONString(turnUsage.summary()));
   }
 
   @Override
