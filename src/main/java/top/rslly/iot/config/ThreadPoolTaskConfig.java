@@ -29,6 +29,7 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.core.task.support.TaskExecutorAdapter;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 
 /**
  * 线程池配置
@@ -63,7 +64,11 @@ public class ThreadPoolTaskConfig {
         .name("virtual-async-", 0)
         .factory();
 
-    return new TaskExecutorAdapter(Executors.newThreadPerTaskExecutor(factory));
+    TaskExecutorAdapter executor =
+        new TaskExecutorAdapter(Executors.newThreadPerTaskExecutor(factory));
+    // Async work (memory, emotion, graph updates) keeps the caller's LLM usage attribution.
+    executor.setTaskDecorator(LlmUsageContext::wrap);
+    return executor;
   }
 
   @Bean("platformTaskExecutor") // bean的名称，默认为首字母小写的方法名

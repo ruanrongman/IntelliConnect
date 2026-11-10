@@ -41,6 +41,7 @@ import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.ConversationHistoryCodec;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
@@ -143,6 +144,17 @@ public class Router {
 
   private String responseInternal(String content, String historyContent, String streamChatId,
       String conversationChatId, int productId, Queue<String> reasoningQueue, String... dataArgs) {
+    // Attributes every model call of this turn (all channels) to the product and conversation.
+    try (LlmUsageContext.Scope ignored =
+        LlmUsageContext.open(productId, conversationChatId, null)) {
+      return respondWithUsageScope(content, historyContent, streamChatId, conversationChatId,
+          productId, reasoningQueue, dataArgs);
+    }
+  }
+
+  private String respondWithUsageScope(String content, String historyContent,
+      String streamChatId, String conversationChatId, int productId,
+      Queue<String> reasoningQueue, String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
@@ -175,6 +187,7 @@ public class Router {
       GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
     }
     ConversationMemoryPolicy memoryPolicy = conversationMemoryPolicy.resolveForProduct(productId);
+    LlmUsageContext.setContextWindowTokens(memoryPolicy.contextWindowTokens());
     memory = loadConversationMemory(conversationChatId, memoryPolicy);
     boolean initializeMemorySummary =
         agentMemoryService.findAllByChatId(conversationChatId).isEmpty();
@@ -210,7 +223,7 @@ public class Router {
         predictionGlobalMessage.put(GlobalMessageContext.QUEUE_MAP, predictionQueueMap);
         predictionGlobalMessage.put(GlobalMessageContext.CHAT_ID, predictionChatId);
 
-        predictionThread = Thread.ofVirtual().start(() -> {
+        predictionThread = Thread.ofVirtual().start(LlmUsageContext.wrap(() -> {
           try {
             if (predictionCancelled.get()) {
               return;
@@ -225,7 +238,7 @@ public class Router {
           } finally {
             predictionLatch.countDown();
           }
-        });
+        }));
       }
       var resultMap = classifierTool.run(content, globalMessage);
       String args;

@@ -37,6 +37,7 @@ import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.prompts.AgentTaskContextPrompt;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 
 /**
  * Request-local working context for one Agent invocation. Its summary and retained tool turns never
@@ -310,7 +311,7 @@ public final class AgentTaskContext {
 
   private String awaitSummary(Supplier<String> call) throws Exception {
     FutureTask<String> task = new FutureTask<>(call::get);
-    Thread.ofVirtual().name("agent-context-summary").start(task);
+    Thread.ofVirtual().name("agent-context-summary").start(LlmUsageContext.wrap(task));
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
     try {
       while (true) {
