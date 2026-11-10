@@ -38,6 +38,11 @@ import java.util.function.Consumer;
 public final class LlmUsageTracker {
   /** Dedicated logger so usage lines can be routed or silenced independently. */
   private static final Logger USAGE_LOG = LoggerFactory.getLogger("llm.usage");
+  /**
+   * DEBUG only: per-message fingerprints to locate where two requests stop sharing a prefix. Enable
+   * with {@code logging.level.llm.usage.prefix=DEBUG}.
+   */
+  private static final Logger PREFIX_LOG = LoggerFactory.getLogger("llm.usage.prefix");
   private static final Logger log = LoggerFactory.getLogger(LlmUsageTracker.class);
   private static final StackWalker STACK_WALKER = StackWalker.getInstance();
   private static final String APP_PACKAGE = "top.rslly.iot.";
@@ -106,7 +111,11 @@ public final class LlmUsageTracker {
       if (tools != null && !tools.isEmpty()) {
         estimate += ConversationMemoryPolicy.estimateText(FunctionToolSpec.toEstimateJson(tools));
       }
-      return new Call(provider, model, detectScene(), frame, estimate, stream);
+      String scene = detectScene();
+      if (PREFIX_LOG.isDebugEnabled()) {
+        PREFIX_LOG.debug("scene={} {}", scene, prefixFingerprint(messages, tools));
+      }
+      return new Call(provider, model, scene, frame, estimate, stream);
     } catch (RuntimeException e) {
       log.debug("llm usage begin failed", e);
       return Call.NOOP;
@@ -146,6 +155,26 @@ public final class LlmUsageTracker {
             LlmUsageAccumulator.ratio(usage.cachedTokens(), usage.promptTokens()) * 100D),
         usage.cacheCreationTokens(), usage.completionTokens(), usage.reasoningTokens(),
         record.estimatedPromptTokens(), record.stream(), record.latencyMs());
+  }
+
+  /**
+   * {@code tools=len#hash [index:role:len#hash ...]}; equal entries mean an equal prefix so far.
+   */
+  static String prefixFingerprint(List<ModelMessage> messages, List<FunctionToolSpec> tools) {
+    StringBuilder builder = new StringBuilder();
+    String toolsJson = FunctionToolSpec.toEstimateJson(tools);
+    builder.append("tools=").append(toolsJson.length()).append('#')
+        .append(Integer.toHexString(toolsJson.hashCode())).append(" [");
+    if (messages != null) {
+      for (int index = 0; index < messages.size(); index++) {
+        ModelMessage message = messages.get(index);
+        String content = message == null ? "" : String.valueOf(message.getContent());
+        builder.append(index == 0 ? "" : " ").append(index).append(':')
+            .append(message == null ? null : message.getRole()).append(':')
+            .append(content.length()).append('#').append(Integer.toHexString(content.hashCode()));
+      }
+    }
+    return builder.append(']').toString();
   }
 
   /** First application frame outside the LLM client package, e.g. {@code ChatTool.run}. */
