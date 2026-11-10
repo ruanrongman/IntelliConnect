@@ -275,26 +275,25 @@ class DeepSeekTest {
   }
 
   private ChatCompletionCreateParams buildTextParams(DeepSeek deepSeek) throws Exception {
-    Method method = DeepSeek.class.getDeclaredMethod("buildTextParams", List.class);
-    method.setAccessible(true);
-    return (ChatCompletionCreateParams) method.invoke(deepSeek, List.of(
-        new ModelMessage(ModelMessageRole.USER.value(), "hello")));
+    return buildTextParams(deepSeek, false);
   }
 
   private ChatCompletionCreateParams buildTextParams(DeepSeek deepSeek, boolean search)
       throws Exception {
-    Method method = DeepSeek.class.getDeclaredMethod("buildTextParams", List.class, boolean.class);
+    Method method = DeepSeek.class.getDeclaredMethod("buildTextParams", List.class,
+        boolean.class, boolean.class);
     method.setAccessible(true);
     return (ChatCompletionCreateParams) method.invoke(deepSeek, List.of(
-        new ModelMessage(ModelMessageRole.USER.value(), "hello")), search);
+        new ModelMessage(ModelMessageRole.USER.value(), "hello")), search, false);
   }
 
   private ChatCompletionCreateParams buildFunctionParams(DeepSeek deepSeek,
       List<FunctionToolSpec> toolSpecs, boolean search) throws Exception {
     Method method = DeepSeek.class.getDeclaredMethod("buildFunctionParams", List.class,
-        List.class, boolean.class);
+        List.class, boolean.class, boolean.class);
     method.setAccessible(true);
     return (ChatCompletionCreateParams) method.invoke(deepSeek,
-        List.of(new ModelMessage(ModelMessageRole.USER.value(), "hello")), toolSpecs, search);
+        List.of(new ModelMessage(ModelMessageRole.USER.value(), "hello")), toolSpecs, search,
+        false);
   }
 }

@@ -31,6 +31,7 @@ import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
 import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionStreamOptions;
 import com.openai.models.chat.completions.ChatCompletionFunctionTool;
 import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
@@ -43,6 +44,7 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartImage;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
+import com.openai.models.completions.CompletionUsage;
 import com.openai.models.models.Model;
 import com.openai.models.models.ModelListPage;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +53,8 @@ import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsage;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageTracker;
 
 import java.net.URI;
 import java.time.Duration;
@@ -85,6 +89,7 @@ public class DeepSeek implements LLM {
   private final double topP;
   private final boolean webSearchEnabled;
   private final boolean dashscopeCompatible;
+  private final String providerLabel;
 
   public DeepSeek(String apiKey) {
     this(DEFAULT_URL, DEFAULT_MODEL, apiKey);
@@ -138,6 +143,7 @@ public class DeepSeek implements LLM {
     this.topP = topP;
     this.webSearchEnabled = webSearchEnabled;
     this.dashscopeCompatible = dashscopeCompatible;
+    this.providerLabel = hostOf(this.baseUrl);
     this.client = OpenAIOkHttpClient.builder()
         .apiKey(apiKey)
         .baseUrl(this.baseUrl)
@@ -149,8 +155,11 @@ public class DeepSeek implements LLM {
   @Override
   public JSONObject jsonChat(String content, List<ModelMessage> messages, boolean search) {
     try {
-      String response =
-          extractText(client.chat().completions().create(buildTextParams(messages, search)));
+      LlmUsageTracker.Call usageCall = beginUsage(messages, false);
+      ChatCompletion completion =
+          client.chat().completions().create(buildTextParams(messages, search, false));
+      usageCall.finish(usageOf(completion));
+      String response = extractText(completion);
       log.debug("model output:{} ", response);
       return LlmJsonResponseParser.parse(response);
     } catch (Exception e) {
@@ -166,8 +175,11 @@ public class DeepSeek implements LLM {
   @Override
   public String commonChat(String content, List<ModelMessage> messages, boolean search) {
     try {
-      String response =
-          extractText(client.chat().completions().create(buildTextParams(messages, search)));
+      LlmUsageTracker.Call usageCall = beginUsage(messages, false);
+      ChatCompletion completion =
+          client.chat().completions().create(buildTextParams(messages, search, false));
+      usageCall.finish(usageOf(completion));
+      String response = extractText(completion);
       log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
@@ -185,8 +197,10 @@ public class DeepSeek implements LLM {
   public FunctionResult functionChat(String content, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, boolean search) {
     try {
+      LlmUsageTracker.Call usageCall = beginUsage(messages, false);
       ChatCompletion completion = client.chat().completions()
-          .create(buildFunctionParams(messages, toolSpecs, search));
+          .create(buildFunctionParams(messages, toolSpecs, search, false));
+      usageCall.finish(usageOf(completion));
       return toFunctionResult(completion);
     } catch (Exception e) {
       log.error("function calling error", e);
@@ -201,16 +215,19 @@ public class DeepSeek implements LLM {
       return;
     }
     handler.onOpen();
+    LlmUsageTracker.Call usageCall = beginUsage(messages, true);
     STREAM_EXECUTOR.execute(() -> {
       StringBuilder replyBuilder = new StringBuilder();
+      AtomicReference<CompletionUsage> streamUsage = new AtomicReference<>();
       StringBuilder reasoningBuilder = new StringBuilder();
       Map<Long, PartialToolCall> partialToolCalls = new LinkedHashMap<>();
       try (StreamResponse<ChatCompletionChunk> streamResponse =
           client.chat().completions()
-              .createStreaming(buildFunctionParams(messages, toolSpecs, search))) {
+              .createStreaming(buildFunctionParams(messages, toolSpecs, search, true))) {
         var iterator = streamResponse.stream().iterator();
         while (iterator.hasNext()) {
           ChatCompletionChunk chunk = iterator.next();
+          captureUsage(chunk, streamUsage);
           for (ChatCompletionChunk.Choice choice : chunk.choices()) {
             ChatCompletionChunk.Choice.Delta delta = choice.delta();
             delta.content().filter(text -> !text.isBlank()).ifPresent(text -> {
@@ -227,6 +244,7 @@ public class DeepSeek implements LLM {
                 .ifPresent(toolCalls -> mergePartialToolCalls(partialToolCalls, toolCalls));
           }
         }
+        usageCall.finish(LlmUsage.fromOpenAi(streamUsage.get()));
         if (!partialToolCalls.isEmpty()) {
           PartialToolCall toolCall = partialToolCalls.values().iterator().next();
           handler.onToolCall(toolCall.id, toolCall.functionName.toString(),
@@ -246,17 +264,22 @@ public class DeepSeek implements LLM {
       EventSourceListener listener) {
     LegacyEventSource eventSource = new LegacyEventSource(baseUrl + "/chat/completions");
     listener.onOpen(eventSource, null);
+    LlmUsageTracker.Call usageCall = beginUsage(messages, true);
     STREAM_EXECUTOR.execute(() -> {
+      AtomicReference<CompletionUsage> streamUsage = new AtomicReference<>();
       try {
-        ChatCompletionCreateParams params = buildTextParams(messages, search);
+        ChatCompletionCreateParams params = buildTextParams(messages, search, true);
         try (StreamResponse<ChatCompletionChunk> streamResponse =
             client.chat().completions().createStreaming(params)) {
           eventSource.setStreamResponse(streamResponse);
           var iterator = streamResponse.stream().iterator();
           while (!eventSource.isCancelled() && iterator.hasNext()) {
             ChatCompletionChunk chunk = iterator.next();
+            captureUsage(chunk, streamUsage);
             emitLegacyChunk(listener, eventSource, chunk);
           }
+          // A cancelled stream gets no usage chunk; it is still recorded as a call.
+          usageCall.finish(LlmUsage.fromOpenAi(streamUsage.get()));
           if (!eventSource.isCancelled()) {
             listener.onEvent(eventSource, null, null, DONE_SIGNAL);
           }
@@ -292,7 +315,10 @@ public class DeepSeek implements LLM {
                       .build())))
               .build()))
                   .build();
-      String response = extractText(client.chat().completions().create(params));
+      LlmUsageTracker.Call usageCall = beginUsage(null, false);
+      ChatCompletion completion = client.chat().completions().create(params);
+      usageCall.finish(usageOf(completion));
+      String response = extractText(completion);
       log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
@@ -313,11 +339,8 @@ public class DeepSeek implements LLM {
         .toList();
   }
 
-  private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages) {
-    return buildTextParams(messages, false);
-  }
-
-  private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages, boolean search) {
+  private ChatCompletionCreateParams buildTextParams(List<ModelMessage> messages, boolean search,
+      boolean stream) {
     ChatCompletionCreateParams.Builder builder =
         applyModelDefaults(ChatCompletionCreateParams.builder()
             .model(model)
@@ -325,16 +348,12 @@ public class DeepSeek implements LLM {
             .topP(topP)
             .messages(toMessageParams(messages)));
     applySearch(builder, search);
+    applyStreamUsage(builder, stream);
     return builder.build();
   }
 
   private ChatCompletionCreateParams buildFunctionParams(List<ModelMessage> messages,
-      List<FunctionToolSpec> toolSpecs) {
-    return buildFunctionParams(messages, toolSpecs, false);
-  }
-
-  private ChatCompletionCreateParams buildFunctionParams(List<ModelMessage> messages,
-      List<FunctionToolSpec> toolSpecs, boolean search) {
+      List<FunctionToolSpec> toolSpecs, boolean search, boolean stream) {
     ChatCompletionCreateParams.Builder builder = applyModelDefaults(
         ChatCompletionCreateParams.builder()
             .model(model)
@@ -342,6 +361,7 @@ public class DeepSeek implements LLM {
             .topP(topP)
             .messages(toMessageParams(messages)));
     applySearch(builder, search);
+    applyStreamUsage(builder, stream);
     if (toolSpecs != null && !toolSpecs.isEmpty()) {
       builder.toolChoice(ChatCompletionToolChoiceOption.Auto.AUTO)
           .parallelToolCalls(false);
@@ -373,6 +393,44 @@ public class DeepSeek implements LLM {
   private void applySearch(ChatCompletionCreateParams.Builder builder, boolean search) {
     if (search && webSearchEnabled && isDashScopeProvider()) {
       builder.putAdditionalBodyProperty("enable_search", JsonValue.from(true));
+    }
+  }
+
+  /** Asks the provider to append a final usage chunk (OpenAI {@code stream_options}). */
+  private void applyStreamUsage(ChatCompletionCreateParams.Builder builder, boolean stream) {
+    if (stream && LlmUsageTracker.streamIncludeUsage()) {
+      builder.streamOptions(ChatCompletionStreamOptions.builder().includeUsage(true).build());
+    }
+  }
+
+  private LlmUsageTracker.Call beginUsage(List<ModelMessage> messages, boolean stream) {
+    return LlmUsageTracker.begin(providerLabel, model, messages, stream);
+  }
+
+  private static LlmUsage usageOf(ChatCompletion completion) {
+    try {
+      return LlmUsage.fromOpenAi(completion.usage().orElse(null));
+    } catch (RuntimeException e) {
+      log.debug("unable to read model usage", e);
+      return null;
+    }
+  }
+
+  private static void captureUsage(ChatCompletionChunk chunk,
+      AtomicReference<CompletionUsage> streamUsage) {
+    try {
+      chunk.usage().ifPresent(streamUsage::set);
+    } catch (RuntimeException e) {
+      log.debug("unable to read stream usage", e);
+    }
+  }
+
+  private static String hostOf(String url) {
+    try {
+      String host = URI.create(url).getHost();
+      return host == null ? url : host.toLowerCase(Locale.ROOT);
+    } catch (IllegalArgumentException e) {
+      return url;
     }
   }
 
