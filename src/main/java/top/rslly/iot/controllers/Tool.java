@@ -107,6 +107,8 @@ public class Tool {
   @Autowired
   private KnowledgeGraphicTool knowledgeGraphicTool;
   @Autowired
+  private LlmUsageService llmUsageService;
+  @Autowired
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
@@ -214,6 +216,24 @@ public class Tool {
       @RequestParam("streamId") @NotBlank(message = "streamId 不能为空") String streamId,
       @RequestHeader("Authorization") String header) {
     return aiService.stopAiResponseStream(productId, streamId, header);
+  }
+
+  @Operation(summary = "大模型 token 用量与缓存命中统计",
+      description = "按场景汇总最近 hours 小时内的输入/缓存命中/输出 token，可按 chatId 过滤")
+  @RequestMapping(value = "/llm/usage/stats", method = RequestMethod.GET)
+  public JsonResult<?> llmUsageStats(@RequestParam("productId") int productId,
+      @RequestParam(value = "hours", defaultValue = "24") int hours,
+      @RequestParam(value = "chatId", required = false) String chatId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    int boundedHours = Math.max(1, Math.min(hours, 24 * 90));
+    long fromMillis = System.currentTimeMillis() - boundedHours * 3_600_000L;
+    return ResultTool.success(llmUsageService.stats(productId, fromMillis, chatId));
   }
 
   @Operation(summary = "请求Agent")

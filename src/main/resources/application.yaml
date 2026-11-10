@@ -177,6 +177,17 @@ ai:
   llm:
     # OpenAI 兼容模型整次 HTTP 请求的总时限，包含思考及流式输出
     request-timeout-seconds: 600
+  usage:
+    # 记录每次大模型调用的 token 用量与缓存命中（日志 llm.usage + storage.database 对应的 llm_usage 表）
+    enabled: true
+    persist: true
+    # 流式请求附带 stream_options.include_usage；若某个中转服务不支持可关闭
+    stream-include-usage: true
+    # 等效计费换算：百炼隐式缓存命中按输入单价 20%（显式缓存 10%，创建 125%），以控制台实际价格为准
+    cache-hit-price-ratio: 0.2
+    cache-creation-price-ratio: 1.25
+    # 百炼上下文缓存最少 1024 token，低于该长度的请求不可能命中
+    min-cacheable-tokens: 1024
   agent:
     mode: function
     # 单轮模型调用完成的等待时限，略大于模型 HTTP 请求总超时
