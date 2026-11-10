@@ -167,6 +167,9 @@ ai:
     context-window-tokens: 300000
     summary-threshold-ratio: 0.5
     recent-turns: 4
+    # 长期记忆 / 对话图谱的后台抽取：攒够这么多轮新对话才执行一次，每轮只处理一次（说再见时立即补齐）
+    # 设为 1 表示每轮都执行，但只读新增的那一轮
+    extraction-interval-turns: 3
   showThinking: false
   classifier:
     include:
