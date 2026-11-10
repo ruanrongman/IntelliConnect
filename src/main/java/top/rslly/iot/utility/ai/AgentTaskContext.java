@@ -19,7 +19,6 @@
  */
 package top.rslly.iot.utility.ai;
 
-import com.alibaba.fastjson.JSON;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -155,7 +154,8 @@ public final class AgentTaskContext {
 
   public List<ModelMessage> prepare(String system, List<FunctionToolSpec> tools) {
     checkCancelled();
-    long schemaTokens = tools.isEmpty() ? 0 : TOKENS.estimateTextTokens(JSON.toJSONString(tools));
+    long schemaTokens =
+        tools.isEmpty() ? 0 : TOKENS.estimateTextTokens(FunctionToolSpec.toEstimateJson(tools));
     // Fixed input cannot be compacted, so reject it before attempting any summary calls.
     long fixedTokens = count(List.of(new ModelMessage("system", system),
         new ModelMessage("user", question))) + schemaTokens;
@@ -272,8 +272,9 @@ public final class AgentTaskContext {
     StringBuilder records = new StringBuilder();
     for (ModelMessage message : removed) {
       records.append(message.getRole()).append(": ")
+          // Tool calls/results are records, which fastjson 1.x serializes as "{}".
           .append(message.getContent() instanceof String ? message.getContent()
-              : JSON.toJSONString(message.getContent()))
+              : ConversationHistoryCodec.encode(message.getContent()))
           .append('\n');
     }
     String nextSummary = summary;
