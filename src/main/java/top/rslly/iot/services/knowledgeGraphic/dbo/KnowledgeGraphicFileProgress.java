@@ -19,7 +19,12 @@
  */
 package top.rslly.iot.services.knowledgeGraphic.dbo;
 
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageSummary;
 
 @Data
 public class KnowledgeGraphicFileProgress {
@@ -43,6 +48,15 @@ public class KnowledgeGraphicFileProgress {
 
   private String errorMessage;
 
+  /** Nodes / relations merged by the model so far, for tokens-per-item efficiency. */
+  private int mergedNodeCount;
+
+  private int mergedRelationCount;
+
+  @Getter(AccessLevel.NONE)
+  @Setter(AccessLevel.NONE)
+  private LlmUsageAccumulator usageAccumulator = new LlmUsageAccumulator();
+
   public static KnowledgeGraphicFileProgress create(String taskId, String fileName) {
     KnowledgeGraphicFileProgress progress = new KnowledgeGraphicFileProgress();
     progress.setTaskId(taskId);
@@ -63,6 +77,21 @@ public class KnowledgeGraphicFileProgress {
     this.currentChunk = currentChunk;
     this.totalChunks = totalChunks;
     update("extracting", percent, message);
+  }
+
+  public synchronized void updateMerged(int nodeCount, int relationCount) {
+    this.mergedNodeCount = nodeCount;
+    this.mergedRelationCount = relationCount;
+  }
+
+  /** Receives the model calls made by this task; not serialized. */
+  public LlmUsageAccumulator usageAccumulator() {
+    return usageAccumulator;
+  }
+
+  /** Token usage of this task so far; null before the first model call returns. */
+  public LlmUsageSummary getUsage() {
+    return usageAccumulator.isEmpty() ? null : usageAccumulator.summary();
   }
 
   public synchronized void complete(String message) {
@@ -92,6 +121,9 @@ public class KnowledgeGraphicFileProgress {
     copy.finished = finished;
     copy.success = success;
     copy.errorMessage = errorMessage;
+    copy.mergedNodeCount = mergedNodeCount;
+    copy.mergedRelationCount = mergedRelationCount;
+    copy.usageAccumulator = usageAccumulator;
     return copy;
   }
 }
