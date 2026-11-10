@@ -637,6 +637,7 @@ async function sendMessage() {
     knowledgeRecall: [],
     knowledgeGraphicReference: null,
     loadingReferences: false,
+    usage: null,
     pending: true,
   })
   conversationMessages.push({
@@ -677,6 +678,9 @@ async function sendMessage() {
       onReasoning: (chunk) => {
         assistantMessage.reasoningContent += chunk
         scrollActiveConversation(conversationChatId)
+      },
+      onUsage: (usage) => {
+        assistantMessage.usage = usage
       },
       onComplete: (finalContent) => {
         assistantMessage.content = finalContent

@@ -13,6 +13,7 @@ export const streamAiControl = async ({
   signal,
   onMessage,
   onReasoning,
+  onUsage,
   onComplete,
 }) => {
   const headers = {
@@ -42,7 +43,7 @@ export const streamAiControl = async ({
     const payload = await response.json().catch(() => null)
     throw new Error(payload?.errorMsg || '未收到流式响应，请检查登录状态后重试。')
   }
-  await readAiEventStream(response.body, { onMessage, onReasoning, onComplete })
+  await readAiEventStream(response.body, { onMessage, onReasoning, onUsage, onComplete })
 }
 
 export const stopAiControlStream = async (productId, streamId) => {

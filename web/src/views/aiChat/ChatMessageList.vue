@@ -100,6 +100,19 @@
           </div>
         </details>
       </div>
+      <details v-if="item.role === 'assistant' && hasUsage(item.usage)" class="usage-footnote">
+        <summary>※ {{ usageFootnote(item.usage) }}</summary>
+        <ul>
+          <li v-for="(line, lineIndex) in usageDetails(item.usage)" :key="`detail-${lineIndex}`">{{ line }}</li>
+          <li
+            v-for="(line, lineIndex) in usageSceneLines(item.usage)"
+            :key="`scene-${lineIndex}`"
+            class="usage-scene"
+          >
+            {{ line }}
+          </li>
+        </ul>
+      </details>
       <div v-if="item.role === 'assistant' && item.content" class="message-actions">
         <a-tooltip title="复制">
           <a-button
@@ -122,6 +135,7 @@
 import { ref } from 'vue'
 import { message as antMessage } from 'ant-design-vue'
 import MarkdownContent from '@/components/MarkdownContent/index.vue'
+import { hasUsage, usageDetails, usageFootnote, usageSceneLines } from '@/utils/llmUsage.mjs'
 
 defineProps({
   messages: {
@@ -584,6 +598,37 @@ function formatKnowledgeGraphicSummary(graphicReference) {
       color: #1f7a5c;
       font-weight: 700;
     }
+  }
+}
+
+.usage-footnote {
+  color: #8a9692;
+  font-size: 11px;
+  line-height: 1.6;
+
+  summary {
+    cursor: pointer;
+    list-style: none;
+    overflow-wrap: anywhere;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  &[open] summary {
+    color: #5f6d69;
+  }
+
+  ul {
+    margin: 4px 0 0;
+    padding: 6px 0 0 12px;
+    border-top: 1px dashed #dde3e1;
+    list-style: none;
+  }
+
+  .usage-scene {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
 }
 
