@@ -197,7 +197,7 @@ public class DeepSeek implements LLM {
   public FunctionResult functionChat(String content, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, boolean search) {
     try {
-      LlmUsageTracker.Call usageCall = beginUsage(messages, false);
+      LlmUsageTracker.Call usageCall = beginUsage(messages, toolSpecs, false);
       ChatCompletion completion = client.chat().completions()
           .create(buildFunctionParams(messages, toolSpecs, search, false));
       usageCall.finish(usageOf(completion));
@@ -215,7 +215,7 @@ public class DeepSeek implements LLM {
       return;
     }
     handler.onOpen();
-    LlmUsageTracker.Call usageCall = beginUsage(messages, true);
+    LlmUsageTracker.Call usageCall = beginUsage(messages, toolSpecs, true);
     STREAM_EXECUTOR.execute(() -> {
       StringBuilder replyBuilder = new StringBuilder();
       AtomicReference<CompletionUsage> streamUsage = new AtomicReference<>();
@@ -405,6 +405,11 @@ public class DeepSeek implements LLM {
 
   private LlmUsageTracker.Call beginUsage(List<ModelMessage> messages, boolean stream) {
     return LlmUsageTracker.begin(providerLabel, model, messages, stream);
+  }
+
+  private LlmUsageTracker.Call beginUsage(List<ModelMessage> messages,
+      List<FunctionToolSpec> toolSpecs, boolean stream) {
+    return LlmUsageTracker.begin(providerLabel, model, messages, toolSpecs, stream);
   }
 
   private static LlmUsage usageOf(ChatCompletion completion) {

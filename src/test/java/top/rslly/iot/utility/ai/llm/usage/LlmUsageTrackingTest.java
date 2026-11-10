@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -142,6 +143,18 @@ class LlmUsageTrackingTest {
     assertEquals(0, summary.getReportedCalls());
     assertEquals(1, sunk.size());
     assertTrue(sunk.getFirst().estimatedPromptTokens() > 0);
+  }
+
+  @Test
+  void estimateIncludesToolDefinitions() {
+    List<ModelMessage> messages = List.of(new ModelMessage("user", "hello world"));
+    LlmUsageTracker.begin("host", "m", messages, false).finish(null);
+    LlmUsageTracker.begin("host", "m", messages,
+        List.of(new FunctionToolSpec("route_weather", "query weather for a city",
+            FunctionToolSpec.defaultRouterArgsSchema())),
+        false).finish(null);
+
+    assertTrue(sunk.get(1).estimatedPromptTokens() > sunk.get(0).estimatedPromptTokens() + 20);
   }
 
   @Test

@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 
 import java.util.List;
 import java.util.Locale;
@@ -86,6 +87,15 @@ public final class LlmUsageTracker {
    */
   public static Call begin(String provider, String model, List<ModelMessage> messages,
       boolean stream) {
+    return begin(provider, model, messages, null, stream);
+  }
+
+  /**
+   * @param tools function definitions sent with the request, so the estimate covers the whole
+   *        prompt like {@code AgentTaskContext} does
+   */
+  public static Call begin(String provider, String model, List<ModelMessage> messages,
+      List<FunctionToolSpec> tools, boolean stream) {
     if (!enabled) {
       return Call.NOOP;
     }
@@ -93,6 +103,9 @@ public final class LlmUsageTracker {
       LlmUsageContext.Frame frame = LlmUsageContext.current();
       long estimate = messages == null ? 0L
           : ConversationMemoryPolicy.estimateMessageTokens(messages);
+      if (tools != null && !tools.isEmpty()) {
+        estimate += ConversationMemoryPolicy.estimateText(FunctionToolSpec.toEstimateJson(tools));
+      }
       return new Call(provider, model, detectScene(), frame, estimate, stream);
     } catch (RuntimeException e) {
       log.debug("llm usage begin failed", e);
