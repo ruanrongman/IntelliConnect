@@ -113,6 +113,9 @@ public final class AgentTaskContext {
   private String summary = "";
   // The initial conversation history is also eligible for compaction on the first budget check.
   private boolean needsCompaction;
+  // Per-run context (time, memory) sent with the task instead of the system prompt, see
+  // #taskMessage.
+  private String runtimeContext = "";
 
   public AgentTaskContext(Settings settings, String question, List<ModelMessage> history,
       Supplier<LLM> summaryModel, BooleanSupplier cancelled, Consumer<String> events,
@@ -158,7 +161,7 @@ public final class AgentTaskContext {
         tools.isEmpty() ? 0 : TOKENS.estimateTextTokens(FunctionToolSpec.toEstimateJson(tools));
     // Fixed input cannot be compacted, so reject it before attempting any summary calls.
     long fixedTokens = count(List.of(new ModelMessage("system", system),
-        new ModelMessage("user", question))) + schemaTokens;
+        new ModelMessage("user", taskMessage()))) + schemaTokens;
     if (fixedTokens >= settings.window()) {
       throw new IllegalArgumentException("Agent 固定提示、原始任务和工具定义超过上下文预算，请增大上下文窗口或减少输入。 ");
     }
@@ -173,6 +176,18 @@ public final class AgentTaskContext {
     return messages;
   }
 
+  /**
+   * Sets context that changes every run (time, long-term memory). It is placed before the task in
+   * the user message so system prompt, tools and history remain a cacheable prefix across turns.
+   */
+  public void setRuntimeContext(String runtimeContext) {
+    this.runtimeContext = runtimeContext == null ? "" : runtimeContext.strip();
+  }
+
+  private String taskMessage() {
+    return runtimeContext.isEmpty() ? question : runtimeContext + "\n\n" + question;
+  }
+
   private List<ModelMessage> compose(String system) {
     List<ModelMessage> messages = new ArrayList<>();
     messages.add(new ModelMessage("system", system));
@@ -181,7 +196,7 @@ public final class AgentTaskContext {
       messages.add(new ModelMessage("assistant", "I will continue from this progress summary."));
     }
     messages.addAll(history);
-    messages.add(new ModelMessage("user", question));
+    messages.add(new ModelMessage("user", taskMessage()));
     for (Turn turn : turns) {
       messages.addAll(turn.messages());
     }

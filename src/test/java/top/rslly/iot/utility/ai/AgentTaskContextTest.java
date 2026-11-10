@@ -93,6 +93,18 @@ class AgentTaskContextTest {
   }
 
   @Test
+  void runtimeContextPrefixesTheTaskMessageAndLeavesSystemStable() {
+    AgentTaskContext context = context(mock(LLM.class), 4000, 0.75, 4, false, new ArrayList<>());
+    context.setRuntimeContext("<runtime_context>now</runtime_context>\n");
+
+    List<ModelMessage> request = context.prepare("system", List.of());
+
+    assertEquals("system", request.getFirst().getContent());
+    assertEquals("<runtime_context>now</runtime_context>\n\noriginal task",
+        request.getLast().getContent());
+  }
+
+  @Test
   void unlimitedIsAnExecutionSettingAndDoesNotAlterCompaction() {
     AgentTaskContext context = context(mock(LLM.class), 256, 0.75, 4, true, new ArrayList<>());
 

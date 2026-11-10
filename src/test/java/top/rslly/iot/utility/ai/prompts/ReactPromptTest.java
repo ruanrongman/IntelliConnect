@@ -51,7 +51,11 @@ class ReactPromptTest {
     String functionCallingSystem = readPromptConstant("FunctionCallingSystem");
 
     Assertions.assertFalse(functionCallingSystem.contains("rolling_week_start"));
-    Assertions.assertTrue(functionCallingSystem.contains("time zone: {time_zone}"));
+    // Time changes every run, so it lives in the runtime context to keep the system cacheable.
+    Assertions.assertFalse(functionCallingSystem.contains("{time}"));
+    Assertions.assertFalse(functionCallingSystem.contains("{memory_map}"));
+    Assertions.assertTrue(
+        readPromptConstant("FUNCTION_RUNTIME_CONTEXT").contains("time zone: {time_zone}"));
     Assertions.assertTrue(functionCallingSystem.contains("[now - 7 days, now]"));
     Assertions.assertTrue(functionCallingSystem.contains("must not end after now"));
     Assertions.assertTrue(functionCallingSystem.contains("\"周报\"/weekly report"));

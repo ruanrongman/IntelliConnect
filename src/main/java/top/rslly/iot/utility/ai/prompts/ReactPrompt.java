@@ -169,7 +169,7 @@ public class ReactPrompt {
           {task_continuation_rules}
 
           ## Time and Freshness Rules
-          - Use the current time and time zone from Runtime Context; never infer the current date from model knowledge.
+          - Use the current time and time zone from <runtime_context>; never infer the current date from model knowledge.
           - Before time-sensitive function calls, convert relative periods to explicit boundaries. Unless the user specifies otherwise: "过去一周"/"最近一周"/"近7天"/"周报"/weekly report = [now - 7 days, now]; "本周" = [Monday 00:00, now]; "上周" = [previous Monday 00:00, this Monday 00:00). Historical or current ranges must not end after now; future ranges require explicit user intent.
           - For latest/current/recent/today requests, use search or live data and verify the source's publication/update time. Prefer the newest relevant reliable source; if freshness cannot be verified, refine the search or state the limitation.
 
@@ -177,8 +177,7 @@ public class ReactPrompt {
           You are {agent_name}, developed by the {team_name} team.
           Your role: {role}. {role_introduction}
           The user's name: {user_name}.
-          Current time: {time}; time zone: {time_zone}; weekday: {weekday}; Lunar: {lunar_date}.
-          Long-term memory: {memory_map}
+          Current time and long-term memory are given in <runtime_context> at the start of the task message.
 
 
           """;
@@ -228,6 +227,24 @@ public class ReactPrompt {
 
   public String getFunctionCalling(String question, int productId) {
     return StringUtils.formatString(FunctionCallingSystem, buildCommonParams(question, productId));
+  }
+
+  private static final String FUNCTION_RUNTIME_CONTEXT =
+      """
+          <runtime_context>
+          Current time: {time}; time zone: {time_zone}; weekday: {weekday}; Lunar: {lunar_date}.
+          Long-term memory: {memory_map}
+          </runtime_context>
+          """;
+
+  /**
+   * Per-run context for function-calling agents. Kept out of the system prompt so the system, tool
+   * definitions and conversation history stay a stable, cacheable prefix across turns.
+   */
+  public String getFunctionCallingRuntimeContext(int productId) {
+    Map<String, String> params = PromptTimeContext.build();
+    params.put("memory_map", descriptionUtil.getAgentLongMemory(productId));
+    return StringUtils.formatString(FUNCTION_RUNTIME_CONTEXT, params);
   }
 
   private Map<String, String> buildCommonParams(String question, int productId) {
