@@ -781,9 +781,14 @@ function refreshChartHandler(option) {
   if (chart.value) {
     chart.value.dispose()
   }
-  crtOption.value = option
+  // ECharts 6 thumbnail throws on an empty graph (zero-size bounding rect -> singular matrix).
+  // This runs inside onMounted; in Vue dev mode an error thrown there wedges the scheduler
+  // and the whole app stops re-rendering, so drop the thumbnail when there is nothing to draw.
+  const hasNodes = Array.isArray(option.series?.[0]?.data) && option.series[0].data.length > 0
+  const { thumbnail, ...optionWithoutThumbnail } = option
+  const finalOption = hasNodes ? option : optionWithoutThumbnail
+  crtOption.value = finalOption
   chart.value = echarts.init(cavDom.value)
-  chart.value.setOption(option)
   chart.value.on('click', function (params) {
     if (params.dataType === 'node') {
       handleNodeClick(params)
@@ -791,6 +796,11 @@ function refreshChartHandler(option) {
       handleEdgeClick(params)
     }
   })
+  try {
+    chart.value.setOption(finalOption)
+  } catch (err) {
+    console.error('[KnowledgeGraphic] chart render failed', err)
+  }
 
   if (isConnection.value) {
     isConnection.value = false
