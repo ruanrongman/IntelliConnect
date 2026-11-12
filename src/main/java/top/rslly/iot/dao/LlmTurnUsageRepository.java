@@ -20,11 +20,21 @@
 package top.rslly.iot.dao;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import top.rslly.iot.models.LlmUsageEntity;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
+import top.rslly.iot.models.LlmTurnUsageEntity;
 
 import java.util.List;
 
-public interface LlmUsageRepository extends JpaRepository<LlmUsageEntity, Long> {
-  List<LlmUsageEntity> findTop20000ByProductIdAndTimeGreaterThanEqualOrderByTimeDesc(
-      Integer productId, long time);
+public interface LlmTurnUsageRepository extends JpaRepository<LlmTurnUsageEntity, Long> {
+  List<LlmTurnUsageEntity> findAllByChatIdAndProductIdOrderByTimeAscIdAsc(String chatId,
+      Integer productId);
+
+  @Modifying
+  @Transactional
+  void deleteAllByChatId(String chatId);
+
+  @Modifying
+  @Transactional
+  void deleteAllByProductId(Integer productId);
 }

@@ -40,6 +40,7 @@ import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageSummary;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.rag.RagUtility;
 import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
@@ -96,6 +97,8 @@ public class AiServiceImpl implements AiService {
   private RedisUtil redisUtil;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
+  @Autowired
+  private LlmTurnUsageService llmTurnUsageService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
   private static final String SSE_DONE_SIGNAL = "[DONE]";
   private static final long STREAM_POLL_INTERVAL_MS = 10L;
@@ -201,6 +204,11 @@ public class AiServiceImpl implements AiService {
               aiControl.getProductId(), reasoningQueue);
         }
       });
+      // Store the turn's usage once the model work ends, also when the user stopped the stream or
+      // disconnected: the answer keeps running in the background and its tokens are still spent.
+      responseFuture.whenComplete((answer, error) -> llmTurnUsageService.record(
+          aiControl.getProductId(), conversationChatId, turnUsage.requestId(),
+          turnUsage.isEmpty() ? null : turnUsage.summary()));
       while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)
           || !reasoningQueue.isEmpty()) {
         if (connectionClosed.get() || stoppedStreamChatIds.contains(streamChatId)) {
@@ -239,7 +247,8 @@ public class AiServiceImpl implements AiService {
       if (!sentFromQueue && finalAnswer != null && !finalAnswer.isBlank()) {
         sendSseEvent(emitter, "message", finalAnswer);
       }
-      sendUsageEvent(emitter, turnUsage);
+      LlmUsageSummary usageSummary = turnUsage.isEmpty() ? null : turnUsage.summary();
+      sendUsageEvent(emitter, usageSummary);
       sendSseEvent(emitter, "complete", finalAnswer == null ? "" : finalAnswer);
     } catch (Exception e) {
       log.error("AI text stream failed, streamChatId={}", streamChatId, e);
@@ -387,14 +396,14 @@ public class AiServiceImpl implements AiService {
 
   /**
    * Token usage of the model calls made while answering this turn. Background work that finishes
-   * after the answer (memory, emotion, graph updates) is persisted but not included here.
+   * after the answer (memory, emotion, graph updates) is only logged, not included here.
    */
-  private void sendUsageEvent(SseEmitter emitter, LlmUsageAccumulator turnUsage)
+  private void sendUsageEvent(SseEmitter emitter, LlmUsageSummary usageSummary)
       throws IOException {
-    if (turnUsage == null || turnUsage.isEmpty()) {
+    if (usageSummary == null) {
       return;
     }
-    sendSseEvent(emitter, "usage", JSON.toJSONString(turnUsage.summary()));
+    sendSseEvent(emitter, "usage", JSON.toJSONString(usageSummary));
   }
 
   @Override

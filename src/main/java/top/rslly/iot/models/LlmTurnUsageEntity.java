@@ -23,42 +23,30 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-/** One model call's token usage; used when {@code storage.database} is mysql. */
+/**
+ * Token usage summary of one chat turn, keyed by the turn's {@code request_id} in
+ * {@code history_message}. One row per answered turn, so it can be shown under the reply again when
+ * the history is reloaded.
+ */
 @Entity
-@Table(name = "llm_usage", indexes = @Index(columnList = "product_id,time"))
+@Table(name = "llm_turn_usage", indexes = {
+    @Index(name = "idx_llm_turn_usage_request_id", columnList = "request_id", unique = true),
+    @Index(name = "idx_llm_turn_usage_chat_id", columnList = "chat_id")})
 @Getter
 @Setter
-public class LlmUsageEntity {
+public class LlmTurnUsageEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
-  @Column(nullable = false)
-  private long time;
+  @Column(name = "request_id", nullable = false, length = 64)
+  private String requestId;
+  @Column(name = "chat_id", nullable = false, length = 255)
+  private String chatId;
   @Column(name = "product_id")
   private Integer productId;
-  @Column(name = "chat_id", length = 255)
-  private String chatId;
-  @Column(length = 128)
-  private String scene;
-  @Column(length = 128)
-  private String model;
-  @Column(length = 255)
-  private String provider;
-  @Column(name = "prompt_tokens")
-  private long promptTokens;
-  @Column(name = "cached_tokens")
-  private long cachedTokens;
-  @Column(name = "cache_creation_tokens")
-  private long cacheCreationTokens;
-  @Column(name = "completion_tokens")
-  private long completionTokens;
-  @Column(name = "reasoning_tokens")
-  private long reasoningTokens;
-  @Column(name = "estimated_prompt_tokens")
-  private long estimatedPromptTokens;
-  @Column(name = "latency_ms")
-  private long latencyMs;
-  @Column(name = "usage_reported")
-  private boolean usageReported;
-  private boolean stream;
+  @Column(nullable = false)
+  private long time;
+  /** Serialized {@code LlmUsageSummary}. */
+  @Column(name = "usage_json", nullable = false, columnDefinition = "TEXT")
+  private String usageJson;
 }

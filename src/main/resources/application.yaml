@@ -181,8 +181,9 @@ ai:
     # OpenAI 兼容模型整次 HTTP 请求的总时限，包含思考及流式输出
     request-timeout-seconds: 600
   usage:
-    # 记录每次大模型调用的 token 用量与缓存命中（日志 llm.usage + storage.database 对应的 llm_usage 表）
+    # 统计每次大模型调用的 token 用量与缓存命中：每次调用写一行 INFO 日志（LlmUsageTracker），并随对话回复展示
     enabled: true
+    # 每轮对话的用量汇总存入 llm_turn_usage 表（一轮一行），重新加载历史时仍显示在回复下方
     persist: true
     # 流式请求附带 stream_options.include_usage；若某个中转服务不支持可关闭
     stream-include-usage: true

@@ -33,6 +33,7 @@ import top.rslly.iot.dao.*;
 import top.rslly.iot.models.*;
 import top.rslly.iot.param.request.Product;
 import top.rslly.iot.param.request.QuickProduct;
+import top.rslly.iot.services.agent.LlmTurnUsageService;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.QuartzManager;
 import top.rslly.iot.utility.ai.voice.VoiceTimbre;
@@ -101,6 +102,8 @@ public class ProductServiceImpl implements ProductService {
   private ProductAsrRepository productAsrRepository;
   @Resource
   private HistoryMessageRepository historyMessageRepository;
+  @Resource
+  private LlmTurnUsageService llmTurnUsageService;
   @Resource
   private CodingAgentDeviceRepository codingAgentDeviceRepository;
   @Resource
@@ -407,6 +410,7 @@ public class ProductServiceImpl implements ProductService {
         if (!historyMessageEntityList.isEmpty()) {
           historyMessageRepository.deleteAllByChatIdStartingWith("chatProduct" + id);
         }
+        llmTurnUsageService.deleteByProductId(id);
         if (!productLlmModelEntityList.isEmpty()) {
           productLlmModelRepository.deleteAllByProductId(id);
         }

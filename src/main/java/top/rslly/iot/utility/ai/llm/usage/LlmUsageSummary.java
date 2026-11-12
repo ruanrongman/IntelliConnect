@@ -61,4 +61,52 @@ public class LlmUsageSummary {
   private long latencyMs;
   /** Per-scene breakdown; null on per-scene entries. */
   private List<LlmUsageSummary> scenes;
+  /** Number of chat turns summed into this summary; 0 for a single turn. */
+  private long turns;
+
+  /**
+   * Adds up the stored summaries of a conversation's turns, oldest first. Token counts, calls and
+   * latency are summed and the cache hit rate is recomputed from the sums. Context fields describe
+   * the current context, so they come from the latest turn. Per-call details that cannot be summed
+   * exactly (eligible hit rate, estimate ratio, scenes) are left empty.
+   *
+   * @return null when there is no turn
+   */
+  public static LlmUsageSummary sumOfTurns(List<LlmUsageSummary> turns) {
+    if (turns == null || turns.isEmpty()) {
+      return null;
+    }
+    LlmUsageSummary total = new LlmUsageSummary();
+    LlmUsageSummary latest = null;
+    for (LlmUsageSummary turn : turns) {
+      if (turn == null) {
+        continue;
+      }
+      latest = turn;
+      total.turns++;
+      total.calls += turn.calls;
+      total.reportedCalls += turn.reportedCalls;
+      total.promptTokens += turn.promptTokens;
+      total.cachedTokens += turn.cachedTokens;
+      total.cacheCreationTokens += turn.cacheCreationTokens;
+      total.uncachedPromptTokens += turn.uncachedPromptTokens;
+      total.completionTokens += turn.completionTokens;
+      total.reasoningTokens += turn.reasoningTokens;
+      total.eligibleCalls += turn.eligibleCalls;
+      total.estimatedPromptTokens += turn.estimatedPromptTokens;
+      total.effectiveInputTokens += turn.effectiveInputTokens;
+      total.latencyMs += turn.latencyMs;
+    }
+    if (latest == null) {
+      return null;
+    }
+    total.cacheHitRate = LlmUsageAccumulator.ratio(total.cachedTokens, total.promptTokens);
+    total.maxPromptTokens = latest.maxPromptTokens;
+    total.contextWindowTokens = latest.contextWindowTokens;
+    total.contextUsage = latest.contextUsage;
+    total.cacheHitPriceRatio = latest.cacheHitPriceRatio;
+    total.cacheCreationPriceRatio = latest.cacheCreationPriceRatio;
+    total.minCacheableTokens = latest.minCacheableTokens;
+    return total;
+  }
 }
