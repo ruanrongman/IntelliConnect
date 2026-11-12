@@ -19,8 +19,7 @@
  */
 package top.rslly.iot.utility.ai.llm.usage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
@@ -32,18 +31,11 @@ import java.util.function.Consumer;
 
 /**
  * Entry point used by LLM clients to report usage. Static because the clients are created by
- * {@code LLMFactory} outside of Spring; {@code LlmUsageServiceImpl} configures it at startup. Never
+ * {@code LLMFactory} outside of Spring; {@code LlmUsageConfig} configures it at startup. Never
  * throws into the model call path.
  */
+@Slf4j
 public final class LlmUsageTracker {
-  /** Dedicated logger so usage lines can be routed or silenced independently. */
-  private static final Logger USAGE_LOG = LoggerFactory.getLogger("llm.usage");
-  /**
-   * DEBUG only: per-message fingerprints to locate where two requests stop sharing a prefix. Enable
-   * with {@code logging.level.llm.usage.prefix=DEBUG}.
-   */
-  private static final Logger PREFIX_LOG = LoggerFactory.getLogger("llm.usage.prefix");
-  private static final Logger log = LoggerFactory.getLogger(LlmUsageTracker.class);
   private static final StackWalker STACK_WALKER = StackWalker.getInstance();
   private static final String APP_PACKAGE = "top.rslly.iot.";
   private static final String LLM_PACKAGE = "top.rslly.iot.utility.ai.llm.";
@@ -66,6 +58,7 @@ public final class LlmUsageTracker {
     LlmUsageTracker.minCacheableTokens = Math.max(0L, minCacheableTokens);
   }
 
+  /** Receives every finished call record; unset in production, used by tests to observe calls. */
   public static void setSink(Consumer<LlmCallRecord> recordSink) {
     sink = recordSink;
   }
@@ -112,8 +105,9 @@ public final class LlmUsageTracker {
         estimate += ConversationMemoryPolicy.estimateText(FunctionToolSpec.toEstimateJson(tools));
       }
       String scene = detectScene();
-      if (PREFIX_LOG.isDebugEnabled()) {
-        PREFIX_LOG.debug("scene={} {}", scene, prefixFingerprint(messages, tools));
+      // Per-message fingerprints to locate where two requests stop sharing a cacheable prefix.
+      if (log.isDebugEnabled()) {
+        log.debug("prefix scene={} {}", scene, prefixFingerprint(messages, tools));
       }
       return new Call(provider, model, scene, frame, estimate, stream);
     } catch (RuntimeException e) {
@@ -136,17 +130,17 @@ public final class LlmUsageTracker {
   }
 
   private static void logRecord(LlmCallRecord record) {
-    if (!USAGE_LOG.isInfoEnabled()) {
+    if (!log.isInfoEnabled()) {
       return;
     }
     LlmUsage usage = record.usage();
     if (usage == null) {
-      USAGE_LOG.info("scene={} product={} chat={} model={} usage=missing stream={} latency={}ms",
+      log.info("scene={} product={} chat={} model={} usage=missing stream={} latency={}ms",
           record.scene(), record.productId(), record.chatId(), record.model(), record.stream(),
           record.latencyMs());
       return;
     }
-    USAGE_LOG.info(
+    log.info(
         "scene={} product={} chat={} model={} prompt={} cached={} hit={} creation={} completion={} "
             + "reasoning={} estimate={} stream={} latency={}ms",
         record.scene(), record.productId(), record.chatId(), record.model(),
