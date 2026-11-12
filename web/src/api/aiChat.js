@@ -1,3 +1,4 @@
+import request from '@/utils/request'
 import store from '@/store'
 import { joinUrl } from '@/utils/url'
 import { readAiEventStream } from '@/utils/aiEventStream.mjs'
@@ -65,3 +66,10 @@ export const stopAiControlStream = async (productId, streamId) => {
   }
   return response.json()
 }
+
+export const getConversationUsage = (params) =>
+  request({
+    url: '/api/v2/llm/usage/conversation',
+    method: 'get',
+    params,
+  })

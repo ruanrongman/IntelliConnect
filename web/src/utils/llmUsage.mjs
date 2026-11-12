@@ -57,6 +57,111 @@ export function usageFootnote(summary) {
   return parts.join(' · ')
 }
 
+/** Short token count for the status bar: 980, 12.3K, 106K, 1.3M. */
+export function formatCompactTokens(value) {
+  const number = Math.max(0, Number(value) || 0)
+  const compact = (scaled, unit) => `${scaled >= 100 ? Math.round(scaled) : Number(scaled.toFixed(1))}${unit}`
+  if (number >= 1_000_000) {
+    return compact(number / 1_000_000, 'M')
+  }
+  if (number >= 1000) {
+    return compact(number / 1000, 'K')
+  }
+  return String(Math.round(number))
+}
+
+export function formatCompactRate(value) {
+  const percent = (Number(value) || 0) * 100
+  if (percent > 0 && percent < 1) {
+    return '<1%'
+  }
+  return `${Math.round(percent)}%`
+}
+
+const SUMMED_FIELDS = [
+  'calls',
+  'reportedCalls',
+  'promptTokens',
+  'cachedTokens',
+  'cacheCreationTokens',
+  'uncachedPromptTokens',
+  'completionTokens',
+  'reasoningTokens',
+  'eligibleCalls',
+  'estimatedPromptTokens',
+  'effectiveInputTokens',
+  'latencyMs',
+]
+
+/**
+ * Adds one finished turn to a conversation total, the same way the backend sums stored turns
+ * (LlmUsageSummary.sumOfTurns): counts add up, the hit rate is recomputed, context comes from the turn.
+ */
+export function addTurnUsage(total, turn) {
+  if (!hasUsage(turn)) {
+    return total || null
+  }
+  const base = hasUsage(total) ? total : null
+  const merged = { ...(base || {}) }
+  for (const field of SUMMED_FIELDS) {
+    merged[field] = (Number(base?.[field]) || 0) + (Number(turn[field]) || 0)
+  }
+  merged.turns = (base ? Number(base.turns) || 1 : 0) + 1
+  merged.cacheHitRate = merged.promptTokens > 0
+    ? Math.round((merged.cachedTokens / merged.promptTokens) * 10000) / 10000
+    : 0
+  for (const field of ['maxPromptTokens', 'contextWindowTokens', 'contextUsage', 'cacheHitPriceRatio', 'cacheCreationPriceRatio', 'minCacheableTokens']) {
+    merged[field] = turn[field]
+  }
+  merged.scenes = null
+  return merged
+}
+
+/**
+ * Status bar under the chat input and the card it opens on click. Null when there is nothing to
+ * show. total = all input + output tokens of the conversation.
+ */
+export function usageStatus(summary) {
+  if (!hasUsage(summary)) {
+    return null
+  }
+  const reported = Number(summary.reportedCalls) > 0
+  const prompt = Number(summary.promptTokens) || 0
+  const total = prompt + (Number(summary.completionTokens) || 0)
+  const hasContext = reported && Number(summary.contextWindowTokens) > 0
+  const turns = Number(summary.turns) || 1
+  const status = {
+    reported,
+    scope: `整个会话 · ${turns} 轮`,
+    chip: reported
+      ? `${formatCompactTokens(total)} tok · 缓存命中 ${formatCompactRate(summary.cacheHitRate)}`
+      : '服务商未返回用量',
+    total: reported ? `${formatTokens(total)} tok` : '—',
+    rows: [],
+    context: hasContext
+      ? {
+          percent: Math.min(100, Math.max(0, (Number(summary.contextUsage) || 0) * 100)),
+          label: formatCompactRate(summary.contextUsage),
+          detail: `${formatTokens(summary.maxPromptTokens)} / ${formatTokens(summary.contextWindowTokens)} tok`,
+        }
+      : null,
+  }
+  if (!reported) {
+    return status
+  }
+  status.rows.push({ label: '缓存命中', value: formatCompactRate(summary.cacheHitRate) })
+  status.rows.push({
+    label: '未缓存输入',
+    value: `${formatTokens(summary.uncachedPromptTokens)} tok`,
+  })
+  status.rows.push({ label: '缓存读取', value: `${formatTokens(summary.cachedTokens)} tok` })
+  if (Number(summary.cacheCreationTokens) > 0) {
+    status.rows.push({ label: '缓存写入', value: `${formatTokens(summary.cacheCreationTokens)} tok` })
+  }
+  status.rows.push({ label: '输出', value: `${formatTokens(summary.completionTokens)} tok` })
+  return status
+}
+
 /** Detail lines shown when the footnote is expanded. */
 export function usageDetails(summary) {
   if (!hasUsage(summary) || !Number(summary.reportedCalls)) {
