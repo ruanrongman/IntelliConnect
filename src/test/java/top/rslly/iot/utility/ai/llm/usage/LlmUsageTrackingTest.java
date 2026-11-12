@@ -186,6 +186,18 @@ class LlmUsageTrackingTest {
     assertEquals(3, summary.getScenes().size());
   }
 
+  @Test
+  void tagsTurnAccumulatorWithFirstRequestIdOnly() {
+    LlmUsageAccumulator turn = new LlmUsageAccumulator();
+    LlmUsageContext.setRequestId("outside-any-scope");
+    try (LlmUsageContext.Scope ignored = LlmUsageContext.open(1, "chat", turn)) {
+      LlmUsageContext.setRequestId("request-1");
+      LlmUsageContext.setRequestId("request-2");
+    }
+    assertEquals("request-1", turn.requestId());
+    assertNull(new LlmUsageAccumulator().requestId());
+  }
+
   private static LlmCallRecord record(String scene, LlmUsage usage, long estimate) {
     return new LlmCallRecord(0L, "host", "qwen-plus", scene, 1, "chat", usage, estimate, 100L,
         false);

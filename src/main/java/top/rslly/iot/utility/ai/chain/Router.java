@@ -702,6 +702,8 @@ public class Router {
     private HistoryTurn(String chatId, String userContent) {
       this.chatId = chatId;
       this.userContent = userContent;
+      // Lets the caller store this turn's token usage under the same request id as the history.
+      LlmUsageContext.setRequestId(requestId);
     }
 
     private void startToolCall(FunctionResult result) {

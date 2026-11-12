@@ -29,6 +29,7 @@ public class LlmUsageAccumulator {
   private final Totals total = new Totals();
   private final Map<String, Totals> scenes = new LinkedHashMap<>();
   private long contextWindowTokens;
+  private String requestId;
 
   public LlmUsageAccumulator() {}
 
@@ -50,6 +51,17 @@ public class LlmUsageAccumulator {
     if (contextWindowTokens <= 0 && tokens > 0) {
       contextWindowTokens = tokens;
     }
+  }
+
+  /** Binds the totals to the chat turn (history request id) they belong to; first one wins. */
+  public synchronized void setRequestIdIfUnset(String requestId) {
+    if (this.requestId == null && requestId != null && !requestId.isBlank()) {
+      this.requestId = requestId;
+    }
+  }
+
+  public synchronized String requestId() {
+    return requestId;
   }
 
   public synchronized boolean isEmpty() {

@@ -89,6 +89,17 @@ public final class LlmUsageContext {
     }
   }
 
+  /** Tags accumulators that do not have a request id yet with the current chat turn's id. */
+  public static void setRequestId(String requestId) {
+    Frame frame = CURRENT.get();
+    if (frame == null) {
+      return;
+    }
+    for (LlmUsageAccumulator accumulator : frame.accumulators()) {
+      accumulator.setRequestIdIfUnset(requestId);
+    }
+  }
+
   private static void restore(Frame previous) {
     if (previous == null) {
       CURRENT.remove();
