@@ -1,3 +1,4 @@
+import request from '@/utils/request'
 import store from '@/store'
 import { joinUrl } from '@/utils/url'
 import { readAiEventStream } from '@/utils/aiEventStream.mjs'
@@ -13,6 +14,7 @@ export const streamAiControl = async ({
   signal,
   onMessage,
   onReasoning,
+  onUsage,
   onComplete,
 }) => {
   const headers = {
@@ -42,7 +44,7 @@ export const streamAiControl = async ({
     const payload = await response.json().catch(() => null)
     throw new Error(payload?.errorMsg || '未收到流式响应，请检查登录状态后重试。')
   }
-  await readAiEventStream(response.body, { onMessage, onReasoning, onComplete })
+  await readAiEventStream(response.body, { onMessage, onReasoning, onUsage, onComplete })
 }
 
 export const stopAiControlStream = async (productId, streamId) => {
@@ -64,3 +66,10 @@ export const stopAiControlStream = async (productId, streamId) => {
   }
   return response.json()
 }
+
+export const getConversationUsage = (params) =>
+  request({
+    url: '/api/v2/llm/usage/conversation',
+    method: 'get',
+    params,
+  })

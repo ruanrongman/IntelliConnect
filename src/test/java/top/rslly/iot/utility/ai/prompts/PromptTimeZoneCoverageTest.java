@@ -31,7 +31,8 @@ class PromptTimeZoneCoverageTest {
   @SuppressWarnings("deprecation")
   void everyCurrentTimePromptIncludesTimeZone() throws Exception {
     assertContainsTimeZone(ReactPrompt.class, "ReactSystem");
-    assertContainsTimeZone(ReactPrompt.class, "FunctionCallingSystem");
+    // Function-calling agents get the time in the task message, not the system prompt.
+    assertContainsTimeZone(ReactPrompt.class, "FUNCTION_RUNTIME_CONTEXT");
     assertContainsTimeZone(ChatToolPrompt.class, "CHAT_PROMPT");
     assertContainsTimeZone(FunctionCallingRouterPrompt.class, "USER_CONTEXT");
     assertContainsTimeZone(ScheduleToolPrompt.class, "schedulePrompt");

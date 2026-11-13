@@ -186,6 +186,8 @@ public class Agent implements BaseTool<String> {
       if (functionResult != null) {
         return functionResult;
       }
+      // ReAct keeps time and memory in its own system prompt.
+      taskContext.setRuntimeContext("");
     }
     int productId = (int) globalMessage.get("productId");
     Map<String, Queue<String>> queueMap =
@@ -459,6 +461,7 @@ public class Agent implements BaseTool<String> {
     List<FunctionToolSpec> toolSpecs = buildFunctionToolSpecs(productId, chatId);
     int currentEpochLimit = getEpochLimitConfig(productId);
     String system = reactPrompt.getFunctionCalling(question, productId);
+    taskContext.setRuntimeContext(reactPrompt.getFunctionCallingRuntimeContext(productId));
     List<ModelMessage> messages;
     String finalAnswer = null;
     for (long iteration = 0; taskContext.unlimited()

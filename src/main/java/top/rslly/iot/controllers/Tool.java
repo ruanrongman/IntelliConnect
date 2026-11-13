@@ -107,6 +107,8 @@ public class Tool {
   @Autowired
   private KnowledgeGraphicTool knowledgeGraphicTool;
   @Autowired
+  private LlmTurnUsageService llmTurnUsageService;
+  @Autowired
   private ProductSkillsServiceImpl productSkillsService;
   @Autowired
   private UserConfigServiceImpl userConfigService;
@@ -214,6 +216,20 @@ public class Tool {
       @RequestParam("streamId") @NotBlank(message = "streamId 不能为空") String streamId,
       @RequestHeader("Authorization") String header) {
     return aiService.stopAiResponseStream(productId, streamId, header);
+  }
+
+  @Operation(summary = "会话 token 用量", description = "汇总该会话所有已记录轮次的输入/缓存命中/输出 token")
+  @RequestMapping(value = "/llm/usage/conversation", method = RequestMethod.GET)
+  public JsonResult<?> conversationUsage(@RequestParam("productId") int productId,
+      @RequestParam("chatId") @NotBlank(message = "chatId 不能为空") String chatId,
+      @RequestHeader("Authorization") String header) {
+    try {
+      if (!safetyService.controlAuthorizeProduct(header, productId))
+        return ResultTool.fail(ResultCode.NO_PERMISSION);
+    } catch (NullPointerException e) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    return ResultTool.success(llmTurnUsageService.conversationTotal(productId, chatId));
   }
 
   @Operation(summary = "请求Agent")

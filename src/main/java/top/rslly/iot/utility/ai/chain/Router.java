@@ -41,6 +41,8 @@ import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.ConversationHistoryCodec;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
+import top.rslly.iot.utility.ai.MemoryExtractionWindow;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
@@ -117,6 +119,9 @@ public class Router {
   private boolean branchPredictionEnabled;
   @Value("${ai.router.mode:prompt}")
   private String routerMode;
+  @Value("${ai.memory.extraction-interval-turns:3}")
+  private int extractionIntervalTurns;
+  private static final String MEMORY_EXTRACTION_KEY_PREFIX = "memoryExtract";
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
   // chatId in WeChat module need to use openid
@@ -143,6 +148,17 @@ public class Router {
 
   private String responseInternal(String content, String historyContent, String streamChatId,
       String conversationChatId, int productId, Queue<String> reasoningQueue, String... dataArgs) {
+    // Attributes every model call of this turn (all channels) to the product and conversation.
+    try (LlmUsageContext.Scope ignored =
+        LlmUsageContext.open(productId, conversationChatId, null)) {
+      return respondWithUsageScope(content, historyContent, streamChatId, conversationChatId,
+          productId, reasoningQueue, dataArgs);
+    }
+  }
+
+  private String respondWithUsageScope(String content, String historyContent,
+      String streamChatId, String conversationChatId, int productId,
+      Queue<String> reasoningQueue, String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
@@ -175,6 +191,7 @@ public class Router {
       GlobalMessageContext.putChatIds(globalMessage, streamChatId, conversationChatId);
     }
     ConversationMemoryPolicy memoryPolicy = conversationMemoryPolicy.resolveForProduct(productId);
+    LlmUsageContext.setContextWindowTokens(memoryPolicy.contextWindowTokens());
     memory = loadConversationMemory(conversationChatId, memoryPolicy);
     boolean initializeMemorySummary =
         agentMemoryService.findAllByChatId(conversationChatId).isEmpty();
@@ -210,7 +227,7 @@ public class Router {
         predictionGlobalMessage.put(GlobalMessageContext.QUEUE_MAP, predictionQueueMap);
         predictionGlobalMessage.put(GlobalMessageContext.CHAT_ID, predictionChatId);
 
-        predictionThread = Thread.ofVirtual().start(() -> {
+        predictionThread = Thread.ofVirtual().start(LlmUsageContext.wrap(() -> {
           try {
             if (predictionCancelled.get()) {
               return;
@@ -225,7 +242,7 @@ public class Router {
           } finally {
             predictionLatch.countDown();
           }
-        });
+        }));
       }
       var resultMap = classifierTool.run(content, globalMessage);
       String args;
@@ -339,6 +356,12 @@ public class Router {
     memory.addAll(historyTurn.protocolMessages);
     memory.add(chatMessage);
     historyTurn.finish(answer);
+    if (memory.size() > 6 && answer != null
+        && answer.startsWith(ToolPrefix.GOODBYE.getPrefix())) {
+      // The conversation ends here, so extract the turns still waiting for a full batch.
+      extractConversationFacts(content, conversationChatId, productId, globalMessage,
+          ConversationHistoryCodec.visibleMessages(memory), true);
+    }
     if (!isFunctionRouterMode()) {
       maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory,
           memoryPolicy, initializeMemorySummary);
@@ -360,15 +383,8 @@ public class Router {
     // Auxiliary models only need the original user text and the visible final answers.
     List<ModelMessage> visibleMemory = ConversationHistoryCodec.visibleMessages(memory);
     if (memory.size() > 6) {
-      List<ModelMessage> sideEffectSnapshot =
-          memoryPolicy.recentMessagesSnapshot(visibleMemory);
-      Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
-      sideEffectMessage.remove(GlobalMessageContext.REASONING_QUEUE);
-      sideEffectMessage.put(GlobalMessageContext.MEMORY, sideEffectSnapshot);
-      longMemoryTool.run(content, sideEffectMessage);
-      if ("true".equals(userConfigService.getConfigValue(productId, "knowledge_graph.toggle"))) {
-        knowledgeGraphicTool.run(content, new HashMap<>(sideEffectMessage));
-      }
+      extractConversationFacts(content, conversationChatId, productId, globalMessage,
+          visibleMemory, false);
     }
     List<ModelMessage> compactionPrefix = memoryPolicy.compactionPrefix(memory);
     boolean compacted = !compactionPrefix.isEmpty();
@@ -396,6 +412,36 @@ public class Router {
     if ("true".equals(
         userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle"))) {
       knowledgeGraphicService.clearNode(productId);
+    }
+  }
+
+  /**
+   * Runs the long-term memory and chat knowledge graph extractors over turns they have not read
+   * yet, once {@code extractionIntervalTurns} such turns exist (or on {@code flush}).
+   */
+  private void extractConversationFacts(String content, String conversationChatId, int productId,
+      Map<String, Object> globalMessage, List<ModelMessage> visibleMemory, boolean flush) {
+    String watermarkKey = MEMORY_EXTRACTION_KEY_PREFIX + conversationChatId;
+    MemoryExtractionWindow.Batch batch;
+    try {
+      Object watermark = redisUtil.get(watermarkKey);
+      batch = MemoryExtractionWindow.next(visibleMemory,
+          watermark == null ? null : watermark.toString(), extractionIntervalTurns, flush);
+      if (batch == null) {
+        return;
+      }
+      redisUtil.set(watermarkKey, batch.watermark(), 48 * 3600);
+    } catch (Exception e) {
+      log.warn("memory extraction window failed, chatId={}", conversationChatId, e);
+      return;
+    }
+    Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
+    sideEffectMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    sideEffectMessage.put(GlobalMessageContext.MEMORY, batch.messages());
+    longMemoryTool.run(content, sideEffectMessage);
+    if ("true".equals(userConfigService.getConfigValue(productId, "knowledge_graph.toggle"))) {
+      // The current question is extracted with its answer in a later batch.
+      knowledgeGraphicTool.run("", new HashMap<>(sideEffectMessage));
     }
   }
 
@@ -656,6 +702,8 @@ public class Router {
     private HistoryTurn(String chatId, String userContent) {
       this.chatId = chatId;
       this.userContent = userContent;
+      // Lets the caller store this turn's token usage under the same request id as the history.
+      LlmUsageContext.setRequestId(requestId);
     }
 
     private void startToolCall(FunctionResult result) {

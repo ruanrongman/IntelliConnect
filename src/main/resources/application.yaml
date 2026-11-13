@@ -167,6 +167,9 @@ ai:
     context-window-tokens: 300000
     summary-threshold-ratio: 0.5
     recent-turns: 4
+    # 长期记忆 / 对话图谱的后台抽取：攒够这么多轮新对话才执行一次，每轮只处理一次（说再见时立即补齐）
+    # 设为 1 表示每轮都执行，但只读新增的那一轮
+    extraction-interval-turns: 3
   showThinking: false
   classifier:
     include:
@@ -177,6 +180,18 @@ ai:
   llm:
     # OpenAI 兼容模型整次 HTTP 请求的总时限，包含思考及流式输出
     request-timeout-seconds: 600
+  usage:
+    # 统计每次大模型调用的 token 用量与缓存命中：每次调用写一行 INFO 日志（LlmUsageTracker），并随对话回复展示
+    enabled: true
+    # 每轮对话的用量汇总存入 llm_turn_usage 表（一轮一行），重新加载历史时仍显示在回复下方
+    persist: true
+    # 流式请求附带 stream_options.include_usage；若某个中转服务不支持可关闭
+    stream-include-usage: true
+    # 等效计费换算：百炼隐式缓存命中按输入单价 20%（显式缓存 10%，创建 125%），以控制台实际价格为准
+    cache-hit-price-ratio: 0.2
+    cache-creation-price-ratio: 1.25
+    # 百炼上下文缓存最少 1024 token，低于该长度的请求不可能命中
+    min-cacheable-tokens: 1024
   agent:
     mode: function
     # 单轮模型调用完成的等待时限，略大于模型 HTTP 请求总超时
@@ -281,6 +296,18 @@ ai:
     max_graphic_length: 256000
     chunk_chars: 12000
     chunk_overlap_chars: 500
+    # 对话时按用户问题召回图谱、注入 Router/ChatTool 提示词的范围（每轮都会发送，且不能命中缓存）
+    # 产品可用 user config 覆盖：knowledge_graph.query.min_score / max_depth / max_neighbors / max_chars
+    # 显式查询（/kg/graphic/query、Agent 图谱工具）不受影响
+    query:
+      # Chroma 分数 = (1 + 余弦) / 2；bge-small-zh 下闲聊最高约 0.77、相关问题从 0.79 起。换 embedding 模型需重新标定
+      min-score: 0.78
+      # 从命中节点向外扩展的跳数，0 表示只要命中节点
+      max-depth: 1
+      # 每个节点最多展开的出边数（防止"中心节点"把几十个邻居全带进来）
+      max-neighbors: 10
+      # 注入内容的字符上限（约 1/3 为 token 数）
+      max-chars: 1500
   branch-prediction:
     enabled: true
   mcp:

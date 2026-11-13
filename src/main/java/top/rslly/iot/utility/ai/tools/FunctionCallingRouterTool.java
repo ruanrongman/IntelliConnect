@@ -264,14 +264,16 @@ public class FunctionCallingRouterTool {
       roleIntroduction = productRole.get(0).getRoleIntroduction();
       voice = productRole.get(0).getVoice();
     }
-    String memoryMap = descriptionUtil.getAgentLongMemory(productId);
+    // System prompt only carries the stable categories; values go with the latest user message.
+    String memoryCategories = descriptionUtil.getAgentLongMemoryCategories(productId);
+    String longTermMemory = descriptionUtil.getAgentLongMemory(productId);
     String knowledgeGraphic = knowledgeGraphicService.queryKnowledgeGraphic(question, productId);
     String prompt = functionCallingRouterPrompt.build(assistantName, userName, role,
-        roleIntroduction, memoryMap, voice,
+        roleIntroduction, memoryCategories, voice,
         limitText(getRouterSet(productId), MAX_ROUTER_RULES_CHARS),
         GlobalMessageContext.youthProtectionEnabled(globalMessage));
     String userContext = functionCallingRouterPrompt.buildUserContext(
-        question, currentMemory, knowledgeGraphic);
+        question, currentMemory, knowledgeGraphic, longTermMemory);
     ModelMessage systemMessage = new ModelMessage(ModelMessageRole.SYSTEM.value(), prompt);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), userContext);
     return ChatTool.buildConversationMessages(memory, systemMessage, userMessage);

@@ -43,7 +43,9 @@ class FunctionCallingRouterPromptTest {
         "memory categories", null, "router rules");
 
     assertTrue(systemPrompt.contains("Custom routing rules: router rules"));
-    assertTrue(systemPrompt.contains("Memory categories: memory categories"));
+    assertTrue(systemPrompt.contains(
+        "Memory categories (values are in <long_term_memory>): memory categories"));
+    assertTrue(systemPrompt.contains("use it to fill missing defaults"));
     assertTrue(systemPrompt.contains("Only <current_user_request> is the user's latest message"));
     assertTrue(systemPrompt.contains("NEVER infer the user's topic, intent, route"));
     assertTrue(systemPrompt.contains("only from native conversation history"));
@@ -80,6 +82,18 @@ class FunctionCallingRouterPromptTest {
             .indexOf("<current_user_request>"));
     assertTrue(
         userContext.indexOf("current question") < userContext.indexOf("</current_user_request>"));
+  }
+
+  @Test
+  void placesLongTermMemoryValuesBeforeReferenceContext() {
+    String userContext = prompt.buildUserContext("weather today", "", "",
+        "[{\"memoryKey\":\"city\",\"memoryValue\":\"Beijing\"}]");
+
+    assertTrue(userContext.contains("Beijing"));
+    assertTrue(userContext.indexOf("<long_term_memory>") < userContext.indexOf("Beijing"));
+    assertTrue(userContext.indexOf("</long_term_memory>") < userContext
+        .indexOf("<reference_context>"));
+    assertTrue(prompt.buildUserContext("q", "", "").contains("<long_term_memory>\nnone"));
   }
 
   @Test

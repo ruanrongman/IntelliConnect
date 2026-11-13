@@ -35,7 +35,9 @@ import top.rslly.iot.utility.ai.mcp.McpAgent;
 import top.rslly.iot.utility.ai.sandbox.SandboxService;
 import top.rslly.iot.utility.ai.tools.*;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -83,6 +85,21 @@ public class DescriptionUtil {
   public String getAgentLongMemory(int productId) {
     var result = agentLongMemoryService.getDescription(productId);
     return JSON.toJSONString(result);
+  }
+
+  /**
+   * Memory keys and descriptions without values. Values change whenever LongMemoryTool learns
+   * something, so prompts that should stay cacheable put only these in the system prompt.
+   */
+  public String getAgentLongMemoryCategories(int productId) {
+    List<Map<String, String>> categories = new ArrayList<>();
+    for (var memory : agentLongMemoryService.getDescription(productId)) {
+      Map<String, String> category = new LinkedHashMap<>();
+      category.put("memoryKey", memory.getMemoryKey());
+      category.put("description", memory.getDescription());
+      categories.add(category);
+    }
+    return JSON.toJSONString(categories);
   }
 
   public String getPropertiesAndValue(int productId) {

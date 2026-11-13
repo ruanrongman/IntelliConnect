@@ -40,6 +40,7 @@
       <ChatComposer
         v-model="inputText"
         :selected-files="selectedFiles"
+        :usage="activeConversationUsage"
         :streaming="streaming"
         :can-send="canSend"
         :workspace-enabled="Boolean(selectedProductId && activeChatId)"
@@ -74,13 +75,14 @@ import {
   getAgentMemoryByNickName,
   getHistoryMessage,
 } from '@/api/agentMemory'
-import { stopAiControlStream, streamAiControl } from '@/api/aiChat'
+import { getConversationUsage, stopAiControlStream, streamAiControl } from '@/api/aiChat'
 import { queryKnowledgeGraphicReference } from '@/api/knowledgeGraphic'
 import { postKnowledgeChatRecall } from '@/api/productKnowledge'
 import ChatComposer from './ChatComposer.vue'
 import ChatMessageList from './ChatMessageList.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ConversationWorkspace from '../workspace/index.vue'
+import { addTurnUsage } from '@/utils/llmUsage.mjs'
 import { acceptedFileExtensions, acceptedFileLabel, getClipboardFiles, getFileIdentity, isAcceptedFile } from './fileUpload'
 
 const workspaceOpen = ref(false)
@@ -143,6 +145,30 @@ const activeProductName = computed(() =>
 const canSend = computed(() =>
   Boolean(activeChatId.value && (inputText.value.trim() || selectedFiles.value.length) && !streaming.value)
 )
+
+// Token usage of each whole conversation (chatId -> summary), shown under the input.
+const conversationUsage = reactive(new Map())
+const activeConversationUsage = computed(() => conversationUsage.get(activeChatId.value) || null)
+
+async function loadConversationUsage(productId, chatId) {
+  if (!productId || !chatId) {
+    return
+  }
+  try {
+    const res = await getConversationUsage({ productId, chatId })
+    const payload = res.data || {}
+    if (payload.errorCode !== 200) {
+      return
+    }
+    if (payload.data) {
+      conversationUsage.set(chatId, payload.data)
+    } else {
+      conversationUsage.delete(chatId)
+    }
+  } catch {
+    // Usage is informational; the chat works without it.
+  }
+}
 
 const hasMoreHistory = computed(() =>
   historyPagination.total > 0 && loadedHistoryCount.value < historyPagination.total
@@ -299,6 +325,9 @@ async function loadHistory(page = 1, mode = 'replace') {
   }
   const requestSequence = ++historyRequestSequence
   const requestChatId = activeChatId.value
+  if (mode === 'replace') {
+    loadConversationUsage(selectedProductId.value, requestChatId)
+  }
   const previousScrollHeight = getMessagePane()?.scrollHeight || 0
   historyPagination.current = page
   loadingHistory.value = true
@@ -637,6 +666,7 @@ async function sendMessage() {
     knowledgeRecall: [],
     knowledgeGraphicReference: null,
     loadingReferences: false,
+    usage: null,
     pending: true,
   })
   conversationMessages.push({
@@ -677,6 +707,13 @@ async function sendMessage() {
       onReasoning: (chunk) => {
         assistantMessage.reasoningContent += chunk
         scrollActiveConversation(conversationChatId)
+      },
+      onUsage: (usage) => {
+        assistantMessage.usage = usage
+        conversationUsage.set(
+          conversationChatId,
+          addTurnUsage(conversationUsage.get(conversationChatId), usage)
+        )
       },
       onComplete: (finalContent) => {
         assistantMessage.content = finalContent

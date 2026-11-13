@@ -19,6 +19,9 @@
  */
 package top.rslly.iot.utility.ai.llm;
 
+import com.alibaba.fastjson.JSON;
+
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,31 @@ public record FunctionToolSpec(
 
   public FunctionToolSpec(String name, String description, Map<String, Object> parameters) {
     this(name, description, parameters, false);
+  }
+
+  /**
+   * JSON of the function definitions as sent to the model, for token estimates. fastjson 1.x
+   * serializes records as {@code {}}, so {@code JSON.toJSONString(specs)} must not be used.
+   */
+  public static String toEstimateJson(List<FunctionToolSpec> specs) {
+    if (specs == null || specs.isEmpty()) {
+      return "";
+    }
+    List<Map<String, Object>> functions = new ArrayList<>();
+    for (FunctionToolSpec spec : specs) {
+      if (spec == null) {
+        continue;
+      }
+      Map<String, Object> function = new LinkedHashMap<>();
+      function.put("name", spec.name());
+      function.put("description", spec.description());
+      function.put("parameters", spec.parameters());
+      Map<String, Object> tool = new LinkedHashMap<>();
+      tool.put("type", "function");
+      tool.put("function", function);
+      functions.add(tool);
+    }
+    return JSON.toJSONString(functions);
   }
 
   public static Map<String, Object> defaultRouterArgsSchema() {

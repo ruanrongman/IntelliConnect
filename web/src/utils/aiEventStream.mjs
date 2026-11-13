@@ -1,6 +1,6 @@
 // A stream is successful only after the server's explicit completion event.
 // Reading EOF alone can also mean that a proxy or the network dropped the connection.
-export async function readAiEventStream(body, { onMessage, onReasoning, onComplete } = {}) {
+export async function readAiEventStream(body, { onMessage, onReasoning, onUsage, onComplete } = {}) {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
@@ -24,6 +24,11 @@ export async function readAiEventStream(body, { onMessage, onReasoning, onComple
         }
         if (event.hasData && event.name === 'reasoning') {
           onReasoning?.(event.data)
+        } else if (event.hasData && event.name === 'usage') {
+          const usage = parseUsage(event.data)
+          if (usage) {
+            onUsage?.(usage)
+          }
         } else if (event.hasData && event.name === 'message') {
           onMessage?.(event.data)
         }
@@ -47,6 +52,16 @@ function parseEvent(frame) {
     }
   })
   return { name, data: data.join('\n'), hasData: data.length > 0 }
+}
+
+// Usage is diagnostic only; a malformed payload must never fail the reply.
+function parseUsage(data) {
+  try {
+    const usage = JSON.parse(data)
+    return usage && typeof usage === 'object' ? usage : null
+  } catch {
+    return null
+  }
 }
 
 function parseError(data) {

@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, onMounted, onUnmounted } from 'vue'
+import { computed, reactive, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Select,
@@ -41,6 +41,13 @@ import {
   clearKnowledgeGraphic,
 } from '@/api/knowledgeGraphic'
 import { getProduct } from '@/api/product'
+import {
+  hasUsage,
+  tokensPerGraphItem,
+  usageDetails,
+  usageFootnote,
+  usageSceneLines,
+} from '@/utils/llmUsage.mjs'
 
 const router = useRouter()
 
@@ -167,7 +174,17 @@ const uploadProgress = reactive({
   finished: false,
   success: false,
   errorMessage: '',
+  usage: null,
+  mergedNodeCount: 0,
+  mergedRelationCount: 0,
 })
+const graphItemCost = computed(() =>
+  tokensPerGraphItem(
+    uploadProgress.usage,
+    uploadProgress.mergedNodeCount,
+    uploadProgress.mergedRelationCount
+  )
+)
 
 // Variables for handling relation
 const isConnection = ref(false)
@@ -270,6 +287,9 @@ function resetUploadProgress() {
   uploadProgress.finished = false
   uploadProgress.success = false
   uploadProgress.errorMessage = ''
+  uploadProgress.usage = null
+  uploadProgress.mergedNodeCount = 0
+  uploadProgress.mergedRelationCount = 0
 }
 
 function handleOpenUploadModal() {
@@ -339,6 +359,9 @@ function applyUploadProgress(progress) {
   uploadProgress.finished = Boolean(progress.finished)
   uploadProgress.success = Boolean(progress.success)
   uploadProgress.errorMessage = progress.errorMessage || ''
+  uploadProgress.usage = progress.usage || null
+  uploadProgress.mergedNodeCount = Number(progress.mergedNodeCount || 0)
+  uploadProgress.mergedRelationCount = Number(progress.mergedRelationCount || 0)
 }
 
 function pollUploadProgress(taskId) {
@@ -758,9 +781,14 @@ function refreshChartHandler(option) {
   if (chart.value) {
     chart.value.dispose()
   }
-  crtOption.value = option
+  // ECharts 6 thumbnail throws on an empty graph (zero-size bounding rect -> singular matrix).
+  // This runs inside onMounted; in Vue dev mode an error thrown there wedges the scheduler
+  // and the whole app stops re-rendering, so drop the thumbnail when there is nothing to draw.
+  const hasNodes = Array.isArray(option.series?.[0]?.data) && option.series[0].data.length > 0
+  const { thumbnail, ...optionWithoutThumbnail } = option
+  const finalOption = hasNodes ? option : optionWithoutThumbnail
+  crtOption.value = finalOption
   chart.value = echarts.init(cavDom.value)
-  chart.value.setOption(option)
   chart.value.on('click', function (params) {
     if (params.dataType === 'node') {
       handleNodeClick(params)
@@ -768,6 +796,11 @@ function refreshChartHandler(option) {
       handleEdgeClick(params)
     }
   })
+  try {
+    chart.value.setOption(finalOption)
+  } catch (err) {
+    console.error('[KnowledgeGraphic] chart render failed', err)
+  }
 
   if (isConnection.value) {
     isConnection.value = false
@@ -1201,6 +1234,22 @@ onUnmounted(() => {
           <div v-if="uploadProgress.totalChunks > 0" class="upload-progress-subtext">
             当前片段：{{ uploadProgress.currentChunk }} / {{ uploadProgress.totalChunks }}
           </div>
+          <details v-if="hasUsage(uploadProgress.usage)" class="usage-footnote">
+            <summary>※ 本次任务 {{ usageFootnote(uploadProgress.usage) }}</summary>
+            <ul>
+              <li v-if="graphItemCost">{{ graphItemCost }}</li>
+              <li v-for="(line, lineIndex) in usageDetails(uploadProgress.usage)" :key="`detail-${lineIndex}`">
+                {{ line }}
+              </li>
+              <li
+                v-for="(line, lineIndex) in usageSceneLines(uploadProgress.usage)"
+                :key="`scene-${lineIndex}`"
+                class="usage-scene"
+              >
+                {{ line }}
+              </li>
+            </ul>
+          </details>
         </Form.Item>
         <Form.Item :wrapper-col="{ offset: 6, span: 16 }">
           <Button
@@ -1324,6 +1373,34 @@ onUnmounted(() => {
 
 .upload-progress-text {
   margin-top: 8px;
+}
+
+.usage-footnote {
+  margin-top: 6px;
+  color: #8c8c8c;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.usage-footnote summary {
+  cursor: pointer;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.usage-footnote summary::-webkit-details-marker {
+  display: none;
+}
+
+.usage-footnote ul {
+  margin: 4px 0 0;
+  padding: 6px 0 0 12px;
+  border-top: 1px dashed #e8e8e8;
+  list-style: none;
+}
+
+.usage-footnote .usage-scene {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .kg-body {

@@ -44,8 +44,11 @@ public class StringUtils {
       String placeHolderName = String.format("{%s}", x.key);
       x.idxInTpl = tpl.indexOf(placeHolderName);
     });
+    // Values are matched to placeholders by position, so a parameter missing from the template
+    // (index -1) would sort first and shift every value into the wrong placeholder.
     List<String> sortedValues =
-        paramWrappers.stream().sorted(Comparator.comparing(KvWrapper::getIdxInTpl))
+        paramWrappers.stream().filter(x -> x.idxInTpl >= 0)
+            .sorted(Comparator.comparing(KvWrapper::getIdxInTpl))
             .map(KvWrapper::getValue).collect(Collectors.toList());
     String standardTpl = tpl;
 
@@ -77,7 +80,7 @@ public class StringUtils {
       placeHolderName = placeHolderPrefix + s + placeHolderSuffix;
     }
 
-    return String.format(standardTpl, paramWrappers.stream()
+    return String.format(standardTpl, paramWrappers.stream().filter(x -> x.idxInTpl >= 0)
         .sorted(Comparator.comparing(KvWrapper::getIdxInTpl)).map(KvWrapper::getValue).toArray());
   }
 

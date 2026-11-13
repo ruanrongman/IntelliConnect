@@ -43,6 +43,8 @@ import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
+import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.prompts.KnowledgeGraphicPrompt;
 import top.rslly.iot.utility.ai.rag.RagUtility;
@@ -75,6 +77,8 @@ public class KnowledgeGraphicTool {
   private KnowledgeGraphicPrompt knowledgeGraphicPrompt;
   @Autowired
   private UserConfigServiceImpl userConfigService;
+  @Autowired(required = false)
+  private ConversationMemoryPolicy conversationMemoryPolicy;
   @Autowired
   @Qualifier("taskExecutor")
   private TaskExecutor taskExecutor;
@@ -278,6 +282,31 @@ public class KnowledgeGraphicTool {
 
   private void processFileGenerationTask(int productId, List<UploadFile> uploadFiles, Path tempDir,
       KnowledgeGraphicFileProgress progress, Runnable checkEnabled, long maximumBytes) {
+    // Keep the conversation id when an agent runs this task; tag standalone uploads by task.
+    String usageChatId =
+        LlmUsageContext.current() == null ? "kg-task:" + progress.getTaskId() : null;
+    try (LlmUsageContext.Scope ignored =
+        LlmUsageContext.open(productId, usageChatId, progress.usageAccumulator())) {
+      LlmUsageContext.setContextWindowTokens(resolveContextWindowTokens(productId));
+      processFileGenerationTaskInScope(productId, uploadFiles, tempDir, progress, checkEnabled,
+          maximumBytes);
+    }
+  }
+
+  private long resolveContextWindowTokens(int productId) {
+    if (conversationMemoryPolicy == null) {
+      return 0L;
+    }
+    try {
+      return conversationMemoryPolicy.resolveForProduct(productId).contextWindowTokens();
+    } catch (RuntimeException e) {
+      return 0L;
+    }
+  }
+
+  private void processFileGenerationTaskInScope(int productId, List<UploadFile> uploadFiles,
+      Path tempDir, KnowledgeGraphicFileProgress progress, Runnable checkEnabled,
+      long maximumBytes) {
     try {
       checkEnabled.run();
       progress.update("parsing", 5, "正在解析文件");
@@ -314,6 +343,7 @@ public class KnowledgeGraphicTool {
                 + chunk.totalInFile() + ")");
         totalResult = totalResult.add(generateSingleChunk(productId, chunk.text(), llm, true,
             false, checkEnabled));
+        progress.updateMerged(totalResult.nodeCount(), totalResult.relationCount());
       }
       if (totalResult.isEmpty()) {
         throw new IllegalStateException("未从文件中抽取到可写入的节点或关系");

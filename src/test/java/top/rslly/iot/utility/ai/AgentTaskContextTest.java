@@ -70,6 +70,41 @@ class AgentTaskContextTest {
   }
 
   @Test
+  void summaryRequestContainsToolCallsAndResults() {
+    LLM model = mock(LLM.class);
+    List<String> summaryInputs = new ArrayList<>();
+    when(model.commonChat(anyString(), any(), anyBoolean())).thenAnswer(invocation -> {
+      List<ModelMessage> messages = invocation.getArgument(1);
+      messages.forEach(message -> summaryInputs.add(String.valueOf(message.getContent())));
+      return "completed old research";
+    });
+    AgentTaskContext context = context(model, 4000, 0.1, 1, false, new ArrayList<>());
+    context.append(functionTurn("old-call", "old-result"),
+        functionResult("old-call", "historical research ".repeat(200)),
+        "historical research ".repeat(200));
+    context.append(functionTurn("recent-call", "recent-result"),
+        functionResult("recent-call", "recent finding"), "recent finding");
+
+    context.prepare("system prompt", List.of());
+
+    String summaryInput = String.join("\n", summaryInputs);
+    assertTrue(summaryInput.contains("historical research"), summaryInput);
+    assertTrue(summaryInput.contains("old-call"), summaryInput);
+  }
+
+  @Test
+  void runtimeContextPrefixesTheTaskMessageAndLeavesSystemStable() {
+    AgentTaskContext context = context(mock(LLM.class), 4000, 0.75, 4, false, new ArrayList<>());
+    context.setRuntimeContext("<runtime_context>now</runtime_context>\n");
+
+    List<ModelMessage> request = context.prepare("system", List.of());
+
+    assertEquals("system", request.getFirst().getContent());
+    assertEquals("<runtime_context>now</runtime_context>\n\noriginal task",
+        request.getLast().getContent());
+  }
+
+  @Test
   void unlimitedIsAnExecutionSettingAndDoesNotAlterCompaction() {
     AgentTaskContext context = context(mock(LLM.class), 256, 0.75, 4, true, new ArrayList<>());
 

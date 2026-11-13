@@ -61,13 +61,58 @@
       <template #icon><StopOutlined /></template>
       停止
     </a-button>
+    <Transition name="usage-fade">
+      <div v-if="usageView" class="usage-status">
+        <a-popover v-model:open="usageOpen" trigger="click" placement="topLeft"
+          overlay-class-name="usage-popover" :arrow="false">
+          <template #content>
+            <div class="usage-card">
+              <div class="usage-card-head">
+                <span><DatabaseOutlined /> Token 用量 <em>{{ usageView.scope }}</em></span>
+                <strong>{{ usageView.total }}</strong>
+              </div>
+              <div v-for="row in usageView.rows" :key="row.label" class="usage-card-row">
+                <span>{{ row.label }}</span>
+                <span>{{ row.value }}</span>
+              </div>
+              <div v-if="usageView.context" class="usage-card-row">
+                <span>上下文占用</span>
+                <span>{{ usageView.context.label }} · {{ usageView.context.detail }}</span>
+              </div>
+            </div>
+          </template>
+          <button type="button" class="usage-trigger" :class="{ active: usageOpen }">
+            <DatabaseOutlined />
+            <span>{{ usageView.chip }}</span>
+            <template v-if="usageView.context">
+              <svg class="usage-ring" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" class="usage-ring-track" />
+                <circle cx="8" cy="8" r="6" class="usage-ring-value"
+                  :stroke-dasharray="`${(usageView.context.percent / 100) * RING_LENGTH} ${RING_LENGTH}`" />
+              </svg>
+              <span>{{ usageView.context.label }}</span>
+            </template>
+          </button>
+        </a-popover>
+      </div>
+    </Transition>
   </form>
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
+// Popover is not in the global antd registration (plugins/antd.js), so register it locally.
+import { Popover as APopover } from 'ant-design-vue'
 import { useFilePicker } from '@/hooks/useFilePicker'
+import { usageStatus } from '@/utils/llmUsage.mjs'
 
-defineProps({
+const RING_LENGTH = 2 * Math.PI * 6
+
+const props = defineProps({
+  usage: {
+    type: Object,
+    default: null,
+  },
   modelValue: {
     type: String,
     default: '',
@@ -96,6 +141,8 @@ defineProps({
 
 const emit = defineEmits(['update:modelValue', 'submit', 'stop', 'select-file', 'paste', 'remove-file', 'open-workspace'])
 const { fileInput, openFilePicker, restoreFullscreen } = useFilePicker()
+const usageView = computed(() => usageStatus(props.usage))
+const usageOpen = ref(false)
 let isComposing = false
 
 function handleCompositionStart() {
@@ -217,10 +264,139 @@ function handleFileChange(event) {
   }
 }
 
+.usage-status {
+  grid-column: 1 / -1;
+  display: flex;
+  margin-top: -6px;
+  min-width: 0;
+}
+
+.usage-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a9692;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &:hover,
+  &.active {
+    color: #34423e;
+    background: #f1f5f4;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(31, 122, 92, 0.35);
+    outline-offset: 1px;
+  }
+}
+
+.usage-ring {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  transform: rotate(-90deg);
+
+  circle {
+    fill: none;
+    stroke-width: 2;
+  }
+}
+
+.usage-ring-track {
+  stroke: #dfe6e4;
+}
+
+.usage-ring-value {
+  stroke: #1f7a5c;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.usage-card {
+  min-width: 248px;
+  color: #d7dddb;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+
+  em {
+    color: #8f9a97;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 400;
+  }
+}
+
+.usage-card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 4px 0;
+
+  span:first-child {
+    color: #9aa5a2;
+  }
+}
+
+.usage-fade-enter-active,
+.usage-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.usage-fade-enter-from,
+.usage-fade-leave-to {
+  opacity: 0;
+}
+
 @media (max-width: 840px) {
   .composer {
     padding: 12px;
     gap: 8px;
   }
+}
+</style>
+
+<style lang="scss">
+/* The popover is teleported to <body>, so its shell needs an unscoped rule. */
+.usage-popover .ant-popover-inner {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #1f2322;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  padding: 12px 14px;
 }
 </style>

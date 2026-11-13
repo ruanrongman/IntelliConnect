@@ -77,6 +77,11 @@ public class ConversationMemoryPolicy {
   }
 
   public long estimateTokens(List<ModelMessage> messages) {
+    return estimateMessageTokens(messages);
+  }
+
+  /** Character-based estimate shared with usage tracking; no tokenizer or product config. */
+  public static long estimateMessageTokens(List<ModelMessage> messages) {
     if (messages == null || messages.isEmpty()) {
       return 0L;
     }
@@ -86,8 +91,8 @@ public class ConversationMemoryPolicy {
         continue;
       }
       tokenCount += MESSAGE_OVERHEAD_TOKENS;
-      tokenCount += estimateTextTokens(message.getRole());
-      tokenCount += estimateTextTokens(message.getContent());
+      tokenCount += estimateText(message.getRole());
+      tokenCount += estimateText(message.getContent());
     }
     return tokenCount;
   }
@@ -201,6 +206,10 @@ public class ConversationMemoryPolicy {
   }
 
   public long estimateTextTokens(Object value) {
+    return estimateText(value);
+  }
+
+  public static long estimateText(Object value) {
     if (value == null) {
       return 0L;
     }

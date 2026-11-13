@@ -38,6 +38,9 @@ import top.rslly.iot.utility.MyFileUtil;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageSummary;
 import top.rslly.iot.utility.ai.mcp.McpWebsocket;
 import top.rslly.iot.utility.ai.rag.RagUtility;
 import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
@@ -94,6 +97,8 @@ public class AiServiceImpl implements AiService {
   private RedisUtil redisUtil;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
+  @Autowired
+  private LlmTurnUsageService llmTurnUsageService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
   private static final String SSE_DONE_SIGNAL = "[DONE]";
   private static final long STREAM_POLL_INTERVAL_MS = 10L;
@@ -190,10 +195,20 @@ public class AiServiceImpl implements AiService {
       initializeDebugMemory(aiControl.getProductId(), conversationChatId, aiControl.getContent());
       Queue<String> reasoningQueue = new ConcurrentLinkedQueue<>();
       reasoningQueueMap.put(streamChatId, reasoningQueue);
-      CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(
-          () -> router.responseDebugStream(savedDocumentPrompt.modelContent(),
+      LlmUsageAccumulator turnUsage = new LlmUsageAccumulator();
+      CompletableFuture<String> responseFuture = CompletableFuture.supplyAsync(() -> {
+        try (LlmUsageContext.Scope ignored =
+            LlmUsageContext.open(aiControl.getProductId(), conversationChatId, turnUsage)) {
+          return router.responseDebugStream(savedDocumentPrompt.modelContent(),
               savedDocumentPrompt.historyContent(), streamChatId, conversationChatId,
-              aiControl.getProductId(), reasoningQueue));
+              aiControl.getProductId(), reasoningQueue);
+        }
+      });
+      // Store the turn's usage once the model work ends, also when the user stopped the stream or
+      // disconnected: the answer keeps running in the background and its tokens are still spent.
+      responseFuture.whenComplete((answer, error) -> llmTurnUsageService.record(
+          aiControl.getProductId(), conversationChatId, turnUsage.requestId(),
+          turnUsage.isEmpty() ? null : turnUsage.summary()));
       while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)
           || !reasoningQueue.isEmpty()) {
         if (connectionClosed.get() || stoppedStreamChatIds.contains(streamChatId)) {
@@ -232,6 +247,8 @@ public class AiServiceImpl implements AiService {
       if (!sentFromQueue && finalAnswer != null && !finalAnswer.isBlank()) {
         sendSseEvent(emitter, "message", finalAnswer);
       }
+      LlmUsageSummary usageSummary = turnUsage.isEmpty() ? null : turnUsage.summary();
+      sendUsageEvent(emitter, usageSummary);
       sendSseEvent(emitter, "complete", finalAnswer == null ? "" : finalAnswer);
     } catch (Exception e) {
       log.error("AI text stream failed, streamChatId={}", streamChatId, e);
@@ -375,6 +392,18 @@ public class AiServiceImpl implements AiService {
 
   private void sendSseEvent(SseEmitter emitter, String eventName, Object data) throws IOException {
     emitter.send(SseEmitter.event().name(eventName).data(data));
+  }
+
+  /**
+   * Token usage of the model calls made while answering this turn. Background work that finishes
+   * after the answer (memory, emotion, graph updates) is only logged, not included here.
+   */
+  private void sendUsageEvent(SseEmitter emitter, LlmUsageSummary usageSummary)
+      throws IOException {
+    if (usageSummary == null) {
+      return;
+    }
+    sendSseEvent(emitter, "usage", JSON.toJSONString(usageSummary));
   }
 
   @Override

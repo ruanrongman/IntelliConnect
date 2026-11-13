@@ -116,3 +116,21 @@ test('preserves a user abort instead of converting it to a network failure', asy
     (error) => error === abort
   )
 })
+
+test('delivers turn usage before completion and ignores malformed usage', async () => {
+  const usages = []
+  const completions = []
+  await readAiEventStream(
+    stream(
+      'event:usage\ndata:{"calls":2,"promptTokens":3000,"cachedTokens":2048}\n\n' +
+        'event:usage\ndata:not-json\n\n' +
+        'event:complete\ndata:done\n\n'
+    ),
+    {
+      onUsage: (value) => usages.push(value),
+      onComplete: (value) => completions.push(value),
+    }
+  )
+  assert.deepEqual(usages, [{ calls: 2, promptTokens: 3000, cachedTokens: 2048 }])
+  assert.deepEqual(completions, ['done'])
+})
