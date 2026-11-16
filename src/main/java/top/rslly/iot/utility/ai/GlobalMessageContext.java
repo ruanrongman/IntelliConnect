@@ -23,6 +23,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.function.LongConsumer;
+import top.rslly.iot.utility.ai.llm.LLM;
+import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 
 public final class GlobalMessageContext {
   public static final String PRODUCT_ID = "productId";
@@ -32,9 +35,18 @@ public final class GlobalMessageContext {
   public static final String REASONING_QUEUE = "reasoningQueue";
   public static final String MEMORY = "memory";
   public static final String MEMORY_REVISION = "memoryRevision";
+  public static final String PROMPT_BUDGET = "conversationPromptBudget";
   public static final String YOUTH_PROTECTION_ENABLED = "youthProtectionEnabled";
 
   private GlobalMessageContext() {}
+
+  /** Called after assembling the full request, before sending it to the selected model. */
+  public static void checkPromptBudget(Map<String, Object> globalMessage, LLM llm,
+      List<ModelMessage> messages, List<FunctionToolSpec> tools) {
+    if (globalMessage != null && globalMessage.get(PROMPT_BUDGET)instanceof LongConsumer check) {
+      check.accept(llm.estimatePromptTokens(messages, tools));
+    }
+  }
 
   public static void putChatIds(Map<String, Object> globalMessage, String streamChatId,
       String conversationChatId) {

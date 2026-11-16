@@ -90,6 +90,7 @@ public class DeepSeek implements LLM {
   private final boolean webSearchEnabled;
   private final boolean dashscopeCompatible;
   private final String providerLabel;
+  private final PromptTokenBudget promptTokenBudget = new PromptTokenBudget();
 
   public DeepSeek(String apiKey) {
     this(DEFAULT_URL, DEFAULT_MODEL, apiKey);
@@ -154,8 +155,8 @@ public class DeepSeek implements LLM {
 
   @Override
   public JSONObject jsonChat(String content, List<ModelMessage> messages, boolean search) {
+    UsageCall usageCall = beginUsage(messages, false);
     try {
-      LlmUsageTracker.Call usageCall = beginUsage(messages, false);
       ChatCompletion completion =
           client.chat().completions().create(buildTextParams(messages, search, false));
       usageCall.finish(usageOf(completion));
@@ -163,6 +164,7 @@ public class DeepSeek implements LLM {
       log.debug("model output:{} ", response);
       return LlmJsonResponseParser.parse(response);
     } catch (Exception e) {
+      usageCall.finish(null);
       log.error("model error", e);
       JSONObject action = new JSONObject();
       JSONObject answer = new JSONObject();
@@ -174,8 +176,8 @@ public class DeepSeek implements LLM {
 
   @Override
   public String commonChat(String content, List<ModelMessage> messages, boolean search) {
+    UsageCall usageCall = beginUsage(messages, false);
     try {
-      LlmUsageTracker.Call usageCall = beginUsage(messages, false);
       ChatCompletion completion =
           client.chat().completions().create(buildTextParams(messages, search, false));
       usageCall.finish(usageOf(completion));
@@ -183,6 +185,7 @@ public class DeepSeek implements LLM {
       log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
+      usageCall.finish(null);
       log.error("model error", e);
       return FALLBACK_MESSAGE;
     }
@@ -196,13 +199,14 @@ public class DeepSeek implements LLM {
   @Override
   public FunctionResult functionChat(String content, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, boolean search) {
+    UsageCall usageCall = beginUsage(messages, toolSpecs, false);
     try {
-      LlmUsageTracker.Call usageCall = beginUsage(messages, toolSpecs, false);
       ChatCompletion completion = client.chat().completions()
           .create(buildFunctionParams(messages, toolSpecs, search, false));
       usageCall.finish(usageOf(completion));
       return toFunctionResult(completion);
     } catch (Exception e) {
+      usageCall.finish(null);
       log.error("function calling error", e);
       return FunctionResult.error(FALLBACK_MESSAGE);
     }
@@ -215,7 +219,7 @@ public class DeepSeek implements LLM {
       return;
     }
     handler.onOpen();
-    LlmUsageTracker.Call usageCall = beginUsage(messages, toolSpecs, true);
+    UsageCall usageCall = beginUsage(messages, toolSpecs, true);
     STREAM_EXECUTOR.execute(() -> {
       StringBuilder replyBuilder = new StringBuilder();
       AtomicReference<CompletionUsage> streamUsage = new AtomicReference<>();
@@ -253,6 +257,7 @@ public class DeepSeek implements LLM {
           handler.onDirectReplyComplete(replyBuilder.toString());
         }
       } catch (Exception e) {
+        usageCall.finish(LlmUsage.fromOpenAi(streamUsage.get()));
         log.error("stream function calling error", e);
         handler.onFailure(e);
       }
@@ -264,7 +269,7 @@ public class DeepSeek implements LLM {
       EventSourceListener listener) {
     LegacyEventSource eventSource = new LegacyEventSource(baseUrl + "/chat/completions");
     listener.onOpen(eventSource, null);
-    LlmUsageTracker.Call usageCall = beginUsage(messages, true);
+    UsageCall usageCall = beginUsage(messages, true);
     STREAM_EXECUTOR.execute(() -> {
       AtomicReference<CompletionUsage> streamUsage = new AtomicReference<>();
       try {
@@ -286,6 +291,7 @@ public class DeepSeek implements LLM {
           listener.onClosed(eventSource);
         }
       } catch (Exception e) {
+        usageCall.finish(LlmUsage.fromOpenAi(streamUsage.get()));
         if (eventSource.isCancelled()) {
           listener.onClosed(eventSource);
           return;
@@ -298,6 +304,7 @@ public class DeepSeek implements LLM {
 
   @Override
   public String imageToWord(String question, String url) {
+    UsageCall usageCall = beginUsage(null, false);
     try {
       ChatCompletionCreateParams params = applyModelDefaults(ChatCompletionCreateParams.builder()
           .model(model)
@@ -315,13 +322,13 @@ public class DeepSeek implements LLM {
                       .build())))
               .build()))
                   .build();
-      LlmUsageTracker.Call usageCall = beginUsage(null, false);
       ChatCompletion completion = client.chat().completions().create(params);
       usageCall.finish(usageOf(completion));
       String response = extractText(completion);
       log.debug("model output:{} ", response);
       return response;
     } catch (Exception e) {
+      usageCall.finish(null);
       log.error("model error", e);
       return FALLBACK_MESSAGE;
     }
@@ -403,13 +410,53 @@ public class DeepSeek implements LLM {
     }
   }
 
-  private LlmUsageTracker.Call beginUsage(List<ModelMessage> messages, boolean stream) {
-    return LlmUsageTracker.begin(providerLabel, model, messages, stream);
+  @Override
+  public long estimatePromptTokens(List<ModelMessage> messages, List<FunctionToolSpec> tools) {
+    try {
+      return promptTokenBudget.estimate(messages, tools);
+    } catch (RuntimeException e) {
+      log.debug("prompt usage estimate unavailable", e);
+      return LLM.super.estimatePromptTokens(messages, tools);
+    }
   }
 
-  private LlmUsageTracker.Call beginUsage(List<ModelMessage> messages,
+  private UsageCall beginUsage(List<ModelMessage> messages, boolean stream) {
+    return beginUsage(messages, null, stream);
+  }
+
+  private UsageCall beginUsage(List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, boolean stream) {
-    return LlmUsageTracker.begin(providerLabel, model, messages, toolSpecs, stream);
+    PromptTokenBudget.Snapshot input = null;
+    try {
+      input = promptTokenBudget.capture(messages, toolSpecs);
+    } catch (RuntimeException e) {
+      log.debug("prompt usage snapshot unavailable", e);
+    }
+    return new UsageCall(LlmUsageTracker.begin(providerLabel, model, messages, toolSpecs, stream),
+        input);
+  }
+
+  private final class UsageCall {
+    private final LlmUsageTracker.Call tracking;
+    private final PromptTokenBudget.Snapshot input;
+    private final AtomicBoolean finished = new AtomicBoolean();
+
+    private UsageCall(LlmUsageTracker.Call tracking, PromptTokenBudget.Snapshot input) {
+      this.tracking = tracking;
+      this.input = input;
+    }
+
+    private void finish(LlmUsage usage) {
+      if (!finished.compareAndSet(false, true)) {
+        return;
+      }
+      try {
+        promptTokenBudget.record(input, usage);
+      } catch (RuntimeException e) {
+        log.debug("prompt usage feedback failed", e);
+      }
+      tracking.finish(usage);
+    }
   }
 
   private static LlmUsage usageOf(ChatCompletion completion) {

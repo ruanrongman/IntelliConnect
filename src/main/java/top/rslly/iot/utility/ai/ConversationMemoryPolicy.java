@@ -98,13 +98,22 @@ public class ConversationMemoryPolicy {
   }
 
   public boolean shouldSummarize(List<ModelMessage> messages) {
+    return shouldSummarize(messages, estimateTokens(messages));
+  }
+
+  /** Full request budget, including system prompt, tools and the current user message. */
+  public boolean shouldSummarize(List<ModelMessage> messages, long inputTokens) {
     return messages != null
         && recentTurnsStart(messages) > 0
-        && estimateTokens(messages) > summaryThresholdTokens();
+        && inputTokens > summaryThresholdTokens();
   }
 
   public List<ModelMessage> compactionPrefix(List<ModelMessage> messages) {
-    if (!shouldSummarize(messages)) {
+    return compactionPrefix(messages, estimateTokens(messages));
+  }
+
+  public List<ModelMessage> compactionPrefix(List<ModelMessage> messages, long inputTokens) {
+    if (!shouldSummarize(messages, inputTokens)) {
       return List.of();
     }
     int prefixSize = recentTurnsStart(messages);

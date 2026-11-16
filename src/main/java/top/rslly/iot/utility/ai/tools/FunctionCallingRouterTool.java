@@ -130,6 +130,10 @@ public class FunctionCallingRouterTool {
     List<FunctionToolSpec> toolSpecs = buildToolSpecs(productId, chatId);
     List<ModelMessage> messages =
         buildPromptMessages(question, productId, chatId, globalMessage, toolSpecs);
+    GlobalMessageContext.checkPromptBudget(globalMessage, llm, messages, toolSpecs);
+    List<ModelMessage> memory = Optional.ofNullable(
+        (List<ModelMessage>) globalMessage.get(GlobalMessageContext.MEMORY)).orElse(List.of());
+    messages = ChatTool.buildConversationMessages(memory, messages.getFirst(), messages.getLast());
     if (!speedUp) {
       return normalizeResult(llm.functionChat(question, messages, toolSpecs, true));
     }

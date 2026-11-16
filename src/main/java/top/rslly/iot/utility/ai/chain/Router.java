@@ -32,6 +32,7 @@ import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.services.agent.HistoryMessageEntityService;
+import top.rslly.iot.services.agent.LlmTurnUsageService;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicServiceImpl;
 import top.rslly.iot.services.agent.ProductToolsBanServiceImpl;
 
@@ -43,6 +44,7 @@ import top.rslly.iot.utility.ai.ConversationHistoryCodec;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.MemoryExtractionWindow;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
@@ -59,7 +61,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongConsumer;
 
 @Component
 @Slf4j
@@ -115,6 +119,8 @@ public class Router {
   private HistoryMessageEntityService historyMessageEntityService;
   @Autowired
   private AgentMemoryServiceImpl agentMemoryService;
+  @Autowired
+  private LlmTurnUsageService llmTurnUsageService;
   @Value("${ai.branch-prediction.enabled:true}")
   private boolean branchPredictionEnabled;
   @Value("${ai.router.mode:prompt}")
@@ -148,11 +154,23 @@ public class Router {
 
   private String responseInternal(String content, String historyContent, String streamChatId,
       String conversationChatId, int productId, Queue<String> reasoningQueue, String... dataArgs) {
-    // Attributes every model call of this turn (all channels) to the product and conversation.
+    // Use the same app-scoped id as the history written by the WeChat path below.
+    String usageChatId = dataArgs.length > 0 && !"false".equals(dataArgs[0])
+        ? dataArgs[0] + conversationChatId
+        : conversationChatId;
+    LlmUsageAccumulator turnUsage = new LlmUsageAccumulator();
+    // Every channel owns a turn accumulator here; an outer SSE accumulator still receives calls.
     try (LlmUsageContext.Scope ignored =
-        LlmUsageContext.open(productId, conversationChatId, null)) {
+        LlmUsageContext.open(productId, usageChatId, turnUsage)) {
       return respondWithUsageScope(content, historyContent, streamChatId, conversationChatId,
           productId, reasoningQueue, dataArgs);
+    } finally {
+      // Persist before returning, including calls spent before a failed/disconnected reply.
+      // Background work finishing after this snapshot remains diagnostic logging only.
+      if (!turnUsage.isEmpty()) {
+        llmTurnUsageService.record(productId, usageChatId, turnUsage.requestId(),
+            turnUsage.summary());
+      }
     }
   }
 
@@ -198,14 +216,25 @@ public class Router {
     globalMessage.put(GlobalMessageContext.MEMORY_REVISION,
         currentMemoryRevision(conversationChatId));
     globalMessage.put(GlobalMessageContext.MEMORY, memory);
+    AtomicBoolean promptBudgetChecked = new AtomicBoolean();
+    AtomicLong predictionInputTokens = new AtomicLong(-1L);
+    String budgetChatId = conversationChatId;
+    globalMessage.put(GlobalMessageContext.PROMPT_BUDGET,
+        (LongConsumer) inputTokens -> {
+          boolean compacted = compactConversationMemory(budgetChatId, globalMessage, memory,
+              memoryPolicy, initializeMemorySummary, inputTokens);
+          if (!compacted && initializeMemorySummary) {
+            initializeConversationSummary(budgetChatId, globalMessage, memory, memoryPolicy);
+          }
+          promptBudgetChecked.set(true);
+        });
     if (historyMessageEntityService.youthProtectForTimeOut(productId, conversationChatId)) {
       return "小朋友，是时候休息一下啰。";
     }
     HistoryTurn historyTurn = new HistoryTurn(conversationChatId, historyContent);
     if (isFunctionRouterMode()) {
       // Summarize prior turns before routing: a routed tool result is already the final answer.
-      maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory,
-          memoryPolicy, initializeMemorySummary);
+      maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory);
       RouteExecutionResult routeExecutionResult =
           resolveFunctionRoute(content, globalMessage, productId, streamChatId, historyTurn,
               dataArgs);
@@ -221,6 +250,17 @@ public class Router {
       if (branchPredictionEnabled) {
         final String predictionContent = content;
         final Map<String, Object> predictionGlobalMessage = new HashMap<>(globalMessage);
+        // Compact a private snapshot before speculative work. Apply its budget to the live
+        // history on the router thread, so the classifier never reads a concurrently edited list.
+        List<ModelMessage> predictionMemory = new ArrayList<>(memory);
+        predictionGlobalMessage.put(GlobalMessageContext.MEMORY, predictionMemory);
+        predictionGlobalMessage.put(GlobalMessageContext.PROMPT_BUDGET,
+            (LongConsumer) inputTokens -> {
+              if (memoryPolicy.shouldSummarize(predictionMemory, inputTokens)) {
+                memoryPolicy.retainRecentTurns(predictionMemory);
+              }
+              predictionInputTokens.set(inputTokens);
+            });
         final Map<String, Queue<String>> predictionQueueMap = new ConcurrentHashMap<>();
         final String predictionChatId = streamChatId + "_prediction";
         predictionQueueMap.put(predictionChatId, predictionQueue);
@@ -348,6 +388,10 @@ public class Router {
             streamChatId);
       }
     }
+    if (!promptBudgetChecked.get() && predictionInputTokens.get() >= 0) {
+      ((LongConsumer) globalMessage.get(GlobalMessageContext.PROMPT_BUDGET))
+          .accept(predictionInputTokens.get());
+    }
     ModelMessage userContent = new ModelMessage(ChatMessageRole.USER.value(), historyContent,
         historyTurn.requestId);
     ModelMessage chatMessage = new ModelMessage(ChatMessageRole.ASSISTANT.value(), answer,
@@ -363,8 +407,16 @@ public class Router {
           ConversationHistoryCodec.visibleMessages(memory), true);
     }
     if (!isFunctionRouterMode()) {
-      maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory,
-          memoryPolicy, initializeMemorySummary);
+      maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory);
+    }
+    if (!promptBudgetChecked.get()) {
+      // Legacy classifiers / speculative chat may not expose a full request budget.
+      boolean compacted =
+          compactConversationMemory(conversationChatId, globalMessage, memory, memoryPolicy,
+              initializeMemorySummary, memoryPolicy.estimateTokens(memory));
+      if (!compacted && initializeMemorySummary) {
+        initializeConversationSummary(conversationChatId, globalMessage, memory, memoryPolicy);
+      }
     }
     try {
       redisUtil.set("memory" + conversationChatId, memory, 48 * 3600);
@@ -375,8 +427,7 @@ public class Router {
   }
 
   private void maintainConversationMemory(String content, String conversationChatId, int productId,
-      Map<String, Object> globalMessage, List<ModelMessage> memory,
-      ConversationMemoryPolicy memoryPolicy, boolean initializeMemorySummary) {
+      Map<String, Object> globalMessage, List<ModelMessage> memory) {
     if (memory.isEmpty()) {
       return;
     }
@@ -386,33 +437,44 @@ public class Router {
       extractConversationFacts(content, conversationChatId, productId, globalMessage,
           visibleMemory, false);
     }
-    List<ModelMessage> compactionPrefix = memoryPolicy.compactionPrefix(memory);
-    boolean compacted = !compactionPrefix.isEmpty();
-    if (compacted) {
-      if (initializeMemorySummary) {
-        markMemorySummaryInProgress(conversationChatId);
-      }
-
-      Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
-      summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
-      List<ModelMessage> summarySnapshot =
-          ConversationHistoryCodec.visibleMessages(compactionPrefix);
-      summaryMessage.put(GlobalMessageContext.MEMORY, summarySnapshot);
-      memoryTool.run(summarySnapshot, summaryMessage);
-      memoryPolicy.retainRecentTurns(memory);
-    }
-    if (!compacted && initializeMemorySummary
-        && markMemorySummaryInProgress(conversationChatId)) {
-      List<ModelMessage> summarySnapshot = memoryPolicy.copyMessages(visibleMemory);
-      Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
-      summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
-      summaryMessage.put(GlobalMessageContext.MEMORY, summarySnapshot);
-      memoryTool.run(summarySnapshot, summaryMessage);
-    }
     if ("true".equals(
         userConfigService.getConfigValue(productId, "knowledge_graph.forget.toggle"))) {
       knowledgeGraphicService.clearNode(productId);
     }
+  }
+
+  private boolean compactConversationMemory(String chatId, Map<String, Object> globalMessage,
+      List<ModelMessage> memory, ConversationMemoryPolicy policy, boolean initializeSummary,
+      long inputTokens) {
+    List<ModelMessage> prefix = policy.compactionPrefix(memory, inputTokens);
+    if (prefix.isEmpty()) {
+      return false;
+    }
+    if (initializeSummary) {
+      markMemorySummaryInProgress(chatId);
+    }
+    Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
+    summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    summaryMessage.remove(GlobalMessageContext.PROMPT_BUDGET);
+    List<ModelMessage> snapshot = ConversationHistoryCodec.visibleMessages(prefix);
+    summaryMessage.put(GlobalMessageContext.MEMORY, snapshot);
+    memoryTool.run(snapshot, summaryMessage);
+    policy.retainRecentTurns(memory);
+    return true;
+  }
+
+  private void initializeConversationSummary(String chatId, Map<String, Object> globalMessage,
+      List<ModelMessage> memory, ConversationMemoryPolicy policy) {
+    if (memory.isEmpty() || !markMemorySummaryInProgress(chatId)) {
+      return;
+    }
+    List<ModelMessage> snapshot =
+        policy.copyMessages(ConversationHistoryCodec.visibleMessages(memory));
+    Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
+    summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    summaryMessage.remove(GlobalMessageContext.PROMPT_BUDGET);
+    summaryMessage.put(GlobalMessageContext.MEMORY, snapshot);
+    memoryTool.run(snapshot, summaryMessage);
   }
 
   /**
@@ -437,6 +499,7 @@ public class Router {
     }
     Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
     sideEffectMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    sideEffectMessage.remove(GlobalMessageContext.PROMPT_BUDGET);
     sideEffectMessage.put(GlobalMessageContext.MEMORY, batch.messages());
     longMemoryTool.run(content, sideEffectMessage);
     if ("true".equals(userConfigService.getConfigValue(productId, "knowledge_graph.toggle"))) {

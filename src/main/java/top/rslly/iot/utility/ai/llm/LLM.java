@@ -22,6 +22,7 @@ package top.rslly.iot.utility.ai.llm;
 import com.alibaba.fastjson.JSONObject;
 import okhttp3.sse.EventSourceListener;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 
 import java.util.List;
 
@@ -36,6 +37,12 @@ public interface LLM {
   String imageToWord(String question, String url);
 
   List<String> modelList();
+
+  /** Uses provider usage when available; clients without usage support keep the local fallback. */
+  default long estimatePromptTokens(List<ModelMessage> messages, List<FunctionToolSpec> tools) {
+    return ConversationMemoryPolicy.estimateMessageTokens(messages)
+        + ConversationMemoryPolicy.estimateText(FunctionToolSpec.toEstimateJson(tools));
+  }
 
   default boolean supportsFunctionCalling() {
     return false;

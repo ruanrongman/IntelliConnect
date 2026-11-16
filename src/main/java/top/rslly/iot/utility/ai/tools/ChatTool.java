@@ -132,6 +132,9 @@ public class ChatTool implements BaseTool<String> {
     log.info(llmName);
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.addAll(buildConversationMessages(memory, systemMessage, userMessage));
+    GlobalMessageContext.checkPromptBudget(globalMessage, llm, messages, List.of());
+    // The budget check may have compacted the shared history.
+    messages = buildConversationMessages(memory, systemMessage, userMessage);
     if (speedUp) {
       return runWithStreaming(question, llm, messages, queueMap, chatId,
           GlobalMessageContext.reasoningQueue(globalMessage));

@@ -25,8 +25,8 @@ import org.springframework.context.annotation.Configuration;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageTracker;
 
 /**
- * Applies the {@code ai.usage} settings to {@link LlmUsageTracker}. Usage is only logged and sent
- * with each chat reply; nothing is persisted.
+ * Applies the {@code ai.usage} settings to {@link LlmUsageTracker}. Router persists turn summaries
+ * across chat channels; the text stream also sends usage with its reply.
  */
 @Configuration
 public class LlmUsageConfig {

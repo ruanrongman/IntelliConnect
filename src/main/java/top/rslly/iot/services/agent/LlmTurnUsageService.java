@@ -33,8 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Stores one usage summary per chat turn and adds them up into a conversation total for the status
- * bar under the chat input. Usage is diagnostic: failures are logged and never reach the chat flow.
+ * Stores one usage summary per chat turn across text, voice and WeChat, and adds them up into a
+ * conversation total. Usage is diagnostic: failures are logged and never reach the chat flow.
  */
 @Service
 @Slf4j

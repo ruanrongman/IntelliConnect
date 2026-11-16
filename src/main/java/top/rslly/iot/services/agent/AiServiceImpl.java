@@ -97,8 +97,6 @@ public class AiServiceImpl implements AiService {
   private RedisUtil redisUtil;
   @Autowired
   private McpEndpointConfigService mcpEndpointConfigService;
-  @Autowired
-  private LlmTurnUsageService llmTurnUsageService;
   private static final String prefix_url = "/api/v2/ai/tmp_voice";
   private static final String SSE_DONE_SIGNAL = "[DONE]";
   private static final long STREAM_POLL_INTERVAL_MS = 10L;
@@ -204,11 +202,7 @@ public class AiServiceImpl implements AiService {
               aiControl.getProductId(), reasoningQueue);
         }
       });
-      // Store the turn's usage once the model work ends, also when the user stopped the stream or
-      // disconnected: the answer keeps running in the background and its tokens are still spent.
-      responseFuture.whenComplete((answer, error) -> llmTurnUsageService.record(
-          aiControl.getProductId(), conversationChatId, turnUsage.requestId(),
-          turnUsage.isEmpty() ? null : turnUsage.summary()));
+      // Router persists the turn for every channel, even if the SSE client disconnects.
       while (!responseFuture.isDone() || hasPendingQueueData(streamChatId)
           || !reasoningQueue.isEmpty()) {
         if (connectionClosed.get() || stoppedStreamChatIds.contains(streamChatId)) {

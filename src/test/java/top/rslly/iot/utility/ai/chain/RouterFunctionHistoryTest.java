@@ -26,6 +26,9 @@ import static org.mockito.Mockito.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,13 +43,20 @@ import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.services.agent.AgentMemoryServiceImpl;
 import top.rslly.iot.services.agent.HistoryMessageEntityService;
+import top.rslly.iot.services.agent.LlmTurnUsageService;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ConversationHistoryCodec;
 import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.llm.FunctionResult;
 import top.rslly.iot.utility.ai.llm.FunctionToolCallMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsage;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageSummary;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageTracker;
 import top.rslly.iot.utility.ai.tools.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +71,8 @@ class RouterFunctionHistoryTest {
   private UserConfigServiceImpl userConfigService;
   @Mock
   private AgentMemoryServiceImpl agentMemoryService;
+  @Mock
+  private LlmTurnUsageService llmTurnUsageService;
   @Mock
   private MusicTool musicTool;
   @Mock
@@ -143,6 +155,34 @@ class RouterFunctionHistoryTest {
   }
 
   @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void fullPromptBudgetControlsCompactionBeforeModelCall(boolean aboveThreshold) {
+    List<ModelMessage> history = new ArrayList<>();
+    // Local history estimate disagrees with the model-aware budget in both directions.
+    String text = aboveThreshold ? "short" : "字".repeat(6000);
+    for (int turn = 1; turn <= 6; turn++) {
+      history.add(new ModelMessage("user", text, "r" + turn));
+      history.add(new ModelMessage("assistant", text, "r" + turn));
+    }
+    when(redisUtil.get("memorychat")).thenReturn(history);
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      Map<String, Object> context = invocation.getArgument(1);
+      ((LongConsumer) context.get(GlobalMessageContext.PROMPT_BUDGET))
+          .accept(aboveThreshold ? 100000 : 10);
+      List<ModelMessage> retained = (List<ModelMessage>) context.get(GlobalMessageContext.MEMORY);
+      assertEquals(aboveThreshold ? 8 : 12, retained.size());
+      return FunctionResult.directReply("answer");
+    });
+
+    assertEquals("answer", router.response("next question", "chat", 1));
+    if (aboveThreshold) {
+      verify(memoryTool).run(anyList(), anyMap());
+    } else {
+      verifyNoInteractions(memoryTool);
+    }
+  }
+
+  @ParameterizedTest
   @ValueSource(ints = {1, 2, 3, 4})
   void historyFailureDoesNotRetryExecutedRoute(int failedSequence) {
     doAnswer(invocation -> {
@@ -198,10 +238,83 @@ class RouterFunctionHistoryTest {
     verify(historyMessageEntityService).recordHistoryMessage(eq("chat"), anyString(), eq("hi"),
         eq("hello"));
     verifyNoInteractions(controlTool, musicTool, classifierTool, chatTool);
+    verifyNoInteractions(llmTurnUsageService);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"chatProduct1device", "openid"})
+  void recordsVoiceAndWechatUsageOnTheRouterWorkerWithHistoryRequestId(String chatId)
+      throws Exception {
+    String[] args = "openid".equals(chatId) ? new String[] {"wx-app"} : new String[0];
+    String storedChatId = "openid".equals(chatId) ? "wx-appopenid" : chatId;
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      assertEquals(storedChatId, LlmUsageContext.current().chatId());
+      assertEquals(1, LlmUsageContext.current().productId());
+      reportUsage(new LlmUsage(1200, 500, 0, 80, 0));
+      return FunctionResult.directReply("answer");
+    });
+
+    assertEquals("answer", CompletableFuture.supplyAsync(
+        () -> router.response("hello", chatId, 1, args)).get(5, TimeUnit.SECONDS));
+
+    ArgumentCaptor<String> requestId = ArgumentCaptor.forClass(String.class);
+    verify(historyMessageEntityService).recordHistoryMessage(eq(storedChatId), requestId.capture(),
+        eq("hello"), eq("answer"));
+    ArgumentCaptor<LlmUsageSummary> summary = ArgumentCaptor.forClass(LlmUsageSummary.class);
+    verify(llmTurnUsageService).record(eq(1), eq(storedChatId), eq(requestId.getValue()),
+        summary.capture());
+    assertEquals(1, summary.getValue().getCalls());
+    assertEquals(1200, summary.getValue().getPromptTokens());
+    assertEquals(500, summary.getValue().getCachedTokens());
+    assertEquals(80, summary.getValue().getCompletionTokens());
+    assertEquals(128000, summary.getValue().getContextWindowTokens());
+    assertNull(LlmUsageContext.current());
   }
 
   @Test
-  void memoryMaintenanceRunsBeforeRoutingAndNeverAfterToolExecution() {
+  void persistsOnceWhileOuterSseAccumulatorStillReceivesUsage() {
+    LlmUsageAccumulator sse = new LlmUsageAccumulator();
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      reportUsage(new LlmUsage(900, 0, 0, 30, 0));
+      return FunctionResult.directReply("answer");
+    });
+
+    try (LlmUsageContext.Scope ignored = LlmUsageContext.open(1, "conversation", sse)) {
+      assertEquals("answer", router.responseDebugStream("hello", "hello", "stream",
+          "conversation", 1, new java.util.concurrent.ConcurrentLinkedQueue<>()));
+    }
+
+    assertEquals(1, sse.summary().getCalls());
+    assertEquals(900, sse.summary().getPromptTokens());
+    verify(llmTurnUsageService, times(1)).record(eq(1), eq("conversation"), eq(sse.requestId()),
+        any(LlmUsageSummary.class));
+    assertNull(LlmUsageContext.current());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void recordsSpentCallsEvenWhenRouterFailsOrProviderOmitsUsage(boolean missingUsage) {
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      reportUsage(missingUsage ? null : new LlmUsage(700, 0, 0, 20, 0));
+      throw new IllegalStateException("model failed after spending tokens");
+    });
+
+    assertThrows(IllegalStateException.class, () -> router.response("hello", "chat", 1));
+
+    ArgumentCaptor<LlmUsageSummary> summary = ArgumentCaptor.forClass(LlmUsageSummary.class);
+    verify(llmTurnUsageService).record(eq(1), eq("chat"), anyString(), summary.capture());
+    assertEquals(1, summary.getValue().getCalls());
+    assertEquals(missingUsage ? 0 : 1, summary.getValue().getReportedCalls());
+    assertNull(LlmUsageContext.current());
+  }
+
+  private static void reportUsage(LlmUsage usage) {
+    LlmUsageTracker.begin("test", "model", List.of(new ModelMessage("user", "hello")), false)
+        .finish(usage);
+  }
+
+  @Test
+  void memoryMaintenanceRunsAtPromptBudgetCheckAndNeverAfterToolExecution() {
     List<ModelMessage> previousTurns = new ArrayList<>();
     for (int index = 0; index < 5; index++) {
       previousTurns.add(new ModelMessage("user", "prior question", "prior-" + index));
@@ -210,16 +323,19 @@ class RouterFunctionHistoryTest {
     when(redisUtil.get("memorychat")).thenReturn(previousTurns);
     ReflectionTestUtils.setField(router, "conversationMemoryPolicy",
         new ConversationMemoryPolicy(1, 0.5, 4));
-    when(functionCallingRouterTool.run(anyString(), anyMap())).thenReturn(
-        FunctionResult.toolCall("control-id", "route_control_electrical", "{}"));
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      Map<String, Object> context = invocation.getArgument(1);
+      ((LongConsumer) context.get(GlobalMessageContext.PROMPT_BUDGET)).accept(100000);
+      return FunctionResult.toolCall("control-id", "route_control_electrical", "{}");
+    });
     when(controlTool.run(anyString(), anyMap())).thenReturn("done");
 
     assertEquals(ToolPrefix.CONTROL.getPrefix() + "done", router.response("switch on", "chat", 1));
 
     var order = inOrder(longMemoryTool, memoryTool, functionCallingRouterTool, controlTool);
     order.verify(longMemoryTool).run(anyString(), anyMap());
-    order.verify(memoryTool).run(anyList(), anyMap());
     order.verify(functionCallingRouterTool).run(anyString(), anyMap());
+    order.verify(memoryTool).run(anyList(), anyMap());
     order.verify(controlTool).run(anyString(), anyMap());
     order.verifyNoMoreInteractions();
     verifyNoInteractions(chatTool, classifierTool);

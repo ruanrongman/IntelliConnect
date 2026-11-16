@@ -26,21 +26,26 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import top.rslly.iot.models.AdminConfigEntity;
 import top.rslly.iot.services.AdminConfigServiceImpl;
+import top.rslly.iot.services.agent.LlmTurnUsageService;
 import top.rslly.iot.services.wechat.WxProductActiveServiceImpl;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
 import top.rslly.iot.utility.Cast;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.ModelMessage;
+import top.rslly.iot.utility.ai.ConversationMemoryPolicy;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.chain.Router;
 import top.rslly.iot.utility.ai.llm.LLMFactory;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
+import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
 import top.rslly.iot.utility.ai.voice.ASR.Audio2Text;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -67,6 +72,10 @@ public class SmartRobot {
   private String defaultWxUnregisteredMessage;
   @Autowired
   private AdminConfigServiceImpl adminConfigService;
+  @Autowired
+  private LlmTurnUsageService llmTurnUsageService;
+  @Autowired
+  private ConversationMemoryPolicy conversationMemoryPolicy;
 
   @Async("taskExecutor")
   public void smartSendContent(String openid, String msg, String microappid) throws IOException {
@@ -74,6 +83,12 @@ public class SmartRobot {
       dealWx.sendContent(openid, getWxUnregisteredMessage(), microappid);
       return;
     }
+    int productId = resolveProductId(openid, microappid);
+    String content = router.response(msg, openid, productId, microappid);
+    dealWx.sendContent(openid, content, microappid);
+  }
+
+  private int resolveProductId(String openid, String microappid) {
     var productActiveEntities = productActiveService.findAllByAppidAndOpenid(microappid, openid);
     int productId = 0;
     if (!productActiveEntities.isEmpty()) {
@@ -95,8 +110,7 @@ public class SmartRobot {
         }
       }
     }
-    String content = router.response(msg, openid, productId, microappid);
-    dealWx.sendContent(openid, content, microappid);
+    return productId;
   }
 
   @Async("taskExecutor")
@@ -107,7 +121,21 @@ public class SmartRobot {
       return;
     }
     List<ModelMessage> memory;
-    String content = LLMFactory.getLLM(smartRobotLLm).imageToWord("图里有什么", imageUrl);
+    int productId = resolveProductId(openid, microappid);
+    String conversationChatId = "false".equals(microappid) ? openid : microappid + openid;
+    LlmUsageAccumulator turnUsage = new LlmUsageAccumulator(
+        conversationMemoryPolicy.resolveForProduct(productId).contextWindowTokens());
+    turnUsage.setRequestIdIfUnset(UUID.randomUUID().toString());
+    String content;
+    try (LlmUsageContext.Scope ignored =
+        LlmUsageContext.open(productId, conversationChatId, turnUsage)) {
+      content = LLMFactory.getLLM(smartRobotLLm).imageToWord("图里有什么", imageUrl);
+    } finally {
+      if (!turnUsage.isEmpty()) {
+        llmTurnUsageService.record(productId, conversationChatId, turnUsage.requestId(),
+            turnUsage.summary());
+      }
+    }
     var memory_cache = redisUtil.get("memory" + openid);
     if (memory_cache != null)
       try {
