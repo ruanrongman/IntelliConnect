@@ -20,13 +20,17 @@
 package top.rslly.iot.services.agent;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.charset.*;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -123,6 +127,132 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     return save(productId, chatId,
         List.of(new Incoming(filename(name), "agent", () -> new ByteArrayInputStream(bytes))))
             .getFirst();
+  }
+
+  @Override
+  public WorkspaceFileEntity strReplace(int productId, String chatId, String fileId, String oldStr,
+      String newStr, boolean replaceAll) {
+    if (oldStr == null || oldStr.isEmpty() || newStr == null) {
+      throw invalid("str_replace requires non-empty old_str and string new_str");
+    }
+    return edit(productId, chatId, fileId, text -> {
+      if (replaceAll) {
+        int count = StringUtils.countMatches(text, oldStr);
+        if (count == 0) {
+          throw invalid("old_str was not found");
+        }
+        long updatedLength = text.length() + (long) count * (newStr.length() - oldStr.length());
+        if (updatedLength > property.getMaxFileBytes()) {
+          throw invalid("Workspace capacity or file size limit exceeded");
+        }
+        return text.replace(oldStr, newStr);
+      }
+      int first = text.indexOf(oldStr);
+      if (first < 0 || text.indexOf(oldStr, first + oldStr.length()) >= 0) {
+        throw invalid("old_str must match exactly once; include more context");
+      }
+      return text.substring(0, first) + newStr + text.substring(first + oldStr.length());
+    });
+  }
+
+  @Override
+  public WorkspaceFileEntity insert(int productId, String chatId, String fileId, int insertLine,
+      String content) {
+    if (insertLine < 0 || content == null || content.isEmpty()) {
+      throw invalid("insert requires insert_line (non-negative integer) and non-empty content");
+    }
+    return edit(productId, chatId, fileId, text -> {
+      int count = 0;
+      int lastEnd = 0;
+      int offset = 0;
+      var endings = Pattern.compile("\\r\\n|[\\n\\r\\x0B\\f\\x1C-\\x1E\\x85\\u2028\\u2029]")
+          .matcher(text);
+      while (endings.find()) {
+        count++;
+        lastEnd = endings.end();
+        if (count == insertLine) {
+          offset = lastEnd;
+        }
+      }
+      if (lastEnd < text.length()) {
+        count++;
+        if (count == insertLine) {
+          offset = text.length();
+        }
+      }
+      if (insertLine > count) {
+        throw invalid("insert_line must be between 0 and " + count);
+      }
+      String before = text.substring(0, offset);
+      String after = text.substring(offset);
+      String newline = text.contains("\r\n") ? "\r\n" : "\n";
+      if (!before.isEmpty() && !before.endsWith("\n") && !before.endsWith("\r")) {
+        before += newline;
+      }
+      String inserted = content;
+      if (!after.isEmpty() && !inserted.endsWith("\n") && !inserted.endsWith("\r")) {
+        inserted += newline;
+      }
+      return before + inserted + after;
+    });
+  }
+
+  private WorkspaceFileEntity edit(int productId, String chatId, String fileId,
+      UnaryOperator<String> operation) {
+    synchronized (lock(productId, chatId)) {
+      Download download = download(productId, chatId, fileId);
+      WorkspaceFileEntity file = download.file();
+      String text;
+      try (InputStream stream = download.stream();
+          ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+        copyLimited(stream, output, property.getMaxFileBytes());
+        text = StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(output.toByteArray()))
+            .toString();
+      } catch (IOException e) {
+        throw invalid("Editing requires a UTF-8 text file");
+      }
+      if (text.chars().anyMatch(c -> c == 0 || (c < 32 && c != '\n' && c != '\r' && c != '\t'))) {
+        throw invalid("Binary files cannot be edited as text");
+      }
+      byte[] updated = operation.apply(text).getBytes(StandardCharsets.UTF_8);
+      long oldSize = file.getSize();
+      long remaining = property.getMaxWorkspaceBytes() - files.totalSize(file.getWorkspaceId());
+      if (updated.length > property.getMaxFileBytes() || updated.length - oldSize > remaining) {
+        throw invalid("Workspace capacity or file size limit exceeded");
+      }
+      Path path = directory(productId, chatId, false).resolve(file.getId());
+      Path temporary = path.resolveSibling(".edit-" + UUID.randomUUID());
+      Path backup = path.resolveSibling(".backup-" + UUID.randomUUID());
+      boolean moved = false;
+      try {
+        try (OutputStream output = Files.newOutputStream(temporary, StandardOpenOption.CREATE_NEW,
+            StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+          output.write(updated);
+        }
+        Files.move(path, backup, StandardCopyOption.ATOMIC_MOVE);
+        moved = true;
+        Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE);
+        WorkspaceFileEntity result = transaction.execute(status -> {
+          file.setSize(updated.length);
+          return files.saveAndFlush(file);
+        });
+        cleanup(backup);
+        return result;
+      } catch (Exception e) {
+        file.setSize(oldSize);
+        if (moved) {
+          try {
+            Files.move(backup, path, StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING);
+          } catch (IOException restoreError) {
+            log.error("Unable to restore workspace file {} after edit", fileId, restoreError);
+          }
+        }
+        throw invalid("Unable to edit workspace file");
+      } finally {
+        cleanup(temporary);
+      }
+    }
   }
 
   private List<WorkspaceFileEntity> save(int productId, String chatId, List<Incoming> incoming) {

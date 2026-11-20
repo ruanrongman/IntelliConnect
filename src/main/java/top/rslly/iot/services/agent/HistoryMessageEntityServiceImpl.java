@@ -72,8 +72,6 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   private ProductServiceImpl productServiceImpl;
   @Autowired
   private ProductRepository productRepository;
-  @Autowired
-  private LlmTurnUsageService llmTurnUsageService;
 
   @Override
   public List<HistoryMessageEntity> findAllById(int id) {
@@ -236,7 +234,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
   @Override
   @Transactional(rollbackFor = Exception.class)
   public List<HistoryMessageEntity> deleteAllByChatId(String chatId) {
-    llmTurnUsageService.deleteByChatId(chatId);
+    // Keep token consumption after clearing a conversation so historical trends stay accurate.
     return historyMessageRepository.deleteAllByChatId(chatId);
   }
 

@@ -38,6 +38,17 @@ public interface WorkspaceService {
 
   WorkspaceFileEntity writeBinary(int productId, String chatId, String name, byte[] content);
 
+  default WorkspaceFileEntity strReplace(int productId, String chatId, String fileId, String oldStr,
+      String newStr) {
+    return strReplace(productId, chatId, fileId, oldStr, newStr, false);
+  }
+
+  WorkspaceFileEntity strReplace(int productId, String chatId, String fileId, String oldStr,
+      String newStr, boolean replaceAll);
+
+  WorkspaceFileEntity insert(int productId, String chatId, String fileId, int insertLine,
+      String content);
+
   TextPage read(int productId, String chatId, String fileId, long offset, int limit);
 
   Download download(int productId, String chatId, String fileId);

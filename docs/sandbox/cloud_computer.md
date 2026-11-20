@@ -11,7 +11,7 @@
 - `grepTool`：在沙箱中递归搜索文件内容，支持正则、字面量、文件名过滤和上下文行，返回文件名、行号及匹配文本
 - `imageTool`：读取当前会话沙箱中的图片，调用多模态视觉模型检查截图、图表或渲染结果，返回文字观察
 - `markdownToPdfTool`：使用固定排版将 Markdown 转为 PDF，检查 PDF 可解析且有页面后自动保存到会话文件；可在产品“工具管理”中独立禁用
-- `workspaceTool`：管理当前会话的持久文件，支持列表、读取文本、保存文本，以及在工作区与沙箱之间导入、导出文件；列表和文本读写不依赖沙箱
+- `workspaceTool`：管理当前会话的持久文件，支持列表、读取文本、保存文本、精确编辑、删除，以及在工作区与沙箱之间导入、导出文件；列表、文本读写、精确编辑和删除不依赖沙箱
 
 关键特性：
 
@@ -47,10 +47,10 @@ python3 /workspace/hello.py
 | `read` | `{"action":"read","path":"hello.py"}` | 读取文件文本 |
 | `list` | `{"action":"list","path":"."}` | 列出目录，包括隐藏文件和文件属性 |
 | `delete` | `{"action":"delete","path":"results/tmp"}` | 删除文件或递归删除目录 |
-| `str_replace` | `{"action":"str_replace","path":"hello.py","old_str":"print('hello')","new_str":"print('你好')"}` | 精确替换唯一匹配的文本 |
+| `str_replace` | `{"action":"str_replace","path":"hello.py","old_str":"print('hello')","new_str":"print('你好')","replace_all":true}` | 默认要求唯一匹配，`replace_all: true` 替换所有非重叠匹配 |
 | `insert` | `{"action":"insert","path":"hello.py","insert_line":0,"content":"import sys\n"}` | 在指定行之后插入文本，`0` 表示文件开头 |
 
-修改已有文件前先读取当前内容。`str_replace` 按字面量匹配，空白和换行也必须一致；`old_str` 不能为空，`new_str` 可为空以删除文本。匹配为零处或多处时不修改文件，应增加上下文后重试。`insert_line` 必须是非负整数：`1` 表示第一行之后，等于文件行数时追加，超过行数则失败；`content` 必须是非空字符串。精确替换和插入要求目标文件已存在且是 UTF-8 文本。
+修改已有文件前先读取当前内容。`str_replace` 按字面量匹配，空白和换行也必须一致；`old_str` 不能为空，`new_str` 可为空以删除文本。`replace_all` 是可选布尔值，默认为 `false`。零匹配或默认模式下的多处匹配均不修改文件。`insert_line` 必须是非负整数：`1` 表示第一行之后，等于文件行数时追加，超过行数则失败；`content` 必须是非空字符串。精确替换和插入要求目标文件已存在且是 UTF-8 文本。
 
 ### 搜索文件内容
 
@@ -366,10 +366,16 @@ ai:
 | `list` | `{"action":"list","pageNum":1,"pageSize":20}` | 查找上传文件和已有产物，获取真实文件 ID |
 | `read` | `{"action":"read","fileId":"实际文件ID","offset":0,"limit":8000}` | 读取 UTF-8 文本，分段继续读取时使用返回的 `nextOffset` |
 | `write` | `{"action":"write","name":"报告.md","content":"报告正文"}` | 直接创建持久文本文件，无需启动沙箱 |
+| `delete` | `{"action":"delete","fileId":"实际文件ID"}` | 永久删除文件，释放工作区容量 |
+| `str_replace` | `{"action":"str_replace","fileId":"实际文件ID","old_str":"旧正文","new_str":"新正文","replace_all":true}` | 保留文件 ID，默认要求唯一匹配，`replace_all: true` 替换所有非重叠匹配 |
+| `insert` | `{"action":"insert","fileId":"实际文件ID","insert_line":0,"content":"报告标题\n"}` | 在指定行之后插入；0 表示开头，文件行数表示末尾 |
 | `import_to_sandbox` | `{"action":"import_to_sandbox","fileId":"实际文件ID"}` | 将文件复制到沙箱，返回 `sandboxPath` |
 | `export_from_sandbox` | `{"action":"export_from_sandbox","path":"results/报告.pdf"}` | 将沙箱产物保存到持久工作区，供页面下载 |
 
 例如，用户上传表格并要求生成分析报告时，智能体先用 `list` 找到文件，再用 `import_to_sandbox` 导入；根据返回的路径，通过 `bashTool` 运行分析。若生成 Markdown 报告，可调用 `markdownToPdfTool` 转换并自动保存 PDF；若用沙箱内程序生成 `/workspace/results/报告.pdf`，则用 `export_from_sandbox` 保存。用户在工作区刷新后即可下载报告。如果只是生成 Markdown、HTML 或代码文本，可以直接使用 `write` 保存。
+
+编辑已有工作区文本时先 `read`，再以 `fileId` 调用 `str_replace` 或 `insert`，无需沙箱。
+`old_str` 和插入的 `content` 不能为空，`new_str` 可为空以删除文本。零匹配、默认模式下的多处匹配、行号越界、非 UTF-8 文本或容量超限均不修改文件。
 
 导入路径为 `/workspace/imports/<fileId>/<原文件名>`；同一实例内重复导入到相同路径会失败，以免覆盖已加工内容。导出仅支持 `/workspace` 下的普通文件，可传相对路径或 `/workspace/` 开头的绝对路径，拒绝路径穿越和符号链接。导入、导出都需要沙箱可用，且受文件大小和工作区配额限制。
 
@@ -389,7 +395,7 @@ ai:
 - **客户端连不上沙箱代理端口**：容器/集群内部署未发布随机代理端口段时，将 `use-server-proxy` 置为 `true`，全部流量经 server 8080 端口转发
 - **健康检查误判创建失败**：容器冷启动慢或代理路由异常时会误判，可置 `skip-health-check: true`；首条命令的普通连接错误会保留实例并返回失败，可稍后重试
 - **模型不调用 bash/edit**：确认 `enabled: true`，路由描述中"云电脑可用"的声明仅在沙箱可用时注入
-- **搜索结果不完整或替换失败**：`grepTool` 的 `max_results` 限制输出行数（包含上下文），截断时先缩小搜索范围。`str_replace` 要求原文本只出现一次，需先读取最新文件，确认空白、换行并提供足够上下文；按行插入则检查行号是否在 `0..文件行数` 内。
+- **搜索结果不完整或替换失败**：`grepTool` 的 `max_results` 限制输出行数（包含上下文），截断时先缩小搜索范围。`str_replace` 默认要求原文本只出现一次，需先读取最新文件，确认空白、换行并提供足够上下文。确需替换所有匹配时传入 `replace_all: true`。按行插入则检查行号是否在 `0..文件行数` 内。
 - **多步任务达到轮次上限**：在产品“运行参数”中调整对应 Agent 的工具调用次数，或开启“取消工具调用次数限制”。上下文压缩与沙箱回收是独立机制，开启无限轮次不会永久保存沙箱文件。
 - **PDF 中中文无法显示或转换失败**：检查 Java 后端机器上的 `ai.pdf.font-path`（或 `AI_PDF_FONT_PATH`），确认字体为可读取且包含所需汉字的 `.ttf`。仅给沙箱镜像安装中文字体不能解决后端 PDF 字体问题；成功生成的 PDF 已直接保存到会话工作区，无需从沙箱导出。
 - **kill 失败的容器残留**：应用会自动延后重试回收；超过 30 分钟仍失败会在日志中输出沙箱 ID，需在宿主机手动清理

@@ -46,7 +46,8 @@ public class EditTool implements BaseTool<String> {
       """
           Invalid arguments. Expected JSON:
           {"action": "write|read|list|delete|str_replace|insert", "path": "target path", ...}
-          str_replace requires old_str and new_str; insert requires insert_line and content.""";
+          str_replace requires old_str and new_str and accepts optional boolean replace_all.
+          insert requires insert_line and content.""";
 
   private static final String EDIT_SCRIPT =
       """
@@ -58,11 +59,17 @@ public class EditTool implements BaseTool<String> {
                   text = file.read()
                   if args['action'] == 'str_replace':
                       old = args['old_str']
-                      count = text.count(old)
-                      if count != 1:
-                          print(f'Error: old_str must match exactly once; found {count} matches. Include more context.')
-                          sys.exit(0)
-                      updated = text.replace(old, args['new_str'], 1)
+                      if args.get('replace_all', False):
+                          if old not in text:
+                              print('Error: old_str was not found.')
+                              sys.exit(0)
+                          updated = text.replace(old, args['new_str'])
+                      else:
+                          count = text.count(old)
+                          if count != 1:
+                              print(f'Error: old_str must match exactly once; found {count} matches. Include more context.')
+                              sys.exit(0)
+                          updated = text.replace(old, args['new_str'], 1)
                   else:
                       lines = text.splitlines(keepends=True)
                       line = args['insert_line']
@@ -102,8 +109,10 @@ public class EditTool implements BaseTool<String> {
           - write: create/overwrite a file; read: read file content; list: list a directory;
             delete: remove a file or directory. write requires content (string).
           - str_replace: requires non-empty old_str and new_str (may be empty to delete text).
-            Matches literal text including whitespace, exactly once; zero/multiple matches fail without changes.
-            Example: {"action":"str_replace","path":"app.py","old_str":"return 1","new_str":"return 2"}
+            Matches literal text including whitespace. Optional boolean replace_all defaults to false,
+            requiring exactly one match. Set it to true to replace all non-overlapping matches.
+            Zero matches fail without changes in either mode.
+            Example: {"action":"str_replace","path":"app.py","old_str":"return 1","new_str":"return 2","replace_all":true}
           - insert: requires insert_line (integer) and non-empty content. Insert AFTER that 1-based line;
             0 inserts at the beginning; the number of lines appends. Out-of-range positions fail.
             Example: {"action":"insert","path":"app.py","insert_line":0,"content":"import os\\n"}
@@ -176,6 +185,9 @@ public class EditTool implements BaseTool<String> {
       if (!args.path("old_str").isTextual() || args.path("old_str").textValue().isEmpty()
           || !args.path("new_str").isTextual()) {
         return "Error: str_replace requires non-empty old_str and string new_str.";
+      }
+      if (args.has("replace_all") && !args.get("replace_all").isBoolean()) {
+        return "Error: replace_all must be a boolean.";
       }
     } else if (!args.path("insert_line").isIntegralNumber()
         || !args.path("insert_line").canConvertToInt() || args.path("insert_line").intValue() < 0

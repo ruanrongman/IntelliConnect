@@ -36,25 +36,45 @@ import top.rslly.iot.utility.ai.GlobalMessageContext;
 public class WorkspaceTool implements BaseTool<String> {
   public static final String ROUTING_DESCRIPTION =
       "Persistent conversation workspace via workspaceTool: list uploaded/saved files, read file"
-          + " contents, write text artifacts, import files into the sandbox, and export sandbox"
-          + " artifacts for permanent storage. List/read/write work even when the sandbox is disabled";
+          + " contents, write/precisely edit text artifacts, delete files, import files into the sandbox,"
+          + " and export sandbox artifacts for permanent storage. List/read/write/edit/delete work even"
+          + " when the sandbox is disabled";
   private final WorkspaceService workspaceService;
   private final ObjectMapper objectMapper;
   private final String name = "workspaceTool";
   private final String description =
       """
           Manage persistent files in the current conversation's workspace.
-          Args: a JSON string containing one operation object with an action field.
+          Args: a JSON string containing one operation object, e.g.
+          {"action":"list|read|write|delete|str_replace|insert|import_to_sandbox|export_from_sandbox", ...}
           Include only the fields needed for the selected operation:
           - list: list saved/uploaded files; pageNum defaults to 1, pageSize defaults to 20.
+            Example: {"action":"list"}
           - read: read UTF-8 text by fileId; offset defaults to 0, limit defaults to 8000.
             Offsets count Java UTF-16 characters; use the returned nextOffset to continue if truncated.
+            Example: {"action":"read","fileId":"FILE_ID","offset":0,"limit":8000}
           - write: create a new persistent text file with name and content (both strings).
             Use this directly for generated HTML, Markdown, code, or other text artifacts.
             Escape quotes, backslashes, and newlines in content as required by JSON.
+            Example: {"action":"write","name":"report.md","content":"# Report\\n"}
+          - delete: permanently remove a saved file by fileId.
+            Example: {"action":"delete","fileId":"FILE_ID"}
+          - str_replace: edit an existing UTF-8 text file by fileId, preserving its ID and name.
+            Requires non-empty old_str and string new_str (may be empty to delete text).
+            Matches literal text including whitespace. Optional boolean replace_all defaults to false,
+            requiring exactly one match. Set it to true to replace all non-overlapping matches.
+            Zero matches fail without changes in either mode.
+            Example: {"action":"str_replace","fileId":"FILE_ID","old_str":"Draft","new_str":"Final","replace_all":true}
+          - insert: edit an existing UTF-8 text file by fileId, preserving its ID and name.
+            Requires insert_line (non-negative integer) and non-empty content. Insert AFTER that 1-based
+            line; 0 prepends; the number of lines appends. Out-of-range positions fail without changes.
+            Example: {"action":"insert","fileId":"FILE_ID","insert_line":0,"content":"# Report\\n"}
+          - Read the current file before editing; use fileId from list/write, not a sandbox path.
           - import_to_sandbox: copy a saved file by fileId into the sandbox; returns sandboxPath.
+            Example: {"action":"import_to_sandbox","fileId":"FILE_ID"}
           - export_from_sandbox: save an existing sandbox file by path, e.g. results/report.pdf.
             The source must be inside the sandbox's /workspace directory.
+            Example: {"action":"export_from_sandbox","path":"results/report.pdf"}
           Execution rules:
           - Follow the active caller protocol. In ReAct mode, output exactly one action JSON object
             without surrounding narration or markdown. In function mode, use the provided function call.
@@ -64,7 +84,7 @@ public class WorkspaceTool implements BaseTool<String> {
             Report success or failure only from the actual returned result; do not assume a failure and
             switch to bash/edit or retry before receiving that result.
           Storage notes:
-          - List/read/write do not require a sandbox. Persistent files survive chat deletion and sandbox recycling.
+          - List/read/write/edit/delete do not require a sandbox. Persistent files survive chat deletion and sandbox recycling.
           - /workspace is temporary sandbox storage. Import binary files there for processing and export
             artifacts before the sandbox is shut down, recycled, or expires.
           - Never put binary/base64 data in content or read results.
@@ -97,6 +117,12 @@ public class WorkspaceTool implements BaseTool<String> {
             args.path("offset").asLong(0), args.path("limit").asInt(8000));
         case "write" -> workspaceService.write(productId, chatId, required(args, "name"),
             required(args, "content"));
+        case "delete" -> {
+          String fileId = required(args, "fileId");
+          workspaceService.delete(productId, chatId, fileId);
+          yield Map.of("deleted", true, "fileId", fileId);
+        }
+        case "str_replace", "insert" -> doEdit(productId, chatId, args);
         case "import_to_sandbox" -> Map.of("sandboxPath", workspaceService.importToSandbox(
             productId, chatId, required(args, "fileId")));
         case "export_from_sandbox" -> workspaceService.exportFromSandbox(productId, chatId,
@@ -110,6 +136,24 @@ public class WorkspaceTool implements BaseTool<String> {
       log.warn("Workspace tool failed for conversation {}", chatId, e);
       return "Error: workspace operation failed; check arguments and workspace storage availability.";
     }
+  }
+
+  private Object doEdit(int productId, String chatId, JsonNode args) {
+    String fileId = required(args, "fileId");
+    if ("str_replace".equals(args.path("action").asText())) {
+      JsonNode replaceAll = args.path("replace_all");
+      if (args.has("replace_all") && !replaceAll.isBoolean()) {
+        throw new IllegalArgumentException("replace_all must be a boolean");
+      }
+      return workspaceService.strReplace(productId, chatId, fileId, required(args, "old_str"),
+          required(args, "new_str"), replaceAll.booleanValue());
+    }
+    JsonNode line = args.path("insert_line");
+    if (!line.isIntegralNumber() || !line.canConvertToInt() || line.intValue() < 0) {
+      throw new IllegalArgumentException("insert_line must be a non-negative integer");
+    }
+    return workspaceService.insert(productId, chatId, fileId, line.intValue(),
+        required(args, "content"));
   }
 
   private String required(JsonNode args, String name) {

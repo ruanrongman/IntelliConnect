@@ -66,6 +66,8 @@ class HistoryMessageEntityServiceImplTest {
   private UserRepository userRepository;
   @Mock
   private UserProductBindRepository userProductBindRepository;
+  @Mock
+  private LlmTurnUsageService llmTurnUsageService;
   @InjectMocks
   private HistoryMessageEntityServiceImpl historyMessageService;
 
@@ -210,7 +212,7 @@ class HistoryMessageEntityServiceImplTest {
   }
 
   @Test
-  void deletesHistoryByExactChatId() {
+  void deletesHistoryByExactChatIdWithoutDeletingTokenUsage() {
     HistoryMessageEntity history = history(1, "user", 100L);
     when(historyMessageRepository.deleteAllByChatId("chat-1")).thenReturn(List.of(history));
 
@@ -219,6 +221,7 @@ class HistoryMessageEntityServiceImplTest {
     assertEquals(1, result.size());
     assertSame(history, result.getFirst());
     verify(historyMessageRepository).deleteAllByChatId("chat-1");
+    org.mockito.Mockito.verifyNoInteractions(llmTurnUsageService);
   }
 
   private HistoryMessageEntity history(int sequence, String type, long time) {

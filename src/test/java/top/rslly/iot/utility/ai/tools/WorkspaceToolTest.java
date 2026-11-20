@@ -79,6 +79,61 @@ class WorkspaceToolTest {
   }
 
   @Test
+  void dispatchesDeleteAndPreciseEditsUsingStableConversation() throws Exception {
+    var context = context("request");
+    var deleted = new ObjectMapper().readTree(
+        tool.run("{\"action\":\"delete\",\"fileId\":\"id\"}", context));
+    assertTrue(deleted.path("deleted").asBoolean());
+    assertEquals("id", deleted.path("fileId").asText());
+    tool.run("""
+        {"action":"str_replace","fileId":"id","old_str":"hello","new_str":""}
+        """, context);
+    tool.run("""
+        {"action":"insert","fileId":"id","insert_line":0,"content":"header\\n"}
+        """, context);
+    verify(service).delete(12, "chatProduct12", "id");
+    verify(service).strReplace(12, "chatProduct12", "id", "hello", "", false);
+    verify(service).insert(12, "chatProduct12", "id", 0, "header\n");
+  }
+
+  @Test
+  void forwardsReplaceAllWhenEnabled() {
+    tool.run("""
+        {"action":"str_replace","fileId":"id","old_str":"old","new_str":"new","replace_all":true}
+        """, context("request"));
+    verify(service).strReplace(12, "chatProduct12", "id", "old", "new", true);
+  }
+
+  @Test
+  void rejectsInvalidEditParametersBeforeCallingService() {
+    for (String line : List.of("-1", "0.5", "2147483648", "\"0\"", "null")) {
+      assertTrue(tool.run("{\"action\":\"insert\",\"fileId\":\"id\",\"insert_line\":"
+          + line + ",\"content\":\"text\"}", context("request")).startsWith("Error:"));
+    }
+    assertTrue(tool.run("""
+        {"action":"str_replace","fileId":"id","old_str":"old"}
+        """, context("request")).startsWith("Error:"));
+    assertTrue(tool.run("""
+        {"action":"str_replace","fileId":"id","old_str":"old","new_str":"new","replace_all":"true"}
+        """, context("request")).contains("replace_all must be a boolean"));
+    assertTrue(tool.run("{\"action\":\"delete\"}", context("request")).startsWith("Error:"));
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void returnsServiceFailuresWithoutReportingSuccess() {
+    doThrow(new IllegalArgumentException("Workspace file not found in this conversation"))
+        .when(service).delete(12, "chatProduct12", "id");
+    when(service.strReplace(12, "chatProduct12", "id", "old", "new", false))
+        .thenThrow(new IllegalArgumentException("old_str must match exactly once"));
+    assertTrue(tool.run("{\"action\":\"delete\",\"fileId\":\"id\"}", context("request"))
+        .startsWith("Error:"));
+    assertTrue(tool.run("""
+        {"action":"str_replace","fileId":"id","old_str":"old","new_str":"new"}
+        """, context("request")).contains("Error: old_str must match exactly once"));
+  }
+
+  @Test
   void registersWithAgentFunctionCalling() {
     DescriptionUtil descriptions = mock(DescriptionUtil.class);
     when(descriptions.getToolDescriptions(12, "chatProduct12"))

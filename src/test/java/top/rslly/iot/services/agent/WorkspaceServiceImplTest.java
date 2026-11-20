@@ -191,6 +191,163 @@ class WorkspaceServiceImplTest {
   }
 
   @Test
+  void replacesLiteralTextInPlaceBeyondPreviewLimitAndUpdatesByteQuota() throws Exception {
+    property.setMaxReadChars(2);
+    var saved = service.write(12, "chatProduct12", "报告.md", "head\r\n你好.*\r\nend");
+    long created = saved.getCreatedAt();
+    var edited = service.strReplace(12, "chatProduct12", saved.getId(), "你好.*", "新的正文");
+    assertEquals(saved.getId(), edited.getId());
+    assertEquals("报告.md", edited.getName());
+    assertEquals("agent", edited.getSource());
+    assertEquals(created, edited.getCreatedAt());
+    String expected = "head\r\n新的正文\r\nend";
+    assertEquals(expected, Files.readString(diskFiles().getFirst()));
+    assertEquals(expected.getBytes(java.nio.charset.StandardCharsets.UTF_8).length, edited.getSize());
+    assertEquals(edited.getSize(), service.listFiles(12, "chatProduct12", 1, 20).usedBytes());
+    assertEquals(1, fileRows.size());
+    assertEquals(1, diskFiles().size());
+    service.strReplace(12, "chatProduct12", saved.getId(), expected, "");
+    assertEquals(0, saved.getSize());
+    assertEquals("", Files.readString(diskFiles().getFirst()));
+  }
+
+  @Test
+  void replacesAllLiteralMatchesAndRejectsMissingOrOversizedReplacement() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "a.*\r\na.*");
+    property.setMaxFileBytes(20);
+    assertThrows(IllegalArgumentException.class, () -> service.strReplace(12, "chatProduct12",
+        saved.getId(), "a.*", "long replacement", true));
+    assertEquals("a.*\r\na.*", Files.readString(diskFiles().getFirst()));
+
+    var edited = service.strReplace(12, "chatProduct12", saved.getId(), "a.*", "", true);
+    assertEquals(saved.getId(), edited.getId());
+    assertEquals(2, edited.getSize());
+    assertEquals("\r\n", Files.readString(diskFiles().getFirst()));
+    assertThrows(IllegalArgumentException.class,
+        () -> service.strReplace(12, "chatProduct12", saved.getId(), "a.*", "new", true));
+    assertEquals("\r\n", Files.readString(diskFiles().getFirst()));
+  }
+
+  @Test
+  void rejectsAmbiguousMissingAndEmptyReplacementTargetsWithoutChanges() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "same same");
+    for (String old : List.of("same", "missing", "")) {
+      assertThrows(IllegalArgumentException.class,
+          () -> service.strReplace(12, "chatProduct12", saved.getId(), old, "new"));
+      assertEquals("same same", Files.readString(diskFiles().getFirst()));
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> service.strReplace(12, "chatProduct12", saved.getId(), "same same", null));
+    assertEquals(1, diskFiles().size());
+    assertEquals(9, saved.getSize());
+  }
+
+  @Test
+  void insertsAtBeginningMiddleAndEndPreservingLineEndings() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "first\r\nlast");
+    service.insert(12, "chatProduct12", saved.getId(), 1, "middle");
+    assertEquals("first\r\nmiddle\r\nlast", Files.readString(diskFiles().getFirst()));
+    service.insert(12, "chatProduct12", saved.getId(), 0, "header");
+    service.insert(12, "chatProduct12", saved.getId(), 4, "tail");
+    assertEquals("header\r\nfirst\r\nmiddle\r\nlast\r\ntail",
+        Files.readString(diskFiles().getFirst()));
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "chatProduct12", saved.getId(), 6, "bad"));
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "chatProduct12", saved.getId(), -1, "bad"));
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "chatProduct12", saved.getId(), 0, ""));
+    assertEquals(1, diskFiles().size());
+  }
+
+  @Test
+  void insertsIntoEmptyFileAndAppendsAfterFinalNewlineWithoutExtraBlankLine() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "");
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "chatProduct12", saved.getId(), 1, "bad"));
+    service.insert(12, "chatProduct12", saved.getId(), 0, "first\n");
+    service.insert(12, "chatProduct12", saved.getId(), 1, "last\n");
+    assertEquals("first\nlast\n", Files.readString(diskFiles().getFirst()));
+  }
+
+  @Test
+  void editsRespectScopeBinaryValidationAndUtf8ByteLimits() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "abc");
+    assertThrows(IllegalArgumentException.class,
+        () -> service.strReplace(13, "chatProduct13", saved.getId(), "abc", "bad"));
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "other", saved.getId(), 0, "bad"));
+    property.setMaxFileBytes(4);
+    assertThrows(IllegalArgumentException.class,
+        () -> service.strReplace(12, "chatProduct12", saved.getId(), "abc", "你好"));
+    property.setMaxFileBytes(100);
+    service.write(12, "chatProduct12", "other.txt", "123");
+    property.setMaxWorkspaceBytes(6);
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "chatProduct12", saved.getId(), 0, "x"));
+    assertEquals("abc", service.read(12, "chatProduct12", saved.getId(), 0, 100).content());
+    service.strReplace(12, "chatProduct12", saved.getId(), "abc", "a");
+    assertEquals(4, service.listFiles(12, "chatProduct12", 1, 20).usedBytes());
+    property.setMaxWorkspaceBytes(100);
+    for (byte[] bytes : List.of(new byte[] {0, 1}, new byte[] {(byte) 0xff})) {
+      var binary = service.writeBinary(12, "chatProduct12", "binary", bytes);
+      assertThrows(IllegalArgumentException.class,
+          () -> service.insert(12, "chatProduct12", binary.getId(), 0, "text"));
+      try (var stream = service.download(12, "chatProduct12", binary.getId()).stream()) {
+        assertArrayEquals(bytes, stream.readAllBytes());
+      }
+    }
+  }
+
+  @Test
+  void restoresOriginalContentAndSizeWhenEditSaveOrCommitFails() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "original");
+    doThrow(new IllegalStateException("save failed")).when(files).saveAndFlush(any());
+    assertThrows(IllegalArgumentException.class,
+        () -> service.strReplace(12, "chatProduct12", saved.getId(), "original", "changed size"));
+    assertEquals("original", Files.readString(diskFiles().getFirst()));
+    assertEquals(8, saved.getSize());
+    doAnswer(call -> call.getArgument(0)).when(files).saveAndFlush(any());
+    doThrow(new IllegalStateException("commit failed")).when(manager).commit(any());
+    assertThrows(IllegalArgumentException.class,
+        () -> service.insert(12, "chatProduct12", saved.getId(), 0, "header"));
+    assertEquals("original", Files.readString(diskFiles().getFirst()));
+    assertEquals(8, saved.getSize());
+    assertEquals(1, diskFiles().size());
+    assertEquals(saved.getId(), diskFiles().getFirst().getFileName().toString());
+  }
+
+  @Test
+  void serializesConcurrentEditsWithoutLosingUpdates() throws Exception {
+    var saved = service.write(12, "chatProduct12", "a.txt", "base\n");
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+    CountDownLatch start = new CountDownLatch(1);
+    try {
+      List<Future<?>> futures = new ArrayList<>();
+      for (int i = 0; i < 4; i++) {
+        int number = i;
+        futures.add(executor.submit(() -> {
+          start.await();
+          service.insert(12, "chatProduct12", saved.getId(), 0, "line" + number);
+          return null;
+        }));
+      }
+      start.countDown();
+      for (Future<?> future : futures) {
+        future.get(10, TimeUnit.SECONDS);
+      }
+      String text = Files.readString(diskFiles().getFirst());
+      assertEquals(5, text.lines().count());
+      for (int i = 0; i < 4; i++) {
+        assertTrue(text.contains("line" + i + "\n"));
+      }
+      assertEquals(text.length(), saved.getSize());
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   void cleansWholeBatchOnOversizeOrDatabaseFailure() throws Exception {
     property.setMaxWorkspaceBytes(5);
     var upload = new MockMultipartFile("file", "a.bin", "application/octet-stream", new byte[3]);

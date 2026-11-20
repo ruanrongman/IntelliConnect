@@ -94,6 +94,23 @@ class SandboxFileToolsTest {
   }
 
   @Test
+  void replaceAllReplacesRepeatedLiteralTextAndRejectsMissingMatches() throws Exception {
+    executeScriptsLocally();
+    Path file = directory.resolve("source.txt");
+    Files.writeString(file, "same.*\r\nsame.*\r\n");
+    String path = file.toString().replace('\\', '/');
+    String arguments = mapper.writeValueAsString(Map.of("action", "str_replace",
+        "path", path, "old_str", "same.*", "new_str", "changed", "replace_all", true));
+    String result = edit.run(arguments, context);
+    assertTrue(result.contains("Edit succeeded"), result);
+    assertEquals("changed\r\nchanged\r\n", Files.readString(file));
+
+    String missing = edit.run(arguments, context);
+    assertTrue(missing.contains("old_str was not found"), missing);
+    assertEquals("changed\r\nchanged\r\n", Files.readString(file));
+  }
+
+  @Test
   void insertsAtStartMiddleAndUnterminatedEndAndRejectsInvalidLine() throws Exception {
     executeScriptsLocally();
     Path file = directory.resolve("source.txt");
@@ -112,6 +129,7 @@ class SandboxFileToolsTest {
   @ParameterizedTest
   @ValueSource(strings = {
       "{\"action\":\"str_replace\",\"path\":\"a\",\"old_str\":\"\",\"new_str\":\"x\"}",
+      "{\"action\":\"str_replace\",\"path\":\"a\",\"old_str\":\"a\",\"new_str\":\"b\",\"replace_all\":\"true\"}",
       "{\"action\":\"insert\",\"path\":\"a\",\"insert_line\":-1,\"content\":\"x\"}",
       "{\"action\":\"insert\",\"path\":\"a\",\"insert_line\":1.5,\"content\":\"x\"}"
   })
