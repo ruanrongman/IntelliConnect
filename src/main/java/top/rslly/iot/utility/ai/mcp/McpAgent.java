@@ -786,13 +786,17 @@ public class McpAgent implements BaseTool<String> {
     llm.streamFunctionChat(question, messages, toolSpecs, true, new FunctionStreamHandler() {
       @Override
       public void onTextDelta(String text) {
-        if (text == null || text.isBlank()) {
+        if (text == null || text.isEmpty()) {
           return;
         }
         replyBuffer.append(text);
         Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
         if (queue != null) {
-          queue.add(text.replace("\n", "").replace("\r", ""));
+          if (reasoningQueue != null) {
+            queue.add(text);
+          } else if (!text.isBlank()) {
+            queue.add(text.replace("\n", "").replace("\r", ""));
+          }
         }
       }
 

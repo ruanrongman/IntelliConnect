@@ -24,7 +24,7 @@
 * 支持时序数据库influxdb
 
 ## 安装运行
-> 推荐使用docker安装，docker-compose.yaml文件在docker目录下，执行 docker-compose up 可初始化
+> 推荐使用 Docker 安装，Compose 文件位于 `docker/docker-compose.yml`，执行 `docker-compose up -d` 可初始化
 mysql,redis,emqx和influxdb环境。
 * 安装mysql和redis数据库，高性能运行推荐安装时序数据库influxdb
 * 安装EMQX集群,并配置好exhook，本项目使用exhook作为mqtt消息的处理器
@@ -106,7 +106,7 @@ mysql,redis,emqx和influxdb环境。
 欢迎加入群聊一起交流讨论有关Aiot相关的话题，免费获取智控台的前端源码，链接过期了可以issue或email提醒一下作者。
 
 <div style="width: 250px;margin: 0 auto;">
-    <img src="./images/b08d290665f953c4b44caddb985b773e.jpg" width="250px"/>
+    <img src="./images/b308058e214f1baf4bdb59c84d09a6f1.jpg" width="250px"/>
 </div>
 
 ## 相关能力文档

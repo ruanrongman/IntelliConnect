@@ -234,7 +234,7 @@ public class DeepSeek implements LLM {
           captureUsage(chunk, streamUsage);
           for (ChatCompletionChunk.Choice choice : chunk.choices()) {
             ChatCompletionChunk.Choice.Delta delta = choice.delta();
-            delta.content().filter(text -> !text.isBlank()).ifPresent(text -> {
+            delta.content().filter(text -> !text.isEmpty()).ifPresent(text -> {
               replyBuilder.append(text);
               handler.onTextDelta(text);
             });

@@ -15,10 +15,21 @@
           <summary>
             <span>思考过程</span>
           </summary>
-          <MarkdownContent class="reasoning-content" :content="item.reasoningContent" />
+          <MarkdownContent
+            class="reasoning-content"
+            :content="item.reasoningContent"
+            :streaming="item.pending"
+            @rendered="onMarkdownRendered(item)"
+          />
         </details>
 
-        <MarkdownContent v-if="item.content" class="message-content" :content="item.content" />
+        <MarkdownContent
+          v-if="item.content"
+          class="message-content"
+          :content="item.content"
+          :streaming="item.pending"
+          @rendered="onMarkdownRendered(item)"
+        />
         <div v-if="item.fileNames?.length" class="message-files">
           <div v-for="(fileName, fileIndex) in item.fileNames" :key="`${fileName}-${fileIndex}`" class="message-file">
             <FileTextOutlined />
@@ -131,6 +142,13 @@ defineProps({
 })
 
 const messagePaneRef = ref(null)
+const emit = defineEmits(['stream-rendered'])
+
+function onMarkdownRendered(item) {
+  if (item.pending) {
+    emit('stream-rendered')
+  }
+}
 
 defineExpose({
   getPaneElement: () => messagePaneRef.value,
@@ -216,6 +234,7 @@ function formatKnowledgeGraphicSummary(graphicReference) {
 
 .message-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   max-width: min(760px, 82%);
 
@@ -241,6 +260,7 @@ function formatKnowledgeGraphicSummary(graphicReference) {
 
 .bubble {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   border: 1px solid #dde3e1;
   border-radius: 8px;
@@ -291,6 +311,7 @@ function formatKnowledgeGraphicSummary(graphicReference) {
 
 .reasoning-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin-top: 9px;
   border-top: 1px solid #d8e2df;
@@ -302,6 +323,7 @@ function formatKnowledgeGraphicSummary(graphicReference) {
 
 .message-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 

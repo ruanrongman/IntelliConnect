@@ -8,8 +8,8 @@
 
 ### 1. 系统要求
 
-- Java 21 或更高版本
-- Maven 3.6.0 或更高版本
+- Java 21
+- Maven 3.9.4 或更高版本（也可以直接使用项目自带的 Maven Wrapper）
 - MySQL 8.0
 - Redis 6.0+
 - Node.js (用于前端开发)
@@ -29,11 +29,11 @@ git checkout -b feature/your-feature-name
 ### 3. 环境配置
 
 ```bash
-# 使用 Maven 构建项目
-./mvnw clean install -DskipTests
+# 使用 Maven Wrapper 构建项目
+./mvnw clean package -DskipTests
 
 # 或者在 Windows 环境下
-mvnw.cmd clean install -DskipTests
+mvnw.cmd clean package -DskipTests
 ```
 
 ### 4. 数据库初始化
@@ -77,7 +77,8 @@ src/
 │   │   ├── application.yaml    # 应用配置
 │   │   └── static/            # 静态资源
 │   └── proto/                 # 协议文件
-└── test/                      # 测试代码
+└── test/
+    └── java/                  # 测试代码
 ```
 
 ### 3. Git 提交规范
@@ -121,7 +122,7 @@ git checkout -b feature/your-feature-name
 ./mvnw verify
 
 # 代码格式化
-./mvnw fmt:format
+./mvnw spotless:apply
 ```
 
 ### 4. 提交更改
@@ -230,7 +231,7 @@ class UserServiceTest {
 
 ### 1. 后端技术
 
-- **框架**: Spring Boot 2.7
+- **框架**: Spring Boot 3.5.7
 - **安全**: Spring Security + JWT
 - **数据访问**: JPA + Hibernate
 - **缓存**: Redis
@@ -241,14 +242,14 @@ class UserServiceTest {
 ### 2. 前端技术
 
 - **框架**: Vue 3
-- **UI 库**: Ant Design
-- **状态管理**: Pinia
+- **UI 库**: Ant Design Vue
+- **状态管理**: Vuex 4
 
 ### 3. 构建工具
 
 - **构建**: Maven
 - **依赖管理**: Maven Central
-- **代码格式化**: google-java-format
+- **代码格式化**: Spotless（使用 `dev-support/dailymart_spotless_formatter.xml`）
 
 ## 常见贡献类型
 

@@ -75,7 +75,7 @@ jpa:
    XXX为bcrypt加密后的密文，具体请看SpringSecurity的加密规则。
    ![img_4.png](img_4.png)
    > user表的结构
-4. 各中间件默认端口如被占用，需同步调整docker-compose.yaml中的端口映射配置
+4. 各中间件默认端口如被占用，需同步调整 `docker/docker-compose.yml` 中的端口映射配置
 5. 生产环境建议配置独立的数据库账号并设置访问白名单
 6. 内网环境需要使用穿透技术，如frp软件。
 

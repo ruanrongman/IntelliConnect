@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Vditor from 'vditor/dist/method.min'
 import 'vditor/dist/index.css'
 
@@ -12,12 +12,46 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  streaming: Boolean,
 })
 
+const emit = defineEmits(['rendered'])
 const previewRef = ref(null)
 const vditorCdn = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, '')}/vditor`
+const previewOptions = {
+  mode: 'light',
+  cdn: vditorCdn,
+  anchor: 0,
+  customEmoji: {},
+  emojiPath: '',
+  lang: 'zh_CN',
+  hljs: {
+    enable: true,
+    lineNumber: false,
+    style: 'atom-one-dark',
+  },
+  math: {
+    engine: 'KaTeX',
+    inlineDigit: true,
+  },
+  markdown: {
+    autoSpace: true,
+    fixTermTypo: false,
+    footnotes: true,
+    listStyle: true,
+    mathBlockPreview: true,
+    paragraphBeginningSpace: true,
+    sanitize: true,
+    toc: true,
+  },
+  render: {
+    media: {
+      enable: false,
+    },
+  },
+}
 let renderTimer = 0
-let renderVersion = 0
+let rendering = false
 
 onMounted(() => {
   scheduleRender(0)
@@ -30,13 +64,13 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.content,
-  () => scheduleRender(80)
+  () => [props.content, props.streaming],
+  () => scheduleRender(props.streaming ? 80 : 0)
 )
 
 function scheduleRender(delay) {
-  if (renderTimer) {
-    window.clearTimeout(renderTimer)
+  if (renderTimer || rendering) {
+    return
   }
   renderTimer = window.setTimeout(() => {
     renderTimer = 0
@@ -49,49 +83,27 @@ async function renderMarkdown() {
   if (!element) {
     return
   }
-  const currentVersion = ++renderVersion
-  const markdown = normalizeMarkdownContent(props.content || '')
+  const { content, streaming } = props
+  rendering = true
   try {
-    await Vditor.preview(element, markdown, {
-      mode: 'light',
-      cdn: vditorCdn,
-      anchor: 0,
-      customEmoji: {},
-      emojiPath: '',
-      lang: 'zh_CN',
-      hljs: {
-        enable: true,
-        lineNumber: false,
-        style: 'atom-one-dark',
-      },
-      math: {
-        engine: 'KaTeX',
-        inlineDigit: true,
-      },
-      markdown: {
-        autoSpace: true,
-        fixTermTypo: false,
-        footnotes: true,
-        listStyle: true,
-        mathBlockPreview: true,
-        paragraphBeginningSpace: true,
-        toc: true,
-      },
-      render: {
-        media: {
-          enable: false,
-        },
-      },
-      after: async () => {
-        if (currentVersion !== renderVersion) {
-          return
-        }
-        restoreEmojiImages(element)
-        await nextTick()
-      },
-    })
-  } catch (error) {
-    element.textContent = markdown
+    const markdown = normalizeMarkdownContent(content)
+    if (streaming) {
+      // Parse the accumulated text without rerunning preview enhancements on each chunk.
+      element.innerHTML = await Vditor.md2html(markdown, previewOptions)
+    } else {
+      await Vditor.preview(element, markdown, previewOptions)
+    }
+    restoreEmojiImages(element)
+  } catch {
+    element.textContent = content
+  } finally {
+    rendering = false
+    if (previewRef.value === element) {
+      emit('rendered')
+      if (props.content !== content || props.streaming !== streaming) {
+        scheduleRender(props.streaming ? 80 : 0)
+      }
+    }
   }
 }
 

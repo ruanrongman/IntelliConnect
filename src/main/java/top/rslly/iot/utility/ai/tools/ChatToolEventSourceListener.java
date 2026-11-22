@@ -133,16 +133,18 @@ public class ChatToolEventSourceListener extends EventSourceListener {
         reasoningQueue.add(reasoning);
       }
       String content = delta.getString("content");
-      if (content == null || content.trim().isEmpty()) {
+      if (content == null || content.isEmpty()) {
         return;
       }
-      String processedContent = content
-          .replace("\n", "")
-          .replace("\r", "");
 
       Queue<String> queue = queueMap.get(chatId);
-      if (queue != null && !processedContent.isEmpty()) {
-        queue.add(processedContent);
+      if (queue != null) {
+        // The text SSE channel supplies a reasoning queue and needs the original Markdown.
+        if (reasoningQueue != null) {
+          queue.add(content);
+        } else if (!content.trim().isEmpty()) {
+          queue.add(content.replace("\n", "").replace("\r", ""));
+        }
       }
       jsonBuffer.append(content);
     } catch (Exception e) {

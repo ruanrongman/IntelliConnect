@@ -35,7 +35,7 @@
         </a-button>
       </header>
 
-      <ChatMessageList ref="messageListRef" :messages="messages" />
+      <ChatMessageList ref="messageListRef" :messages="messages" @stream-rendered="queueScrollToBottom" />
 
       <ChatComposer
         v-model="inputText"
@@ -702,11 +702,9 @@ async function sendMessage() {
       signal: streamContext.abortController.signal,
       onMessage: (chunk) => {
         assistantMessage.content += chunk
-        scrollActiveConversation(conversationChatId)
       },
       onReasoning: (chunk) => {
         assistantMessage.reasoningContent += chunk
-        scrollActiveConversation(conversationChatId)
       },
       onUsage: (usage) => {
         assistantMessage.usage = usage

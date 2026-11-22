@@ -56,6 +56,27 @@ test('server error rejects instead of reporting successful completion', async ()
   assert.equal(completed, false)
 })
 
+test('preserves Markdown line breaks and indentation across message events', async () => {
+  let reply = ''
+  await readAiEventStream(
+    stream(
+      'event:message\ndata:示例\n\n' +
+        'event:message\ndata:\ndata:\ndata:\n\n' +
+        'event:message\ndata:```python\ndata:def sort():\ndata:\n\n' +
+        'event:message\ndata:    \n\n' +
+        'event:message\ndata:return []\ndata:```\n\n' +
+        'event:complete\ndata:\n\n',
+      1
+    ),
+    {
+      onMessage: (value) => {
+        reply += value
+      },
+    }
+  )
+  assert.equal(reply, '示例\n\n```python\ndef sort():\n    return []\n```')
+})
+
 test('EOF after a partial response is a disconnect, preserving received content', async () => {
   const messages = []
   await assert.rejects(

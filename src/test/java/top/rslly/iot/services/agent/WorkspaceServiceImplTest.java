@@ -202,7 +202,8 @@ class WorkspaceServiceImplTest {
     assertEquals(created, edited.getCreatedAt());
     String expected = "head\r\n新的正文\r\nend";
     assertEquals(expected, Files.readString(diskFiles().getFirst()));
-    assertEquals(expected.getBytes(java.nio.charset.StandardCharsets.UTF_8).length, edited.getSize());
+    assertEquals(expected.getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
+        edited.getSize());
     assertEquals(edited.getSize(), service.listFiles(12, "chatProduct12", 1, 20).usedBytes());
     assertEquals(1, fileRows.size());
     assertEquals(1, diskFiles().size());
