@@ -71,6 +71,7 @@
             />
           </button>
           <a-popconfirm
+            v-if="!conversation.deviceName || conversation.id > 0"
             title="删除后，该对话的消息和记忆将无法恢复。确定删除？"
             ok-text="删除"
             cancel-text="取消"

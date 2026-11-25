@@ -27,9 +27,11 @@ import top.rslly.iot.dao.*;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.models.ProductRouterSetEntity;
+import top.rslly.iot.models.RodakDeviceEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.param.request.AgentMemory;
 import top.rslly.iot.param.response.AgentMemoryResponse;
+import top.rslly.iot.services.rodak.RodakConversation;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.RedisUtil;
@@ -65,6 +67,8 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
   private UserRepository userRepository;
   @Resource
   private OtaXiaozhiRepository otaXiaozhiRepository;
+  @Resource
+  private RodakDeviceRepository rodakDeviceRepository;
   @Autowired
   private RedisUtil redisUtil;
   @Autowired
@@ -160,12 +164,17 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
     String defaultChatId = buildDefaultChatId(productId);
     Map<String, AgentMemoryEntity> memoryByChatId = new LinkedHashMap<>();
     Map<String, OtaXiaozhiEntity> deviceByChatId = new LinkedHashMap<>();
+    Map<String, RodakDeviceEntity> rodakByChatId = new LinkedHashMap<>();
     List<OtaXiaozhiEntity> otaXiaozhiEntities;
     if (nickName != null && !nickName.isBlank()) {
       otaXiaozhiEntities =
           otaXiaozhiRepository.findAllByProductIdAndNickName(productId, nickName);
     } else {
       otaXiaozhiEntities = otaXiaozhiRepository.findAllByProductId(productId);
+      for (RodakDeviceEntity device : rodakDeviceRepository.findAllByProductIdAndStatus(
+          productId, "ACTIVE")) {
+        rodakByChatId.put(RodakConversation.chatId(device), device);
+      }
       List<AgentMemoryEntity> textConversationMemories =
           agentMemoryRepository.findAllByChatIdStartingWith(defaultChatId);
       for (AgentMemoryEntity memory : textConversationMemories) {
@@ -178,14 +187,16 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
       String chatId = defaultChatId + device.getDeviceId();
       deviceByChatId.putIfAbsent(chatId, device);
     }
-    if (!deviceByChatId.isEmpty()) {
+    var deviceChatIds = new ArrayList<>(deviceByChatId.keySet());
+    deviceChatIds.addAll(rodakByChatId.keySet());
+    if (!deviceChatIds.isEmpty()) {
       for (AgentMemoryEntity memory : agentMemoryRepository
-          .findAllByChatIdIn(new ArrayList<>(deviceByChatId.keySet()))) {
+          .findAllByChatIdIn(deviceChatIds)) {
         String chatId = memory.getChatId();
         memoryByChatId.putIfAbsent(chatId, memory);
       }
     }
-    if (memoryByChatId.isEmpty()) {
+    if (memoryByChatId.isEmpty() && rodakByChatId.isEmpty()) {
       return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
     }
     List<AgentMemoryResponse> agentMemoryResponses = new ArrayList<>();
@@ -195,11 +206,24 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
       agentMemoryResponse.setContent(memory.getContent());
       agentMemoryResponse.setChatId(memory.getChatId());
       OtaXiaozhiEntity device = deviceByChatId.get(memory.getChatId());
+      RodakDeviceEntity rodak = rodakByChatId.get(memory.getChatId());
       if (device != null) {
         agentMemoryResponse.setDeviceName(device.getDeviceId());
         agentMemoryResponse.setNickName(device.getNickName());
+      } else if (rodak != null) {
+        agentMemoryResponse.setDeviceName(rodak.getDeviceKey());
+        agentMemoryResponse.setNickName("Rodak");
       }
       agentMemoryResponses.add(agentMemoryResponse);
+    }
+    for (var entry : rodakByChatId.entrySet()) {
+      if (!memoryByChatId.containsKey(entry.getKey())) {
+        var response = new AgentMemoryResponse();
+        response.setChatId(entry.getKey());
+        response.setDeviceName(entry.getValue().getDeviceKey());
+        response.setNickName("Rodak");
+        agentMemoryResponses.add(response);
+      }
     }
     agentMemoryResponses.sort(Comparator.comparingInt(AgentMemoryResponse::getId).reversed());
     return ResultTool.success(agentMemoryResponses);
@@ -209,6 +233,19 @@ public class AgentMemoryServiceImpl implements AgentMemoryService {
   public boolean isChatIdValidForProduct(int productId, String chatId) {
     if (chatId == null || chatId.isBlank()) {
       return false;
+    }
+    if (RodakConversation.belongsToProduct(chatId, productId)) {
+      String prefix = RodakConversation.prefix(productId);
+      int versionSeparator = chatId.indexOf(':', prefix.length());
+      if (versionSeparator != prefix.length() + 36) {
+        return false;
+      }
+      return rodakDeviceRepository
+          .findByDeviceUuid(chatId.substring(prefix.length(), versionSeparator))
+          .filter(
+              device -> device.getProductId() == productId && "ACTIVE".equals(device.getStatus()))
+          .filter(device -> chatId.equals(RodakConversation.chatId(device)))
+          .isPresent();
     }
     String defaultChatId = buildDefaultChatId(productId);
     if (chatId.equals(defaultChatId)) {

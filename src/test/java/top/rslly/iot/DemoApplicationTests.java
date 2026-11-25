@@ -153,17 +153,6 @@ class DemoApplicationTests {
     System.out.println(locations.get(0).getTime());
   }
 
-  /**
-   * 删除数据库
-   */
-  @Test
-  public void delete() {
-    // 默认使用配置文件中数据库
-    // influxDao.deleteDataBase();
-    // 使用指定数据库
-    executor.deleteDataBase("data");
-  }
-
   @Test
   public void insert2() {
     DataEntity dataTimeEntity = new DataEntity();

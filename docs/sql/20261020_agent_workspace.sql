@@ -17,7 +17,5 @@ CREATE TABLE IF NOT EXISTS agent_workspace_file (
     source VARCHAR(32) NOT NULL,
     created_at BIGINT NOT NULL,
     PRIMARY KEY (id),
-    KEY idx_workspace_file_created (workspace_id, created_at),
-    CONSTRAINT fk_workspace_file_workspace FOREIGN KEY (workspace_id)
-        REFERENCES agent_workspace (id)
+    KEY idx_workspace_file_created (workspace_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

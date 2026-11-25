@@ -88,13 +88,20 @@ public class MiniMaxTtsService implements TtsService {
   @Override
   public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
       String voice) {
+    return getTextAudio(chatId, text, pitch, speed, voice,
+        AudioFrameDuration.resolveOutboundSampleRate(chatId),
+        AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
+  }
+
+  @Override
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice, int sampleRate, int frameDurationMs) {
     // Only used for WebSocket audio sending.
     List<byte[]> audioList = new ArrayList<>();
     // End-of-stream marker: an empty byte array.
     final byte[] EOS = new byte[0];
     final OpusEncoderUtils encoder =
-        new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
-            AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
+        new OpusEncoderUtils(sampleRate, 1, frameDurationMs);
     String tempFilePath = null;
 
     try {
@@ -102,7 +109,7 @@ public class MiniMaxTtsService implements TtsService {
       String url = API_URL + "?GroupId=" + URLEncoder.encode(groupId, StandardCharsets.UTF_8);
 
       // 构建 JSON 请求体
-      int outboundSampleRate = AudioFrameDuration.resolveOutboundSampleRate(chatId);
+      int outboundSampleRate = sampleRate;
       String requestBody = buildRequestBody(text, pitch, speed, voice, true, outboundSampleRate);
 
       // 发送请求

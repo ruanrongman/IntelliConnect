@@ -52,9 +52,21 @@ public interface TtsService {
 
   List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice);
 
+  List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed, String voice,
+      int sampleRate, int frameDurationMs);
+
   default boolean streamTextAudio(String chatId, String text, Float pitch, Float speed,
       String voice, Consumer<byte[]> onChunk) {
-    List<byte[]> audioFrames = getTextAudio(chatId, text, pitch, speed, voice);
+    return emitAudioFrames(getTextAudio(chatId, text, pitch, speed, voice), onChunk);
+  }
+
+  default boolean streamTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice, int sampleRate, int frameDurationMs, Consumer<byte[]> onChunk) {
+    return emitAudioFrames(getTextAudio(chatId, text, pitch, speed, voice, sampleRate,
+        frameDurationMs), onChunk);
+  }
+
+  private static boolean emitAudioFrames(List<byte[]> audioFrames, Consumer<byte[]> onChunk) {
     if (audioFrames == null || audioFrames.isEmpty()) {
       return false;
     }

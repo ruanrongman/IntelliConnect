@@ -76,7 +76,7 @@ class FunctionCallingRouterKnowledgeRouteTest {
     assertTrue(agentRoute.description().contains("knowledge coverage"));
     assertTrue(agentRoute.description().contains("workspaceTool"));
     assertTrue(agentRoute.description()
-        .contains("List/read/write work even when the sandbox is disabled"));
+        .contains("List/read/write/edit/delete work even when the sandbox is disabled"));
   }
 
   @Test

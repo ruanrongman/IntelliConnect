@@ -56,6 +56,16 @@ public enum ToolPrefix {
     return TOOL_CALL_MARKER + "：" + toolName.replace("\r", " ").replace("\n", " ").trim() + "。";
   }
 
+  public static String stripLeadingPrefix(String text) {
+    String trimmed = text.stripLeading();
+    for (ToolPrefix toolPrefix : values()) {
+      if (trimmed.startsWith(toolPrefix.prefix)) {
+        return trimmed.substring(toolPrefix.prefix.length()).stripLeading();
+      }
+    }
+    return text;
+  }
+
   // 检查文本是否以任何插件前缀开头
   public static boolean startsWithAnyPrefix(String text) {
     if (text == null) {

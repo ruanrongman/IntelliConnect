@@ -35,6 +35,7 @@ import top.rslly.iot.dao.*;
 import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.models.WxUserEntity;
 import top.rslly.iot.services.UserConfigServiceImpl;
+import top.rslly.iot.services.rodak.RodakConversation;
 import top.rslly.iot.services.thingsModel.ProductServiceImpl;
 import top.rslly.iot.utility.JwtTokenUtil;
 import top.rslly.iot.utility.result.JsonResult;
@@ -163,6 +164,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       Set<String> chatIds = new LinkedHashSet<>();
       for (var s : wxBindProductResponseList) {
         chatIdPrefixes.add("chatProduct" + s.getProductId());
+        chatIdPrefixes.add(RodakConversation.prefix(s.getProductId()));
         chatIds.add(s.getAppid() + s.getOpenid());
       }
       result = historyMessageRepository
@@ -180,6 +182,7 @@ public class HistoryMessageEntityServiceImpl implements HistoryMessageEntityServ
       Set<String> chatIdPrefixes = new LinkedHashSet<>();
       for (var s : userProductBindEntityList) {
         chatIdPrefixes.add("chatProduct" + s.getProductId());
+        chatIdPrefixes.add(RodakConversation.prefix(s.getProductId()));
       }
       result = historyMessageRepository
           .findAll(buildChatIdSpec(chatIdPrefixes, Set.of(), chatId).and(visibleMessages),

@@ -51,8 +51,8 @@ class ChatToolPromptTest {
     String enabled = prompt.getChatTool("assistant", "user", "role", "introduction",
         "memory", "memory map", "graph", null, true);
 
-    assertFalse(disabled.contains("青少年模式已开启"));
-    assertTrue(enabled.contains("青少年模式已开启"));
-    assertTrue(enabled.contains("给出安全替代"));
+    assertFalse(disabled.contains("Teen Mode is enabled"));
+    assertTrue(enabled.contains("Teen Mode is enabled"));
+    assertTrue(enabled.contains("provide safe alternatives"));
   }
 }

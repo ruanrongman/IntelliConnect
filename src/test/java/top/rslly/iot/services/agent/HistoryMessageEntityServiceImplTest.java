@@ -52,6 +52,7 @@ import top.rslly.iot.dao.UserProductBindRepository;
 import top.rslly.iot.models.HistoryMessageEntity;
 import top.rslly.iot.models.ProductEntity;
 import top.rslly.iot.models.UserEntity;
+import top.rslly.iot.models.UserProductBindEntity;
 import top.rslly.iot.services.UserConfigServiceImpl;
 
 @ExtendWith(MockitoExtension.class)
@@ -208,6 +209,37 @@ class HistoryMessageEntityServiceImplTest {
 
       assertTrue(response.getErrorCode() != 200);
       org.mockito.Mockito.verifyNoInteractions(historyMessageRepository);
+    }
+  }
+
+  @Test
+  void restrictsRodakHistoryToTheUsersBoundProduct() {
+    try (var jwt = mockStatic(JwtTokenUtil.class)) {
+      jwt.when(() -> JwtTokenUtil.getUserRole("token")).thenReturn("ROLE_user");
+      jwt.when(() -> JwtTokenUtil.getUsername("token")).thenReturn("user");
+      var user = new UserEntity();
+      user.setId(7);
+      var binding = new UserProductBindEntity();
+      binding.setProductId(1);
+      when(userRepository.findAllByUsername("user")).thenReturn(List.of(user));
+      when(userProductBindRepository.findAllByUserId(7)).thenReturn(List.of(binding));
+      when(historyMessageRepository.findAll(any(Specification.class), any(Pageable.class)))
+          .thenReturn(new PageImpl<>(List.of()));
+      String chatId = "rodak:1:550e8400-e29b-41d4-a716-446655440000:3";
+
+      historyMessageService.getHistoryMessage("token", 1, 20, chatId, true);
+
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<Specification<HistoryMessageEntity>> specification =
+          ArgumentCaptor.forClass(Specification.class);
+      verify(historyMessageRepository).findAll(specification.capture(), any(Pageable.class));
+      Root<HistoryMessageEntity> root = mock(Root.class);
+      Path<String> chatIdPath = mock(Path.class);
+      when(root.<String>get("chatId")).thenReturn(chatIdPath);
+      CriteriaBuilder cb = mock(CriteriaBuilder.class);
+      specification.getValue().toPredicate(root, null, cb);
+      verify(cb).like(chatIdPath, "rodak:1:%");
+      verify(cb).equal(chatIdPath, chatId);
     }
   }
 

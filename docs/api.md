@@ -2,7 +2,7 @@
 
 ## 概述
 
-IntelliConnect 平台提供丰富的 REST API 接口，支持设备管理、物模型配置、Agent 智能体交互、OTA升级、微信服务等功能。所有 API 接口均通过 JWT Token 进行身份验证。
+IntelliConnect 平台提供丰富的 REST API 接口，支持设备管理、物模型配置、Agent 智能体交互、OTA升级、微信服务等功能。需要登录的管理接口使用用户 JWT。RodakOS 固件使用独立的设备接口和设备凭据，详见 [Rodak 设备协议](rodak/README.md)。
 
 ## 基础信息
 

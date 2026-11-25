@@ -41,6 +41,7 @@ Built by RSLLY
 * 支持OTA空中升级技术，支持设备昵称管理
 * 支持微信小程序和微信服务号
 * 支持小智AI硬件
+* 支持 RodakOS 设备接入，提供配对绑定、实时语音、遥测、设备影子和远程控制
 * 支持AI文本调试界面，实时流式对话和历史消息持久化
 * 支持系统级全局角色审核和产品级青少年保护：可编辑审核要求，支持 Jev/普通 LLM、适龄回答提示及最近两小时会话限制
 * 支持 TypeSafe Jev 结构化评估，以及本地 Laya 多语言模型情绪识别
@@ -114,6 +115,8 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 
 ## 项目文档和视频演示
 * 项目文档和视频演示地址https://ruanrongman.github.io/IntelliConnect/
+* [RodakOS 接入指南与小智协议对比](docs/get_started/rodakos.md)
+* [Rodak 协议参考](docs/rodak/README.md)
 * [全局角色审核、青少年保护、Jev 与 Laya 情绪能力](docs/ai_safety_and_emotion.md)
 * [云电脑（OpenSandbox 沙箱）](docs/sandbox/cloud_computer.md)
 * [Jev 独立客户端](docs/jev-client.md)
@@ -123,6 +126,7 @@ mysql,redis,emqx和influxdb环境，安装详情请看官方文档。
 * 创万联社区公众号：微信直接搜索创万联
 
 ## 相关项目和社区
+* [RodakOS](https://github.com/rymcu/rodakos) · RYMCU 开源设备固件，可通过 Rodak 协议接入 IntelliConnect。
 * 创万联(cwl): 专注于物联网和人工智能技术的开源社区。
 * Promptulate https://github.com/Undertone0809/promptulate [A LLM application and Agent development framework.]
 * Rymcu https://github.com/rymcu [为数百万人服务的开源嵌入式知识学习交流平台]

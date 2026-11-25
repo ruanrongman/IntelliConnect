@@ -51,6 +51,7 @@ const chart = {
 const product ={
   productPage: 'productPage',
   productXiaoZhi:'productXiaoZhi',
+  rodakDeviceBinding: 'Rodak Device Binding',
   aiChat:'Agent Workbench',
   workspace: 'Conversation Workspace',
   productRole:'productRole',

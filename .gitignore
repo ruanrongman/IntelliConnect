@@ -38,6 +38,9 @@ build/
 /web/package-lock.json
 .m2/
 .home/
+/.rodak
+/rodak/
+/tmp/
 /data/workspaces/
 
 ### Local Laya Jev runtime (models, CUDA wheels, caches and logs) ###

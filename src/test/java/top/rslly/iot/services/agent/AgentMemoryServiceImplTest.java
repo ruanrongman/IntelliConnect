@@ -37,10 +37,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import top.rslly.iot.dao.AgentMemoryRepository;
 import top.rslly.iot.dao.OtaXiaozhiRepository;
 import top.rslly.iot.dao.ProductRepository;
+import top.rslly.iot.dao.RodakDeviceRepository;
 import top.rslly.iot.models.AgentMemoryEntity;
 import top.rslly.iot.models.OtaXiaozhiEntity;
 import top.rslly.iot.models.ProductEntity;
+import top.rslly.iot.models.RodakDeviceEntity;
 import top.rslly.iot.param.response.AgentMemoryResponse;
+import top.rslly.iot.services.rodak.RodakConversation;
 import top.rslly.iot.utility.RedisUtil;
 import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.result.JsonResult;
@@ -53,6 +56,8 @@ class AgentMemoryServiceImplTest {
   private AgentMemoryRepository agentMemoryRepository;
   @Mock
   private OtaXiaozhiRepository otaXiaozhiRepository;
+  @Mock
+  private RodakDeviceRepository rodakDeviceRepository;
   @Mock
   private ProductRepository productRepository;
   @Mock
@@ -122,6 +127,48 @@ class AgentMemoryServiceImplTest {
   }
 
   @Test
+  void exposesBoundRodakConversationsWithAndWithoutSavedMemory() {
+    RodakDeviceEntity used = rodakDevice("76:56:26:c6:66:65");
+    RodakDeviceEntity newDevice = rodakDevice("76:56:26:c6:66:66");
+    String usedChatId = RodakConversation.chatId(used);
+    String newChatId = RodakConversation.chatId(newDevice);
+    when(productRepository.findAllById(1)).thenReturn(List.of(mock(ProductEntity.class)));
+    when(rodakDeviceRepository.findAllByProductIdAndStatus(1, "ACTIVE"))
+        .thenReturn(List.of(used, newDevice));
+    when(agentMemoryRepository.findAllByChatIdIn(List.of(usedChatId, newChatId)))
+        .thenReturn(List.of(memory(9, usedChatId, "设备历史")));
+
+    JsonResult<?> result = agentMemoryService.getMemoryByNickName(1, null);
+
+    assertEquals(200, result.getErrorCode());
+    List<?> rows = (List<?>) result.getData();
+    assertEquals(2, rows.size());
+    var saved = (AgentMemoryResponse) rows.get(0);
+    assertEquals(usedChatId, saved.getChatId());
+    assertEquals(9, saved.getId());
+    assertEquals("设备历史", saved.getContent());
+    assertEquals(used.getDeviceKey(), saved.getDeviceName());
+    var empty = (AgentMemoryResponse) rows.get(1);
+    assertEquals(newChatId, empty.getChatId());
+    assertEquals("Rodak", empty.getNickName());
+    assertEquals(0, empty.getId());
+  }
+
+  @Test
+  void validatesOnlyTheCurrentRodakBindingForTheProduct() {
+    RodakDeviceEntity rodak = rodakDevice("76:56:26:c6:66:65");
+    when(rodakDeviceRepository.findByDeviceUuid(rodak.getDeviceUuid()))
+        .thenReturn(java.util.Optional.of(rodak));
+
+    assertTrue(agentMemoryService.isChatIdValidForProduct(1, RodakConversation.chatId(rodak)));
+    assertFalse(agentMemoryService.isChatIdValidForProduct(10, RodakConversation.chatId(rodak)));
+    assertFalse(agentMemoryService.isChatIdValidForProduct(1,
+        RodakConversation.chatId(1, rodak.getDeviceUuid(), rodak.getTokenVersion() - 1)));
+    rodak.setStatus("UNBOUND");
+    assertFalse(agentMemoryService.isChatIdValidForProduct(1, RodakConversation.chatId(rodak)));
+  }
+
+  @Test
   void deletingMemoryDeletesExactConversationDataAndInvalidatesSummaries() {
     String chatId = "chatProduct1debug" + UUID;
     AgentMemoryEntity memory = memory(7, chatId, "summary");
@@ -153,6 +200,15 @@ class AgentMemoryServiceImplTest {
     device.setProductId(1);
     device.setDeviceId(deviceId);
     device.setNickName(nickName);
+    return device;
+  }
+
+  private RodakDeviceEntity rodakDevice(String deviceKey) {
+    var device = new RodakDeviceEntity();
+    device.setProductId(1);
+    device.setDeviceKey(deviceKey);
+    device.setStatus("ACTIVE");
+    device.setTokenVersion(3);
     return device;
   }
 }

@@ -255,13 +255,14 @@ async function loadConversations(productId, preserveActive = true) {
       const deviceName = record?.deviceName && record.deviceName !== '未知设备'
         ? String(record.deviceName)
         : ''
+      const nickName = deviceName ? String(record?.nickName || '').trim() : ''
       conversationById.set(chatId, {
         id: record.id,
         chatId,
-        title: content ? getFirstSentence(content) : chatId === defaultChatId ? '默认对话' : '新对话',
+        title: content ? getFirstSentence(content) : chatId === defaultChatId ? '默认对话' : nickName || '新对话',
         fullContent: content,
         deviceName,
-        nickName: deviceName ? String(record?.nickName || '').trim() : '',
+        nickName,
         isDefault: chatId === defaultChatId,
         isDraft: false,
       })

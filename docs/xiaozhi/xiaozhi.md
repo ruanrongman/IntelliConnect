@@ -42,3 +42,7 @@ curl -X POST "http://localhost:8080/api/v2/xiaozhi/otaManage" \
 小智设备支持设置昵称（nickname），便于区分同一产品下的多个设备：
 - 昵称在OTA绑定或MCP连接时设置
 - 可通过 `GET /api/v2/memoryByNickName` 接口按昵称查询设备记忆
+
+## Rodak 与小智协议对比
+
+IntelliConnect 同时提供小智和 RodakOS 接入。请按设备运行的固件选择接入入口。详见 [Rodak 与小智协议对比](../get_started/rodakos.md#rodak-与小智协议对比)。

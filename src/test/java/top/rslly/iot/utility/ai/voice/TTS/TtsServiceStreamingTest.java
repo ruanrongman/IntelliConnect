@@ -21,14 +21,36 @@ package top.rslly.iot.utility.ai.voice.TTS;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class TtsServiceStreamingTest {
+
+  @Test
+  void cancelledPlaybackStopsTheCallbackWithoutWaitingForProviderCompletion() {
+    var callbacks = new AtomicInteger();
+    var callback = new Text2audio.ReactCallback(24000, 60, packet -> {
+      if (callbacks.incrementAndGet() == 2) {
+        throw new CancellationException();
+      }
+    });
+    callback.acceptPcm(new byte[24000 * 60 / 1000 * 2 * 3]);
+
+    assertTimeoutPreemptively(Duration.ofSeconds(1), callback::waitForComplete);
+    callback.acceptPcm(new byte[24000 * 60 / 1000 * 2]);
+    callback.onComplete();
+    assertEquals(2, callbacks.get());
+    assertFalse(callback.hasAudio());
+  }
 
   @Test
   void defaultStreamAdapterFiltersNullAndEndMarkers() {
@@ -42,6 +64,12 @@ class TtsServiceStreamingTest {
       public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
           String voice) {
         return Arrays.asList(first, null, new byte[0], second);
+      }
+
+      @Override
+      public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+          String voice, int sampleRate, int frameDurationMs) {
+        return getTextAudio(chatId, text, pitch, speed, voice);
       }
     };
     List<byte[]> streamed = new ArrayList<>();

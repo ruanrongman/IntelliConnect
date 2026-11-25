@@ -83,6 +83,13 @@ public class TtsServiceFactory {
         onChunk);
   }
 
+  public boolean streamTextAudio(String chatId, String text, int productId, int sampleRate,
+      int frameDurationMs, Consumer<byte[]> onChunk) {
+    TtsOptions options = resolveTtsOptions(productId);
+    return getTtsService(options.provider).streamTextAudio(chatId, text, options.pitch,
+        options.speed, options.voice, sampleRate, frameDurationMs, onChunk);
+  }
+
   private TtsOptions resolveTtsOptions(int productId) {
     String provider = "dashscope";
     // 语音音调 (0.5-2.0)

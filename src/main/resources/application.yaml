@@ -99,6 +99,26 @@ mqtt:
   Host: tcp://192.168.49.129:1883
   username: hello
   password: 1234
+rodak:
+  aiot:
+    enabled: true
+  voice:
+    # 默认由服务端 VAD 收口，开启后支持设备 VAD 和服务端回退。
+    hybrid-vad-enabled: ${RODAK_VOICE_HYBRID_VAD_ENABLED:false}
+    # Bootstrap 建议的下行 Opus 格式。采样率支持 16000、24000、48000，帧长支持 5、10、20、40、60。
+    downlink-sample-rate-hz: 16000
+    downlink-frame-duration-ms: 60
+  mqtt:
+    enabled: true
+    # 设备从 bootstrap 和凭据响应获取的 Broker 地址
+    host: 192.168.137.1
+    port: 1883
+    # 后端桥接默认复用物模型 Broker 地址
+    bridge-uri: ${mqtt.Host}
+    # 启动前填写。原值至少 24 个字符，与 EMQX 的 X-Rodak-Broker-Key 请求头一致。
+    callback-key: XXXX
+    # 启动前填写。原值至少 24 个字符，与回调密钥不同。
+    service-password: XXX
 wx:
   debug: true # false即启动微信模块
   unregistered-message: 该用户未注册，请先注册再使用

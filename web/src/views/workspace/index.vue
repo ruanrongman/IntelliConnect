@@ -164,7 +164,9 @@ async function refresh() {
     const memories = memoryResponse.data?.errorCode === 200 ? memoryResponse.data.data : []
     ;(Array.isArray(memories) ? memories : []).forEach((item) => {
       if (item.chatId) choices.set(item.chatId, { chatId: item.chatId,
-        label: `${item.deviceName || '对话'} · ${item.chatId}` })
+        label: item.nickName && item.deviceName
+          ? `${item.nickName} · ${item.deviceName}`
+          : `${item.deviceName || '对话'} · ${item.chatId}` })
     })
     saved.forEach((item) => {
       if (!choices.has(item.chatId)) choices.set(item.chatId, { chatId: item.chatId,

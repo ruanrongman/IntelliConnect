@@ -78,7 +78,8 @@ class ClassifierKnowledgeRouteTest {
 
     assertTrue(result.contains("Complex multi-step task | knowledge coverage"));
     assertTrue(result.contains("workspaceTool"));
-    assertTrue(result.contains("List/read/write work even when the sandbox is disabled"));
+    assertTrue(
+        result.contains("List/read/write/edit/delete work even when the sandbox is disabled"));
   }
 
   @Test

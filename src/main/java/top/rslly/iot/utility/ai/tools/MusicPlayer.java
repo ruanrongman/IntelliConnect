@@ -83,8 +83,8 @@ public class MusicPlayer {
   public void play() {
     try {
       // 1. 查找匹配的MP3文件
-      FindResult result = findMp3File();
-      if (result.mp3File == null) {
+      Track result = findMp3File(musicPath, song, artist);
+      if (result == null) {
         log.info("音乐文件夹为空");
         return;
       }
@@ -102,37 +102,42 @@ public class MusicPlayer {
   /**
    * 查找结果
    */
-  private record FindResult(Path mp3File, boolean isRandom) {}
+  public record Track(Path mp3File, boolean isRandom) {
+    public String title() {
+      String fileName = mp3File.getFileName().toString();
+      return fileName.substring(0, fileName.length() - 4);
+    }
+  }
 
   /**
    * 在音乐文件夹中查找匹配的MP3文件，找不到时随机选择一首
    */
-  private FindResult findMp3File() {
+  static Track findMp3File(String musicPath, String song, String artist) {
     Path musicDir = Path.of(musicPath);
     if (!Files.exists(musicDir) || !Files.isDirectory(musicDir)) {
       log.warn("音乐文件夹不存在: {}", musicPath);
-      return new FindResult(null, false);
+      return null;
     }
 
-    String songLower = song.toLowerCase();
-    String artistLower = (artist != null && !artist.isEmpty()) ? artist.toLowerCase() : null;
+    String songLower = song == null ? "" : song.strip().toLowerCase(Locale.ROOT);
+    String artistLower = artist == null ? "" : artist.strip().toLowerCase(Locale.ROOT);
 
     try (Stream<Path> paths = Files.walk(musicDir)) {
       // 查找所有MP3文件
       List<Path> mp3Files = paths
           .filter(Files::isRegularFile)
-          .filter(p -> p.toString().toLowerCase().endsWith(".mp3"))
+          .filter(p -> p.toString().toLowerCase(Locale.ROOT).endsWith(".mp3"))
           .toList();
 
       if (mp3Files.isEmpty()) {
         log.warn("音乐文件夹中没有MP3文件: {}", musicPath);
-        return new FindResult(null, false);
+        return null;
       }
 
       // 计算每个文件的匹配得分
       List<MatchResult> matchResults = new ArrayList<>();
       for (Path mp3 : mp3Files) {
-        String fileName = mp3.getFileName().toString().toLowerCase();
+        String fileName = mp3.getFileName().toString().toLowerCase(Locale.ROOT);
         int score = calculateMatchScore(fileName, songLower, artistLower);
         matchResults.add(new MatchResult(mp3, score));
       }
@@ -142,31 +147,31 @@ public class MusicPlayer {
       MatchResult best = matchResults.get(0);
 
       if (best.score > 0) {
-        return new FindResult(best.file, false);
+        return new Track(best.file, false);
       }
 
       // 得分为0，随机选择
       log.info("未找到匹配的音乐文件: {}，随机播放一首", song);
       Random random = new Random();
       Path randomFile = mp3Files.get(random.nextInt(mp3Files.size()));
-      return new FindResult(randomFile, true);
+      return new Track(randomFile, true);
 
     } catch (IOException e) {
       log.error("遍历音乐文件夹失败: {}", musicPath, e);
-      return new FindResult(null, false);
+      return null;
     }
   }
 
   /**
    * 计算匹配得分
    */
-  private int calculateMatchScore(String fileName, String songLower, String artistLower) {
+  private static int calculateMatchScore(String fileName, String songLower, String artistLower) {
     int score = 0;
     // 移除.mp3后缀
     String nameWithoutExt = fileName.replace(".mp3", "");
 
     // 1. 歌曲名完整匹配（最高分）
-    if (nameWithoutExt.contains(songLower)) {
+    if (!songLower.isEmpty() && nameWithoutExt.contains(songLower)) {
       score += 100;
     }
 
@@ -186,7 +191,7 @@ public class MusicPlayer {
     }
 
     // 4. 歌手匹配
-    if (artistLower != null && !artistLower.isEmpty()) {
+    if (!artistLower.isEmpty()) {
       // 歌手名完整匹配
       if (nameWithoutExt.contains(artistLower)) {
         score += 50;
@@ -213,7 +218,7 @@ public class MusicPlayer {
   /**
    * 判断字符串是否包含中文字符
    */
-  private boolean containsChinese(String str) {
+  private static boolean containsChinese(String str) {
     if (str == null || str.isEmpty()) {
       return false;
     }
@@ -229,7 +234,7 @@ public class MusicPlayer {
    * 计算中文子串匹配得分 从最长子串开始匹配，匹配到的子串越长得分越高 例如：搜索"生日歌"，文件名"生日快乐" - "生日歌"(3字) 不匹配 - "生日"(2字) 匹配，得分 = 2 *
    * 15 = 30
    */
-  private int calculateChineseMatchScore(String fileName, String searchTerm) {
+  private static int calculateChineseMatchScore(String fileName, String searchTerm) {
     int maxScore = 0;
     int searchLen = searchTerm.length();
 

@@ -1592,12 +1592,12 @@ const handleDelete = (record) => {
   // 实现删除功能    
   console.log('Deleting record:', record);    
   deleteProduct({id:record.id}).then((res) => {    
-      const { data, errorCode } = res.data;    
+      const { data, errorCode, errorMsg } = res.data;
       if(errorCode==200){    
         message.success("删除成功")    
         fetchProduct()
       }else if(errorCode==3002){    
-        message.warn("删除失败，产品被绑定或者下面有物模型")    
+        message.warn(errorMsg || "删除失败，产品被绑定或者下面有物模型")
       }else if(errorCode==2001){    
         router.push('/login')    
       }else{    

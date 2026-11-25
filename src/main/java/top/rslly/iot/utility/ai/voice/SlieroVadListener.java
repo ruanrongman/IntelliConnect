@@ -136,6 +136,17 @@ public class SlieroVadListener {
     return null;
   }
 
+  public void reset() {
+    lifecycleLock.writeLock().lock();
+    try {
+      if (vadDetector != null && !stop.get()) {
+        vadDetector.reset();
+      }
+    } finally {
+      lifecycleLock.writeLock().unlock();
+    }
+  }
+
   public boolean isStop() {
     return stop.get();
   }

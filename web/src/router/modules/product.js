@@ -31,6 +31,15 @@ export default [
           },
         },
         {
+          path: '/rodak',
+          name: 'Rodak',
+          component: () => import('@/views/rodak/index.vue'),
+          meta: {
+            title: 'rodakDeviceBinding',
+            auth: ['[ROLE_admin]', '[ROLE_guest]'],
+          },
+        },
+        {
           path: '/aiChat',
           name: 'aiChat',
           component: () => import('@/views/aiChat/index.vue'),

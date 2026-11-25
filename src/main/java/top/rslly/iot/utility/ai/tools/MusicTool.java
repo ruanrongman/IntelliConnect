@@ -23,21 +23,20 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import top.rslly.iot.services.agent.LlmProviderInformationServiceImpl;
-import top.rslly.iot.services.agent.ProductLlmModelServiceImpl;
 import top.rslly.iot.utility.HttpRequestUtils;
 import top.rslly.iot.utility.ai.IcAiException;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.ModelMessage;
 import top.rslly.iot.utility.ai.ModelMessageRole;
 import top.rslly.iot.utility.ai.llm.LLM;
-import top.rslly.iot.utility.ai.llm.LLMFactory;
 import top.rslly.iot.utility.ai.prompts.MusicToolPrompt;
 import top.rslly.iot.utility.ai.voice.TTS.TtsServiceFactory;
 import top.rslly.iot.utility.smartVoice.XiaoZhiWebsocket;
+import top.rslly.iot.utility.smartVoice.rodak.RodakVoiceRuntime;
 
 import java.io.IOException;
 import java.util.*;
@@ -54,6 +53,8 @@ public class MusicTool implements BaseTool<Map<String, String>> {
   private LlmDiyUtility llmDiyUtility;
   @Autowired
   private TtsServiceFactory ttsServiceFactory;
+  @Autowired
+  private ObjectProvider<RodakVoiceRuntime> rodakVoice;
   @Value("${ai.musicTool-llm}")
   private String llmName;
   @Value("${ai.music.path:}")
@@ -90,10 +91,20 @@ public class MusicTool implements BaseTool<Map<String, String>> {
     responseMap.put("answer", answer);
     responseMap.put("url", "");
 
-    // 检查是否是小智设备连接
-    boolean isXiaoZhiDevice = chatId != null && XiaoZhiWebsocket.clients.containsKey(chatId);
-
+    RodakVoiceRuntime rodak = chatId == null ? null : rodakVoice.getIfAvailable();
+    boolean isRodakDevice = rodak != null && rodak.hasMusicTurn(chatId);
     try {
+      if (isRodakDevice) {
+        if (!"200".equals(obj.getString("code"))) {
+          return responseMap;
+        }
+        MusicPlayer.Track track = musicPath == null || musicPath.isBlank() ? null
+            : MusicPlayer.findMp3File(musicPath, obj.getString("music"), obj.getString("singer"));
+        responseMap.put("answer", track == null ? "服务器音乐目录中没有可播放的 MP3。"
+            : rodak.prepareMusic(chatId, track));
+        return responseMap;
+      }
+      boolean isXiaoZhiDevice = chatId != null && XiaoZhiWebsocket.clients.containsKey(chatId);
       if (isXiaoZhiDevice && musicPath != null && !musicPath.isEmpty()) {
         // 小智设备：使用本地音乐文件夹播放
         String singer = obj.getString("singer");
@@ -115,6 +126,9 @@ public class MusicTool implements BaseTool<Map<String, String>> {
       }
     } catch (Exception e) {
       log.error("MusicTool error: {}", e.getMessage(), e);
+      if (isRodakDevice) {
+        responseMap.put("answer", "暂时无法读取服务器上的音乐。");
+      }
       return responseMap;
     }
   }

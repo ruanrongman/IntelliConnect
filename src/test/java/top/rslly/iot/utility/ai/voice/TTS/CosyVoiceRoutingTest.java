@@ -26,6 +26,7 @@ import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer;
 import java.nio.ByteBuffer;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -39,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.aop.framework.ProxyFactory;
 import top.rslly.iot.models.ProductRoleEntity;
 import top.rslly.iot.services.agent.ProductRoleServiceImpl;
 import top.rslly.iot.services.agent.ProductVoiceDiyServiceImpl;
@@ -112,6 +114,38 @@ class CosyVoiceRoutingTest {
     assertEquals(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT, requests.get(1).getFormat());
     assertEquals(0.8f, requests.get(1).getPitchRate());
     assertEquals(1.2f, requests.get(1).getSpeechRate());
+  }
+
+  @Test
+  void rodakFactoryStreamsAt16KhzThroughTheSpringInterfaceProxy() {
+    var proxyFactory = new ProxyFactory();
+    proxyFactory.setTarget(service);
+    proxyFactory.setInterfaces(TtsService.class);
+    var proxy = (TtsService) proxyFactory.getProxy();
+    assertTrue(Proxy.isProxyClass(proxy.getClass()));
+
+    var factory = new TtsServiceFactory();
+    ReflectionTestUtils.setField(factory, "text2audio", proxy);
+    ReflectionTestUtils.setField(factory, "productRoleService", mock(ProductRoleServiceImpl.class));
+    ReflectionTestUtils.setField(factory, "productVoiceDiyService",
+        mock(ProductVoiceDiyServiceImpl.class));
+    List<byte[]> frames = new ArrayList<>();
+    try (var mocked = mockConstruction(SpeechSynthesizer.class, (synthesizer, context) -> {
+      var request = (SpeechSynthesisParam) context.arguments().get(0);
+      assertEquals(SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT, request.getFormat());
+      var callback = (Text2audio.ReactCallback) context.arguments().get(1);
+      when(synthesizer.call(anyString())).thenAnswer(invocation -> {
+        callback.acceptPcm(new byte[16000 * 60 / 1000 * 2]);
+        assertEquals(1, frames.size());
+        callback.onComplete();
+        return null;
+      });
+    })) {
+      assertTrue(factory.streamTextAudio("rodak-test", "测试", 7, 16000, 60, frames::add));
+      assertEquals(1, mocked.constructed().size());
+    }
+    assertEquals(1, frames.size());
+    assertTrue(frames.getFirst().length > 0);
   }
 
   @Test

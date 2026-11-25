@@ -15,6 +15,13 @@
   - [:file_folder: 会话工作区](ai_chat/workspace.md)
 - 接入小智
   - [:bookmark_tabs: 小智接入](xiaozhi/xiaozhi.md#小智接入)
+- 接入 RodakOS
+  - [RodakOS 接入指南](get_started/rodakos.md)
+  - [Rodak 协议总览](rodak/README.md)
+  - [设备绑定与鉴权](rodak/binding.md)
+  - [AIoT 数据协议](rodak/aiot.md)
+  - [实时语音协议](rodak/voice.md)
+  - [主动播报协议](rodak/announce.md)
 - Ota
   - [:bookmark_tabs: OTA升级](ota/common.md#OTA升级)
 - Mcp protocol

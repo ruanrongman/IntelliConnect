@@ -108,6 +108,14 @@ public class ProductServiceImpl implements ProductService {
   private CodingAgentDeviceRepository codingAgentDeviceRepository;
   @Resource
   private CodingAgentSessionRepository codingAgentSessionRepository;
+  @Resource
+  private RodakDeviceRepository rodakDeviceRepository;
+  @Resource
+  private RodakPairingRequestRepository rodakPairingRequestRepository;
+  @Resource
+  private RodakShadowRepository rodakShadowRepository;
+  @Resource
+  private RodakCommandRepository rodakCommandRepository;
   @Value("${product-limit}")
   private int productLimit;
 
@@ -330,6 +338,15 @@ public class ProductServiceImpl implements ProductService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public JsonResult<?> deleteProduct(int id) {
+    if (productRepository.findLockedById(id).isEmpty()) {
+      return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
+    }
+    var rodakDevices = rodakDeviceRepository.findAllLockedByProductId(id);
+    if (rodakDevices.stream().anyMatch(device -> !"REVOKED".equals(device.getStatus()))) {
+      var result = ResultTool.fail(ResultCode.HAS_DEPENDENCIES);
+      result.setErrorMsg("该产品仍绑定 Rodak 设备，请先解绑后再删除产品");
+      return result;
+    }
     List<ProductModelEntity> productModelEntityList = productModelRepository.findAllByProductId(id);
     List<WxProductBindEntity> wxProductBindEntityList =
         wxProductBindRepository.findAllByProductId(id);
@@ -398,6 +415,15 @@ public class ProductServiceImpl implements ProductService {
       if (result.isEmpty())
         return ResultTool.fail(ResultCode.PARAM_NOT_VALID);
       else {
+        var rodakDeviceIds = rodakDevices.stream().map(RodakDeviceEntity::getId).toList();
+        if (!rodakDeviceIds.isEmpty()) {
+          rodakCommandRepository.deleteAllByDeviceIds(rodakDeviceIds);
+          rodakShadowRepository.deleteAllByIdInBatch(rodakDeviceIds);
+          rodakDeviceRepository.deleteAllByIdInBatch(rodakDeviceIds);
+        }
+        var rodakRequestIds = rodakPairingRequestRepository.findAllByProductId(id).stream()
+            .map(RodakPairingRequestEntity::getId).toList();
+        rodakPairingRequestRepository.deleteAllByIdInBatch(rodakRequestIds);
         if (!userProductBindEntityList.isEmpty()) {
           userProductBindRepository.deleteAllByProductId(id);
         }

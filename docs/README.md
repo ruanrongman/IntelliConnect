@@ -17,6 +17,7 @@
 * 支持OTA空中升级技术，支持设备昵称管理
 * 支持微信小程序和微信服务号
 * 支持小智AI硬件
+* 支持 RodakOS 设备接入，提供配对绑定、实时语音、遥测、设备影子和远程控制
 * 支持AI文本调试界面，实时流式对话和历史消息持久化
 * 支持系统级全局角色审核和产品级青少年保护：可编辑审核要求，支持 Jev/普通 LLM、适龄回答提示及最近两小时会话限制
 * 支持 TypeSafe Jev 结构化评估，以及本地 Laya 多语言模型情绪识别
@@ -111,6 +112,8 @@ mysql,redis,emqx和influxdb环境。
 
 ## 相关能力文档
 
+- [RodakOS 接入、Rodak 协议与小智协议对比](get_started/rodakos.md)
+- [Rodak 协议参考](rodak/README.md)
 - [全局角色审核、青少年保护、Jev 与 Laya 情绪能力](ai_safety_and_emotion.md)
 - [云电脑（OpenSandbox 沙箱）](sandbox/cloud_computer.md)
 - [会话工作区](ai_chat/workspace.md)

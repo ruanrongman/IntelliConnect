@@ -29,6 +29,7 @@ import top.rslly.iot.services.iot.AlarmEventServiceImpl;
 import top.rslly.iot.services.iot.OtaPassiveServiceImpl;
 import top.rslly.iot.services.iot.OtaServiceImpl;
 import top.rslly.iot.services.knowledgeGraphic.KnowledgeGraphicService;
+import top.rslly.iot.services.rodak.RodakConversation;
 import top.rslly.iot.services.thingsModel.*;
 import top.rslly.iot.services.wechat.WxProductBindServiceImpl;
 import top.rslly.iot.services.wechat.WxUserServiceImpl;
@@ -327,7 +328,8 @@ public class SafetyServiceImpl implements SafetyService {
       List<WxProductBindEntity> wxProductBindEntityList =
           wxProductBindService.findAllByAppidAndOpenid(appid, openid);
       for (WxProductBindEntity bind : wxProductBindEntityList) {
-        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())) {
+        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())
+            || RodakConversation.belongsToProduct(memoryChatId, bind.getProductId())) {
           return true;
         }
       }
@@ -340,7 +342,8 @@ public class SafetyServiceImpl implements SafetyService {
       List<UserProductBindEntity> userProductBindEntityList =
           userProductBindService.findAllByUserId(userId);
       for (UserProductBindEntity bind : userProductBindEntityList) {
-        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())) {
+        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())
+            || RodakConversation.belongsToProduct(memoryChatId, bind.getProductId())) {
           return true;
         }
       }
@@ -454,7 +457,8 @@ public class SafetyServiceImpl implements SafetyService {
       List<WxProductBindEntity> wxProductBindEntityList =
           wxProductBindService.findAllByAppidAndOpenid(appid, openid);
       for (WxProductBindEntity bind : wxProductBindEntityList) {
-        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())) {
+        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())
+            || RodakConversation.belongsToProduct(memoryChatId, bind.getProductId())) {
           return true;
         }
       }
@@ -467,7 +471,8 @@ public class SafetyServiceImpl implements SafetyService {
       List<UserProductBindEntity> userProductBindEntityList =
           userProductBindService.findAllByUserId(userId);
       for (UserProductBindEntity bind : userProductBindEntityList) {
-        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())) {
+        if (memoryChatId.startsWith("chatProduct" + bind.getProductId())
+            || RodakConversation.belongsToProduct(memoryChatId, bind.getProductId())) {
           return true;
         }
       }

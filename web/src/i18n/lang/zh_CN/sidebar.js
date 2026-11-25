@@ -58,6 +58,7 @@ const permission = {
 const product ={
   productPage: '产品页面',
   productXiaoZhi:'小智绑定',
+  rodakDeviceBinding: 'Rodak 设备绑定',
   aiChat:'智能体工作台',
   workspace: '会话工作区',
   productRole:'角色设置',

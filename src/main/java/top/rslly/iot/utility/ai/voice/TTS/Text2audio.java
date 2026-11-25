@@ -43,6 +43,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -74,12 +75,16 @@ public class Text2audio implements TtsService {
     private final AtomicBoolean terminal = new AtomicBoolean();
     private volatile boolean emitted;
     private volatile boolean failed;
+    private volatile boolean cancelled;
 
     ReactCallback(String chatId, Consumer<byte[]> onChunk) {
+      this(AudioFrameDuration.resolveOutboundSampleRate(chatId),
+          AudioFrameDuration.resolveOutboundFrameDurationMs(chatId), onChunk);
+    }
+
+    ReactCallback(int sampleRate, int frameDurationMs, Consumer<byte[]> onChunk) {
       this.onChunk = onChunk;
-      this.encoder =
-          new OpusEncoderUtils(AudioFrameDuration.resolveOutboundSampleRate(chatId), 1,
-              AudioFrameDuration.resolveOutboundFrameDurationMs(chatId), BOUNDARY_FADE_MS);
+      this.encoder = new OpusEncoderUtils(sampleRate, 1, frameDurationMs, BOUNDARY_FADE_MS);
     }
 
     @Override
@@ -96,6 +101,8 @@ public class Text2audio implements TtsService {
       }
       try {
         emitPackets(encoder.encodePcmToOpus(pcmData, false));
+      } catch (CancellationException e) {
+        cancel();
       } catch (Exception e) {
         failed = true;
         log.error("PCM processing error: {}", e.getMessage(), e);
@@ -112,6 +119,8 @@ public class Text2audio implements TtsService {
         if (!failed) {
           emitPackets(encoder.encodePcmToOpus(new byte[0], true));
         }
+      } catch (CancellationException e) {
+        cancelled = true;
       } catch (Exception e) {
         failed = true;
         log.error("PCM processing error: {}", e.getMessage(), e);
@@ -133,7 +142,7 @@ public class Text2audio implements TtsService {
 
     synchronized void cancel() {
       if (terminal.compareAndSet(false, true)) {
-        failed = true;
+        cancelled = true;
         latch.countDown();
       }
     }
@@ -143,7 +152,7 @@ public class Text2audio implements TtsService {
     }
 
     boolean hasAudio() {
-      return emitted && !failed;
+      return emitted && !failed && !cancelled;
     }
 
     private void emitPackets(List<byte[]> packets) {
@@ -263,8 +272,8 @@ public class Text2audio implements TtsService {
     return audio;
   }
 
-  private static SpeechSynthesisAudioFormat getPcmFormat(String chatId) {
-    return switch (AudioFrameDuration.resolveOutboundSampleRate(chatId)) {
+  private static SpeechSynthesisAudioFormat getPcmFormat(int sampleRate) {
+    return switch (sampleRate) {
       case 24000 -> SpeechSynthesisAudioFormat.PCM_24000HZ_MONO_16BIT;
       case 48000 -> SpeechSynthesisAudioFormat.PCM_48000HZ_MONO_16BIT;
       default -> SpeechSynthesisAudioFormat.PCM_16000HZ_MONO_16BIT;
@@ -290,8 +299,18 @@ public class Text2audio implements TtsService {
   @Override
   public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
       String voice) {
+    return getTextAudio(chatId, text, pitch, speed, voice,
+        AudioFrameDuration.resolveOutboundSampleRate(chatId),
+        AudioFrameDuration.resolveOutboundFrameDurationMs(chatId));
+  }
+
+  @Override
+  public List<byte[]> getTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice, int sampleRate, int frameDurationMs) {
     List<byte[]> audioFrames = new ArrayList<>();
-    boolean success = streamTextAudio(chatId, text, pitch, speed, voice, audioFrames::add);
+    boolean success =
+        streamTextAudio(chatId, text, pitch, speed, voice, sampleRate, frameDurationMs,
+            audioFrames::add);
     if (!success) {
       return null;
     }
@@ -302,14 +321,22 @@ public class Text2audio implements TtsService {
   @Override
   public boolean streamTextAudio(String chatId, String text, Float pitch, Float speed,
       String voice, Consumer<byte[]> onChunk) {
-    ReactCallback callback = new ReactCallback(chatId, onChunk);
+    return streamTextAudio(chatId, text, pitch, speed, voice,
+        AudioFrameDuration.resolveOutboundSampleRate(chatId),
+        AudioFrameDuration.resolveOutboundFrameDurationMs(chatId), onChunk);
+  }
+
+  @Override
+  public boolean streamTextAudio(String chatId, String text, Float pitch, Float speed,
+      String voice, int sampleRate, int frameDurationMs, Consumer<byte[]> onChunk) {
+    ReactCallback callback = new ReactCallback(sampleRate, frameDurationMs, onChunk);
     try {
       ResolvedVoice resolvedVoice = resolveVoice(voice);
       // 创建线程安全的参数副本
       SpeechSynthesisParam localParam = SpeechSynthesisParam.builder()
           .apiKey(param.getApiKey())
           .model(resolvedVoice.model())
-          .format(getPcmFormat(chatId))
+          .format(getPcmFormat(sampleRate))
           .pitchRate(pitch)
           .speechRate(speed)
           .voice(resolvedVoice.voice())
@@ -322,10 +349,13 @@ public class Text2audio implements TtsService {
         callback.waitForComplete();
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        log.error("waitForComplete error{}", e.getMessage());
         callback.cancel();
+        return false;
       } finally {
         ttsSemaphore.release();
+      }
+      if (callback.cancelled) {
+        return false;
       }
       if (!callback.hasAudio()) {
         log.warn("TTS未生成有效音频: chatId={}, textLength={}", chatId,
