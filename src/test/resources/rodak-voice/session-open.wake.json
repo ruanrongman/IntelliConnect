@@ -1,0 +1,28 @@
+{
+  "event": "session.open",
+  "protocol": "rodak-realtime-voice",
+  "protocolVersion": 1,
+  "generation": 7,
+  "vadStrategies": [
+    "device-authoritative",
+    "server-authoritative",
+    "hybrid-fallback"
+  ],
+  "preferredVadStrategy": "hybrid-fallback",
+  "features": {
+    "mcp": false,
+    "device_vad_epoch": 1
+  },
+  "uplink": {
+    "codec": "opus",
+    "sampleRateHz": 16000,
+    "channels": 1,
+    "frameDurationMs": 60
+  },
+  "downlink": {
+    "codec": "opus",
+    "sampleRateHz": 24000,
+    "channels": 1,
+    "frameDurationMs": 60
+  }
+}

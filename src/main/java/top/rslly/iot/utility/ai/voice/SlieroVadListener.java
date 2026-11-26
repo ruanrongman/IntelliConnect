@@ -147,6 +147,17 @@ public class SlieroVadListener {
     }
   }
 
+  public void confirmSpeechStarted() {
+    lifecycleLock.writeLock().lock();
+    try {
+      if (vadDetector != null && !stop.get()) {
+        vadDetector.confirmSpeechStarted();
+      }
+    } finally {
+      lifecycleLock.writeLock().unlock();
+    }
+  }
+
   public boolean isStop() {
     return stop.get();
   }

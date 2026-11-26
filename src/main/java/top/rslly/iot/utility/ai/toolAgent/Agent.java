@@ -53,6 +53,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 @Component
 @Data
@@ -252,6 +253,7 @@ public class Agent implements BaseTool<String> {
           }
           return content;
         }
+        GlobalMessageContext.reportToolStart(globalMessage);
         toolResult = manage.runTool(res.get("action_name"),
             extractFunctionArgs(res.get("action_parameters")), globalMessage);
         taskContext.append(new ModelMessage(ModelMessageRole.ASSISTANT.value(), String.format(
@@ -472,7 +474,8 @@ public class Agent implements BaseTool<String> {
       messages = taskContext.prepare(system, toolSpecs);
       List<String> toolObservations = taskContext.observations();
       FunctionResult result = callFunctionLlm(question, messages, toolSpecs, queueMap, chatId, llm,
-          GlobalMessageContext.reasoningQueue(globalMessage));
+          GlobalMessageContext.reasoningQueue(globalMessage),
+          GlobalMessageContext.speechText(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
         if (iteration == 0 && result != null && result.isUnsupported()) {
           log.info("Agent function calling reported unsupported, fallback to ReAct, chatId={}",
@@ -525,6 +528,7 @@ public class Agent implements BaseTool<String> {
         observation = "Error: unknown function '" + functionName
             + "'. Use an exact provided function name: " + availableNames;
       } else {
+        GlobalMessageContext.reportToolStart(globalMessage);
         if (queue != null) {
           queue.add(ToolPrefix.getToolCallPrefix(functionName));
         }
@@ -552,7 +556,7 @@ public class Agent implements BaseTool<String> {
 
   private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
-      LLM llm, Queue<String> reasoningQueue) {
+      LLM llm, Queue<String> reasoningQueue, Consumer<String> speechText) {
     if (!speedUp) {
       return llm.functionChat(question, messages, toolSpecs, true);
     }
@@ -570,6 +574,9 @@ public class Agent implements BaseTool<String> {
           return;
         }
         replyBuffer.append(text);
+        if (speechText != null) {
+          speechText.accept(text);
+        }
         Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
         if (queue != null) {
           if (reasoningQueue != null) {

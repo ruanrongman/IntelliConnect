@@ -32,6 +32,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -51,6 +52,7 @@ import top.rslly.iot.services.rodak.RodakPairingService;
 import top.rslly.iot.services.rodak.RodakPairingService.Identity;
 import top.rslly.iot.services.rodak.RodakPairingService.Revoked;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.chain.Router.TurnStage;
 import top.rslly.iot.utility.ai.tools.MusicPlayer.Track;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.voice.ASR.AsrServiceFactory;
@@ -78,6 +80,8 @@ public class RodakVoiceRuntime {
       Executors.newSingleThreadScheduledExecutor(
           Thread.ofPlatform().daemon().name("rodak-announce").factory());
   private final ExecutorService musicWorkers = Executors.newVirtualThreadPerTaskExecutor();
+  private final ScheduledThreadPoolExecutor voiceTimers = new ScheduledThreadPoolExecutor(2,
+      Thread.ofPlatform().daemon().name("rodak-voice-timer-", 1).factory());
   private final ThreadPoolExecutor workers = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS,
       new ArrayBlockingQueue<>(8), Thread.ofPlatform().daemon().name("rodak-voice-", 1).factory());
 
@@ -92,6 +96,7 @@ public class RodakVoiceRuntime {
     this.tts = tts;
     this.mqtt = mqtt;
     this.skipToolPrefix = skipToolPrefix;
+    voiceTimers.setRemoveOnCancelPolicy(true);
   }
 
   Identity authenticate(String token) {
@@ -159,6 +164,7 @@ public class RodakVoiceRuntime {
     workers.shutdownNow();
     announceCommands.shutdownNow();
     musicWorkers.shutdownNow();
+    voiceTimers.shutdownNow();
     musicAnnouncements.clear();
   }
 
@@ -201,11 +207,13 @@ public class RodakVoiceRuntime {
     }
   }
 
-  VoiceReply reply(String text, String streamId, String conversationId, Identity identity) {
+  VoiceReply reply(String text, String streamId, String conversationId, Identity identity,
+      Consumer<TurnStage> progress, Consumer<String> speechText) {
     var turn = new MusicTurn(identity);
     musicTurns.put(streamId, turn);
     try {
-      String answer = router.response(text, text, streamId, conversationId, identity.productId());
+      String answer = router.responseWithSpeech(text, text, streamId, conversationId,
+          identity.productId(), progress, speechText);
       return new VoiceReply(answer, turn.track);
     } finally {
       musicTurns.remove(streamId, turn);
@@ -310,6 +318,14 @@ public class RodakVoiceRuntime {
 
   Future<?> submit(Runnable turn) {
     return workers.submit(turn);
+  }
+
+  long nanoTime() {
+    return System.nanoTime();
+  }
+
+  Future<?> scheduleVoiceTimer(Runnable task, long delayNanos) {
+    return voiceTimers.schedule(task, delayNanos, TimeUnit.NANOSECONDS);
   }
 
   void cancel(Future<?> future) {

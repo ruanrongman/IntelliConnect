@@ -56,6 +56,10 @@ public enum ToolPrefix {
     return TOOL_CALL_MARKER + "：" + toolName.replace("\r", " ").replace("\n", " ").trim() + "。";
   }
 
+  public static boolean isToolCallMarker(String text) {
+    return text.startsWith(TOOL_CALL_MARKER);
+  }
+
   public static String stripLeadingPrefix(String text) {
     String trimmed = text.stripLeading();
     for (ToolPrefix toolPrefix : values()) {
@@ -71,7 +75,7 @@ public enum ToolPrefix {
     if (text == null) {
       return false;
     }
-    if (text.startsWith(TOOL_CALL_MARKER)) {
+    if (isToolCallMarker(text)) {
       return true;
     }
     for (ToolPrefix toolPrefix : values()) {

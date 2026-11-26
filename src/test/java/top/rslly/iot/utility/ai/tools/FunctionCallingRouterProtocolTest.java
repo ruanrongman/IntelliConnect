@@ -23,9 +23,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -40,10 +42,12 @@ class FunctionCallingRouterProtocolTest {
     FunctionCallingRouterTool tool = new FunctionCallingRouterTool();
     LLM llm = mock(LLM.class);
     String arguments = "{\"args\":\" raw argument \"}";
+    var speech = new ArrayList<String>();
     doAnswer(invocation -> {
       FunctionStreamHandler handler = invocation.getArgument(4);
       handler.onTextDelta("assistant preamble");
       if (withReasoning) {
+        handler.onReasoningDelta("private reasoning");
         handler.onToolCall("deepseek-real-id", "route_music", arguments, "reasoning");
       } else {
         handler.onToolCall("deepseek-real-id", "route_music", arguments);
@@ -53,13 +57,14 @@ class FunctionCallingRouterProtocolTest {
 
     FunctionResult result = ReflectionTestUtils.invokeMethod(tool, "runWithStreaming", "question",
         "chat", llm, List.of(), List.of(), Map.of("chat", new ConcurrentLinkedQueue<String>()),
-        null);
+        null, (Consumer<String>) speech::add);
 
     assertTrue(result.isToolCall());
     assertEquals("deepseek-real-id", result.getToolCallId());
     assertEquals("route_music", result.getFunctionName());
     assertEquals(arguments, result.getArguments());
     assertEquals("assistant preamble", result.getReply());
+    assertEquals(List.of("assistant preamble"), speech);
     assertEquals(withReasoning ? "reasoning" : "", result.getReasoningContent());
     verify(llm, times(1)).streamFunctionChat(anyString(), anyList(), anyList(), eq(true), any());
     verifyNoMoreInteractions(llm);

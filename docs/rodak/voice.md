@@ -26,13 +26,15 @@ Protocol-Version: 1
   "generation": 1,
   "uplink": {"codec": "opus", "sampleRateHz": 16000, "channels": 1, "frameDurationMs": 60},
   "downlink": {"codec": "opus", "sampleRateHz": 16000, "channels": 1, "frameDurationMs": 60},
-  "features": {"mcp": false, "device_vad_epoch": 1},
+  "features": {"mcp": false, "device_vad_epoch": 1, "turn_accepted": 1, "turn_progress": 1},
   "vadStrategies": ["server-authoritative"],
   "preferredVadStrategy": "server-authoritative"
 }
 ```
 
 服务端返回 `session.ready`，回显 `generation`、`protocol`、`protocolVersion` 和确认的 `uplink`、`downlink`，并提供 `sessionId`、`transport: "websocket"` 和选定的 `vadStrategy`。设备在收到它之后才能发送唤醒、收音和音频。后续设备控制帧使用返回的 `sessionId`。
+
+`turn_accepted` 和 `turn_progress` 是可选的整数开关，取值为 `0` 或 `1`，缺省为 `0`。启用 `turn_progress` 需要同时启用 `turn_accepted`。这两个事件通过 `session.open` 单独协商，Bootstrap 描述符的 `events` 列出固件通用的基础事件。
 
 | 参数 | IntelliConnect 支持范围 |
 | --- | --- |
@@ -49,6 +51,7 @@ Protocol-Version: 1
 服务端     → 设备    session.ready
 设备       → 服务端  wake.detected → input.start → 若干 RAV1 上行帧
 设备       → 服务端  input.stop，或由协商的 VAD 检测结束
+服务端     → 设备    turn.accepted → 零条或多条 turn.progress（按会话协商）
 服务端     → 设备    output.start → 若干 RAV1 下行帧 → output.stop
 设备                 播完本地缓冲后，可在同一会话中再次 input.start
 ```
@@ -59,7 +62,9 @@ Protocol-Version: 1
 | 设备 → 服务端 | `input.start` | 可带 `mode`，取 `manual-stop`、`auto-stop` 或 `realtime`。录音的二进制帧在此事件之后发送。新一轮输入可打断仍在处理或播报的旧轮次。 |
 | 设备 → 服务端 | `input.stop` | 可带 `reason`，用于显式结束当前输入，常见于按键松开。 |
 | 设备 → 服务端 | `vad` | `state` 为 `start` 或 `end`，并带 `source`、正整数 `sequence`、`triggerMs`，可带 `playbackEpoch`。设备边界按协商的 VAD 策略处理。 |
-| 服务端 → 设备 | `output.start` | `text` 为回复文本，`playbackEpoch` 标识此次输出。第一帧下行音频随后到达。 |
+| 服务端 → 设备 | `turn.accepted` | `turnId` 为正整数。识别到非空输入并决定回答时发送一次。每次建立会话时从 `1` 开始，仅已确认的轮次占用序号。 |
+| 服务端 → 设备 | `turn.progress` | 当前轮的 `turnId`、从 `1` 开始递增的 `seq` 和 `stage`。阶段包括 `thinking`（开始模型路由）、`tool`（开始分派工具）和 `composing`（开始准备最终回复）。 |
+| 服务端 → 设备 | `output.start` | `text` 为开始播放时可用的回复文本，流式回复通常为首句。`playbackEpoch` 标识此次输出。第一帧下行音频随后到达。 |
 | 服务端 → 设备 | `output.stop` | `reason` 和 `playbackEpoch` 标识输出结束，例如 `complete`、`interrupted`、`timeout` 或 `error`。 |
 | 设备 → 服务端 | `playback.abort` | `reason` 必填，建议携带当前 `playbackEpoch`。旧批次的打断会被忽略。 |
 | 双向 | `session.end` | 可带 `reason`。服务端发出结束事件后会正常关闭连接。 |
@@ -76,6 +81,12 @@ Protocol-Version: 1
 ```
 
 收到 `output.start` 后开始解码下行音频，收到同一批次的 `output.stop` 后播放完本地缓冲。打断时清理当前播放队列，忽略已结束会话、旧 `generation` 或旧 `playbackEpoch` 的异步结果。一个播放批次的音频序号延续本连接的序列，下一轮回复继续递增。
+
+进度只在 `turn.accepted` 与首次 `output.start` 之间发送。工具开始执行时立即发送 `tool`，其他密集的阶段变化可在 500 毫秒内合并，`seq` 按实际发送次数计数。设备使用阶段对应的本地文案。主动播报会话直接播放音频。
+
+流式回复按标点分句，首句就绪即可合成，同时最多预取下一句。音频按原句顺序发送，整轮共用一个 `playbackEpoch`。收到完整文本后补读尚未播放的尾段。
+
+实时收音在等待回复和播放期间可继续上传音频。服务端 VAD 在等待回复时检测到新语音，会取消正在处理的轮次，并用最近的上行音频接续收音。播放期间收到当前播放批次的语音打断时，服务端停止下行音频并接续收音。
 
 例如服务端发送下列播放起始事件。用户打断时，设备可在同一会话用相同 `playbackEpoch` 发送第二条事件。
 
@@ -116,6 +127,7 @@ Protocol-Version: 1
 | 鉴权失效 | Upgrade 可返回 HTTP `401`，已连接的会话可关闭为 `1008`。刷新设备凭据，解绑时重新配对。 |
 | 协议格式错误 | 例如会话 ID 不匹配、序号重复或音频头无效，返回 `invalid-canonical-event`、`retryable: false`，并关闭为 `1002`。 |
 | 服务短暂不可用 | 例如 `voice-busy`、`tts-failed`、`turn-timeout` 或关闭码 `1011`。设备按 `retryable` 和固件重连策略处理。 |
+| 新版轮次超时或回复为空 | 超时发送 `voice-turn-timeout`。接受后回复为空发送 `voice-turn-no-reply`。两者均为 `retryable: false`，随后关闭会话。 |
 | 连接被替换 | 同一设备建立新连接后，旧连接关闭为 `4001`，旧连接停止重试。 |
 
-打开后约 10 秒未完成 `session.open` 时服务端会关闭连接，普通对话单轮处理的服务端超时为 90 秒。需要重连时重新获取有效凭据，建立新的 WebSocket 并从 `session.open` 开始。同一入口也可承载仅播放的 [主动播报会话](announce.md)。
+打开后约 10 秒未完成 `session.open` 时服务端会关闭连接。未启用 `turn_accepted` 的普通轮次超时为 90 秒。启用后，语音识别、路由和等待首帧的上限分别为 20、90 和 20 秒。接受轮次后，`output.start`、`error` 或 `session.end` 须在 120 秒内到达，进度事件不延长时限。开始播放后，连续 20 秒没有新的 RAV1 音频帧时发送 `output.stop`。需要重连时重新获取有效凭据，建立新的 WebSocket 并从 `session.open` 开始。同一入口也可承载仅播放的 [主动播报会话](announce.md)。

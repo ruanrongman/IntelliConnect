@@ -63,6 +63,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 
 @Component
@@ -130,6 +131,12 @@ public class Router {
   private static final String MEMORY_EXTRACTION_KEY_PREFIX = "memoryExtract";
   public static final Map<String, Queue<String>> queueMap = new ConcurrentHashMap<>();
 
+  public enum TurnStage {
+    THINKING,
+    TOOL,
+    COMPOSING
+  }
+
   // chatId in WeChat module need to use openid
   public String response(String content, String chatId, int productId, String... dataArgs) {
     return response(content, content, chatId, productId, dataArgs);
@@ -143,17 +150,31 @@ public class Router {
   public String response(String content, String historyContent, String streamChatId,
       String conversationChatId, int productId, String... dataArgs) {
     return responseInternal(content, historyContent, streamChatId, conversationChatId, productId,
-        null, dataArgs);
+        null, null, null, dataArgs);
+  }
+
+  public String responseWithProgress(String content, String historyContent, String streamChatId,
+      String conversationChatId, int productId, Consumer<TurnStage> progress) {
+    return responseWithSpeech(content, historyContent, streamChatId, conversationChatId, productId,
+        progress, null);
+  }
+
+  public String responseWithSpeech(String content, String historyContent, String streamChatId,
+      String conversationChatId, int productId, Consumer<TurnStage> progress,
+      Consumer<String> speechText) {
+    return responseInternal(content, historyContent, streamChatId, conversationChatId, productId,
+        null, progress, speechText);
   }
 
   public String responseDebugStream(String content, String historyContent, String streamChatId,
       String conversationChatId, int productId, Queue<String> reasoningQueue) {
     return responseInternal(content, historyContent, streamChatId, conversationChatId, productId,
-        reasoningQueue);
+        reasoningQueue, null, null);
   }
 
   private String responseInternal(String content, String historyContent, String streamChatId,
-      String conversationChatId, int productId, Queue<String> reasoningQueue, String... dataArgs) {
+      String conversationChatId, int productId, Queue<String> reasoningQueue,
+      Consumer<TurnStage> progress, Consumer<String> speechText, String... dataArgs) {
     // Use the same app-scoped id as the history written by the WeChat path below.
     String usageChatId = dataArgs.length > 0 && !"false".equals(dataArgs[0])
         ? dataArgs[0] + conversationChatId
@@ -163,7 +184,7 @@ public class Router {
     try (LlmUsageContext.Scope ignored =
         LlmUsageContext.open(productId, usageChatId, turnUsage)) {
       return respondWithUsageScope(content, historyContent, streamChatId, conversationChatId,
-          productId, reasoningQueue, dataArgs);
+          productId, reasoningQueue, progress, speechText, dataArgs);
     } finally {
       // Persist before returning, including calls spent before a failed/disconnected reply.
       // Background work finishing after this snapshot remains diagnostic logging only.
@@ -176,7 +197,8 @@ public class Router {
 
   private String respondWithUsageScope(String content, String historyContent,
       String streamChatId, String conversationChatId, int productId,
-      Queue<String> reasoningQueue, String... dataArgs) {
+      Queue<String> reasoningQueue, Consumer<TurnStage> progress, Consumer<String> speechText,
+      String... dataArgs) {
     List<ModelMessage> memory;
     String answer;
     String toolResult = "";
@@ -188,6 +210,13 @@ public class Router {
     globalMessage.put(GlobalMessageContext.QUEUE_MAP, queueMap);
     if (reasoningQueue != null) {
       globalMessage.put(GlobalMessageContext.REASONING_QUEUE, reasoningQueue);
+    }
+    if (speechText != null) {
+      globalMessage.put(GlobalMessageContext.SPEECH_TEXT, speechText);
+    }
+    if (progress != null) {
+      globalMessage.put(GlobalMessageContext.ON_TOOL_START,
+          (Runnable) () -> progress.accept(TurnStage.TOOL));
     }
     // 从 WebSocket session 获取客户端 IP
     Session session = XiaoZhiWebsocket.clients
@@ -237,7 +266,7 @@ public class Router {
       maintainConversationMemory(content, conversationChatId, productId, globalMessage, memory);
       RouteExecutionResult routeExecutionResult =
           resolveFunctionRoute(content, globalMessage, productId, streamChatId, historyTurn,
-              dataArgs);
+              progress, dataArgs);
       answer = routeExecutionResult.answer();
       toolResult = routeExecutionResult.toolResult();
     } else {
@@ -250,6 +279,8 @@ public class Router {
       if (branchPredictionEnabled) {
         final String predictionContent = content;
         final Map<String, Object> predictionGlobalMessage = new HashMap<>(globalMessage);
+        predictionGlobalMessage.remove(GlobalMessageContext.ON_TOOL_START);
+        predictionGlobalMessage.remove(GlobalMessageContext.SPEECH_TEXT);
         // Compact a private snapshot before speculative work. Apply its budget to the live
         // history on the router thread, so the classifier never reads a concurrently edited list.
         List<ModelMessage> predictionMemory = new ArrayList<>(memory);
@@ -284,6 +315,7 @@ public class Router {
           }
         }));
       }
+      reportStage(progress, TurnStage.THINKING);
       var resultMap = classifierTool.run(content, globalMessage);
       String args;
       Object argsObject = resultMap.get("args");
@@ -300,6 +332,7 @@ public class Router {
           if (banTools.contains(value.get(0))) {
             value.set(0, "5");
           }
+          reportRouteStage(progress, value.get(0), dataArgs);
           switch (value.get(0)) {
             case "1" -> {
               predictionCancelled.set(true);
@@ -378,11 +411,13 @@ public class Router {
             }
           }
         } else {
+          reportStage(progress, TurnStage.COMPOSING);
           answer = resolvePredictedChatAnswer(content, globalMessage, predictionThread,
               predictionResult, predictionCancelled, predictionLatch, queue, predictionQueue,
               streamChatId);
         }
       } else {
+        reportStage(progress, TurnStage.COMPOSING);
         answer = resolvePredictedChatAnswer(content, globalMessage, predictionThread,
             predictionResult, predictionCancelled, predictionLatch, queue, predictionQueue,
             streamChatId);
@@ -455,6 +490,7 @@ public class Router {
     }
     Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
     summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    summaryMessage.remove(GlobalMessageContext.SPEECH_TEXT);
     summaryMessage.remove(GlobalMessageContext.PROMPT_BUDGET);
     List<ModelMessage> snapshot = ConversationHistoryCodec.visibleMessages(prefix);
     summaryMessage.put(GlobalMessageContext.MEMORY, snapshot);
@@ -472,6 +508,7 @@ public class Router {
         policy.copyMessages(ConversationHistoryCodec.visibleMessages(memory));
     Map<String, Object> summaryMessage = new HashMap<>(globalMessage);
     summaryMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    summaryMessage.remove(GlobalMessageContext.SPEECH_TEXT);
     summaryMessage.remove(GlobalMessageContext.PROMPT_BUDGET);
     summaryMessage.put(GlobalMessageContext.MEMORY, snapshot);
     memoryTool.run(snapshot, summaryMessage);
@@ -499,6 +536,8 @@ public class Router {
     }
     Map<String, Object> sideEffectMessage = new HashMap<>(globalMessage);
     sideEffectMessage.remove(GlobalMessageContext.REASONING_QUEUE);
+    sideEffectMessage.remove(GlobalMessageContext.SPEECH_TEXT);
+    sideEffectMessage.remove(GlobalMessageContext.ON_TOOL_START);
     sideEffectMessage.remove(GlobalMessageContext.PROMPT_BUDGET);
     sideEffectMessage.put(GlobalMessageContext.MEMORY, batch.messages());
     longMemoryTool.run(content, sideEffectMessage);
@@ -528,13 +567,16 @@ public class Router {
 
   private RouteExecutionResult resolveFunctionRoute(String content,
       Map<String, Object> globalMessage,
-      int productId, String chatId, HistoryTurn historyTurn, String... dataArgs) {
+      int productId, String chatId, HistoryTurn historyTurn,
+      Consumer<TurnStage> progress, String... dataArgs) {
+    reportStage(progress, TurnStage.THINKING);
     FunctionResult result = functionCallingRouterTool.run(content, globalMessage);
     if (result.isToolCall()) {
       Optional<FunctionRouterRoute> route =
           FunctionRouterRoute.fromFunctionName(result.getFunctionName());
       if (route.isPresent()) {
         FunctionRouterRoute matchedRoute = route.get();
+        reportRouteStage(progress, matchedRoute.getTaskId(), dataArgs);
         if (matchedRoute == FunctionRouterRoute.SCHEDULE
             && dataArgs.length > 0 && "false".equals(dataArgs[0])) {
           return executeToolRoute(matchedRoute.getTaskId(), content, result.getArguments(),
@@ -568,14 +610,37 @@ public class Router {
       log.warn("Function router failed, fallback to legacy router, chatId={}", chatId);
     }
 
+    reportStage(progress, TurnStage.THINKING);
     var resultMap = classifierTool.run(content, globalMessage);
     String args = resultMap.get("args") == null ? "" : resultMap.get("args").toString();
     List<String> value = Cast.castList(resultMap.get("value"), String.class);
     if (value == null || value.isEmpty()) {
+      reportStage(progress, TurnStage.COMPOSING);
       String directReply = chatTool.run(mergeRouterArgs(content, args), globalMessage);
       return new RouteExecutionResult(directReply, directReply);
     }
+    reportRouteStage(progress, value.get(0), dataArgs);
     return executeToolRoute(value.get(0), content, args, globalMessage, dataArgs);
+  }
+
+  private static void reportRouteStage(Consumer<TurnStage> progress, String routeId,
+      String... dataArgs) {
+    if (progress == null)
+      return;
+    switch (routeId) {
+      case "1", "2", "3", "6", "7", "9", "11" -> progress.accept(TurnStage.TOOL);
+      case "4", "10" -> progress.accept(TurnStage.THINKING);
+      case "8" -> {
+        if (dataArgs.length == 0 || !"false".equals(dataArgs[0]))
+          progress.accept(TurnStage.TOOL);
+      }
+      default -> progress.accept(TurnStage.COMPOSING);
+    }
+  }
+
+  private static void reportStage(Consumer<TurnStage> progress, TurnStage stage) {
+    if (progress != null)
+      progress.accept(stage);
   }
 
   private RouteExecutionResult executeToolRoute(String routeId, String content, String args,
@@ -654,6 +719,7 @@ public class Router {
 
     if (predictionThread.isAlive() || predictionResult.get() != null) {
       log.debug("[BranchPrediction] HIT, chatId={}", chatId);
+      Consumer<String> speechText = GlobalMessageContext.speechText(globalMessage);
 
       Thread.ofVirtual().start(() -> {
         try {
@@ -665,6 +731,9 @@ public class Router {
             String token = predictionQueue.poll();
             if (token != null) {
               mainQueue.offer(token);
+              if (speechText != null && !"[DONE]".equals(token)) {
+                speechText.accept(token);
+              }
             } else {
               Thread.yield();
             }

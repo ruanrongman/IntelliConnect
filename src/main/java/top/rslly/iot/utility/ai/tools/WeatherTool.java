@@ -99,6 +99,8 @@ public class WeatherTool implements BaseTool<String> {
     ModelMessage userMessage = new ModelMessage(ModelMessageRole.USER.value(), question);
     messages.add(systemMessage);
     messages.add(userMessage);
+    if (!mcpIsTool)
+      GlobalMessageContext.reportToolStart(globalMessage);
     if (speedUp && !mcpIsTool) {
       queueMap.get(chatId).add(ToolPrefix.getToolCallPrefix(name));
     }
@@ -118,7 +120,8 @@ public class WeatherTool implements BaseTool<String> {
         dataMap.remove(chatId); // 使用 chatId 作为 key
         llm.streamJsonChat(question, messages, true,
             new ChatToolEventSourceListener(queueMap, chatId, this,
-                GlobalMessageContext.reasoningQueue(globalMessage)));
+                GlobalMessageContext.reasoningQueue(globalMessage),
+                GlobalMessageContext.speechText(globalMessage)));
         Lock chatLock = lockMap.get(chatId);
         Condition chatCondition = conditionMap.get(chatId);
         chatLock.lock();

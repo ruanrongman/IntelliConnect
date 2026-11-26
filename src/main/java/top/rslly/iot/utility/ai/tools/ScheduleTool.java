@@ -103,6 +103,8 @@ public class ScheduleTool implements BaseTool<String> {
       lockMap.putIfAbsent(chatId, new ReentrantLock());
       conditionMap.putIfAbsent(chatId, lockMap.get(chatId).newCondition());
     }
+    if (!mcpIsTool)
+      GlobalMessageContext.reportToolStart(globalMessage);
     if (queue != null && !mcpIsTool) {
       queue.add(ToolPrefix.getToolCallPrefix(name));
     }

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
@@ -33,12 +34,25 @@ public final class GlobalMessageContext {
   public static final String CONVERSATION_CHAT_ID = "conversationChatId";
   public static final String QUEUE_MAP = "queueMap";
   public static final String REASONING_QUEUE = "reasoningQueue";
+  public static final String ON_TOOL_START = "onToolStart";
+  public static final String SPEECH_TEXT = "speechText";
   public static final String MEMORY = "memory";
   public static final String MEMORY_REVISION = "memoryRevision";
   public static final String PROMPT_BUDGET = "conversationPromptBudget";
   public static final String YOUTH_PROTECTION_ENABLED = "youthProtectionEnabled";
 
   private GlobalMessageContext() {}
+
+  public static void reportToolStart(Map<String, Object> globalMessage) {
+    if (globalMessage.get(ON_TOOL_START)instanceof Runnable notify) {
+      notify.run();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static Consumer<String> speechText(Map<String, Object> globalMessage) {
+    return (Consumer<String>) globalMessage.get(SPEECH_TEXT);
+  }
 
   /** Called after assembling the full request, before sending it to the selected model. */
   public static void checkPromptBudget(Map<String, Object> globalMessage, LLM llm,

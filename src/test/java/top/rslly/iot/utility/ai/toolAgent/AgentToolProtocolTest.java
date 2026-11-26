@@ -39,6 +39,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import top.rslly.iot.services.AdminConfigServiceImpl;
 import top.rslly.iot.services.UserConfigServiceImpl;
 import top.rslly.iot.utility.ai.DescriptionUtil;
+import top.rslly.iot.utility.ai.GlobalMessageContext;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.Manage;
 import top.rslly.iot.utility.ai.ModelMessage;
@@ -49,6 +50,7 @@ import top.rslly.iot.utility.ai.llm.FunctionToolResultMessage;
 import top.rslly.iot.utility.ai.llm.FunctionToolSpec;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.prompts.ReactPrompt;
+import top.rslly.iot.utility.ai.tools.ToolPrefix;
 
 class AgentToolProtocolTest {
   private static final String QUESTION = "获取新闻";
@@ -95,6 +97,8 @@ class AgentToolProtocolTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void unknownFunctionReturnsPairedErrorAndModelCorrectsNameWithoutReact(boolean stream) {
+    Runnable onToolStart = mock(Runnable.class);
+    context.put(GlobalMessageContext.ON_TOOL_START, onToolStart);
     respond(stream,
         FunctionResult.toolCall("call-wrong", "bash", ARGUMENTS, "progress", "reasoning"),
         FunctionResult.toolCall("call-correct", "bashTool", ARGUMENTS),
@@ -116,10 +120,14 @@ class AgentToolProtocolTest {
     assertEquals("call-wrong", result.toolCallId());
     assertTrue(result.content().contains("unknown function 'bash'"));
     assertTrue(result.content().contains("bashTool"));
-    verify(manage).runTool("bashTool", COMMAND, context);
+    var dispatch = inOrder(onToolStart, manage);
+    dispatch.verify(onToolStart).run();
+    dispatch.verify(manage).runTool("bashTool", COMMAND, context);
+    verifyNoMoreInteractions(onToolStart);
     verifyNoMoreInteractions(manage);
     verify(llm, never()).jsonChat(anyString(), anyList(), anyBoolean());
     assertEquals("[DONE]", new ArrayList<>(output).getLast());
+    assertTrue(output.contains(ToolPrefix.getToolCallPrefix("bashTool")));
     assertTrue(agent.getLockMap().isEmpty());
   }
 
@@ -145,6 +153,8 @@ class AgentToolProtocolTest {
 
   @Test
   void reactStringArgsAreUnwrappedBeforeToolDispatch() {
+    Runnable onToolStart = mock(Runnable.class);
+    context.put(GlobalMessageContext.ON_TOOL_START, onToolStart);
     ReflectionTestUtils.setField(agent, "agentMode", "prompt");
     when(llm.jsonChat(eq(QUESTION), anyList(), eq(true))).thenReturn(
         JSON.parseObject(JSON.toJSONString(Map.of("action",
@@ -153,7 +163,10 @@ class AgentToolProtocolTest {
 
     assertEquals("新闻摘要", agent.run(QUESTION, context));
 
-    verify(manage).runTool("bashTool", COMMAND, context);
+    var dispatch = inOrder(onToolStart, manage);
+    dispatch.verify(onToolStart).run();
+    dispatch.verify(manage).runTool("bashTool", COMMAND, context);
+    verifyNoMoreInteractions(onToolStart);
     verifyNoMoreInteractions(manage);
   }
 

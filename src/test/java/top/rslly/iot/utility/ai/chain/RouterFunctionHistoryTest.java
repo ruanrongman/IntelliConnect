@@ -57,6 +57,7 @@ import top.rslly.iot.utility.ai.llm.usage.LlmUsageAccumulator;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageContext;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageSummary;
 import top.rslly.iot.utility.ai.llm.usage.LlmUsageTracker;
+import top.rslly.iot.utility.ai.toolAgent.Agent;
 import top.rslly.iot.utility.ai.tools.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,6 +78,8 @@ class RouterFunctionHistoryTest {
   private MusicTool musicTool;
   @Mock
   private ControlTool controlTool;
+  @Mock
+  private Agent agent;
   @Mock
   private ScheduleTool scheduleTool;
   @Mock
@@ -361,6 +364,57 @@ class RouterFunctionHistoryTest {
     verify(historyMessageEntityService).recordHistoryMessage(eq("chat"), anyString(),
         eq("switch on"), eq(answer));
     verify(controlTool, times(1)).run(anyString(), anyMap());
+  }
+
+  @Test
+  void reportsProgressBeforeRoutingCallsAndFinalChatGeneration() {
+    var stages = new ArrayList<Router.TurnStage>();
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      assertEquals(List.of(Router.TurnStage.THINKING), stages);
+      return FunctionResult.unsupported();
+    });
+    when(classifierTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      assertEquals(List.of(Router.TurnStage.THINKING, Router.TurnStage.THINKING), stages);
+      return Map.of("value", List.of("5"), "args", "");
+    });
+    when(chatTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      assertEquals(List.of(Router.TurnStage.THINKING, Router.TurnStage.THINKING,
+          Router.TurnStage.COMPOSING), stages);
+      return "answer";
+    });
+
+    assertEquals("answer",
+        router.responseWithProgress("question", "question", "voice", "chat", 1, stages::add));
+  }
+
+  @Test
+  void reportsToolBeforeDispatchingTheSelectedNativeRoute() {
+    var stages = new ArrayList<Router.TurnStage>();
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenReturn(
+        FunctionResult.toolCall("control-id", "route_control_electrical", "{}"));
+    when(controlTool.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      assertEquals(List.of(Router.TurnStage.THINKING, Router.TurnStage.TOOL), stages);
+      return "switched on";
+    });
+
+    assertEquals(ToolPrefix.CONTROL.getPrefix() + "switched on",
+        router.responseWithProgress("switch on", "switch on", "voice", "chat", 1, stages::add));
+  }
+
+  @Test
+  void delegatedAgentReportsToolWhenItsCallStarts() {
+    var stages = new ArrayList<Router.TurnStage>();
+    when(functionCallingRouterTool.run(anyString(), anyMap())).thenReturn(
+        FunctionResult.toolCall("agent-id", "route_agent", "{}"));
+    when(agent.run(anyString(), anyMap())).thenAnswer(invocation -> {
+      assertFalse(stages.contains(Router.TurnStage.TOOL));
+      GlobalMessageContext.reportToolStart(invocation.getArgument(1));
+      assertEquals(Router.TurnStage.TOOL, stages.getLast());
+      return "answer";
+    });
+
+    assertEquals(ToolPrefix.AGENT.getPrefix() + "answer",
+        router.responseWithProgress("question", "question", "voice", "chat", 1, stages::add));
   }
 
   @Test

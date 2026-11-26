@@ -171,6 +171,11 @@ public class SlieroVadDetector {
     }
   }
 
+  synchronized void confirmSpeechStarted() {
+    triggered = true;
+    tempEnd = 0;
+  }
+
   public void close() throws OrtException {
     synchronized (this) {
       if (closed) {

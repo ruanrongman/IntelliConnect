@@ -40,11 +40,12 @@ import java.util.function.BooleanSupplier;
 @Slf4j
 public class AudioUtils {
   // Number of frames for pre-buffering
-  private static final int PRE_BUFFER_COUNT = 5;
+  public static final int PRE_BUFFER_COUNT = 5;
 
-  record PreBufferResult(List<byte[]> frames, boolean endOfStream, boolean cancelled) {}
+  public record PreBufferResult(List<byte[]> frames, boolean endOfStream, boolean cancelled) {}
 
-  static PreBufferResult readPreBuffer(BlockingQueue<byte[]> queue, BooleanSupplier shouldCancel)
+  public static PreBufferResult readPreBuffer(BlockingQueue<byte[]> queue,
+      BooleanSupplier shouldCancel)
       throws InterruptedException {
     List<byte[]> frames = new ArrayList<>();
     for (int i = 0; i < PRE_BUFFER_COUNT; i++) {

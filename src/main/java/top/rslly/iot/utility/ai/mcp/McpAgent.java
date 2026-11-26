@@ -79,6 +79,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 @Component
 @Slf4j
@@ -409,6 +410,7 @@ public class McpAgent implements BaseTool<String> {
         }
         String serverKey = parts[0];
         String toolName = parts[1];
+        GlobalMessageContext.reportToolStart(globalMessage);
         // 调用指定服务器的工具
         try {
           if (serverKey.equals(McpWebsocket.DEVICE_SERVER_NAME)) {
@@ -705,7 +707,8 @@ public class McpAgent implements BaseTool<String> {
       List<String> toolObservations = taskContext.observations();
       FunctionResult result =
           callFunctionLlm(question, messages, registry.toolSpecs(), queueMap, chatId, llm,
-              GlobalMessageContext.reasoningQueue(globalMessage));
+              GlobalMessageContext.reasoningQueue(globalMessage),
+              GlobalMessageContext.speechText(globalMessage));
       if (result == null || result.isUnsupported() || result.isError()) {
         if (iteration == 0 && result != null && result.isUnsupported()) {
           return null;
@@ -743,6 +746,7 @@ public class McpAgent implements BaseTool<String> {
       String assistantText = extractAssistantText(result.getArguments());
       String arguments = normalizeToolArguments(result.getArguments());
       String toolCallArguments = normalizeToolCallArguments(result.getArguments());
+      GlobalMessageContext.reportToolStart(globalMessage);
       if (queue != null) {
         queue.add(ToolPrefix.getToolCallPrefix(functionRef.fullName()));
       }
@@ -772,7 +776,7 @@ public class McpAgent implements BaseTool<String> {
 
   private FunctionResult callFunctionLlm(String question, List<ModelMessage> messages,
       List<FunctionToolSpec> toolSpecs, Map<String, Queue<String>> queueMap, String chatId,
-      LLM llm, Queue<String> reasoningQueue) {
+      LLM llm, Queue<String> reasoningQueue, Consumer<String> speechText) {
     if (!speedUp) {
       return llm.functionChat(question, messages, toolSpecs, true);
     }
@@ -790,6 +794,9 @@ public class McpAgent implements BaseTool<String> {
           return;
         }
         replyBuffer.append(text);
+        if (speechText != null) {
+          speechText.accept(text);
+        }
         Queue<String> queue = queueMap == null ? null : queueMap.get(chatId);
         if (queue != null) {
           if (reasoningQueue != null) {

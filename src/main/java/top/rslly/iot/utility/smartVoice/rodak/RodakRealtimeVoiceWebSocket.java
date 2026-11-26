@@ -35,7 +35,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -52,9 +54,11 @@ import top.rslly.iot.services.rodak.RodakDescriptor;
 import top.rslly.iot.services.rodak.RodakDescriptor.VoiceFormat;
 import top.rslly.iot.services.rodak.RodakPairingService.Identity;
 import top.rslly.iot.utility.SpringBeanUtils;
+import top.rslly.iot.utility.ai.chain.Router.TurnStage;
 import top.rslly.iot.utility.ai.tools.MusicPlayer.Track;
 import top.rslly.iot.utility.ai.tools.ToolPrefix;
 import top.rslly.iot.utility.ai.voice.ASR.StreamingAsrSession;
+import top.rslly.iot.utility.ai.voice.AudioUtils;
 import top.rslly.iot.utility.ai.voice.OpusEncoderUtils;
 import top.rslly.iot.utility.ai.voice.SlieroVadListener;
 import top.rslly.iot.utility.ai.voice.concentus.OpusDecoder;
@@ -70,7 +74,20 @@ public class RodakRealtimeVoiceWebSocket {
   private static final int CONTROL_LIMIT = 65536;
   private static final int MAX_CAPTURE_BYTES = SAMPLE_RATE * 2 * 20;
   private static final int VAD_WINDOW = 512 * 2;
+  private static final int BARGE_IN_PREROLL_MS = 300;
+  private static final int BARGE_IN_PREROLL_FRAMES =
+      BARGE_IN_PREROLL_MS / RodakDescriptor.VOICE_UPLINK.frameDurationMs();
+  private static final long ASR_TIMEOUT = TimeUnit.SECONDS.toNanos(20);
+  private static final long ROUTER_TIMEOUT = TimeUnit.SECONDS.toNanos(90);
+  private static final long FIRST_AUDIO_TIMEOUT = TimeUnit.SECONDS.toNanos(20);
+  private static final long ACCEPTED_TURN_TIMEOUT = TimeUnit.SECONDS.toNanos(120);
+  private static final long AUDIO_GAP_TIMEOUT = TimeUnit.SECONDS.toNanos(20);
+  private static final int MAX_OUTPUT_TEXT_LENGTH = 4096;
+  private static final long PROGRESS_INTERVAL = TimeUnit.MILLISECONDS.toNanos(500);
   private static final String DEVICE_VAD = "device-authoritative";
+  private static final Set<String> KNOWN_FEATURES =
+      Set.of("mcp", "device_vad_epoch", "announce", "announceSeq", "turn_accepted",
+          "turn_progress");
   private static final Set<String> KNOWN_VAD_STRATEGIES =
       Set.of(RodakDescriptor.SERVER_VAD, RodakDescriptor.HYBRID_VAD, DEVICE_VAD);
   private static final ObjectMapper JSON = new ObjectMapper();
@@ -84,6 +101,7 @@ public class RodakRealtimeVoiceWebSocket {
   private long inputSequence;
   private long outputSequence;
   private long playbackEpoch;
+  private long lastOutputEpoch;
   private long vadSequence;
   private long vadPlaybackEpoch;
   private long vadCaptureEpoch;
@@ -93,10 +111,14 @@ public class RodakRealtimeVoiceWebSocket {
   private VoiceFormat downlink;
   private boolean inputOpen;
   private boolean announceSession;
+  private boolean turnAcceptedEnabled;
+  private boolean turnProgressEnabled;
+  private long acceptedTurnCount;
   private boolean closed;
   private OpusDecoder decoder;
   private SlieroVadListener serverVad;
   private final byte[] vadWindow = new byte[VAD_WINDOW];
+  private final ArrayDeque<UplinkFrame> playbackUplink = new ArrayDeque<>();
   private int vadOffset;
   private Turn current;
 
@@ -176,6 +198,7 @@ public class RodakRealtimeVoiceWebSocket {
           inputOpen = true;
           if (current == null || !current.capturing) {
             interruptTurn("input.start");
+            playbackUplink.clear();
             startTurn();
           }
         }
@@ -183,6 +206,7 @@ public class RodakRealtimeVoiceWebSocket {
           fields(event, "text");
           string(event, "text");
           inputOpen = false;
+          playbackUplink.clear();
           interruptTurn("wake.detected");
         }
         case "input.stop" -> {
@@ -190,14 +214,26 @@ public class RodakRealtimeVoiceWebSocket {
           if (event.has("reason"))
             string(event, "reason");
           inputOpen = false;
+          playbackUplink.clear();
           finishInput();
         }
         case "vad" -> deviceVad(event);
         case "playback.abort" -> {
           fields(event, "reason", "playbackEpoch");
-          string(event, "reason");
-          if (matchesPlayback(event) && current != null && !current.capturing)
+          String reason = string(event, "reason");
+          long epoch = playbackEpoch(event);
+          if ("vad_detected".equals(reason)) {
+            if (canCaptureBargeIn(epoch == 0 ? lastOutputEpoch : epoch)
+                || canCaptureProcessingInterrupt(epoch)) {
+              startBargeIn("playback.abort");
+            } else if (!inputOpen && matchesPlayback(event) && current != null && current.playing) {
+              interruptTurn("playback.abort");
+            }
+          } else if ((epoch == 0 || epoch == playbackEpoch) && current != null
+              && !current.capturing) {
             interruptTurn("playback.abort");
+            playbackUplink.clear();
+          }
         }
         case "session.end" -> {
           fields(event, "reason");
@@ -232,41 +268,29 @@ public class RodakRealtimeVoiceWebSocket {
           decoder.decode(frame.payload(), 0, frame.payload().length, pcm, 0, samples,
               false) == samples);
       if (current != null && !current.capturing) {
-        return;
-      }
-      boolean serverStart = false;
-      boolean serverEnd = false;
-      if (serverVad != null) {
-        for (int offset = 0; offset < pcm.length;) {
-          int count = Math.min(pcm.length - offset, VAD_WINDOW - vadOffset);
-          System.arraycopy(pcm, offset, vadWindow, vadOffset, count);
-          offset += count;
-          vadOffset += count;
-          if (vadOffset == VAD_WINDOW) {
-            var boundary = serverVad.listen(vadWindow);
-            vadOffset = 0;
-            if (boundary != null) {
-              serverStart |= boundary.containsKey("start");
-              serverEnd |= boundary.containsKey("end");
-            }
+        if (current.playing) {
+          retainPlaybackUplink(pcm);
+        } else if (canCaptureProcessingInterrupt(0)) {
+          retainPlaybackUplink(pcm);
+          if (serverVad != null && detectSpeech(pcm).started()) {
+            startBargeIn("processing.vad");
           }
         }
+        return;
       }
-      if (current == null && serverStart) {
+      VadBoundary boundary = detectSpeech(pcm);
+      if (current == null && boundary.started()) {
+        playbackUplink.clear();
         startTurn();
       }
       if (current == null) {
         return;
       }
       Turn turn = current;
-      turn.pcm.writeBytes(pcm);
-      if (turn.asr != null && !turn.asr.sendPcm(pcm)) {
-        turn.asr.cancel();
-        turn.asr = null;
-      }
+      appendAudio(turn, pcm);
       boolean awaitingDeviceEnd = deviceBoundary != 0
           && System.nanoTime() - deviceBoundary < TimeUnit.SECONDS.toNanos(3);
-      turn.serverEndPending |= serverEnd;
+      turn.serverEndPending |= boundary.ended();
       if ((!awaitingDeviceEnd && turn.serverEndPending) || turn.pcm.size() >= MAX_CAPTURE_BYTES) {
         finishInput();
       }
@@ -274,6 +298,42 @@ public class RodakRealtimeVoiceWebSocket {
       protocolError();
     } catch (Exception e) {
       close(1011, "voice unavailable");
+    }
+  }
+
+  private void retainPlaybackUplink(byte[] pcm) {
+    if (playbackUplink.size() == BARGE_IN_PREROLL_FRAMES)
+      playbackUplink.removeFirst();
+    playbackUplink.addLast(new UplinkFrame(runtime.nanoTime(), pcm));
+  }
+
+  private VadBoundary detectSpeech(byte[] pcm) {
+    if (serverVad == null)
+      return new VadBoundary(false, false);
+    boolean started = false;
+    boolean ended = false;
+    for (int offset = 0; offset < pcm.length;) {
+      int count = Math.min(pcm.length - offset, VAD_WINDOW - vadOffset);
+      System.arraycopy(pcm, offset, vadWindow, vadOffset, count);
+      offset += count;
+      vadOffset += count;
+      if (vadOffset == VAD_WINDOW) {
+        var boundary = serverVad.listen(vadWindow);
+        vadOffset = 0;
+        if (boundary != null) {
+          started |= boundary.containsKey("start");
+          ended |= boundary.containsKey("end");
+        }
+      }
+    }
+    return new VadBoundary(started, ended);
+  }
+
+  private void appendAudio(Turn turn, byte[] pcm) {
+    turn.pcm.writeBytes(pcm);
+    if (turn.asr != null && !turn.asr.sendPcm(pcm)) {
+      turn.asr.cancel();
+      turn.asr = null;
     }
   }
 
@@ -290,14 +350,26 @@ public class RodakRealtimeVoiceWebSocket {
     require(RodakDescriptor.VOICE_UPLINK.equals(audioFormat(event.path("uplink"))));
     downlink = audioFormat(event.path("downlink"));
     JsonNode features = event.path("features");
-    announceSession = features.path("announce").isBoolean()
-        && features.path("announce").booleanValue();
-    require(features.isObject() && features.size() == (announceSession ? 4 : 2)
-        && features.path("mcp").isBoolean()
+    require(features.isObject() && features.path("mcp").isBoolean()
         && !features.path("mcp").booleanValue());
+    features.fieldNames().forEachRemaining(key -> require(KNOWN_FEATURES.contains(key)));
     number(features, "device_vad_epoch", 1);
+    announceSession = features.has("announce");
+    require(announceSession == features.has("announceSeq"));
+    require(!announceSession
+        || (features.path("announce").isBoolean() && features.path("announce").booleanValue()));
     long announceSeq = announceSession ? number(features, "announceSeq", 0xffffffffL) : 0;
     require(!announceSession || announceSeq > 0);
+    boolean wantsAccepted = features.has("turn_accepted")
+        && number(features, "turn_accepted", 1) == 1;
+    boolean wantsProgress = features.has("turn_progress")
+        && number(features, "turn_progress", 1) == 1;
+    require(!wantsProgress || wantsAccepted);
+    turnAcceptedEnabled = wantsAccepted && !announceSession;
+    turnProgressEnabled = wantsProgress && turnAcceptedEnabled;
+    if (turnAcceptedEnabled) {
+      socket.setMaxIdleTimeout(150_000);
+    }
 
     JsonNode strategies = event.path("vadStrategies");
     String preferred = string(event, "preferredVadStrategy");
@@ -338,7 +410,7 @@ public class RodakRealtimeVoiceWebSocket {
         endSession("announce-expired");
         return;
       }
-      Turn turn = new Turn(++playbackEpoch, lastActivity);
+      Turn turn = new Turn(++playbackEpoch, runtime.nanoTime());
       turn.capturing = false;
       current = turn;
       turn.work = runtime.submitMusic(() -> playAnnouncement(turn, track, announceSeq));
@@ -358,14 +430,18 @@ public class RodakRealtimeVoiceWebSocket {
       return;
     }
     if ("start".equals(state)) {
-      if (sequence <= vadSequence || (epoch != 0 && epoch != playbackEpoch) || !inputOpen
-          || (current != null && !current.capturing && !current.playing)) {
+      boolean processingInterrupt = canCaptureProcessingInterrupt(epoch);
+      boolean playbackInterrupt = canCaptureBargeIn(epoch == 0 ? lastOutputEpoch : epoch);
+      if (sequence <= vadSequence || !inputOpen
+          || (!processingInterrupt && epoch != 0 && epoch != playbackEpoch)
+          || (current != null && !current.capturing && !current.outputStarted
+              && !processingInterrupt)) {
         return;
       }
-      if (current != null && current.playing) {
-        interruptTurn("vad.start");
-      }
-      if (current == null) {
+      if (processingInterrupt || playbackInterrupt) {
+        startBargeIn("vad.start");
+      } else if (current == null) {
+        playbackUplink.clear();
         startTurn();
       }
       vadSequence = sequence;
@@ -377,6 +453,32 @@ public class RodakRealtimeVoiceWebSocket {
         && sequence == vadSequence && epoch == vadPlaybackEpoch) {
       finishInput();
     }
+  }
+
+  private boolean canCaptureBargeIn(long epoch) {
+    return inputOpen && epoch != 0 && epoch == lastOutputEpoch && epoch == playbackEpoch
+        && (current == null || current.playing || current.outputStarted);
+  }
+
+  private boolean canCaptureProcessingInterrupt(long epoch) {
+    return turnAcceptedEnabled && inputOpen && current != null && current.id != 0
+        && !current.outputStarted && epoch == 0;
+  }
+
+  private void startBargeIn(String event) throws IOException {
+    interruptTurn(event);
+    startTurn();
+    // Keep the words spoken while the device was confirming the interruption.
+    long threshold = runtime.nanoTime() - TimeUnit.MILLISECONDS.toNanos(BARGE_IN_PREROLL_MS);
+    while (!playbackUplink.isEmpty()) {
+      UplinkFrame frame = playbackUplink.removeFirst();
+      if (frame.receivedAt() - threshold >= 0) {
+        appendAudio(current, frame.pcm());
+        detectSpeech(frame.pcm());
+      }
+    }
+    if (serverVad != null)
+      serverVad.confirmSpeechStarted();
   }
 
   private boolean matchesPlayback(JsonNode event) {
@@ -395,7 +497,7 @@ public class RodakRealtimeVoiceWebSocket {
 
   private void startTurn() {
     deviceBoundary = 0;
-    Turn turn = new Turn(++playbackEpoch, lastActivity);
+    Turn turn = new Turn(++playbackEpoch, runtime.nanoTime());
     current = turn;
     turn.provider = runtime.asrProvider(device.productId());
     turn.asr = runtime.startAsr(turn.provider, sessionId + "-" + turn.epoch);
@@ -412,6 +514,8 @@ public class RodakRealtimeVoiceWebSocket {
       return;
     }
     try {
+      if (turnAcceptedEnabled)
+        armDeadline(turn, runtime.nanoTime() + ASR_TIMEOUT);
       turn.work = runtime.submit(() -> respond(turn));
     } catch (RejectedExecutionException e) {
       cancelTurn("busy");
@@ -419,7 +523,159 @@ public class RodakRealtimeVoiceWebSocket {
     }
   }
 
+  private synchronized boolean acceptTurn(Turn turn) throws IOException {
+    if (!canRespond(turn))
+      return false;
+    if (turnAcceptedEnabled) {
+      long now = runtime.nanoTime();
+      long id = acceptedTurnCount + 1;
+      send(Map.of("event", "turn.accepted", "sessionId", sessionId, "turnId", id));
+      acceptedTurnCount = id;
+      turn.id = id;
+      turn.responseDeadline = now + ACCEPTED_TURN_TIMEOUT;
+      resetServerVad();
+      armDeadline(turn, now + ROUTER_TIMEOUT);
+    }
+    return true;
+  }
+
+  private synchronized boolean prepareAudio(Turn turn) {
+    if (!canRespond(turn))
+      return false;
+    if (turn.id != 0) {
+      armDeadline(turn,
+          Math.min(turn.responseDeadline, runtime.nanoTime() + FIRST_AUDIO_TIMEOUT));
+      reportProgress(turn, TurnStage.COMPOSING);
+    }
+    return true;
+  }
+
+  private synchronized void reportProgress(Turn turn, TurnStage stage) {
+    if (!canRespond(turn))
+      throw new CancellationException();
+    if (!turnProgressEnabled || turn.id == 0 || turn.outputStarted)
+      return;
+    turn.pendingStage = stage == turn.lastStage ? null : stage;
+    if (turn.pendingStage == null)
+      return;
+    long remaining = turn.lastProgressAt + PROGRESS_INTERVAL - runtime.nanoTime();
+    if (stage == TurnStage.TOOL || turn.progressSequence == 0 || remaining <= 0) {
+      clearPendingProgressTask(turn);
+      flushProgress(turn);
+      if (!ownsTurn(turn))
+        throw new CancellationException();
+    } else if (turn.progressTask == null) {
+      long lastProgress = turn.lastProgressAt;
+      turn.progressTask =
+          runtime.scheduleVoiceTimer(() -> flushScheduledProgress(turn, lastProgress), remaining);
+    }
+  }
+
+  private synchronized void flushScheduledProgress(Turn turn, long lastProgress) {
+    if (turn.progressTask == null || turn.lastProgressAt != lastProgress)
+      return;
+    turn.progressTask = null;
+    flushProgress(turn);
+  }
+
+  private void flushProgress(Turn turn) {
+    TurnStage stage = turn.pendingStage;
+    turn.pendingStage = null;
+    if (stage == null || turn.outputStarted || !canRespond(turn))
+      return;
+    long sequence = turn.progressSequence + 1;
+    try {
+      send(Map.of("event", "turn.progress", "sessionId", sessionId, "turnId", turn.id,
+          "seq", sequence, "stage", stage.name().toLowerCase(Locale.ROOT)));
+      turn.progressSequence = sequence;
+      turn.lastStage = stage;
+      turn.lastProgressAt = runtime.nanoTime();
+    } catch (IOException e) {
+      close(1011, "send failed");
+    }
+  }
+
+  private void clearPendingProgressTask(Turn turn) {
+    if (turn.progressTask != null) {
+      turn.progressTask.cancel(false);
+      turn.progressTask = null;
+    }
+  }
+
+  private void armDeadline(Turn turn, long deadline) {
+    clearDeadline(turn);
+    turn.deadlineTask = runtime.scheduleVoiceTimer(() -> checkTurnDeadline(turn, deadline),
+        Math.max(0, deadline - runtime.nanoTime()));
+    turn.deadline = deadline;
+  }
+
+  private void clearDeadline(Turn turn) {
+    if (turn.deadlineTask != null) {
+      turn.deadlineTask.cancel(false);
+      turn.deadlineTask = null;
+    }
+  }
+
+  private synchronized void checkTurnDeadline(Turn turn, long deadline) {
+    if (!ownsTurn(turn) || turn.deadlineTask == null || turn.deadline != deadline)
+      return;
+    long effectiveDeadline =
+        turn.playing ? turn.lastAudioAt + AUDIO_GAP_TIMEOUT : turn.deadline;
+    if (effectiveDeadline - runtime.nanoTime() > 0) {
+      armDeadline(turn, effectiveDeadline);
+    } else {
+      expireTurn(turn);
+    }
+  }
+
+  private boolean ownsTurn(Turn turn) {
+    return current == turn && !closed && runtime.registered(device, this);
+  }
+
+  private boolean canRespond(Turn turn) {
+    if (!ownsTurn(turn) || !java.time.Instant.now().isBefore(device.expiresAt()))
+      return false;
+    if (turn.deadlineTask != null) {
+      long deadline = turn.playing ? turn.lastAudioAt + AUDIO_GAP_TIMEOUT : turn.deadline;
+      if (deadline - runtime.nanoTime() <= 0) {
+        expireTurn(turn);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private void expireTurn(Turn turn) {
+    boolean playing = turn.playing;
+    if (playing) {
+      LOG.warn("Rodak audio stalled sessionId={} epoch={} packets={} gapMs={}",
+          sessionId, turn.epoch, turn.outputPackets,
+          TimeUnit.NANOSECONDS.toMillis(runtime.nanoTime() - turn.lastAudioAt));
+    }
+    try {
+      cancelTurn("timeout");
+      if (!playing) {
+        sendError("voice-turn-timeout", "voice turn timed out", false);
+        close(1000, "voice turn timed out");
+      }
+    } catch (IOException e) {
+      close(1011, "send failed");
+    }
+  }
+
+  private void sendTurnError(Turn turn, String code, String message) throws IOException {
+    clearDeadline(turn);
+    clearPendingProgressTask(turn);
+    sendError(code, message, true);
+    turn.errorSent = true;
+  }
+
   private void respond(Turn turn) {
+    synchronized (this) {
+      turn.worker = Thread.currentThread();
+      if (!canRespond(turn))
+        return;
+    }
     String streamId = "rodak:" + sessionId + ":" + turn.epoch;
     String chatId = RodakConversation.chatId(device.productId(), device.id(), device.version());
     String stage = "asr";
@@ -441,13 +697,20 @@ public class RodakRealtimeVoiceWebSocket {
           sessionId, turn.epoch, turn.pcm.size(), text.length(), elapsedMillis(started));
       stage = "router";
       started = System.nanoTime();
-      var reply = runtime.reply(text, streamId, chatId, device);
+      if (!acceptTurn(turn))
+        return;
+      var audio = startReplyAudio(turn, streamId);
+      var reply = runtime.reply(text, streamId, chatId, device,
+          turnAcceptedEnabled ? step -> reportProgress(turn, step) : null, audio::acceptText);
       if (!stillCurrent(turn))
         return;
       if (reply.track() != null) {
         synchronized (this) {
-          if (current == turn && !closed && runtime.registered(device, this)) {
+          if (canRespond(turn)) {
             turn.work = null;
+            audio.close();
+            if (turn.playing)
+              stopOutput(turn, "interrupted");
             endSession("music-announce");
             runtime.announceMusic(device, reply.track());
           }
@@ -458,30 +721,23 @@ public class RodakRealtimeVoiceWebSocket {
       if (answer == null || answer.isBlank()) {
         LOG.warn("Rodak voice Router returned empty reply sessionId={} epoch={} elapsedMs={}",
             sessionId, turn.epoch, elapsedMillis(started));
-        return;
+        answer = "";
       }
       goodbye = answer.startsWith(ToolPrefix.GOODBYE.getPrefix());
-      String displayText = answer.substring(0, Math.min(answer.length(), 4096));
-      String spoken = runtime.speechText(displayText);
-      if (spoken.isBlank())
-        return;
-      LOG.info("Rodak voice TTS started sessionId={} epoch={} replyChars={} routerMs={}",
-          sessionId, turn.epoch, spoken.length(), elapsedMillis(started));
+      String spoken = runtime.speechText(answer);
       stage = "tts";
       started = System.nanoTime();
-      long[] nextPacket = {0};
-      boolean emitted = runtime.synthesize(streamId, spoken, device.productId(),
-          downlink.sampleRate(), downlink.frameDurationMs(),
-          packet -> output(turn, displayText, packet, nextPacket));
+      audio.finish(spoken, answer);
+      boolean emitted = audio.await();
       synchronized (this) {
-        if (current == turn && !closed && runtime.registered(device, this)) {
+        if (canRespond(turn)) {
           LOG.info(
               "Rodak voice TTS finished sessionId={} epoch={} success={} packets={} elapsedMs={}",
               sessionId, turn.epoch, emitted, turn.outputPackets, elapsedMillis(started));
           if (turn.playing)
             stopOutput(turn, emitted ? "complete" : "error");
-          if (!emitted && !goodbye)
-            sendError("tts-failed", "speech synthesis failed", true);
+          else if (!emitted && !goodbye && !spoken.isBlank())
+            sendTurnError(turn, "tts-failed", "speech synthesis failed");
         }
       }
     } catch (InterruptedException e) {
@@ -492,12 +748,12 @@ public class RodakRealtimeVoiceWebSocket {
       LOG.warn("Rodak voice stage failed sessionId={} epoch={} stage={} errorType={} elapsedMs={}",
           sessionId, turn.epoch, stage, e.getClass().getSimpleName(), elapsedMillis(started));
       synchronized (this) {
-        if (current == turn && !closed && runtime.registered(device, this)) {
+        if (canRespond(turn)) {
           try {
             if (turn.playing)
               stopOutput(turn, "error");
-            if (!goodbye)
-              sendError("voice-runtime-error", "voice turn failed", true);
+            else if (!goodbye)
+              sendTurnError(turn, "voice-runtime-error", "voice turn failed");
           } catch (IOException io) {
             close(1011, "send failed");
           }
@@ -507,25 +763,37 @@ public class RodakRealtimeVoiceWebSocket {
       runtime.releaseReplyQueue(streamId);
       synchronized (this) {
         if (current == turn) {
-          if (goodbye && !closed && runtime.registered(device, this)) {
-            turn.work = null;
-            String reason = "goodbye-intent";
-            try {
-              endSession(reason);
-            } catch (IOException e) {
-              close(1011, "send failed");
+          try {
+            if (canRespond(turn)) {
+              turn.work = null;
+              if (goodbye) {
+                endSession("goodbye-intent");
+              } else if (turn.id != 0 && !turn.outputStarted && !turn.errorSent) {
+                sendError("voice-turn-no-reply", "voice turn produced no playable reply", false);
+                close(1000, "voice turn produced no reply");
+              }
             }
-          } else {
-            current = null;
-            deviceBoundary = 0;
-            if (serverVad != null) {
-              serverVad.reset();
-              vadOffset = 0;
+          } catch (IOException e) {
+            close(1011, "send failed");
+          } finally {
+            if (current == turn) {
+              clearTurn(turn);
             }
           }
         }
       }
     }
+  }
+
+  private synchronized RodakReplyAudio startReplyAudio(Turn turn, String streamId) {
+    if (!canRespond(turn))
+      throw new CancellationException();
+    long[] nextPacket = {0};
+    turn.audio = new RodakReplyAudio(() -> prepareAudio(turn),
+        (text, packets) -> runtime.synthesize(streamId, text, device.productId(),
+            downlink.sampleRate(), downlink.frameDurationMs(), packets),
+        (text, packet) -> output(turn, text, packet, nextPacket));
+    return turn.audio;
   }
 
   private void playAnnouncement(Turn turn, Track track, long announceSeq) {
@@ -599,34 +867,50 @@ public class RodakRealtimeVoiceWebSocket {
     synchronized (this) {
       if (!authorized && !closed)
         close(1008, "device authorization ended");
-      return authorized && current == turn && !closed && runtime.registered(device, this);
+      return authorized && canRespond(turn);
     }
   }
 
   private void output(Turn turn, String text, byte[] packet, long[] nextPacket) {
     try {
-      long delay = nextPacket[0] - System.nanoTime();
-      if (nextPacket[0] != 0 && delay > 0)
+      boolean prebuffering = !announceSession && turn.outputPackets < AudioUtils.PRE_BUFFER_COUNT;
+      long scheduledAt = nextPacket[0];
+      long delay = scheduledAt - System.nanoTime();
+      if (!prebuffering && scheduledAt != 0 && delay > 0)
         TimeUnit.NANOSECONDS.sleep(delay);
       synchronized (this) {
-        if (Thread.currentThread().isInterrupted() || closed || current != turn
-            || !runtime.registered(device, this)
-            || !java.time.Instant.now().isBefore(device.expiresAt())) {
+        if (Thread.currentThread().isInterrupted() || !canRespond(turn)) {
           throw new CancellationException();
         }
         if (!turn.playing) {
+          playbackUplink.clear();
+          clearPendingProgressTask(turn);
+          turn.pendingStage = null;
+          clearDeadline(turn);
+          String displayText = text.substring(0, Math.min(text.length(), MAX_OUTPUT_TEXT_LENGTH));
           send(Map.of("event", "output.start", "sessionId", sessionId,
-              "playbackEpoch", turn.epoch, "text", text));
+              "playbackEpoch", turn.epoch, "text", displayText));
+          turn.outputStarted = true;
+          lastOutputEpoch = turn.epoch;
           turn.playing = true;
         }
+        long sendStartedAt = System.nanoTime();
         socket.getBasicRemote()
             .sendBinary(ByteBuffer.wrap(new Rav1Frame(++outputSequence, packet).encode()));
+        if (!announceSession) {
+          turn.lastAudioAt = runtime.nanoTime();
+          if (turn.deadlineTask == null)
+            armDeadline(turn, turn.lastAudioAt + AUDIO_GAP_TIMEOUT);
+        }
         if (++turn.outputPackets == 1) {
           LOG.info("Rodak voice first audio sent sessionId={} epoch={} sequence={} bytes={}",
               sessionId, turn.epoch, outputSequence, packet.length);
         }
-        nextPacket[0] =
-            System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(downlink.frameDurationMs());
+        long frameNanos = TimeUnit.MILLISECONDS.toNanos(downlink.frameDurationMs());
+        if (prebuffering || scheduledAt == 0 || sendStartedAt - scheduledAt >= frameNanos) {
+          scheduledAt = sendStartedAt;
+        }
+        nextPacket[0] = scheduledAt + frameNanos;
         lastActivity = System.nanoTime();
       }
     } catch (InterruptedException e) {
@@ -641,6 +925,7 @@ public class RodakRealtimeVoiceWebSocket {
   }
 
   private void stopOutput(Turn turn, String reason) throws IOException {
+    clearDeadline(turn);
     turn.playing = false;
     send(Map.of("event", "output.stop", "sessionId", sessionId, "reason", reason,
         "playbackEpoch", turn.epoch));
@@ -658,10 +943,10 @@ public class RodakRealtimeVoiceWebSocket {
 
   private void cancelTurn(String reason) throws IOException {
     Turn turn = current;
-    current = null;
     if (turn == null)
       return;
-    if (turn.work != null)
+    clearTurn(turn);
+    if (turn.work != null && turn.worker != Thread.currentThread())
       runtime.cancel(turn.work);
     if (turn.transcoder != null)
       turn.transcoder.destroyForcibly();
@@ -669,7 +954,20 @@ public class RodakRealtimeVoiceWebSocket {
       turn.asr.cancel();
     if (turn.playing && !closed)
       stopOutput(turn, reason);
+  }
+
+  private void clearTurn(Turn turn) {
+    current = null;
+    if (turn.audio != null)
+      turn.audio.close();
+    clearDeadline(turn);
+    clearPendingProgressTask(turn);
+    turn.pendingStage = null;
     deviceBoundary = 0;
+    resetServerVad();
+  }
+
+  private void resetServerVad() {
     if (serverVad != null) {
       serverVad.reset();
       vadOffset = 0;
@@ -690,7 +988,8 @@ public class RodakRealtimeVoiceWebSocket {
           && System.nanoTime() - lastActivity > TimeUnit.SECONDS.toNanos(20)) {
         close(1011, "announce stalled");
       } else if (!announceSession && current != null
-          && System.nanoTime() - current.startedAt > TimeUnit.SECONDS.toNanos(90)) {
+          && !current.playing && (!turnAcceptedEnabled || current.capturing)
+          && runtime.nanoTime() - current.startedAt > ROUTER_TIMEOUT) {
         try {
           cancelTurn("timeout");
           sendError("turn-timeout", "voice turn timed out", true);
@@ -765,6 +1064,7 @@ public class RodakRealtimeVoiceWebSocket {
     if (closed)
       return;
     closed = true;
+    playbackUplink.clear();
     try {
       cancelTurn(reason);
       if (serverVad != null)
@@ -791,6 +1091,10 @@ public class RodakRealtimeVoiceWebSocket {
     close(1011, "transport error");
   }
 
+  private record UplinkFrame(long receivedAt, byte[] pcm) {}
+
+  private record VadBoundary(boolean started, boolean ended) {}
+
   private static final class Turn {
     final long epoch;
     final long startedAt;
@@ -798,9 +1102,23 @@ public class RodakRealtimeVoiceWebSocket {
     String provider;
     StreamingAsrSession asr;
     Future<?> work;
+    RodakReplyAudio audio;
+    Thread worker;
+    Future<?> deadlineTask;
+    Future<?> progressTask;
+    long id;
+    long deadline;
+    long responseDeadline;
+    long lastAudioAt;
+    long lastProgressAt;
+    long progressSequence;
+    TurnStage lastStage;
+    TurnStage pendingStage;
     Process transcoder;
     boolean capturing = true;
     boolean playing;
+    boolean outputStarted;
+    boolean errorSent;
     boolean serverEndPending;
     int outputPackets;
 

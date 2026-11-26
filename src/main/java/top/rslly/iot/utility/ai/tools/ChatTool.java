@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 @Data
 @Component
@@ -137,15 +138,17 @@ public class ChatTool implements BaseTool<String> {
     messages = buildConversationMessages(memory, systemMessage, userMessage);
     if (speedUp) {
       return runWithStreaming(question, llm, messages, queueMap, chatId,
-          GlobalMessageContext.reasoningQueue(globalMessage));
+          GlobalMessageContext.reasoningQueue(globalMessage),
+          GlobalMessageContext.speechText(globalMessage));
     }
     return runWithoutStreaming(question, llm, messages);
   }
 
   private String runWithStreaming(String question, LLM llm, List<ModelMessage> messages,
-      Map<String, Queue<String>> queueMap, String chatId, Queue<String> reasoningQueue) {
+      Map<String, Queue<String>> queueMap, String chatId, Queue<String> reasoningQueue,
+      Consumer<String> speechText) {
     ChatToolEventSourceListener listener =
-        new ChatToolEventSourceListener(queueMap, chatId, this, reasoningQueue);
+        new ChatToolEventSourceListener(queueMap, chatId, this, reasoningQueue, speechText);
     Lock chatLock = lockMap.get(chatId);
     Condition chatCondition = conditionMap.get(chatId);
     dataMap.remove(chatId);

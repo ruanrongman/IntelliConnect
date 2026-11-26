@@ -59,6 +59,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -139,12 +140,14 @@ public class FunctionCallingRouterTool {
     }
     return runWithStreaming(question, chatId, llm, messages, toolSpecs,
         (Map<String, Queue<String>>) globalMessage.get("queueMap"),
-        GlobalMessageContext.reasoningQueue(globalMessage));
+        GlobalMessageContext.reasoningQueue(globalMessage),
+        GlobalMessageContext.speechText(globalMessage));
   }
 
   private FunctionResult runWithStreaming(String question, String chatId, LLM llm,
       List<ModelMessage> messages, List<FunctionToolSpec> toolSpecs,
-      Map<String, Queue<String>> queueMap, Queue<String> reasoningQueue) {
+      Map<String, Queue<String>> queueMap, Queue<String> reasoningQueue,
+      Consumer<String> speechText) {
     lockMap.computeIfAbsent(chatId, k -> new ReentrantLock());
     conditionMap.computeIfAbsent(chatId, k -> lockMap.get(k).newCondition());
     dataMap.remove(chatId);
@@ -157,6 +160,9 @@ public class FunctionCallingRouterTool {
       @Override
       public void onTextDelta(String text) {
         responseStarted.set(true);
+        if (speechText != null && text != null && !text.isEmpty()) {
+          speechText.accept(text);
+        }
         if (text == null || text.isBlank()) {
           return;
         }

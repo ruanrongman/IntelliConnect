@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
@@ -32,17 +33,20 @@ import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.net.http.WebSocketHandshakeException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,6 +56,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -87,6 +92,7 @@ import top.rslly.iot.services.rodak.RodakTokenService;
 import top.rslly.iot.utility.SpringBeanUtils;
 import top.rslly.iot.utility.ai.LlmDiyUtility;
 import top.rslly.iot.utility.ai.chain.Router;
+import top.rslly.iot.utility.ai.chain.Router.TurnStage;
 import top.rslly.iot.utility.ai.llm.LLM;
 import top.rslly.iot.utility.ai.prompts.MusicToolPrompt;
 import top.rslly.iot.utility.ai.tools.MusicTool;
@@ -105,8 +111,6 @@ import ws.schild.jave.process.ffmpeg.DefaultFFMPEGLocator;
 @ActiveProfiles("rodak-voice-test")
 class RodakVoiceIntegrationTest {
   private static final ObjectMapper JSON = new ObjectMapper();
-  private static final Path FIXTURES = Path.of("rodak", "rodakos-main", "contracts",
-      "rodak-realtime-voice", "v1", "examples");
   private static final String DEVICE = "aa:bb:cc:dd:ee:ff";
   private static final Identity IDENTITY = new Identity("voice-device", DEVICE, 7, 3,
       Instant.now().plusSeconds(1200));
@@ -121,7 +125,7 @@ class RodakVoiceIntegrationTest {
   RodakDataService data;
   @MockitoBean
   RodakMqttBridge mqtt;
-  @Autowired
+  @MockitoSpyBean
   RodakVoiceRuntime runtime;
   @MockitoBean
   AsrServiceFactory asr;
@@ -155,8 +159,8 @@ class RodakVoiceIntegrationTest {
       when(recognition.finish()).thenReturn(CompletableFuture.completedFuture("语音输入"));
       return recognition;
     });
-    when(router.response(eq("语音输入"), eq("语音输入"), anyString(),
-        eq("rodak:7:voice-device:3"), eq(7))).thenReturn("语音回复");
+    when(router.responseWithSpeech(eq("语音输入"), eq("语音输入"), anyString(),
+        eq("rodak:7:voice-device:3"), eq(7), nullable(Consumer.class), any())).thenReturn("语音回复");
     byte[] packet = opus(16000);
     when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
         .thenAnswer(call -> {
@@ -223,8 +227,8 @@ class RodakVoiceIntegrationTest {
     List<String> replies = List.of("语音回复", ToolPrefix.WEATHER.getPrefix() + weather,
         ToolPrefix.CONTROL.getPrefix() + control);
     List<String> spokenReplies = List.of("语音回复", weather, control);
-    when(router.response(eq("语音输入"), eq("语音输入"), anyString(),
-        eq("rodak:7:voice-device:3"), eq(7)))
+    when(router.responseWithSpeech(eq("语音输入"), eq("语音输入"), anyString(),
+        eq("rodak:7:voice-device:3"), eq(7), nullable(Consumer.class), any()))
             .thenReturn(replies.get(0), replies.get(1), replies.get(2));
     Client first = new Client();
     WebSocket socket = connect(DEVICE, "test-device-token", first);
@@ -268,8 +272,8 @@ class RodakVoiceIntegrationTest {
       verify(tts).streamTextAudio(anyString(), eq(spokenReplies.get(round - 1)), eq(7),
           eq(24000), eq(20), any());
     }
-    verify(router, times(3)).response(eq("语音输入"), eq("语音输入"), anyString(),
-        eq("rodak:7:voice-device:3"), eq(7));
+    verify(router, times(3)).responseWithSpeech(eq("语音输入"), eq("语音输入"), anyString(),
+        eq("rodak:7:voice-device:3"), eq(7), nullable(Consumer.class), any());
 
     Client replacement = new Client();
     connect(DEVICE, "test-device-token", replacement);
@@ -279,25 +283,32 @@ class RodakVoiceIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void goodbyeEndsTheSessionEvenIfFarewellAudioIsUnavailable(boolean audioAvailable)
+  @CsvSource({"false, true", "false, false", "true, true", "true, false"})
+  void goodbyeEndsTheSessionEvenIfFarewellAudioIsUnavailable(boolean negotiated,
+      boolean audioAvailable)
       throws Exception {
     String farewell = "下次见！";
-    when(router.response(eq("语音输入"), eq("语音输入"), anyString(),
-        eq("rodak:7:voice-device:3"), eq(7))).thenReturn(ToolPrefix.GOODBYE.getPrefix() + farewell);
+    when(router.responseWithSpeech(eq("语音输入"), eq("语音输入"), anyString(),
+        eq("rodak:7:voice-device:3"), eq(7), nullable(Consumer.class), any()))
+            .thenReturn(ToolPrefix.GOODBYE.getPrefix() + farewell);
     if (!audioAvailable) {
       when(tts.streamTextAudio(anyString(), eq(farewell), eq(7), eq(16000), eq(60), any()))
           .thenReturn(false);
     }
     Client client = new Client();
     WebSocket socket = connect(DEVICE, "test-device-token", client);
-    socket.sendText(sessionOpen(16000, 60).toString(), true).join();
+    var open = sessionOpen(16000, 60);
+    if (negotiated)
+      open.withObject("/features").put("turn_accepted", 1);
+    socket.sendText(open.toString(), true).join();
     var ready = JSON.readTree(assertInstanceOf(String.class, client.next()));
     String session = ready.path("sessionId").asText();
     send(socket, Map.of("event", "input.start", "sessionId", session, "mode", "manual-stop"));
     socket.sendBinary(ByteBuffer.wrap(new Rav1Frame(1, opus(16000)).encode()), true).join();
     send(socket, Map.of("event", "input.stop", "sessionId", session));
 
+    if (negotiated)
+      assertAccepted(client, session, 1);
     if (audioAvailable) {
       var start = JSON.readTree(assertInstanceOf(String.class, client.next()));
       assertEquals("output.start", start.path("event").asText());
@@ -341,8 +352,8 @@ class RodakVoiceIntegrationTest {
         .thenReturn(com.alibaba.fastjson.JSON.parseObject(
             "{\"action\":{\"code\":200,\"answer\":\"好的\",\"music\":\"测试音乐\"}}"));
     music.setLlmDiyUtility(llmLookup);
-    when(router.response(eq("语音输入"), eq("语音输入"), anyString(),
-        eq("rodak:7:voice-device:3"), eq(7))).thenAnswer(call -> {
+    when(router.responseWithSpeech(eq("语音输入"), eq("语音输入"), anyString(),
+        eq("rodak:7:voice-device:3"), eq(7), nullable(Consumer.class), any())).thenAnswer(call -> {
           String streamId = call.getArgument(2);
           var result = music.run("播放测试音乐", Map.of("chatId", streamId, "productId", 7));
           assertEquals("正在准备播放《测试音乐》。", result.get("answer"));
@@ -363,6 +374,7 @@ class RodakVoiceIntegrationTest {
     });
 
     var sessionOpen = sessionOpen(16000, 60);
+    sessionOpen.withObject("/features").put("turn_accepted", 1);
     Client conversation = new Client();
     WebSocket socket = connect(DEVICE, "test-device-token", conversation);
     socket.sendText(sessionOpen.toString(), true).join();
@@ -371,6 +383,7 @@ class RodakVoiceIntegrationTest {
     send(socket, Map.of("event", "input.start", "sessionId", sessionId, "mode", "manual-stop"));
     socket.sendBinary(ByteBuffer.wrap(new Rav1Frame(1, opus(16000)).encode()), true).join();
     send(socket, Map.of("event", "input.stop", "sessionId", sessionId));
+    assertAccepted(conversation, sessionId, 1);
     assertEquals("music-announce",
         JSON.readTree(assertInstanceOf(String.class, conversation.next())).path("reason").asText());
     assertEquals(1000, conversation.next());
@@ -422,14 +435,12 @@ class RodakVoiceIntegrationTest {
   void rejectsInvalidControlAndDuplicateSequence() throws Exception {
     Client client = new Client();
     WebSocket socket = connect(DEVICE, "test-device-token", client);
-    socket.sendText(Files.readString(FIXTURES.resolve("invalid/session-open.generation-zero.json")),
-        true).join();
+    socket.sendText(fixture("session-open.generation-zero.json").toString(), true).join();
     var error = JSON.readTree(assertInstanceOf(String.class, client.next()));
     assertEquals("invalid-canonical-event", error.path("code").asText());
     assertEquals(1002, client.next());
 
-    byte[] valid = HexFormat.of().parseHex(JSON.readTree(Files.readString(
-        FIXTURES.resolve("valid/rav1-frame.opus.json"))).asText());
+    byte[] valid = HexFormat.of().parseHex(fixture("rav1-frame.opus.json").asText());
     long sequence = Rav1Frame.decode(valid, 0).sequence();
     assertEquals(1, sequence);
     assertThrows(IllegalArgumentException.class, () -> Rav1Frame.decode(valid, sequence));
@@ -479,11 +490,15 @@ class RodakVoiceIntegrationTest {
     assertEquals(1000, client.next());
   }
 
-  @Test
-  void serverVadEndsRealtimeSpeechAndKeepsTheUplinkOpenAfterPlaybackAbort() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void serverVadEndsRealtimeSpeechAndKeepsTheUplinkOpenAfterPlaybackAbort(boolean negotiated)
+      throws Exception {
     var voice = (Map<?, ?>) descriptor.bootstrap("http://localhost").get("realtimeVoice");
     assertEquals(List.of("server-authoritative"), voice.get("vadStrategies"));
     assertEquals("server-authoritative", voice.get("preferredVadStrategy"));
+    assertFalse(assertInstanceOf(List.class, voice.get("events")).contains("turn.accepted"));
+    assertFalse(assertInstanceOf(List.class, voice.get("events")).contains("turn.progress"));
     byte[] packet = opus(16000);
     var invocation = new java.util.concurrent.atomic.AtomicInteger();
     when(tts.streamTextAudio(anyString(), eq("语音回复"), eq(7), eq(16000), eq(60), any()))
@@ -502,6 +517,8 @@ class RodakVoiceIntegrationTest {
     Client client = new Client();
     WebSocket socket = connect(DEVICE, "test-device-token", client);
     var open = sessionOpen(16000, 60);
+    if (negotiated)
+      open.withObject("/features").put("turn_accepted", 1);
     socket.sendText(open.toString(), true).join();
     var ready = JSON.readTree(assertInstanceOf(String.class, client.next()));
     assertEquals("server-authoritative", ready.path("vadStrategy").asText());
@@ -512,6 +529,8 @@ class RodakVoiceIntegrationTest {
     send(socket, vad(session, "end", 1, 0));
     assertNull(client.messages.poll(250, TimeUnit.MILLISECONDS));
     long sequence = sendSpeechAndSilence(socket, 1);
+    if (negotiated)
+      assertAccepted(client, session, 1);
     var first = JSON.readTree(assertInstanceOf(String.class, client.next()));
     assertEquals("output.start", first.path("event").asText());
     assertInstanceOf(byte[].class, client.next());
@@ -523,6 +542,8 @@ class RodakVoiceIntegrationTest {
     var interrupted = JSON.readTree(assertInstanceOf(String.class, client.next()));
     assertEquals("interrupted", interrupted.path("reason").asText());
     sendSpeechAndSilence(socket, sequence);
+    if (negotiated)
+      assertAccepted(client, session, 2);
     var second = JSON.readTree(assertInstanceOf(String.class, client.next()));
     assertEquals("output.start", second.path("event").asText());
     assertEquals(epoch + 1, second.path("playbackEpoch").asLong());
@@ -530,6 +551,381 @@ class RodakVoiceIntegrationTest {
     assertEquals("output.stop",
         JSON.readTree(assertInstanceOf(String.class, client.next())).path("event").asText());
     socket.sendClose(1000, "done").join();
+    assertEquals(1000, client.next());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"server-authoritative, false", "server-authoritative, true",
+      "hybrid-fallback, false"})
+  void realtimeBargeInCapturesTheExistingUplinkAndKeepsItsOnset(String strategy,
+      boolean stopSentBeforeAbort) throws Exception {
+    doReturn(strategy).when(descriptor).preferredVadStrategy();
+    controlVoiceTime();
+    var recognizedBytes = new LinkedBlockingQueue<Integer>();
+    doAnswer(call -> {
+      java.io.ByteArrayOutputStream captured = call.getArgument(2);
+      recognizedBytes.add(captured.size());
+      return "语音输入";
+    }).when(runtime).transcribe(nullable(String.class), any(), any());
+    byte[] packet = opus(16000);
+    var firstReply = new AtomicBoolean(true);
+    var releaseFirstReply = new CompletableFuture<Void>();
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          Consumer<byte[]> output = call.getArgument(5);
+          output.accept(packet);
+          if (firstReply.getAndSet(false)) {
+            releaseFirstReply.orTimeout(10, TimeUnit.SECONDS).join();
+            if (!stopSentBeforeAbort) {
+              assertThrows(java.util.concurrent.CancellationException.class,
+                  () -> output.accept(packet));
+            }
+          }
+          return true;
+        });
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    send(socket, Map.of("event", "input.start", "sessionId", session, "mode", "realtime"));
+    long sequence = sendSpeechAndSilence(socket, 0);
+    assertAccepted(client, session, 1);
+    long epoch = client.event("output.start").path("playbackEpoch").asLong();
+    assertInstanceOf(byte[].class, client.next());
+    assertNotNull(recognizedBytes.poll(5, TimeUnit.SECONDS));
+    for (int i = 0; i < 8; i++) {
+      socket.sendBinary(ByteBuffer.wrap(new Rav1Frame(++sequence, packet).encode()), true).join();
+    }
+
+    // A stale abort cannot stop the latest output or consume its buffered input.
+    send(socket, Map.of("event", "playback.abort", "sessionId", session,
+        "reason", "vad_detected", "playbackEpoch", epoch + 1));
+    assertNull(client.messages.poll(100, TimeUnit.MILLISECONDS));
+    if (stopSentBeforeAbort) {
+      releaseFirstReply.complete(null);
+      assertEquals("complete", client.event("output.stop").path("reason").asText());
+    }
+
+    boolean hybrid = "hybrid-fallback".equals(strategy);
+    if (hybrid) {
+      send(socket, vad(session, "start", 1, epoch));
+    }
+    var abort = Map.<String, Object>of("event", "playback.abort", "sessionId", session,
+        "reason", "vad_detected", "playbackEpoch", epoch);
+    send(socket, abort);
+    if (!stopSentBeforeAbort) {
+      assertEquals("interrupted", client.event("output.stop").path("reason").asText());
+      releaseFirstReply.complete(null);
+    }
+    send(socket, abort);
+    if (hybrid) {
+      send(socket, vad(session, "end", 1, epoch));
+    } else {
+      for (int i = 0; i < 17; i++) {
+        socket.sendBinary(ByteBuffer.wrap(new Rav1Frame(++sequence, packet).encode()), true).join();
+      }
+    }
+    assertAccepted(client, session, 2);
+    assertCompleteReply(client, 2);
+    Integer captured = recognizedBytes.poll(5, TimeUnit.SECONDS);
+    assertNotNull(captured);
+    int frameBytes = 16000 * 60 / 1000 * Short.BYTES;
+    if (hybrid) {
+      assertEquals(5 * frameBytes, captured);
+    } else {
+      assertTrue(captured > 5 * frameBytes);
+    }
+    socket.sendClose(1000, "done").join();
+    assertEquals(1000, client.next());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"thinking", "tool"})
+  void incomingRealtimeSpeechInterruptsThinkingAndToolStages(String stage) throws Exception {
+    doReturn(RodakDescriptor.SERVER_VAD).when(descriptor).preferredVadStrategy();
+    controlVoiceTime();
+    var routerCalls = new java.util.concurrent.atomic.AtomicInteger();
+    var firstStageStarted = new CountDownLatch(1);
+    var invocationInterrupted = new CountDownLatch(1);
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        nullable(Consumer.class), any())).thenAnswer(call -> {
+          if (routerCalls.getAndIncrement() == 0) {
+            Consumer<TurnStage> progress = call.getArgument(5);
+            progress.accept(TurnStage.THINKING);
+            if ("tool".equals(stage)) {
+              progress.accept(TurnStage.TOOL);
+            }
+            firstStageStarted.countDown();
+            try {
+              new CountDownLatch(1).await();
+            } catch (InterruptedException e) {
+              invocationInterrupted.countDown();
+              throw new java.util.concurrent.CancellationException();
+            }
+            return "stale reply";
+          }
+          return "语音回复";
+        });
+
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1).put("turn_progress", 1);
+    String session = negotiate(socket, client, open);
+    send(socket, Map.of("event", "input.start", "sessionId", session, "mode", "realtime"));
+    long sequence = sendSpeechAndSilence(socket, 0);
+    assertAccepted(client, session, 1);
+    assertProgress(client, session, 1, 1, "thinking");
+    if ("tool".equals(stage))
+      assertProgress(client, session, 1, 2, "tool");
+    assertTrue(firstStageStarted.await(5, TimeUnit.SECONDS));
+
+    sendSpeechAndSilence(socket, sequence);
+    assertAccepted(client, session, 2);
+    assertTrue(invocationInterrupted.await(5, TimeUnit.SECONDS));
+    assertProgress(client, session, 2, 1, "composing");
+    assertCompleteReply(client, 1);
+    verify(router, times(2)).responseWithSpeech(anyString(), anyString(), anyString(),
+        anyString(), eq(7), nullable(Consumer.class), any());
+    socket.sendClose(1000, "done").join();
+    assertEquals(1000, client.next());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 1})
+  void zeroFlagsAndAcceptanceOnlyDoNotSendProgress(int acceptance) throws Exception {
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", acceptance).put("turn_progress", 0);
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    String session = negotiate(socket, client, open);
+    sendUtterance(socket, session, 1);
+    if (acceptance == 1)
+      assertAccepted(client, session, 1);
+    assertCompleteReply(client, 1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"session-open.progress-without-accepted.json",
+      "session-open.turn-accepted-two.json", "boolean-progress", "unknown-feature"})
+  void rejectsInvalidTurnNegotiation(String example) throws Exception {
+    ObjectNode open;
+    if (example.endsWith(".json")) {
+      open = (ObjectNode) fixture(example);
+    } else {
+      open = progressOpen();
+      var features = open.withObject("/features");
+      if (example.equals("boolean-progress")) {
+        features.put("turn_progress", true);
+      } else {
+        features.put("unexpected_flag", 1);
+      }
+    }
+    var client = new Client();
+    connect(DEVICE, "test-device-token", client).sendText(open.toString(), true).join();
+    assertEquals("invalid-canonical-event", client.event("error").path("code").asText());
+    assertEquals(1002, client.next());
+  }
+
+  @Test
+  void mergesProgressAndRestartsWireCountersOnEachSession() throws Exception {
+    FakeTimers timers = controlVoiceTime();
+    var replyGates = new LinkedBlockingQueue<CompletableFuture<String>>();
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        nullable(Consumer.class), any())).thenAnswer(call -> {
+          Consumer<TurnStage> progress = call.getArgument(5);
+          progress.accept(TurnStage.THINKING);
+          progress.accept(TurnStage.TOOL);
+          progress.accept(TurnStage.THINKING);
+          progress.accept(TurnStage.COMPOSING);
+          var gate = new CompletableFuture<String>();
+          replyGates.add(gate);
+          return gate.orTimeout(10, TimeUnit.SECONDS).join();
+        });
+
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    String session = negotiate(socket, client, progressOpen());
+    assertProgressTurn(timers, replyGates, client, socket, session, 1);
+    assertProgressTurn(timers, replyGates, client, socket, session, 2);
+
+    var replacement = new Client();
+    var replacementSocket = connect(DEVICE, "test-device-token", replacement);
+    String replacementSession = negotiate(replacementSocket, replacement, progressOpen());
+    assertNotEquals(session, replacementSession);
+    assertEquals(4001, client.next());
+    assertProgressTurn(timers, replyGates, replacement, replacementSocket, replacementSession, 1);
+  }
+
+  @Test
+  void emptyRecognitionDoesNotConsumeTurnIdAndEmptyAnswerEndsAcceptedTurn() throws Exception {
+    doReturn("  ", "语音输入").when(runtime).transcribe(nullable(String.class), any(), any());
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        nullable(Consumer.class), any())).thenReturn("");
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    String session = negotiate(socket, client, progressOpen());
+    sendUtterance(socket, session, 1);
+    verify(runtime, timeout(5000)).transcribe(nullable(String.class), any(), any());
+    sendUtterance(socket, session, 2);
+    assertAccepted(client, session, 1);
+    var error = client.event("error");
+    assertEquals("voice-turn-no-reply", error.path("code").asText());
+    assertFalse(error.path("retryable").asBoolean());
+    assertEquals(1000, client.next());
+    verifyNoInteractions(tts);
+  }
+
+  @Test
+  void routerTimeoutClosesOnceAndDropsLateProgress() throws Exception {
+    FakeTimers timers = controlVoiceTime();
+    var progressHook = new CompletableFuture<Consumer<TurnStage>>();
+    var reply = new CompletableFuture<String>();
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        nullable(Consumer.class), any())).thenAnswer(call -> {
+          Consumer<TurnStage> progress = call.getArgument(5);
+          progress.accept(TurnStage.THINKING);
+          progress.accept(TurnStage.TOOL);
+          progressHook.complete(progress);
+          return reply.orTimeout(10, TimeUnit.SECONDS).join();
+        });
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    String session = negotiate(socket, client, progressOpen());
+    sendUtterance(socket, session, 1);
+    assertAccepted(client, session, 1);
+    assertProgress(client, session, 1, 1, "thinking");
+    assertProgress(client, session, 1, 2, "tool");
+    var progress = progressHook.get(5, TimeUnit.SECONDS);
+    timers.advance(90_000);
+    var error = client.event("error");
+    assertEquals(session, error.path("sessionId").asText());
+    assertEquals("voice-turn-timeout", error.path("code").asText());
+    assertFalse(error.path("retryable").asBoolean());
+    assertEquals(1000, client.next());
+    assertThrows(java.util.concurrent.CancellationException.class,
+        () -> progress.accept(TurnStage.COMPOSING));
+    reply.complete("迟到的回答");
+    verifyNoInteractions(tts);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void preOutputStageTimeoutClosesOnce(boolean waitingForTts) throws Exception {
+    FakeTimers timers = controlVoiceTime();
+    var entered = new CountDownLatch(1);
+    var release = new CompletableFuture<Void>();
+    if (waitingForTts) {
+      when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+          .thenAnswer(call -> {
+            entered.countDown();
+            release.orTimeout(10, TimeUnit.SECONDS).join();
+            Consumer<byte[]> output = call.getArgument(5);
+            output.accept(opus(16000));
+            return true;
+          });
+    } else {
+      doAnswer(call -> {
+        entered.countDown();
+        release.orTimeout(10, TimeUnit.SECONDS).join();
+        return "迟到的识别结果";
+      }).when(runtime).transcribe(nullable(String.class), any(), any());
+    }
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    sendUtterance(socket, session, 1);
+    if (waitingForTts)
+      assertAccepted(client, session, 1);
+    assertTrue(entered.await(5, TimeUnit.SECONDS));
+    timers.advance(20_000);
+    var error = client.event("error");
+    assertEquals("voice-turn-timeout", error.path("code").asText());
+    assertFalse(error.path("retryable").asBoolean());
+    release.complete(null);
+    assertEquals(1000, client.next());
+    if (!waitingForTts)
+      verifyNoInteractions(router, tts);
+  }
+
+  @Test
+  void abortBeforeOutputDropsPendingProgressAndDoesNotAffectTheNextTurn() throws Exception {
+    FakeTimers timers = controlVoiceTime();
+    var reply = new CompletableFuture<String>();
+    var progressHook = new CompletableFuture<Consumer<TurnStage>>();
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        nullable(Consumer.class), any())).thenAnswer(call -> {
+          Consumer<TurnStage> progress = call.getArgument(5);
+          progress.accept(TurnStage.THINKING);
+          progress.accept(TurnStage.TOOL);
+          progress.accept(TurnStage.COMPOSING);
+          progressHook.complete(progress);
+          return reply.orTimeout(10, TimeUnit.SECONDS).join();
+        }).thenReturn("语音回复");
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    String session = negotiate(socket, client, progressOpen());
+    sendUtterance(socket, session, 1);
+    assertAccepted(client, session, 1);
+    assertProgress(client, session, 1, 1, "thinking");
+    assertProgress(client, session, 1, 2, "tool");
+    var progress = progressHook.get(5, TimeUnit.SECONDS);
+    send(socket, Map.of("event", "playback.abort", "sessionId", session, "reason", "user"));
+    sendUtterance(socket, session, 2);
+    assertAccepted(client, session, 2);
+    assertProgress(client, session, 2, 1, "composing");
+    assertCompleteReply(client, 1);
+    timers.advance(120_000);
+    assertThrows(java.util.concurrent.CancellationException.class,
+        () -> progress.accept(TurnStage.COMPOSING));
+    reply.complete("迟到的回答");
+    verify(tts, times(1)).streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60),
+        any());
+  }
+
+  @Test
+  void audioDeadlineTracksTheMostRecentPacketAndStopsStalledPlayback() throws Exception {
+    FakeTimers timers = controlVoiceTime();
+    var sendSecond = new CompletableFuture<Void>();
+    var sendLate = new CompletableFuture<Void>();
+    var firstSent = new CountDownLatch(1);
+    var secondSent = new CountDownLatch(1);
+    byte[] packet = opus(16000);
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          Consumer<byte[]> output = call.getArgument(5);
+          output.accept(packet);
+          firstSent.countDown();
+          sendSecond.orTimeout(10, TimeUnit.SECONDS).join();
+          output.accept(packet);
+          secondSent.countDown();
+          sendLate.orTimeout(10, TimeUnit.SECONDS).join();
+          output.accept(packet);
+          return true;
+        });
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    sendUtterance(socket, session, 1);
+    assertAccepted(client, session, 1);
+    client.event("output.start");
+    assertInstanceOf(byte[].class, client.next());
+    assertTrue(firstSent.await(5, TimeUnit.SECONDS));
+    timers.advance(19_000);
+    sendSecond.complete(null);
+    assertInstanceOf(byte[].class, client.next());
+    assertTrue(secondSent.await(5, TimeUnit.SECONDS));
+    timers.advance(1000);
+    assertTrue(client.messages.isEmpty());
+    timers.advance(19_000);
+    assertEquals("timeout", client.event("output.stop").path("reason").asText());
+    sendLate.complete(null);
+    send(socket, Map.of("event", "session.end", "sessionId", session));
     assertEquals(1000, client.next());
   }
 
@@ -605,11 +1001,354 @@ class RodakVoiceIntegrationTest {
   }
 
   private static ObjectNode sessionOpen(int downlinkRate, int downlinkDuration) throws Exception {
-    var open = (ObjectNode) JSON.readTree(
-        Files.readString(FIXTURES.resolve("valid/session-open.wake.json")));
+    var open = (ObjectNode) fixture("session-open.wake.json");
     open.withObject("/downlink").put("sampleRateHz", downlinkRate)
         .put("frameDurationMs", downlinkDuration);
     return open;
+  }
+
+  private static ObjectNode progressOpen() throws Exception {
+    var open = (ObjectNode) fixture("session-open.turn-progress.json");
+    open.withObject("/downlink").put("sampleRateHz", 16000);
+    return open;
+  }
+
+  private FakeTimers controlVoiceTime() {
+    var timers = new FakeTimers();
+    doAnswer(call -> timers.now()).when(runtime).nanoTime();
+    doAnswer(call -> timers.schedule(call.getArgument(0), call.getArgument(1)))
+        .when(runtime).scheduleVoiceTimer(any(), anyLong());
+    return timers;
+  }
+
+  private static String negotiate(WebSocket socket, Client client, JsonNode open)
+      throws Exception {
+    socket.sendText(open.toString(), true).join();
+    return client.event("session.ready").path("sessionId").asText();
+  }
+
+  private static void sendUtterance(WebSocket socket, String session, int sequence)
+      throws Exception {
+    send(socket, Map.of("event", "input.start", "sessionId", session, "mode", "manual-stop"));
+    socket.sendBinary(ByteBuffer.wrap(new Rav1Frame(sequence, opus(16000)).encode()), true)
+        .join();
+    send(socket, Map.of("event", "input.stop", "sessionId", session));
+  }
+
+  private static void assertAccepted(Client client, String session, long turn) throws Exception {
+    var accepted = client.event("turn.accepted");
+    assertEquals(3, accepted.size());
+    assertEquals(session, accepted.path("sessionId").asText());
+    assertEquals(turn, accepted.path("turnId").asLong());
+  }
+
+  private static void assertProgress(Client client, String session, long turn, long sequence,
+      String stage) throws Exception {
+    var progress = client.event("turn.progress");
+    assertEquals(5, progress.size());
+    assertEquals(session, progress.path("sessionId").asText());
+    assertEquals(turn, progress.path("turnId").asLong());
+    assertEquals(sequence, progress.path("seq").asLong());
+    assertEquals(stage, progress.path("stage").asText());
+  }
+
+  private static void assertProgressTurn(FakeTimers timers,
+      BlockingQueue<CompletableFuture<String>> replyGates, Client client, WebSocket socket,
+      String session, int turn) throws Exception {
+    sendUtterance(socket, session, turn);
+    assertAccepted(client, session, turn);
+    assertProgress(client, session, turn, 1, "thinking");
+    assertProgress(client, session, turn, 2, "tool");
+    var gate = replyGates.poll(5, TimeUnit.SECONDS);
+    assertNotNull(gate);
+    timers.advance(499);
+    assertTrue(client.messages.isEmpty());
+    timers.advance(1);
+    assertProgress(client, session, turn, 3, "composing");
+    gate.complete("语音回复");
+    assertCompleteReply(client, turn);
+  }
+
+  private static void assertCompleteReply(Client client, long sequence) throws Exception {
+    client.event("output.start");
+    assertEquals(sequence,
+        Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), sequence - 1).sequence());
+    assertEquals("complete", client.event("output.stop").path("reason").asText());
+  }
+
+  @Test
+  void streamsFirstSentenceBeforeRouterReturnsAndKeepsOneOrderedPlaybackEpoch() throws Exception {
+    var routerMayFinish = new CountDownLatch(1);
+    var firstMayFinish = new CountDownLatch(1);
+    var synthesis = new LinkedBlockingQueue<String>();
+    byte[] first = {1};
+    byte[] second = {2};
+    byte[] third = {3};
+    byte[] tail = {4};
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        any(), any())).thenAnswer(call -> {
+          Consumer<String> text = call.getArgument(6);
+          text.accept("%工");
+          text.accept("具：weatherTool。第一");
+          text.accept("句。第二句。第三句。");
+          assertTrue(routerMayFinish.await(5, TimeUnit.SECONDS));
+          text.accept("末尾");
+          return "第一句。第二句。第三句。末尾";
+        });
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          String text = call.getArgument(1);
+          Consumer<byte[]> audio = call.getArgument(5);
+          synthesis.add(text);
+          switch (text) {
+            case "第一句。" -> {
+              audio.accept(first);
+              assertTrue(firstMayFinish.await(5, TimeUnit.SECONDS));
+            }
+            case "第二句。" -> audio.accept(second);
+            case "第三句。" -> audio.accept(third);
+            case "末尾" -> audio.accept(tail);
+            default -> fail("Unexpected spoken text " + text);
+          }
+          return true;
+        });
+
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    try {
+      sendUtterance(socket, session, 1);
+      assertAccepted(client, session, 1);
+      var start = client.event("output.start");
+      assertEquals("第一句。", start.path("text").asText());
+      long epoch = start.path("playbackEpoch").asLong();
+      assertArrayEquals(first, Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), 0)
+          .payload());
+      assertEquals(java.util.Set.of("第一句。", "第二句。"),
+          java.util.Set.of(synthesis.poll(5, TimeUnit.SECONDS),
+              synthesis.poll(5, TimeUnit.SECONDS)));
+      assertNull(synthesis.poll(100, TimeUnit.MILLISECONDS));
+      firstMayFinish.countDown();
+      assertArrayEquals(second, Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), 1)
+          .payload());
+      assertArrayEquals(third, Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), 2)
+          .payload());
+      routerMayFinish.countDown();
+      assertArrayEquals(tail, Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), 3)
+          .payload());
+      assertEquals(epoch, client.event("output.stop").path("playbackEpoch").asLong());
+    } finally {
+      firstMayFinish.countDown();
+      routerMayFinish.countDown();
+      socket.sendClose(1000, "done").join();
+    }
+  }
+
+  @Test
+  void abortCancelsLiveTextAndPrefetchedAudio() throws Exception {
+    var modelStopped = new CountDownLatch(1);
+    var synthesisStopped = new CountDownLatch(1);
+    var prefetched = new CountDownLatch(1);
+    var textSink = new CompletableFuture<Consumer<String>>();
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        any(), any())).thenAnswer(call -> {
+          Consumer<String> text = call.getArgument(6);
+          textSink.complete(text);
+          text.accept("第一句。第二句。");
+          try {
+            new CountDownLatch(1).await(5, TimeUnit.SECONDS);
+          } catch (InterruptedException e) {
+            modelStopped.countDown();
+            Thread.currentThread().interrupt();
+          }
+          return "第一句。第二句。";
+        });
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          String text = call.getArgument(1);
+          Consumer<byte[]> audio = call.getArgument(5);
+          if (text.equals("第一句。")) {
+            audio.accept(new byte[] {1});
+            new CountDownLatch(1).await(5, TimeUnit.SECONDS);
+          } else if (text.equals("第二句。")) {
+            prefetched.countDown();
+            try {
+              new CountDownLatch(1).await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              synthesisStopped.countDown();
+              assertThrows(java.util.concurrent.CancellationException.class,
+                  () -> audio.accept(new byte[] {2}));
+            }
+          }
+          return true;
+        });
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    sendUtterance(socket, session, 1);
+    assertAccepted(client, session, 1);
+    long epoch = client.event("output.start").path("playbackEpoch").asLong();
+    assertInstanceOf(byte[].class, client.next());
+    assertTrue(prefetched.await(5, TimeUnit.SECONDS));
+
+    send(socket, Map.of("event", "playback.abort", "sessionId", session,
+        "reason", "user", "playbackEpoch", epoch));
+    assertEquals("interrupted", client.event("output.stop").path("reason").asText());
+    assertTrue(modelStopped.await(5, TimeUnit.SECONDS));
+    assertTrue(synthesisStopped.await(5, TimeUnit.SECONDS));
+    textSink.get(5, TimeUnit.SECONDS).accept("迟到的第三句。");
+    send(socket, Map.of("event", "session.end", "sessionId", session));
+    assertEquals(1000, client.next());
+    verify(tts, times(2)).streamTextAudio(anyString(), anyString(), eq(7), eq(16000),
+        eq(60), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void longReplyPlaysThroughTheTailWithBoundedSynthesisSegments(boolean streaming)
+      throws Exception {
+    String reply = ("语".repeat(178) + "，" + "𠀀".repeat(20) + "音".repeat(60)).repeat(18) + "尾段";
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        any(), any())).thenAnswer(call -> {
+          if (streaming) {
+            Consumer<String> text = call.getArgument(6);
+            for (int offset = 0; offset < reply.length(); offset += 37) {
+              text.accept(reply.substring(offset, Math.min(reply.length(), offset + 37)));
+            }
+          }
+          return reply;
+        });
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          String segment = call.getArgument(1);
+          assertTrue(segment.codePointCount(0, segment.length()) <= 240);
+          Consumer<byte[]> audio = call.getArgument(5);
+          audio.accept(segment.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          return true;
+        });
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    sendUtterance(socket, session, 1);
+    assertAccepted(client, session, 1);
+    client.event("output.start");
+    var played = new StringBuilder();
+    long sequence = 0;
+    Object result = client.next();
+    while (result instanceof byte[] bytes) {
+      var frame = Rav1Frame.decode(bytes, sequence++);
+      played.append(new String(frame.payload(), java.nio.charset.StandardCharsets.UTF_8));
+      result = client.next();
+    }
+    assertEquals(reply, played.toString());
+    var stop = JSON.readTree(assertInstanceOf(String.class, result));
+    assertEquals("output.stop", stop.path("event").asText());
+    assertEquals("complete", stop.path("reason").asText());
+    socket.sendClose(1000, "done").join();
+  }
+
+  @Test
+  void prefetchedAudioDrainsEvenWhenTheProviderFailsAfterProducingFrames() throws Exception {
+    var finishFirst = new CountDownLatch(1);
+    var secondProduced = new CountDownLatch(1);
+    int secondFrames = 40;
+    when(router.responseWithSpeech(anyString(), anyString(), anyString(), anyString(), eq(7),
+        any(), any())).thenAnswer(call -> {
+          Consumer<String> text = call.getArgument(6);
+          text.accept("第一句。第二句。");
+          return "第一句。第二句。";
+        });
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          Consumer<byte[]> audio = call.getArgument(5);
+          if (call.getArgument(1).equals("第一句。")) {
+            audio.accept(new byte[] {1});
+            assertTrue(finishFirst.await(5, TimeUnit.SECONDS));
+            return true;
+          }
+          for (int i = 0; i < secondFrames; i++) {
+            audio.accept(new byte[] {(byte) (i + 2)});
+          }
+          secondProduced.countDown();
+          return false;
+        });
+
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    var open = sessionOpen(16000, 60);
+    open.withObject("/features").put("turn_accepted", 1);
+    String session = negotiate(socket, client, open);
+    try {
+      sendUtterance(socket, session, 1);
+      assertAccepted(client, session, 1);
+      client.event("output.start");
+      assertArrayEquals(new byte[] {1},
+          Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), 0).payload());
+      assertTrue(secondProduced.await(5, TimeUnit.SECONDS));
+      finishFirst.countDown();
+      for (int i = 1; i <= secondFrames; i++) {
+        var frame = Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), i);
+        assertArrayEquals(new byte[] {(byte) (i + 1)}, frame.payload());
+      }
+      assertEquals("error", client.event("output.stop").path("reason").asText());
+      send(socket, Map.of("event", "session.end", "sessionId", session));
+      assertEquals(1000, client.next());
+    } finally {
+      finishFirst.countDown();
+      socket.abort();
+    }
+  }
+
+  @Test
+  void legacyReplyKeepsPlayingPastTheTurnDeadline() throws Exception {
+    FakeTimers timers = controlVoiceTime();
+    var firstPacket = new CompletableFuture<Consumer<byte[]>>();
+    var releaseFirst = new CountDownLatch(1);
+    var releaseLast = new CountDownLatch(1);
+    byte[] packet = opus(16000);
+    when(tts.streamTextAudio(anyString(), anyString(), eq(7), eq(16000), eq(60), any()))
+        .thenAnswer(call -> {
+          Consumer<byte[]> audio = call.getArgument(5);
+          firstPacket.complete(audio);
+          assertTrue(releaseFirst.await(5, TimeUnit.SECONDS));
+          audio.accept(packet);
+          assertTrue(releaseLast.await(5, TimeUnit.SECONDS));
+          audio.accept(packet);
+          return true;
+        });
+    var client = new Client();
+    var socket = connect(DEVICE, "test-device-token", client);
+    String session = negotiate(socket, client, sessionOpen(16000, 60));
+    try {
+      sendUtterance(socket, session, 1);
+      firstPacket.get(5, TimeUnit.SECONDS);
+      timers.advance(89_000);
+      releaseFirst.countDown();
+      client.event("output.start");
+      assertInstanceOf(byte[].class, client.next());
+      timers.advance(2_000);
+      runtime.checkConnections();
+      releaseLast.countDown();
+      assertEquals(2,
+          Rav1Frame.decode(assertInstanceOf(byte[].class, client.next()), 1).sequence());
+      assertEquals("complete", client.event("output.stop").path("reason").asText());
+    } finally {
+      releaseFirst.countDown();
+      releaseLast.countDown();
+      socket.sendClose(1000, "done").join();
+    }
+  }
+
+  private static JsonNode fixture(String name) throws Exception {
+    try (var input = RodakVoiceIntegrationTest.class.getResourceAsStream("/rodak-voice/" + name)) {
+      return JSON.readTree(input);
+    }
   }
 
   private URI endpoint() {
@@ -632,6 +1371,39 @@ class RodakVoiceIntegrationTest {
     socket.sendText(JSON.writeValueAsString(event), true).join();
   }
 
+  private static final class FakeTimers {
+    private final PriorityQueue<Timer> timers =
+        new PriorityQueue<>(Comparator.comparingLong(Timer::at));
+    private long now = TimeUnit.SECONDS.toNanos(1);
+
+    synchronized long now() {
+      return now;
+    }
+
+    synchronized Future<?> schedule(Runnable task, long delay) {
+      var future = new FutureTask<Void>(task, null);
+      timers.add(new Timer(now + delay, future));
+      return future;
+    }
+
+    void advance(long millis) {
+      synchronized (this) {
+        now += TimeUnit.MILLISECONDS.toNanos(millis);
+      }
+      while (true) {
+        Timer timer;
+        synchronized (this) {
+          if (timers.isEmpty() || timers.peek().at() > now)
+            return;
+          timer = timers.remove();
+        }
+        timer.task().run();
+      }
+    }
+
+    private record Timer(long at, FutureTask<Void> task) {}
+  }
+
   private static final class Client implements WebSocket.Listener {
     private final BlockingQueue<Object> messages = new LinkedBlockingQueue<>();
     private final StringBuilder text = new StringBuilder();
@@ -641,6 +1413,12 @@ class RodakVoiceIntegrationTest {
       Object message = messages.poll(10, TimeUnit.SECONDS);
       assertNotNull(message, "expected a WebSocket frame");
       return message;
+    }
+
+    JsonNode event(String name) throws Exception {
+      var event = JSON.readTree(assertInstanceOf(String.class, next()));
+      assertEquals(name, event.path("event").asText());
+      return event;
     }
 
     @Override

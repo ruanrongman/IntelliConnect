@@ -30,6 +30,7 @@ import okhttp3.sse.EventSourceListener;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
@@ -42,22 +43,27 @@ public class ChatToolEventSourceListener extends EventSourceListener {
   private final String chatId;
   private final BaseTool<?> chatTool; // 持有ChatTool实例引用
   private final Queue<String> reasoningQueue;
+  private final Consumer<String> speechText;
   private final AtomicReference<EventSource> currentEventSource = new AtomicReference<>();
 
   public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
       BaseTool<?> tool) {
-    this.queueMap = queueMap;
-    this.chatId = chatId;
-    this.chatTool = tool;
-    this.reasoningQueue = null;
+    this(queueMap, chatId, tool, null, null);
   }
 
   public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
       BaseTool<?> tool, Queue<String> reasoningQueue) {
+    this(queueMap, chatId, tool, reasoningQueue, null);
+  }
+
+  public ChatToolEventSourceListener(Map<String, Queue<String>> queueMap, String chatId,
+      BaseTool<?> tool, Queue<String> reasoningQueue,
+      Consumer<String> speechText) {
     this.queueMap = queueMap;
     this.chatId = chatId;
     this.chatTool = tool;
     this.reasoningQueue = reasoningQueue;
+    this.speechText = speechText;
   }
 
 
@@ -147,6 +153,9 @@ public class ChatToolEventSourceListener extends EventSourceListener {
         }
       }
       jsonBuffer.append(content);
+      if (speechText != null) {
+        speechText.accept(content);
+      }
     } catch (Exception e) {
       log.error("解析ChatTool流式数据失败, chatId={}", chatId, e);
       failStream(ERROR_MESSAGE);
